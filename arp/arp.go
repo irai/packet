@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"net"
+	"syscall"
 	"time"
 
 	"errors"
@@ -58,16 +59,18 @@ func (c *Handler) request(srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr ne
 }
 
 func (c *Handler) requestWithDstEthernet(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
-	arp, err := ARPMarshalBinary(nil, OperationRequest, srcHwAddr, srcIP, dstHwAddr, dstIP)
+	ether := raw.EtherMarshalBinary(nil, syscall.ETH_P_ARP, srcHwAddr, dstEther)
+	arp, err := ARPMarshalBinary(ether.Payload(), OperationRequest, srcHwAddr, srcIP, dstHwAddr, dstIP)
 	if err != nil {
 		return err
 	}
+	n := len(ether) + len(arp)
 
-	if err := c.client.SetWriteDeadline(time.Now().Add(writeTimeout)); err != nil {
+	if err := c.conn.SetWriteDeadline(time.Now().Add(writeTimeout)); err != nil {
 		return err
 	}
 
-	if _, err := c.client.WriteTo(arp, raw.Addr{MAC: dstEther}); err != nil {
+	if _, err := c.conn.WriteTo(ether[:n], raw.Addr{MAC: dstEther}); err != nil {
 		return err
 	}
 	return nil
@@ -87,16 +90,18 @@ func (c *Handler) Reply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, s
 //
 // dstEther identifies the target for the Ethernet packet : i.e. use EthernetBroadcast for gratuitous ARP
 func (c *Handler) reply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
-	p, err := ARPMarshalBinary(nil, OperationReply, srcHwAddr, srcIP, dstHwAddr, dstIP)
+	ether := raw.EtherMarshalBinary(nil, syscall.ETH_P_ARP, srcHwAddr, dstEther)
+	arp, err := ARPMarshalBinary(ether.Payload(), OperationReply, srcHwAddr, srcIP, dstHwAddr, dstIP)
 	if err != nil {
 		return err
 	}
+	n := len(ether) + len(arp)
 
-	if err := c.client.SetWriteDeadline(time.Now().Add(writeTimeout)); err != nil {
+	if err := c.conn.SetWriteDeadline(time.Now().Add(writeTimeout)); err != nil {
 		return err
 	}
 
-	_, err = c.client.WriteTo(p, raw.Addr{MAC: dstEther})
+	_, err = c.conn.WriteTo(ether[:n], raw.Addr{MAC: dstEther})
 	return err
 }
 

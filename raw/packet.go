@@ -70,7 +70,11 @@ func (p Ether) Dst() net.HardwareAddr { return net.HardwareAddr(p[:6]) }
 func (p Ether) Src() net.HardwareAddr { return net.HardwareAddr(p[6 : 6+6]) }
 func (p Ether) EtherType() uint16     { return binary.BigEndian.Uint16(p[12:14]) } // same pos as PayloadLen
 func (p Ether) Payload() []byte {
-	if p.EtherType() == syscall.ETH_P_IP || p.EtherType() == syscall.ETH_P_IPV6 {
+
+	if p.EtherType() == syscall.ETH_P_IP || p.EtherType() == syscall.ETH_P_IPV6 || p.EtherType() == syscall.ETH_P_ARP {
+		if len(p) <= 14 { // change p in case the payload is empty
+			p = p[:cap(p)]
+		}
 		return p[14:]
 	}
 	// The IEEE 802.1Q tag, if present, then two EtherType contains the Tag Protocol Identifier (TPID) value of 0x8100
@@ -78,19 +82,28 @@ func (p Ether) Payload() []byte {
 	// The TPID is followed by two octets containing the Tag Control Information (TCI) (the IEEE 802.1p priority (quality of service) and VLAN id).
 	// also handle 802.1ad - 0x88a8
 	if p.EtherType() == syscall.ETH_P_8021Q { // add 2 bytes to frame
+		if len(p) <= 16 { // change p in case the payload is empty
+			p = p[:cap(p)]
+		}
 		return p[16:]
 	}
 
 	if p.EtherType() == EthType8021AD { // add 6 bytes to frame
+		if len(p) <= 20 { // change p in case the payload is empty
+			p = p[:cap(p)]
+		}
 		return p[20:]
+	}
+	if len(p) <= 14 { // change p in case the payload is empty
+		p = p[:cap(p)]
 	}
 	return p[14:]
 }
 func (p Ether) AppendPayload(payload []byte) (Ether, error) {
-	if len(payload)+14 > len(p) {
+	if len(payload)+14 > cap(p) { //must be enough capcity to store header + payload
 		return nil, ErrPayloadTooBig
 	}
-	copy(p.Payload(), payload)
+	copy(p.Payload()[:cap(payload)], payload)
 	return p[:14+len(payload)], nil
 
 }
@@ -101,14 +114,15 @@ func (p Ether) String() string {
 
 // EtherMarshalBinary creates a ethernet frame in at b using the values
 // It automatically allocates a buffer if b is nil or not sufficient to store a full len ethernet packet
-func EtherMarshalBinary(b []byte, hType uint16, srcMAC net.HardwareAddr, dstMAC net.HardwareAddr) (Ether, error) {
-	if b == nil || len(b) < 14 {
-		b = make([]byte, EthMaxSize)
+func EtherMarshalBinary(b []byte, hType uint16, srcMAC net.HardwareAddr, dstMAC net.HardwareAddr) Ether {
+	if b == nil || cap(b) < 14 {
+		b = make([]byte, EthMaxSize) // enough capacity for a max ethernet frame
 	}
+	b = b[:14] // change slice in case slice is less than 14
 	copy(b[0:6], dstMAC)
 	copy(b[6:6+6], srcMAC)
 	binary.BigEndian.PutUint16(b[12:14], hType)
-	return Ether(b), nil
+	return Ether(b)
 }
 
 // IP4 provide access to IP fields without copying data.

@@ -37,7 +37,7 @@ func (c Config) String() string {
 
 // Handler stores instance variables
 type Handler struct {
-	client      net.PacketConn
+	conn        net.PacketConn
 	table       *arpTable
 	config      Config
 	routerEntry MACEntry // store the router mac address
@@ -60,7 +60,7 @@ func New(config Config) (c *Handler, err error) {
 	}
 
 	// Set up ARP client with socket
-	c.client, err = raw.Dial(ifi, syscall.ETH_P_ALL)
+	c.conn, err = raw.Dial(ifi, syscall.ETH_P_ALL)
 	if err != nil {
 		return nil, fmt.Errorf("ARP dial error: %w", err)
 	}
@@ -73,10 +73,10 @@ func New(config Config) (c *Handler, err error) {
 func NewTestHandler(config Config, p net.PacketConn) (*Handler, net.PacketConn, error) {
 	c := newHandler(config)
 	c.table = newARPTable() // we want an empty table for testing
-	a, server := raw.NewBufferedConn()
-	c.client = a
+	client, server := raw.NewBufferedConn()
+	c.conn = server
 
-	return c, server, nil
+	return c, client, nil
 }
 
 func newHandler(config Config) (c *Handler) {
@@ -169,7 +169,7 @@ func (c *Handler) GetTable() []MACEntry {
 // Close will terminate the ListenAndServer goroutine as well as all other pending goroutines.
 func (c *Handler) Close() {
 	// Close the arp socket
-	c.client.Close()
+	c.conn.Close()
 }
 
 // ListenAndServe listen for ARP packets and action each.
@@ -192,7 +192,7 @@ func (c *Handler) ListenAndServe(ctx context.Context) error {
 	var wg sync.WaitGroup
 
 	// Set ZERO timeout to block forever
-	if err := c.client.SetReadDeadline(time.Time{}); err != nil {
+	if err := c.conn.SetReadDeadline(time.Time{}); err != nil {
 		return fmt.Errorf("ARP error in socket: %w", err)
 	}
 

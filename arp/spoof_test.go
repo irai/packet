@@ -1,35 +1,27 @@
 package arp
 
 import (
-	"context"
-	"sync"
 	"testing"
 	"time"
+
+	"github.com/irai/packet"
 )
 
 func TestHandler_ForceIPChange(t *testing.T) {
 	//Debug = true
 	// log.SetLevel(log.DebugLevel)
-	h, conn := testHandler(t)
+	tc := setupTestHandler(t)
+	defer tc.Close()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	packet.Debug = true
 
-	var wg sync.WaitGroup
-	go func() {
-		wg.Add(1)
-		h.ListenAndServe(ctx)
-		wg.Done()
-	}()
-
-	time.Sleep(time.Millisecond * 20) // time for ListenAndServe to start
-	e2, _ := h.table.upsert(StateNormal, mac2, ip2)
+	e2, _ := tc.arp.table.upsert(StateNormal, mac2, ip2)
 	e2.Online = true
-	h.table.updateIP(e2, ip3)
-	h.table.updateIP(e2, ip4)
-	h.ForceIPChange(e2.MAC, true)
+	tc.arp.table.updateIP(e2, ip3)
+	tc.arp.table.updateIP(e2, ip4)
+	tc.arp.ForceIPChange(e2.MAC, true)
 
-	if e := h.table.findByMAC(mac2); e == nil || e.State != StateHunt || !e.Online {
+	if e := tc.arp.table.findByMAC(mac2); e == nil || e.State != StateHunt || !e.Online {
 		t.Fatalf("Test_ForceIPChange entry2 state=%s, online=%v", e.State, e.Online)
 	}
 
@@ -46,16 +38,16 @@ func TestHandler_ForceIPChange(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := conn.WriteTo(tt.packet, nil); err != tt.wantErr {
+			if _, err := tc.client.WriteTo(tt.packet, nil); err != tt.wantErr {
 				t.Errorf("TestHandler_ForceIPChange:%s error = %v, wantErr %v", tt.name, err, tt.wantErr)
 			}
 			time.Sleep(time.Millisecond * 10)
-			if len(h.table.macTable) != tt.wantLen {
-				h.PrintTable()
-				t.Errorf("TestHandler_ForceIPChange:%s table len = %v, wantLen %v", tt.name, len(h.table.macTable), tt.wantLen)
+			if len(tc.arp.table.macTable) != tt.wantLen {
+				tc.arp.PrintTable()
+				t.Errorf("TestHandler_ForceIPChange:%s table len = %v, wantLen %v", tt.name, len(tc.arp.table.macTable), tt.wantLen)
 			}
 			if tt.wantIPs != 0 {
-				e := h.table.findByMAC(tt.packet.SrcMAC())
+				e := tc.arp.table.findByMAC(tt.packet.SrcMAC())
 				if e == nil || len(e.IPs()) != tt.wantIPs {
 					t.Errorf("TestHandler_ForceIPChange:%s table IP entry=%+v, wantLen %v", tt.name, e, tt.wantLen)
 				}
@@ -63,22 +55,20 @@ func TestHandler_ForceIPChange(t *testing.T) {
 		})
 	}
 
-	if entry := h.table.findVirtualIP(ip2); entry == nil {
+	if entry := tc.arp.table.findVirtualIP(ip2); entry == nil {
 		t.Errorf("TestHandler_ForceIPChange invalid virtual ip2")
 	}
-	if entry := h.table.findVirtualIP(ip3); entry == nil {
+	if entry := tc.arp.table.findVirtualIP(ip3); entry == nil {
 		t.Errorf("TestHandler_ForceIPChange invalid virtual ip3")
 	}
-	if entry := h.table.findVirtualIP(ip4); entry == nil {
+	if entry := tc.arp.table.findVirtualIP(ip4); entry == nil {
 		t.Errorf("TestHandler_ForceIPChange invalid virtual ip4")
 	}
-	if entry := h.table.findVirtualIP(ip5); entry != nil {
+	if entry := tc.arp.table.findVirtualIP(ip5); entry != nil {
 		t.Errorf("TestHandler_ForceIPChange invalid virtual ip5")
 	}
-	if entry := h.table.findByIP(ip5); entry == nil || entry.State != StateNormal || len(entry.IPs()) != 4 {
-		h.PrintTable()
+	if entry := tc.arp.table.findByIP(ip5); entry == nil || entry.State != StateNormal || len(entry.IPs()) != 4 {
+		tc.arp.PrintTable()
 		t.Errorf("TestHandler_ForceIPChange invalid virtual ip52 entry=%+v", entry)
 	}
-	cancel()
-	wg.Wait()
 }

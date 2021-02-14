@@ -5,11 +5,40 @@ import (
 	"net"
 	"syscall"
 	"testing"
+
+	"github.com/irai/packet/raw"
 )
 
 func tFrame(proto uint16, operation uint16, srcMAC net.HardwareAddr, srcIP net.IP, dstMAC net.HardwareAddr, dstIP net.IP) []byte {
 	b, _ := ARPMarshalBinary(nil, operation, srcMAC, srcIP, dstMAC, dstIP)
 	return b
+}
+
+func TestMarshalUnmarshall(t *testing.T) {
+	// marshall
+	ether := raw.EtherMarshalBinary(nil, syscall.ETH_P_ARP, mac1, mac2)
+	arpFrame, err := ARPMarshalBinary(ether.Payload(), OperationRequest, mac1, ip1, mac2, ip2)
+	if err != nil {
+		t.Errorf("error in marshall binary: %s", err)
+	}
+	if len(ether) != 14 {
+		t.Errorf("invalid ether len=%d", len(ether))
+	}
+	if len(arpFrame) != 28 {
+		t.Errorf("invalid arp len=%d", len(arpFrame))
+	}
+
+	// unmarschall
+	n := len(ether) + len(arpFrame)
+	ether = raw.Ether(ether[:n])
+	arpFrame = ARP(ether.Payload())
+	if !ether.IsValid() {
+		t.Errorf("invalid ether=%s", ether)
+	}
+	if !arpFrame.IsValid() {
+		t.Errorf("invalid arp=%s", arpFrame)
+	}
+
 }
 
 func TestMarshalBinary(t *testing.T) {

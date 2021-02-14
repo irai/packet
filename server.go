@@ -229,6 +229,9 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			}
 
 		case syscall.ETH_P_ARP:
+			if h.handlerARP.name == "" {
+				continue
+			}
 			if err := h.handlerARP.function(host, ether.Payload()); err != nil {
 				fmt.Printf("packet: error processing arp: %s\n", err)
 			}
