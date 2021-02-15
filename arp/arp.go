@@ -70,7 +70,7 @@ func (c *Handler) requestWithDstEthernet(dstEther net.HardwareAddr, srcHwAddr ne
 		return err
 	}
 
-	if _, err := c.conn.WriteTo(ether[:n], raw.Addr{MAC: dstEther}); err != nil {
+	if _, err := c.conn.WriteTo(ether[:n], &raw.Addr{MAC: dstEther}); err != nil {
 		return err
 	}
 	return nil
@@ -101,7 +101,7 @@ func (c *Handler) reply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, s
 		return err
 	}
 
-	_, err = c.conn.WriteTo(ether[:n], raw.Addr{MAC: dstEther})
+	_, err = c.conn.WriteTo(ether[:n], &raw.Addr{MAC: dstEther})
 	return err
 }
 

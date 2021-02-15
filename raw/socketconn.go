@@ -6,6 +6,7 @@ package raw
 // as part of the raw package github.com/mdlayher/raw
 
 import (
+	"fmt"
 	"net"
 	"os"
 	"syscall"
@@ -210,6 +211,7 @@ func (p *packetConn) WriteTo(b []byte, addr net.Addr) (int, error) {
 	// Ensure correct Addr type.
 	a, ok := addr.(*Addr)
 	if !ok || a.MAC == nil {
+		fmt.Println("DEBUG invalid parameter", ok, addr)
 		return 0, unix.EINVAL
 	}
 

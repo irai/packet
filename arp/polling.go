@@ -139,7 +139,7 @@ func (c *Handler) ScanNetwork(ctx context.Context, lan net.IPNet) error {
 		}
 
 		err := c.request(c.config.HostMAC, c.config.HostIP, EthernetBroadcast, ip)
-		if ctx.Err() != nil {
+		if ctx.Err() == context.Canceled {
 			return nil
 		}
 		if err != nil {
