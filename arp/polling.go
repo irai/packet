@@ -85,6 +85,7 @@ func (c *Handler) purgeLoop(ctx context.Context, offline time.Duration, purge ti
 			c.Lock()
 			for _, e := range c.table.macTable {
 
+				fmt.Println("DEBUG running purge", e, offlineCutoff, e.LastUpdated)
 				// Delete from ARP table if the device was not seen for the last hour
 				// This will delete Virtual hosts too
 				if e.LastUpdated.Before(deleteCutoff) {
