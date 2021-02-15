@@ -89,15 +89,6 @@ func setupTestHandler(t *testing.T) *testContext {
 
 	tc.ctx, tc.cancel = context.WithCancel(context.Background())
 
-	// setup server with server conn
-	tc.packet, _ = packet.Config{Conn: tc.arp.conn}.New("")
-	tc.packet.ARPHook("arp", tc.arp.ProcessPacket)
-	go func() {
-		if err := tc.packet.ListenAndServe(tc.ctx); err != nil {
-			panic(err)
-		}
-	}()
-
 	// MUST read the test conn to avoid blocking the sender
 	go func() {
 		buf := make([]byte, 2000)
@@ -126,13 +117,21 @@ func setupTestHandler(t *testing.T) *testContext {
 		}
 	}()
 
+	// setup server with server conn
+	tc.packet, _ = packet.Config{Conn: tc.arp.conn}.New("")
+	tc.packet.ARPHook("arp", tc.arp.ProcessPacket)
 	go func() {
-		// tc.wg.Add(1)
-		tc.arp.Begin(tc.ctx)
-		// tc.wg.Done()
+		if err := tc.packet.ListenAndServe(tc.ctx); err != nil {
+			panic(err)
+		}
 	}()
 
-	time.Sleep(time.Millisecond * 10) // time for ListenAndServe to start
+	// start arp handler
+	if err := tc.arp.Start(tc.ctx); err != nil {
+		panic(err)
+	}
+
+	time.Sleep(time.Millisecond * 10) // time for all goroutine to start
 	return &tc
 }
 
