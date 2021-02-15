@@ -89,7 +89,7 @@ func (t *arpTable) printTable() {
 	// Don't lock; it is called from multiple locked locations
 	table := t.macTable
 	for _, v := range table {
-		log.Printf("ARP entry %s", v)
+		log.Printf("arp entry %s", v)
 	}
 }
 
@@ -185,7 +185,7 @@ func (t *arpTable) updateIP(e *MACEntry, ip net.IP) (found bool) {
 	e.IPArray[0].LastUpdated = now
 	e.LastUpdated = now
 	if Debug {
-		log.Printf("ARP ip=%s updated mac=%s state=%s ips=%s", ip, e.MAC, e.State, e.IPs())
+		log.Printf("arp ip=%s updated mac=%s state=%s ips=%s", ip, e.MAC, e.State, e.IPs())
 	}
 	return false
 }
@@ -204,7 +204,7 @@ func (t *arpTable) upsert(state arpState, mac net.HardwareAddr, ip net.IP) (entr
 		e = &MACEntry{State: state, MAC: mac, LastUpdated: now, Online: false}
 		t.macTable[string(mac)] = e
 		if Debug {
-			log.Printf("ARP new mac=%s ip=%s state=%s created", mac, ip, state)
+			log.Printf("arp new mac=%s ip=%s state=%s created", mac, ip, state)
 		}
 	} else {
 		e.State = state
@@ -227,7 +227,7 @@ func (t *arpTable) upsert(state arpState, mac net.HardwareAddr, ip net.IP) (entr
 func (t *arpTable) delete(mac net.HardwareAddr) {
 	e, _ := t.macTable[string(mac)]
 	if Debug {
-		log.Printf("ARP delete MACEntry entry=%s", e)
+		log.Printf("arp delete MACEntry entry=%s", e)
 	}
 	if e == nil {
 		return

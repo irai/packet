@@ -49,7 +49,7 @@ func (c *Handler) probeOnlineLoop(ctx context.Context, interval time.Duration) e
 				if entry.LastUpdated.Before(refreshCutoff) {
 					for _, v := range entry.IPs() {
 						if Debug {
-							log.Printf("ARP ip=%s online? mac=%s", v, entry.MAC)
+							log.Printf("arp ip=%s online? mac=%s", v, entry.MAC)
 						}
 						if err := c.request(c.config.HostMAC, c.config.HostIP, entry.MAC, v); err != nil {
 							log.Printf("Error ARP request mac=%s ip=%s: %s ", entry.MAC, v, err)
@@ -97,7 +97,7 @@ func (c *Handler) purgeLoop(ctx context.Context, offline time.Duration, purge ti
 				// Ignore virtual hosts; offline controlled by spoofing goroutine
 				if e.State != StateVirtualHost && e.Online && e.LastUpdated.Before(offlineCutoff) {
 					c.table.printTable()
-					log.Printf("ARP ip=%s offline cutoff reached mac=%s state=%s ips=%s", e.IP(), e.MAC, e.State, e.IPs())
+					log.Printf("arp ip=%s offline cutoff reached mac=%s state=%s ips=%s", e.IP(), e.MAC, e.State, e.IPs())
 
 					e.Online = false
 					e.State = StateNormal // Stop hunt if in progress
@@ -128,7 +128,7 @@ func (c *Handler) ScanNetwork(ctx context.Context, lan net.IPNet) error {
 	ip := lan.IP.To4()
 
 	if Debug {
-		log.Printf("ARP Discovering IP - sending 254 ARP requests - lan %v", lan)
+		log.Printf("arp Discovering IP - sending 254 ARP requests - lan %v", lan)
 	}
 	for host := 1; host < 255; host++ {
 		ip[3] = byte(host)
@@ -145,13 +145,13 @@ func (c *Handler) ScanNetwork(ctx context.Context, lan net.IPNet) error {
 		if err != nil {
 			if err1, ok := err.(net.Error); ok && err1.Temporary() {
 				if Debug {
-					log.Print("ARP error in write socket is temporary - retry ", err1)
+					log.Print("arp error in write socket is temporary - retry ", err1)
 				}
 				continue
 			}
 
 			if Debug {
-				log.Print("ARP request error ", err)
+				log.Print("arp request error ", err)
 			}
 			return err
 		}

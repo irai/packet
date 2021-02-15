@@ -19,7 +19,7 @@ import (
 // client will revert back to "normal" when a new IP is detected for the MAC
 func (c *Handler) ForceIPChange(mac net.HardwareAddr, claimIP bool) error {
 	if Debug {
-		log.Printf("ARP force IP change mac=%s", mac)
+		log.Printf("arp force IP change mac=%s", mac)
 	}
 
 	c.Lock()
@@ -53,7 +53,7 @@ func (c *Handler) ForceIPChange(mac net.HardwareAddr, claimIP bool) error {
 // StopIPChange terminate the hunting process
 func (c *Handler) StopIPChange(mac net.HardwareAddr) error {
 	if Debug {
-		log.Printf("ARP stop IP change mac=%s", mac)
+		log.Printf("arp stop IP change mac=%s", mac)
 	}
 
 	c.Lock()
@@ -68,7 +68,7 @@ func (c *Handler) StopIPChange(mac net.HardwareAddr) error {
 	if client.State != StateHunt {
 		err := fmt.Errorf("not in hunt state mac=%s state=%s", mac, client.State)
 		if Debug {
-			log.Printf("ARP %s", err)
+			log.Printf("arp %s", err)
 		}
 		return err
 	}
@@ -107,10 +107,10 @@ func (c *Handler) IPChanged(mac net.HardwareAddr, clientIP net.IP) {
 	c.RUnlock()
 
 	if Debug {
-		log.Printf("ARP ip%s validating for mac=%s", clientIP, mac)
+		log.Printf("arp ip%s validating for mac=%s", clientIP, mac)
 	}
 	if err := c.Request(c.config.HostMAC, c.config.HostIP, EthernetBroadcast, clientIP); err != nil {
-		log.Printf("ARP request failed mac=%s: %s", mac, err)
+		log.Printf("arp request failed mac=%s: %s", mac, err)
 	}
 
 	go func() {
@@ -120,7 +120,7 @@ func (c *Handler) IPChanged(mac net.HardwareAddr, clientIP net.IP) {
 			if entry := c.table.findByMAC(mac); entry != nil && entry.IP().Equal(clientIP) {
 				c.RUnlock()
 				if Debug {
-					log.Printf("ARP ip=%s found for mac=%s ips=%s", entry.IP(), entry.MAC, entry.IPs())
+					log.Printf("arp ip=%s found for mac=%s ips=%s", entry.IP(), entry.MAC, entry.IPs())
 				}
 				return
 			}
@@ -128,10 +128,10 @@ func (c *Handler) IPChanged(mac net.HardwareAddr, clientIP net.IP) {
 
 			// Silent request
 			if err := c.request(c.config.HostMAC, c.config.HostIP, EthernetBroadcast, clientIP); err != nil {
-				log.Printf("ARP request 2 failed mac=%s ip=%s: %s", mac, clientIP, err)
+				log.Printf("arp request 2 failed mac=%s ip=%s: %s", mac, clientIP, err)
 			}
 		}
-		log.Printf("ARP ip=%s not detect for mac=%s", clientIP, mac)
+		log.Printf("arp ip=%s not detect for mac=%s", clientIP, mac)
 
 		c.RLock()
 		c.table.printTable()
@@ -173,13 +173,13 @@ func (c *Handler) spoofLoop(ctx context.Context, client *MACEntry, ip net.IP) {
 	ticker := time.NewTicker(time.Second * 4).C
 	startTime := time.Now()
 	nTimes := 0
-	log.Printf("ARP attack ip=%s client=%s time=%v", ip, mac, startTime)
+	log.Printf("arp attack ip=%s client=%s time=%v", ip, mac, startTime)
 	for {
 		c.Lock()
 		// Always search for MAC in case it has been deleted.
 		client := c.table.findByMAC(mac)
 		if client == nil || client.State != StateHunt {
-			log.Printf("ARP attack end ip=%s client=%s repeat=%v duration=%v", ip, mac, nTimes, time.Now().Sub(startTime))
+			log.Printf("arp attack end ip=%s client=%s repeat=%v duration=%v", ip, mac, nTimes, time.Now().Sub(startTime))
 			if virtual != nil {
 				virtual.Online = false // goroutine ended
 			}
@@ -211,7 +211,7 @@ func (c *Handler) spoofLoop(ctx context.Context, client *MACEntry, ip net.IP) {
 		}
 
 		if nTimes%16 == 0 {
-			log.Printf("ARP attack ip=%s client=%s repeat=%v duration=%v", ip, mac, nTimes, time.Now().Sub(startTime))
+			log.Printf("arp attack ip=%s client=%s repeat=%v duration=%v", ip, mac, nTimes, time.Now().Sub(startTime))
 		}
 		nTimes++
 
@@ -236,7 +236,7 @@ func (c *Handler) forceSpoof(mac net.HardwareAddr, ip net.IP) error {
 	// This will update the target arp table with our mac
 	err := c.announce(mac, c.config.HostMAC, c.config.RouterIP, EthernetBroadcast, 2)
 	if err != nil {
-		log.Printf("ARP error send announcement packet mac=%s ip=%s: %s", mac, ip, err)
+		log.Printf("arp error send announcement packet mac=%s ip=%s: %s", mac, ip, err)
 		return err
 	}
 
@@ -244,7 +244,7 @@ func (c *Handler) forceSpoof(mac net.HardwareAddr, ip net.IP) error {
 	for i := 0; i < 2; i++ {
 		err = c.reply(mac, c.config.HostMAC, c.config.RouterIP, mac, ip)
 		if err != nil {
-			log.Printf("ARP error spoof client mac=%s ip=%s: %s", mac, ip, err)
+			log.Printf("arp error spoof client mac=%s ip=%s: %s", mac, ip, err)
 			return err
 		}
 		time.Sleep(time.Millisecond * 10)
@@ -257,7 +257,7 @@ func (c *Handler) forceSpoof(mac net.HardwareAddr, ip net.IP) error {
 func (c *Handler) forceAnnouncement(dstEther net.HardwareAddr, mac net.HardwareAddr, ip net.IP) error {
 	err := c.announce(dstEther, mac, ip, EthernetBroadcast, 4) // many repeats to force client to reaquire IP
 	if err != nil {
-		log.Printf("ARP error send announcement packet mac=%s ip=%s: %s", mac, ip, err)
+		log.Printf("arp error send announcement packet mac=%s ip=%s: %s", mac, ip, err)
 	}
 
 	// Send gratuitous ARP replies : Log the first one only
@@ -265,7 +265,7 @@ func (c *Handler) forceAnnouncement(dstEther net.HardwareAddr, mac net.HardwareA
 	err = c.reply(dstEther, mac, ip, EthernetBroadcast, ip) // Send gratuitous ARP reply - unicast to target
 	for i := 0; i < 3; i++ {
 		if err != nil {
-			log.Printf("ARP error send gratuitous packet mac=%s ip=%s: %s", mac, ip, err)
+			log.Printf("arp error send gratuitous packet mac=%s ip=%s: %s", mac, ip, err)
 		}
 		time.Sleep(time.Millisecond * 10)
 

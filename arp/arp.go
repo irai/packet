@@ -45,9 +45,9 @@ var (
 func (c *Handler) Request(srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
 	if Debug {
 		if srcIP.Equal(dstIP) {
-			log.Printf("ARP send announcement - I am ip=%s mac=%s", srcIP, srcHwAddr)
+			log.Printf("arp send announcement - I am ip=%s mac=%s", srcIP, srcHwAddr)
 		} else {
-			log.Printf("ARP send request - who is ip=%s tell sip=%s smac=%s", dstIP, srcIP, srcHwAddr)
+			log.Printf("arp send request - who is ip=%s tell sip=%s smac=%s", dstIP, srcIP, srcHwAddr)
 		}
 	}
 
@@ -81,7 +81,7 @@ func (c *Handler) requestWithDstEthernet(dstEther net.HardwareAddr, srcHwAddr ne
 // Call with dstHwAddr = ethernet.Broadcast to reply to all
 func (c *Handler) Reply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
 	if Debug {
-		log.Printf("ARP send reply - ip=%s is at mac=%s", srcIP, srcHwAddr)
+		log.Printf("arp send reply - ip=%s is at mac=%s", srcIP, srcHwAddr)
 	}
 	return c.reply(dstEther, srcHwAddr, srcIP, dstHwAddr, dstIP)
 }
@@ -140,9 +140,9 @@ func (c *Handler) probeUnicast(mac net.HardwareAddr, ip net.IP) error {
 func (c *Handler) announce(dstEther net.HardwareAddr, mac net.HardwareAddr, ip net.IP, targetMac net.HardwareAddr, repeats int) (err error) {
 	if Debug {
 		if bytes.Equal(dstEther, EthernetBroadcast) {
-			log.Printf("ARP send announcement broadcast - I am ip=%s mac=%s", ip, mac)
+			log.Printf("arp send announcement broadcast - I am ip=%s mac=%s", ip, mac)
 		} else {
-			log.Printf("ARP send announcement unicast - I am ip=%s mac=%s to=%s", ip, mac, dstEther)
+			log.Printf("arp send announcement unicast - I am ip=%s mac=%s to=%s", ip, mac, dstEther)
 		}
 	}
 
@@ -172,7 +172,7 @@ func (c *Handler) WhoIs(ip net.IP) (MACEntry, error) {
 
 	for i := 0; i < 3; i++ {
 		if err := c.Request(c.config.HostMAC, c.config.HostIP, EthernetBroadcast, ip); err != nil {
-			return MACEntry{}, fmt.Errorf("ARP WhoIs error: %w", err)
+			return MACEntry{}, fmt.Errorf("arp WhoIs error: %w", err)
 		}
 		time.Sleep(time.Millisecond * 50)
 
@@ -191,7 +191,7 @@ func (c *Handler) WhoIs(ip net.IP) (MACEntry, error) {
 	}
 
 	if Debug {
-		log.Printf("ARP ip=%s whois not found", ip)
+		log.Printf("arp ip=%s whois not found", ip)
 		c.RLock()
 		c.table.printTable()
 		c.RUnlock()

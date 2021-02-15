@@ -63,7 +63,7 @@ func New(config Config) (c *Handler, err error) {
 	// Set up ARP client with socket
 	c.conn, err = raw.Dial(ifi, syscall.ETH_P_ALL)
 	if err != nil {
-		return nil, fmt.Errorf("ARP dial error: %w", err)
+		return nil, fmt.Errorf("arp dial error: %w", err)
 	}
 
 	return c, nil
@@ -107,7 +107,7 @@ func newHandler(config Config) (c *Handler) {
 	}
 
 	if Debug {
-		log.Printf("ARP Config %s", c.config)
+		log.Printf("arp Config %s", c.config)
 		c.PrintTable()
 	}
 
@@ -158,7 +158,7 @@ func (c *Handler) PrintTable() {
 	c.RLock()
 	defer c.RUnlock()
 
-	log.Printf("ARP Table: %v entries", len(c.table.macTable))
+	log.Printf("arp Table: %v entries", len(c.table.macTable))
 	c.table.printTable()
 }
 
@@ -178,7 +178,7 @@ func (c *Handler) Start(ctx context.Context) error {
 
 	// Set ZERO timeout to block forever
 	// if err := c.conn.SetReadDeadline(time.Time{}); err != nil {
-	// return fmt.Errorf("ARP error in socket: %w", err)
+	// return fmt.Errorf("arp error in socket: %w", err)
 	// }
 
 	if c.config.FullNetworkScanInterval != 0 {
@@ -186,12 +186,12 @@ func (c *Handler) Start(ctx context.Context) error {
 		go func() {
 			c.wg.Add(1)
 			if err := c.scanLoop(ctx, c.config.FullNetworkScanInterval); err != nil {
-				log.Print("ARP goroutine scanLoop terminated unexpectedly", err)
+				log.Print("arp goroutine scanLoop terminated unexpectedly", err)
 				c.Close() // force error in main loop
 			}
 			c.wg.Done()
 			if Debug {
-				log.Print("ARP goroutine scanLoop ended")
+				log.Print("arp goroutine scanLoop ended")
 			}
 		}()
 	}
@@ -200,12 +200,12 @@ func (c *Handler) Start(ctx context.Context) error {
 	go func() {
 		c.wg.Add(1)
 		if err := c.probeOnlineLoop(ctx, c.config.ProbeInterval); err != nil {
-			log.Print("ARP goroutine probeOnlineLoop terminated unexpectedly", err)
+			log.Print("arp goroutine probeOnlineLoop terminated unexpectedly", err)
 		}
 		c.Close() // close conn to force error in main loopi to finish quickly
 		c.wg.Done()
 		if Debug {
-			log.Print("ARP goroutine probeOnlineLoop ended")
+			log.Print("arp goroutine probeOnlineLoop ended")
 		}
 	}()
 
@@ -213,12 +213,12 @@ func (c *Handler) Start(ctx context.Context) error {
 	go func() {
 		c.wg.Add(1)
 		if err := c.purgeLoop(ctx, c.config.OfflineDeadline, c.config.PurgeDeadline); err != nil {
-			log.Print("ARP ListenAndServer purgeLoop terminated unexpectedly", err)
+			log.Print("arp ListenAndServer purgeLoop terminated unexpectedly", err)
 			c.Close() // force error in main loop
 		}
 		c.wg.Done()
 		if Debug {
-			log.Print("ARP goroutine purgeLoop ended")
+			log.Print("arp goroutine purgeLoop ended")
 		}
 	}()
 
@@ -228,12 +228,12 @@ func (c *Handler) Start(ctx context.Context) error {
 			c.wg.Add(1)
 			time.Sleep(time.Millisecond * 100) // Time to start read loop below
 			if err := c.ScanNetwork(ctx, c.config.HomeLAN); err != nil {
-				log.Print("ARP ListenAndServer scanNetwork terminated unexpectedly", err)
+				log.Print("arp ListenAndServer scanNetwork terminated unexpectedly", err)
 				c.Close() // force error in main loop
 			}
 			c.wg.Done()
 			if Debug {
-				log.Print("ARP goroutine scanNetwork ended")
+				log.Print("arp goroutine scanNetwork ended")
 			}
 		}()
 	}
@@ -259,7 +259,6 @@ func (c *Handler) ProcessPacket(host *packet.Host, b []byte) error {
 	notify := 0
 
 	frame := ARP(b)
-	fmt.Printf("arp  : %s\n", frame)
 	if !frame.IsValid() {
 		return packet.ErrParseMessage
 	}
@@ -270,7 +269,7 @@ func (c *Handler) ProcessPacket(host *packet.Host, b []byte) error {
 	// skip link local packets
 	if frame.SrcIP().IsLinkLocalUnicast() || frame.DstIP().IsLinkLocalUnicast() {
 		if Debug {
-			log.Printf("ARP skipping link local packet smac=%v sip=%v tmac=%v tip=%v", frame.SrcMAC(), frame.SrcIP(), frame.DstMAC(), frame.DstIP())
+			log.Printf("arp skipping link local packet smac=%v sip=%v tmac=%v tip=%v", frame.SrcMAC(), frame.SrcIP(), frame.DstMAC(), frame.DstIP())
 		}
 		return nil
 	}
@@ -278,18 +277,18 @@ func (c *Handler) ProcessPacket(host *packet.Host, b []byte) error {
 	if Debug {
 		switch {
 		case frame.Operation() == OperationReply:
-			log.Printf("ARP reply recvd: %s", frame)
+			log.Printf("arp reply recvd: %s", frame)
 		case frame.Operation() == OperationRequest:
 			switch {
 			case frame.SrcIP().Equal(frame.DstIP()):
-				log.Printf("ARP announcement recvd: %s", frame)
+				log.Printf("arp announcement recvd: %s", frame)
 			case frame.SrcIP().Equal(net.IPv4zero):
-				log.Printf("ARP probe recvd: %s", frame)
+				log.Printf("arp probe recvd: %s", frame)
 			default:
-				log.Printf("ARP who is %s: %s ", frame.DstIP(), frame)
+				log.Printf("arp who is %s: %s ", frame.DstIP(), frame)
 			}
 		default:
-			log.Printf("ARP invalid operation: %s", frame)
+			log.Printf("arp invalid operation: %s", frame)
 			return nil
 		}
 	}
@@ -314,7 +313,7 @@ func (c *Handler) ProcessPacket(host *packet.Host, b []byte) error {
 		mac := target.MAC
 		c.RUnlock()
 		if Debug {
-			log.Printf("ARP ip=%s is virtual - send reply smac=%v", frame.DstIP(), mac)
+			log.Printf("arp ip=%s is virtual - send reply smac=%v", frame.DstIP(), mac)
 		}
 		c.reply(frame.SrcMAC(), mac, frame.DstIP(), EthernetBroadcast, frame.DstIP())
 		return nil
@@ -375,7 +374,7 @@ func (c *Handler) ProcessPacket(host *packet.Host, b []byte) error {
 			}
 
 		default:
-			log.Print("ARP unexpected client state in request =", sender.State)
+			log.Print("arp unexpected client state in request =", sender.State)
 		}
 
 	case OperationReply:
@@ -390,9 +389,9 @@ func (c *Handler) ProcessPacket(host *packet.Host, b []byte) error {
 	if notify > 0 {
 		if sender.Online == false {
 			sender.Online = true
-			log.Printf("ARP ip=%s is online mac=%s state=%s ips=%s", frame.SrcIP(), sender.MAC, sender.State, sender.IPs())
+			log.Printf("arp ip=%s is online mac=%s state=%s ips=%s", frame.SrcIP(), sender.MAC, sender.State, sender.IPs())
 		} else {
-			log.Printf("ARP ip=%s is online - updated ip for mac=%s state=%s ips=%s", frame.SrcIP(), sender.MAC, sender.State, sender.IPs())
+			log.Printf("arp ip=%s is online - updated ip for mac=%s state=%s ips=%s", frame.SrcIP(), sender.MAC, sender.State, sender.IPs())
 		}
 
 		if c.notification != nil {
