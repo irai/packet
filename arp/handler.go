@@ -187,7 +187,7 @@ func (c *Handler) Close() {
 // A virtual MAC is a fake mac address used when claiming an existing IP during spoofing.
 // ListenAndServe will send ARP reply on behalf of virtual MACs
 //
-func (c *Handler) ListenAndServe(ctx context.Context) error {
+func (c *Handler) Begin(ctx context.Context) error {
 
 	var wg sync.WaitGroup
 
@@ -251,6 +251,7 @@ func (c *Handler) ListenAndServe(ctx context.Context) error {
 		}()
 	}
 
+	wg.Wait()
 	return nil
 }
 
@@ -334,6 +335,8 @@ func (c *Handler) ProcessPacket(host *packet.Host, b []byte) error {
 	}
 
 	c.Lock()
+	defer c.Unlock()
+
 	sender := c.table.findByMAC(frame.SrcMAC())
 	if sender == nil {
 		// If new client, then create a MACEntry in table
@@ -348,7 +351,6 @@ func (c *Handler) ProcessPacket(host *packet.Host, b []byte) error {
 
 	// Skip packets that we sent as virtual host (i.e. we sent these)
 	if sender.State == StateVirtualHost {
-		c.Unlock()
 		return nil
 	}
 
@@ -398,6 +400,5 @@ func (c *Handler) ProcessPacket(host *packet.Host, b []byte) error {
 		}
 	}
 
-	c.Unlock()
 	return nil
 }

@@ -46,10 +46,10 @@ func addNotification(ctx context.Context, h *Handler) *notificationCounter {
 			case entry := <-channel:
 				if entry.Online {
 					n.onlineCounter++
-					// log.Print("got notification online", entry.String(), n.onlineCounter)
+					log.Print("got notification online", entry.String(), n.onlineCounter)
 				} else {
 					n.offlineCounter++
-					// log.Print("got notification offline", entry.String(), n.offlineCounter)
+					log.Print("got notification offline", entry.String(), n.offlineCounter)
 				}
 			}
 		}
@@ -98,6 +98,7 @@ func setupTestHandler(t *testing.T) *testContext {
 		}
 	}()
 
+	// MUST read the test conn to avoid blocking the sender
 	go func() {
 		buf := make([]byte, 2000)
 		for {
@@ -107,7 +108,7 @@ func setupTestHandler(t *testing.T) *testContext {
 					panic(err)
 				}
 			}
-			if tc.ctx.Err() != context.Canceled {
+			if tc.ctx.Err() == context.Canceled {
 				return
 			}
 			buf = buf[:n]
@@ -126,9 +127,9 @@ func setupTestHandler(t *testing.T) *testContext {
 	}()
 
 	go func() {
-		tc.wg.Add(1)
-		tc.arp.ListenAndServe(tc.ctx)
-		tc.wg.Done()
+		// tc.wg.Add(1)
+		tc.arp.Begin(tc.ctx)
+		// tc.wg.Done()
 	}()
 
 	time.Sleep(time.Millisecond * 10) // time for ListenAndServe to start
@@ -214,6 +215,10 @@ func Test_ARPRequests(t *testing.T) {
 				t.Errorf("Test_Requests:%s error = %v, wantErr %v", tt.name, err, tt.wantErr)
 			}
 			time.Sleep(time.Millisecond * 10)
+
+			tc.arp.Lock()
+			defer tc.arp.Unlock()
+
 			if len(tc.arp.table.macTable) != tt.wantLen {
 				t.Errorf("Test_Requests:%s table len = %v, wantLen %v", tt.name, len(tc.arp.table.macTable), tt.wantLen)
 			}
@@ -293,6 +298,10 @@ func Test_ServeReplies(t *testing.T) {
 				t.Errorf("Test_Requests:%s error = %v, wantErr %v", tt.name, err, tt.wantErr)
 			}
 			time.Sleep(time.Millisecond * 10)
+
+			tc.arp.Lock()
+			defer tc.arp.Unlock()
+
 			if len(tc.arp.table.macTable) != tt.wantLen {
 				t.Errorf("Test_Requests:%s table len = %v, wantLen %v", tt.name, len(tc.arp.table.macTable), tt.wantLen)
 			}
@@ -377,7 +386,7 @@ func Test_CaptureSameIP(t *testing.T) {
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac2, EthernetBroadcast),
 			arp:     newPacket(OperationRequest, mac2, ip5, zeroMAC, ip5),
 			wantErr: nil, wantLen: 3, wantIPs: 4, wantState: StateNormal},
-		{name: "announce old IP2",
+		{name: "announce old IP2-2",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac2, EthernetBroadcast),
 			arp:     newPacket(OperationRequest, mac2, ip2, zeroMAC, ip2),
 			wantErr: nil, wantLen: 3, wantIPs: 4, wantState: StateNormal},
@@ -391,7 +400,12 @@ func Test_CaptureSameIP(t *testing.T) {
 			if _, err := tc.client.WriteTo(ether, nil); err != tt.wantErr {
 				t.Errorf("Test_catpureSameIP:%s error = %v, wantErr %v", tt.name, err, tt.wantErr)
 			}
+			fmt.Println("writing finished")
 			time.Sleep(time.Millisecond * 10)
+
+			tc.arp.Lock()
+			defer tc.arp.Unlock()
+
 			if len(tc.arp.table.macTable) != tt.wantLen {
 				tc.arp.PrintTable()
 				t.Errorf("Test_catpureSameIP:%s table len = %v, wantLen %v", tt.name, len(tc.arp.table.macTable), tt.wantLen)
@@ -429,6 +443,8 @@ func Test_CaptureEnterOffline(t *testing.T) {
 	e4.Online = true
 	tc.arp.ForceIPChange(mac2, true)
 	time.Sleep(time.Millisecond * 20)
+
+	tc.arp.Lock()
 	if e := tc.arp.table.findByMAC(mac2); e == nil || e.State != StateHunt || !e.Online {
 		t.Fatalf("Test_CaptureEnterOffline entry2 state=%s, online=%v", e.State, e.Online)
 	}
@@ -442,6 +458,7 @@ func Test_CaptureEnterOffline(t *testing.T) {
 	if e := tc.arp.table.findByMAC(mac4); e == nil || e.State != StateNormal || !e.Online {
 		t.Fatalf("Test_CaptureEnterOffline entry4 state=%s, online=%v", e.State, e.Online)
 	}
+	tc.arp.Unlock()
 
 	time.Sleep(tc.arp.config.ProbeInterval / 2)
 
@@ -482,6 +499,10 @@ func Test_CaptureEnterOffline(t *testing.T) {
 				t.Errorf("Test_Capture:%s error = %v, wantErr %v", tt.name, err, tt.wantErr)
 			}
 			time.Sleep(time.Millisecond * 10)
+
+			tc.arp.Lock()
+			defer tc.arp.Unlock()
+
 			if len(tc.arp.table.macTable) != tt.wantLen {
 				t.Errorf("Test_Capture:%s table len = %v, wantLen %v", tt.name, len(tc.arp.table.macTable), tt.wantLen)
 			}
