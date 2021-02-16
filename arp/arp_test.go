@@ -428,8 +428,6 @@ func Test_Handler_CaptureSameIP(t *testing.T) {
 	}
 }
 
-/***
-
 func Test_Handler_CaptureEnterOffline(t *testing.T) {
 	// Debug = true
 	// log.SetLevel(log.DebugLevel)
@@ -498,7 +496,7 @@ func Test_Handler_CaptureEnterOffline(t *testing.T) {
 			if err != nil {
 				panic(err)
 			}
-			if _, err := tc.client.WriteTo(ether, nil); err != tt.wantErr {
+			if _, err := tc.outConn.WriteTo(ether, nil); err != tt.wantErr {
 				t.Errorf("Test_Capture:%s error = %v, wantErr %v", tt.name, err, tt.wantErr)
 			}
 			time.Sleep(time.Millisecond * 10)
@@ -542,12 +540,10 @@ func Test_Handler_CaptureEnterOffline(t *testing.T) {
 		t.Fatalf("Test_CaptureEnterOffline is not offline entry=%+v", e)
 	}
 	if e := tc.arp.table.findVirtualIP(ip2); e == nil || e.State != StateVirtualHost || e.Online {
-		tc.arp.PrintTable()
+		tc.arp.printTable()
 		t.Fatalf("Test_CaptureEnterOffline wrong virtualip entry=%v", e)
 	}
 	tc.arp.Unlock()
 
 	log.Printf("notification %+v", notification)
 }
-
-****/
