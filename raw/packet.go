@@ -1,12 +1,19 @@
 package raw
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"net"
 	"syscall"
 )
+
+type PacketProcessor interface {
+	ProcessPacket(*Host, []byte) error
+	Start(context.Context) error
+	// Stop() error
+}
 
 // Ethernet packet types - ETHER_TYPE
 const (
@@ -27,6 +34,8 @@ const (
 var (
 	ErrInvalidLen    = errors.New("invalid len")
 	ErrPayloadTooBig = errors.New("payload too big")
+	ErrParseMessage  = errors.New("failed to parse message")
+	ErrInvalidConn   = errors.New("invalid connection")
 )
 
 // CopyIP simply copies the IP to a new buffer with the same len - either 4 or 16

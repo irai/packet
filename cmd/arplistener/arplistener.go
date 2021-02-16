@@ -31,7 +31,7 @@ func main() {
 	NIC := *ifaceFlag
 
 	var err error
-	HostIP, HostMAC, err := getNICInfo(NIC)
+	HostIP, _, err := getNICInfo(NIC)
 	if err != nil {
 		log.Fatal("error cannot get host ip and mac ", err)
 	}
@@ -48,6 +48,7 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
+	/**
 	config := arp.Config{
 		NIC:     NIC,
 		HostMAC: HostMAC, HostIP: HostIP,
@@ -55,6 +56,7 @@ func main() {
 		ProbeInterval:           time.Minute * 1,
 		FullNetworkScanInterval: time.Minute * 20,
 		PurgeDeadline:           time.Minute * 10}
+		***/
 
 	// setup server with server conn
 	packet, err := packet.New(NIC)
@@ -63,32 +65,20 @@ func main() {
 	}
 	defer packet.Close()
 
-	arpHandler, err := arp.New(config)
-	if err != nil {
-		panic(err)
-	}
-	defer arpHandler.Close()
-
-	packet.ARPHook("arp", arpHandler.ProcessPacket)
 	go func() {
 		if err := packet.ListenAndServe(ctx); err != nil {
 			panic(err)
 		}
 	}()
 
-	// start arp handler
-	if err := arpHandler.Start(ctx); err != nil {
-		panic(err)
-	}
-
 	time.Sleep(time.Millisecond * 10) // time for all goroutine to start
 
 	arpChannel := make(chan arp.MACEntry, 16)
-	arpHandler.AddNotificationChannel(arpChannel)
+	packet.ARP.(*arp.Handler).AddNotificationChannel(arpChannel)
 
 	go arpNotification(arpChannel)
 
-	cmd(packet, arpHandler)
+	cmd(packet)
 
 	cancel()
 
@@ -103,7 +93,8 @@ func arpNotification(arpChannel chan arp.MACEntry) {
 	}
 }
 
-func cmd(packet *packet.Handler, c *arp.Handler) {
+func cmd(packet *packet.Handler) {
+	arpHandler := packet.ARP.(*arp.Handler)
 	reader := bufio.NewReader(os.Stdin)
 	for {
 		fmt.Println("Command: (q)uit | (l)ist | (f)force <mac> | (s) stop <mac> | (g) toggle log")
@@ -126,21 +117,21 @@ func cmd(packet *packet.Handler, c *arp.Handler) {
 				arp.Debug = true
 			}
 		case 'l':
-			c.PrintTable()
+			arpHandler.PrintTable()
 		case 'f':
-			entry, err := getMAC(c, text)
+			entry, err := getMAC(arpHandler, text)
 			if err != nil {
 				log.Print(err)
 				break
 			}
-			c.ForceIPChange(entry.MAC, true)
+			arpHandler.ForceIPChange(entry.MAC, true)
 		case 's':
-			MACEntry, err := getMAC(c, text)
+			MACEntry, err := getMAC(arpHandler, text)
 			if err != nil {
 				log.Print(err)
 				break
 			}
-			c.StopIPChange(MACEntry.MAC)
+			arpHandler.StopIPChange(MACEntry.MAC)
 		}
 	}
 }

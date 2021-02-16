@@ -70,9 +70,10 @@ func htons(i uint16) uint16 {
 
 // Dial creates a net.PacketConn which can be used to send and receive
 // data at the device driver level.
-func Dial(ifi *net.Interface, proto uint16) (*packetConn, error) {
+func Dial(ifi *net.Interface) (*packetConn, error) {
 
 	filename := "eth-packet-socket-client"
+	proto := uint16(syscall.ETH_P_ALL)
 
 	fd, err := unix.Socket(syscall.AF_PACKET, syscall.SOCK_RAW, int(htons(proto)))
 	if err != nil {

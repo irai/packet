@@ -56,7 +56,7 @@ func Test_Spoof_ForceIPChange(t *testing.T) {
 			if err != nil {
 				panic(err)
 			}
-			if _, err := tc.client.WriteTo(ether, nil); err != tt.wantErr {
+			if _, err := tc.outConn.WriteTo(ether, nil); err != tt.wantErr {
 				t.Errorf("TestHandler_ForceIPChange:%s error = %v, wantErr %v", tt.name, err, tt.wantErr)
 			}
 			time.Sleep(time.Millisecond * 10)

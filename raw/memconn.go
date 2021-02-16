@@ -18,7 +18,6 @@ func NewBufferedConn() (a *bufferedPacketConn, b *bufferedPacketConn) {
 }
 
 func (p *bufferedPacketConn) Close() error {
-
 	return p.conn.Close()
 }
 

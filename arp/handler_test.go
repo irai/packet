@@ -59,41 +59,28 @@ func addNotification(ctx context.Context, h *Handler) *notificationCounter {
 }
 
 type testContext struct {
-	arp    *Handler
-	packet *packet.Handler
-	server net.PacketConn
-	client net.PacketConn
-	wg     sync.WaitGroup
-	ctx    context.Context
-	cancel context.CancelFunc
+	inConn  net.PacketConn
+	outConn net.PacketConn
+	arp     *Handler
+	packet  *packet.Handler
+	wg      sync.WaitGroup
+	ctx     context.Context
+	cancel  context.CancelFunc
 }
 
 func setupTestHandler(t *testing.T) *testContext {
 
-	all, _ := net.Interfaces()
-
-	config := Config{
-		NIC:      all[0].Name,
-		HostMAC:  hostMAC,
-		HostIP:   hostIP,
-		RouterIP: routerIP, HomeLAN: homeLAN,
-		FullNetworkScanInterval: time.Second * 60,
-		ProbeInterval:           time.Second * 1,
-		OfflineDeadline:         time.Second * 2,
-		PurgeDeadline:           time.Second * 4,
-	}
+	var err error
 
 	tc := testContext{}
-
-	tc.arp, tc.client, _ = NewTestHandler(config, nil)
-
+	tc.inConn, tc.outConn = raw.NewBufferedConn()
 	tc.ctx, tc.cancel = context.WithCancel(context.Background())
 
-	// MUST read the test conn to avoid blocking the sender
+	// MUST read the out conn to avoid blocking the sender
 	go func() {
 		buf := make([]byte, 2000)
 		for {
-			n, _, err := tc.client.ReadFrom(buf)
+			n, _, err := tc.outConn.ReadFrom(buf)
 			if err != nil {
 				if tc.ctx.Err() != context.Canceled {
 					panic(err)
@@ -113,23 +100,39 @@ func setupTestHandler(t *testing.T) *testContext {
 				s := fmt.Sprintf("error arp client packet %s %s", ether, arp)
 				panic(s)
 			}
-			// fmt.Println("read client packet", raw.Ether(buf))
+			// fmt.Println("read client packet", raw.Ether(buf), ARP(raw.Ether(buf).Payload()))
 		}
 	}()
 
 	// setup server with server conn
-	tc.packet, _ = packet.Config{Conn: tc.arp.conn}.New("")
-	tc.packet.ARPHook("arp", tc.arp.ProcessPacket)
+	tc.packet, err = packet.Config{Conn: tc.inConn}.New("eth0")
+	if err != nil {
+		all, _ := net.Interfaces()
+		fmt.Println("valid interfaces")
+		for _, v := range all {
+			fmt.Printf("%s: %+v\n", v.Name, v)
+		}
+		panic(err)
+	}
+
+	arpConfig := Config{
+		HostMAC:  hostMAC,
+		HostIP:   hostIP,
+		RouterIP: routerIP, HomeLAN: homeLAN,
+		FullNetworkScanInterval: time.Second * 60,
+		ProbeInterval:           time.Second * 1,
+		OfflineDeadline:         time.Second * 2,
+		PurgeDeadline:           time.Second * 4,
+	}
+	tc.arp, err = New(tc.inConn, tc.packet.LANHosts, arpConfig)
+	tc.arp.table = newARPTable() // we want an empty table
+	tc.packet.ARP = tc.arp
+
 	go func() {
 		if err := tc.packet.ListenAndServe(tc.ctx); err != nil {
 			panic(err)
 		}
 	}()
-
-	// start arp handler
-	if err := tc.arp.Start(tc.ctx); err != nil {
-		panic(err)
-	}
 
 	time.Sleep(time.Millisecond * 10) // time for all goroutine to start
 	return &tc
@@ -209,8 +212,8 @@ func Test_Handler_ARPRequests(t *testing.T) {
 			if err != nil {
 				panic(err)
 			}
-			fmt.Println("frame ether: ", ether, "frame arp: ", ARP(ether.Payload()), "srcarp: ", tt.arp)
-			if _, err := tc.client.WriteTo(ether, nil); err != tt.wantErr {
+			// fmt.Println("frame ether: ", ether, "frame arp: ", ARP(ether.Payload()), "srcarp: ", tt.arp)
+			if _, err := tc.outConn.WriteTo(ether, nil); err != tt.wantErr {
 				t.Errorf("Test_Requests:%s error = %v, wantErr %v", tt.name, err, tt.wantErr)
 			}
 			time.Sleep(time.Millisecond * 10)
@@ -219,6 +222,7 @@ func Test_Handler_ARPRequests(t *testing.T) {
 			defer tc.arp.Unlock()
 
 			if len(tc.arp.table.macTable) != tt.wantLen {
+				tc.arp.printTable()
 				t.Errorf("Test_Requests:%s table len = %v, wantLen %v", tt.name, len(tc.arp.table.macTable), tt.wantLen)
 			}
 			if tt.wantIPs != 0 {
@@ -293,7 +297,7 @@ func Test_Handler_ServeReplies(t *testing.T) {
 			if err != nil {
 				panic(err)
 			}
-			if _, err := tc.client.WriteTo(ether, nil); err != tt.wantErr {
+			if _, err := tc.outConn.WriteTo(ether, nil); err != tt.wantErr {
 				t.Errorf("Test_Requests:%s error = %v, wantErr %v", tt.name, err, tt.wantErr)
 			}
 			time.Sleep(time.Millisecond * 10)
@@ -396,7 +400,7 @@ func Test_Handler_CaptureSameIP(t *testing.T) {
 			if err != nil {
 				panic(err)
 			}
-			if _, err := tc.client.WriteTo(ether, nil); err != tt.wantErr {
+			if _, err := tc.outConn.WriteTo(ether, nil); err != tt.wantErr {
 				t.Errorf("Test_catpureSameIP:%s error = %v, wantErr %v", tt.name, err, tt.wantErr)
 			}
 			fmt.Println("writing finished")

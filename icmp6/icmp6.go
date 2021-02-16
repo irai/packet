@@ -11,7 +11,6 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/irai/packet"
 	"github.com/irai/packet/raw"
 	"github.com/mdlayher/netx/rfc4193"
 
@@ -158,7 +157,7 @@ func (h *Handler) autoConfigureRouter(router Router) {
 
 var repeat int
 
-func (h *Handler) ProcessPacket(host *packet.Host, p []byte) error {
+func (h *Handler) ProcessPacket(host *raw.Host, p []byte) error {
 
 	// TODO: verify checksum?
 	frame := raw.ICMP(p)

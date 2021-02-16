@@ -6,12 +6,11 @@ import (
 	"fmt"
 	"net"
 	"sync"
-	"syscall"
 	"time"
 
 	"log"
 
-	"github.com/irai/packet"
+	"github.com/irai/arp"
 	"github.com/irai/packet/raw"
 )
 
@@ -19,7 +18,6 @@ import (
 //
 // Set FullNetworkScanInterval = 0 to avoid network scan
 type Config struct {
-	NIC                     string           `yaml:"-"`
 	HostMAC                 net.HardwareAddr `yaml:"-"`
 	HostIP                  net.IP           `yaml:"-"`
 	RouterIP                net.IP           `yaml:"-"`
@@ -39,7 +37,7 @@ func (c Config) String() string {
 type Handler struct {
 	conn        net.PacketConn
 	table       *arpTable
-	config      Config
+	config      arp.Config
 	routerEntry MACEntry // store the router mac address
 	sync.RWMutex
 	notification chan<- MACEntry // notification channel for state change
@@ -51,67 +49,39 @@ var (
 	Debug bool
 )
 
-// New creates an ARP handler for a given interface.
-func New(config Config) (c *Handler, err error) {
-	c = newHandler(config)
+// New creates an ARP handler for a given connection
+func New(conn net.PacketConn, table *raw.HostTable, config Config) (h *Handler, err error) {
+	h = &Handler{}
+	h.table, _ = loadARPProcTable() // load linux proc table
+	h.config.HostMAC = config.HostMAC
+	h.config.HostIP = config.HostIP.To4()
+	h.config.RouterIP = config.RouterIP.To4()
+	h.config.HomeLAN = config.HomeLAN
+	h.config.FullNetworkScanInterval = config.FullNetworkScanInterval
+	h.config.ProbeInterval = config.ProbeInterval
+	h.config.OfflineDeadline = config.OfflineDeadline
+	h.config.PurgeDeadline = config.PurgeDeadline
+	h.conn = conn
 
-	ifi, err := net.InterfaceByName(config.NIC)
-	if err != nil {
-		return nil, fmt.Errorf("InterfaceByName error: %w", err)
+	if h.config.FullNetworkScanInterval <= 0 || h.config.FullNetworkScanInterval > time.Hour*12 {
+		h.config.FullNetworkScanInterval = time.Minute * 60
 	}
-
-	// Set up ARP client with socket
-	c.conn, err = raw.Dial(ifi, syscall.ETH_P_ALL)
-	if err != nil {
-		return nil, fmt.Errorf("arp dial error: %w", err)
+	if h.config.ProbeInterval <= 0 || h.config.ProbeInterval > time.Minute*10 {
+		h.config.ProbeInterval = time.Minute * 2
 	}
-
-	return c, nil
-}
-
-// NewTestHandler allow you to pass a PacketConn. Useful for testing
-// if p is nil, auto create a bufferedPacketConn
-func NewTestHandler(config Config, p net.PacketConn) (*Handler, net.PacketConn, error) {
-	c := newHandler(config)
-	c.table = newARPTable() // we want an empty table for testing
-	client, server := raw.NewBufferedConn()
-	c.conn = server
-
-	return c, client, nil
-}
-
-func newHandler(config Config) (c *Handler) {
-	c = &Handler{}
-	c.table, _ = loadARPProcTable() // load linux proc table
-	c.config.NIC = config.NIC
-	c.config.HostMAC = config.HostMAC
-	c.config.HostIP = config.HostIP.To4()
-	c.config.RouterIP = config.RouterIP.To4()
-	c.config.HomeLAN = config.HomeLAN
-	c.config.FullNetworkScanInterval = config.FullNetworkScanInterval
-	c.config.ProbeInterval = config.ProbeInterval
-	c.config.OfflineDeadline = config.OfflineDeadline
-	c.config.PurgeDeadline = config.PurgeDeadline
-
-	if c.config.FullNetworkScanInterval <= 0 || c.config.FullNetworkScanInterval > time.Hour*12 {
-		c.config.FullNetworkScanInterval = time.Minute * 60
+	if h.config.OfflineDeadline <= h.config.ProbeInterval {
+		h.config.OfflineDeadline = h.config.ProbeInterval * 2
 	}
-	if c.config.ProbeInterval <= 0 || c.config.ProbeInterval > time.Minute*10 {
-		c.config.ProbeInterval = time.Minute * 2
-	}
-	if c.config.OfflineDeadline <= c.config.ProbeInterval {
-		c.config.OfflineDeadline = c.config.ProbeInterval * 2
-	}
-	if c.config.PurgeDeadline <= c.config.OfflineDeadline {
-		c.config.PurgeDeadline = time.Minute * 61
+	if h.config.PurgeDeadline <= h.config.OfflineDeadline {
+		h.config.PurgeDeadline = time.Minute * 61
 	}
 
 	if Debug {
-		log.Printf("arp Config %s", c.config)
-		c.PrintTable()
+		log.Printf("arp Config %s", h.config)
+		h.PrintTable()
 	}
 
-	return c
+	return h, nil
 }
 
 // AddNotificationChannel set the notification channel for when the MACEntry
@@ -157,7 +127,10 @@ func (c *Handler) FindIP(ip net.IP) (entry MACEntry, found bool) {
 func (c *Handler) PrintTable() {
 	c.RLock()
 	defer c.RUnlock()
+	c.printTable()
+}
 
+func (c *Handler) printTable() {
 	log.Printf("arp Table: %v entries", len(c.table.macTable))
 	c.table.printTable()
 }
@@ -233,7 +206,7 @@ func (c *Handler) Start(ctx context.Context) error {
 			}
 			c.wg.Done()
 			if Debug {
-				log.Print("arp goroutine scanNetwork ended")
+				log.Print("arp goroutine scanNetwork ended normally")
 			}
 		}()
 	}
@@ -255,12 +228,12 @@ func (c *Handler) Start(ctx context.Context) error {
 // Virtual MACs
 // A virtual MAC is a fake mac address used when claiming an existing IP during spoofing.
 // ListenAndServe will send ARP reply on behalf of virtual MACs
-func (c *Handler) ProcessPacket(host *packet.Host, b []byte) error {
+func (c *Handler) ProcessPacket(host *raw.Host, b []byte) error {
 	notify := 0
 
 	frame := ARP(b)
 	if !frame.IsValid() {
-		return packet.ErrParseMessage
+		return raw.ErrParseMessage
 	}
 	if Debug {
 		fmt.Printf("arp  : %s\n", frame)
@@ -395,6 +368,7 @@ func (c *Handler) ProcessPacket(host *packet.Host, b []byte) error {
 		}
 
 		if c.notification != nil {
+			fmt.Println("DEBUG: will notify")
 			c.notification <- *sender
 		}
 	}

@@ -83,7 +83,7 @@ func (h *Handler) Close() error {
 	return nil
 }
 
-func (h *Handler) ProcessPacket(host *packet.Host, b []byte) error {
+func (h *Handler) ProcessPacket(host *raw.Host, b []byte) error {
 
 	icmpFrame := raw.ICMP(b)
 
@@ -198,7 +198,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context, pt *packet.Handler) (err 
 			continue
 		}
 
-		host, _ := pt.FindOrCreateHost(ether.Src(), ipFrame.Src())
+		host, _ := pt.LANHosts.FindOrCreateHost(ether.Src(), ipFrame.Src())
 		h.ProcessPacket(host, ipFrame.Payload())
 	}
 }

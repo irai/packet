@@ -1,11 +1,10 @@
 package packet
 
 import (
+	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"net"
-	"sync"
 	"syscall"
 	"time"
 
@@ -17,59 +16,50 @@ import (
 // Debug packets turn on logging if desirable
 var Debug bool
 
-// Sentinel errors
-var (
-	ErrParseMessage = errors.New("failed to parse message")
-)
-
 type Hook struct {
 	name     string
-	function func(*Host, []byte) error
+	function func(*raw.Host, []byte) error
 }
 
 // Config has a list of configurable parameters that overide package defaults
 type Config struct {
+
 	// Conn enables the client to override the connection with a another packet conn
 	// usefule for testing
-	Conn net.PacketConn
+	Conn net.PacketConn // listen connectinon
 }
 
 // Handler implements ICMPv6 Neighbor Discovery Protocol
 // see: https://mdlayher.com/blog/network-protocol-breakdown-ndp-and-go/
 type Handler struct {
 	conn         net.PacketConn
-	mutex        sync.Mutex
 	ifi          *net.Interface
-	LANHosts     map[string]*Host
+	LANHosts     *raw.HostTable
 	Config       Config
 	handlerIP4   []Hook
 	handlerIP6   []Hook
 	handlerICMP4 []Hook
 	handlerICMP6 []Hook
-	handlerARP   Hook
+	ARP          raw.PacketProcessor
 }
 
-func (h *Handler) IP4Hook(name string, f func(*Host, []byte) error) error {
+func (h *Handler) IP4Hook(name string, f func(*raw.Host, []byte) error) error {
 	hook := Hook{name: name, function: f}
 	h.handlerIP4 = append(h.handlerIP4, hook)
 	return nil
 }
 
-func (h *Handler) IP6Hook(name string, f func(*Host, []byte) error) error {
+func (h *Handler) IP6Hook(name string, f func(*raw.Host, []byte) error) error {
 	hook := Hook{name: name, function: f}
 	h.handlerIP6 = append(h.handlerIP6, hook)
 	return nil
 }
-func (h *Handler) ARPHook(name string, f func(*Host, []byte) error) error {
-	h.handlerARP = Hook{name: name, function: f}
-	return nil
-}
-func (h *Handler) ICMP4Hook(name string, f func(*Host, []byte) error) error {
+func (h *Handler) ICMP4Hook(name string, f func(*raw.Host, []byte) error) error {
 	hook := Hook{name: name, function: f}
 	h.handlerICMP4 = append(h.handlerICMP4, hook)
 	return nil
 }
-func (h *Handler) ICMP6Hook(name string, f func(*Host, []byte) error) error {
+func (h *Handler) ICMP6Hook(name string, f func(*raw.Host, []byte) error) error {
 	hook := Hook{name: name, function: f}
 	h.handlerICMP6 = append(h.handlerICMP6, hook)
 	return nil
@@ -80,22 +70,35 @@ func New(nic string) (*Handler, error) {
 	return Config{}.New(nic)
 }
 
-// New creates an ICMPv6 handler with config values
+// New creates an packet handler with config values
 func (config Config) New(nic string) (*Handler, error) {
 	var err error
 
-	h := &Handler{Config: config, LANHosts: make(map[string]*Host, 64)}
-
-	// Override conn
-	if config.Conn != nil {
-		h.conn = config.Conn
-		return h, nil
-	}
+	h := &Handler{Config: config, LANHosts: raw.New()}
 
 	h.ifi, err = net.InterfaceByName(nic)
 	if err != nil {
 		return nil, fmt.Errorf("interface not found nic=%s: %w", nic, err)
 	}
+
+	// Skip if conn is overriden
+	h.conn = config.Conn
+	if h.conn == nil {
+		h.conn, err = h.setupConn()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return h, nil
+}
+
+// Close closes the underlying sockets
+func (h *Handler) Close() error {
+	h.conn.Close()
+	return nil
+}
+func (h *Handler) setupConn() (conn net.PacketConn, err error) {
 
 	// see syscall constants for full list of available network protocols
 	// https://golang.org/pkg/syscall/
@@ -121,18 +124,16 @@ func (config Config) New(nic string) (*Handler, error) {
 	}
 
 	// see: https://www.man7.org/linux/man-pages/man7/packet.7.html
-	h.conn, err = raw.ListenPacket(h.ifi, syscall.ETH_P_ALL, raw.Config{Filter: bpf})
+	conn, err = raw.ListenPacket(h.ifi, syscall.ETH_P_ALL, raw.Config{Filter: bpf})
 	if err != nil {
 		return nil, fmt.Errorf("raw.ListenPacket error: %w", err)
 	}
 
-	return h, nil
+	return conn, nil
 }
 
-// Close closes the underlying sockets
-func (h *Handler) Close() error {
-	h.conn.Close()
-	return nil
+func (h *Handler) PrintTable() {
+	h.LANHosts.PrintTable()
 }
 
 // isUnicastMAC return true if the mac address is unicast
@@ -150,6 +151,16 @@ func isUnicastMAC(mac net.HardwareAddr) bool {
 // ListenAndServe listen for raw packets and invoke hooks as required
 func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
+	// start arp handler
+	if h.ARP != nil {
+		go func() {
+			time.Sleep(time.Millisecond * 200) // time for read to start
+			if err := h.ARP.Start(ctxt); err != nil {
+				fmt.Println("error: in ARP start:", err)
+			}
+		}()
+	}
+
 	buf := make([]byte, raw.EthMaxSize)
 	for {
 		if err = h.conn.SetReadDeadline(time.Now().Add(time.Second * 2)); err != nil {
@@ -159,6 +170,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			return
 		}
 
+		fmt.Println("debug read arp")
 		n, _, err1 := h.conn.ReadFrom(buf)
 		if err1 != nil {
 			if err1, ok := err1.(net.Error); ok && err1.Temporary() {
@@ -175,16 +187,25 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			log.Error("icmp invalid ethernet packet ", ether.EtherType())
 			continue
 		}
+
+		// Ignore packets sent via our interface
+		// TODO: should this be in the bpf rules?
+		if bytes.Equal(ether.Src(), h.ifi.HardwareAddr) {
+			continue
+		}
+
+		// Only interested in unicast ethernet
 		if !isUnicastMAC(ether.Src()) {
 			continue
 		}
+
 		if Debug {
 			fmt.Println("ether: ", ether)
 		}
 
 		var l4Proto int
 		var l4Payload []byte
-		var host *Host
+		var host *raw.Host
 		switch ether.EtherType() {
 		case syscall.ETH_P_IP:
 			frame := raw.IP4(ether.Payload())
@@ -199,7 +220,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				fmt.Println("ignore IP4 ", frame)
 				continue
 			}
-			host, _ = h.findOrCreateHost(ether.Src(), frame.Src())
+			host, _ = h.LANHosts.FindOrCreateHost(ether.Src(), frame.Src())
 			l4Proto = frame.Protocol()
 			l4Payload = frame.Payload()
 			for _, v := range h.handlerIP4 {
@@ -223,16 +244,13 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			l4Proto = frame.NextHeader()
 			l4Payload = frame.Payload()
 
-			host, _ = h.findOrCreateHost(ether.Src(), frame.Src())
+			host, _ = h.LANHosts.FindOrCreateHost(ether.Src(), frame.Src())
 			for _, v := range h.handlerIP6 {
 				v.function(host, ether)
 			}
 
 		case syscall.ETH_P_ARP:
-			if h.handlerARP.name == "" {
-				continue
-			}
-			if err := h.handlerARP.function(host, ether.Payload()); err != nil {
+			if err := h.ARP.ProcessPacket(host, ether.Payload()); err != nil {
 				fmt.Printf("packet: error processing arp: %s\n", err)
 			}
 			continue // Skip nextHeader check
