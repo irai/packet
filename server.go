@@ -95,9 +95,19 @@ func (config Config) New(nic string) (*Handler, error) {
 
 // Close closes the underlying sockets
 func (h *Handler) Close() error {
+	fmt.Println("DEBUG closing server")
 	h.conn.Close()
 	return nil
 }
+
+func (h *Handler) Conn() net.PacketConn {
+	return h.conn
+}
+
+func (h *Handler) HostMAC() net.HardwareAddr {
+	return h.ifi.HardwareAddr
+}
+
 func (h *Handler) setupConn() (conn net.PacketConn, err error) {
 
 	// see syscall constants for full list of available network protocols
@@ -152,13 +162,12 @@ func isUnicastMAC(mac net.HardwareAddr) bool {
 func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 	// start arp handler
-	if h.ARP != nil {
-		go func() {
-			time.Sleep(time.Millisecond * 200) // time for read to start
-			if err := h.ARP.Start(ctxt); err != nil {
-				fmt.Println("error: in ARP start:", err)
-			}
-		}()
+	if h.ARP == nil {
+		return fmt.Errorf("nil ARP handler")
+	}
+
+	if err := h.ARP.Start(ctxt); err != nil {
+		fmt.Println("error: in ARP start:", err)
 	}
 
 	buf := make([]byte, raw.EthMaxSize)
@@ -170,16 +179,15 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			return
 		}
 
-		fmt.Println("debug read arp")
-		n, _, err1 := h.conn.ReadFrom(buf)
-		if err1 != nil {
-			if err1, ok := err1.(net.Error); ok && err1.Temporary() {
+		n, _, err := h.conn.ReadFrom(buf)
+		if err != nil {
+			if err, ok := err.(net.Error); ok && err.Temporary() {
 				continue
 			}
 			if ctxt.Err() != context.Canceled {
-				return fmt.Errorf("read error: %w", err1)
+				return fmt.Errorf("read error: %w", err)
 			}
-			return
+			return nil
 		}
 
 		ether := raw.Ether(buf[:n])

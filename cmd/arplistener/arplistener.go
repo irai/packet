@@ -28,10 +28,24 @@ func main() {
 
 	arp.Debug = true
 
-	NIC := *ifaceFlag
+	nic := *ifaceFlag
 
-	var err error
-	HostIP, _, err := getNICInfo(NIC)
+	_, err := net.InterfaceByName(nic)
+	if err != nil {
+		fmt.Printf("error opening nic=%s: %s\n", nic, err)
+		iif, _ := net.Interfaces()
+		fmt.Printf("available interfaces\n")
+		for _, v := range iif {
+			addrs, _ := v.Addrs()
+			fmt.Printf("  name=%s mac=%s\n", v.Name, v.HardwareAddr)
+			for _, v := range addrs {
+				fmt.Printf("    ip=%s\n", v)
+			}
+		}
+		return
+	}
+
+	HostIP, _, err := getNICInfo(nic)
 	if err != nil {
 		log.Fatal("error cannot get host ip and mac ", err)
 	}
@@ -48,23 +62,25 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	/**
-	config := arp.Config{
-		NIC:     NIC,
-		HostMAC: HostMAC, HostIP: HostIP,
-		RouterIP: HomeRouterIP, HomeLAN: HomeLAN,
-		ProbeInterval:           time.Minute * 1,
-		FullNetworkScanInterval: time.Minute * 20,
-		PurgeDeadline:           time.Minute * 10}
-		***/
-
-	// setup server with server conn
-	packet, err := packet.New(NIC)
+	// setup packet listener
+	packet, err := packet.New(nic)
 	if err != nil {
 		panic(err)
 	}
 	defer packet.Close()
 
+	// setup ARP handler
+	arpConfig := arp.Config{
+		HostMAC:  packet.HostMAC(),
+		HostIP:   HostIP,
+		RouterIP: HomeRouterIP, HomeLAN: HomeLAN,
+		ProbeInterval:           time.Minute * 1,
+		FullNetworkScanInterval: time.Minute * 20,
+		PurgeDeadline:           time.Minute * 10}
+	arpHandler, err := arp.New(packet.Conn(), packet.LANHosts, arpConfig)
+	packet.ARP = arpHandler
+
+	// Start server listener
 	go func() {
 		if err := packet.ListenAndServe(ctx); err != nil {
 			panic(err)
@@ -81,6 +97,7 @@ func main() {
 	cmd(packet)
 
 	cancel()
+	time.Sleep(time.Millisecond * 100)
 
 }
 
