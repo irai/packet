@@ -83,7 +83,9 @@ func main() {
 	// Start server listener
 	go func() {
 		if err := packet.ListenAndServe(ctx); err != nil {
-			panic(err)
+			if ctx.Err() != context.Canceled {
+				panic(err)
+			}
 		}
 	}()
 
