@@ -141,9 +141,8 @@ func (c *Handler) GetTable() []MACEntry {
 }
 
 // Close will terminate the ListenAndServer goroutine as well as all other pending goroutines.
-func (c *Handler) Close() {
-	// Close the arp socket
-	c.conn.Close()
+func (c *Handler) End() {
+	// Don't close the socket - it is shared with packet
 }
 
 // Start start background processes
@@ -160,7 +159,7 @@ func (c *Handler) Start(ctx context.Context) error {
 			c.wg.Add(1)
 			if err := c.scanLoop(ctx, c.config.FullNetworkScanInterval); err != nil {
 				log.Print("arp goroutine scanLoop terminated unexpectedly", err)
-				c.Close() // force error in main loop
+				c.conn.Close() // force error in main loop
 			}
 			c.wg.Done()
 			if Debug {
@@ -174,8 +173,8 @@ func (c *Handler) Start(ctx context.Context) error {
 		c.wg.Add(1)
 		if err := c.probeOnlineLoop(ctx, c.config.ProbeInterval); err != nil {
 			log.Print("arp goroutine probeOnlineLoop terminated unexpectedly", err)
+			c.conn.Close()
 		}
-		c.Close() // close conn to force error in main loopi to finish quickly
 		c.wg.Done()
 		if Debug {
 			log.Print("arp goroutine probeOnlineLoop ended")
@@ -187,7 +186,7 @@ func (c *Handler) Start(ctx context.Context) error {
 		c.wg.Add(1)
 		if err := c.purgeLoop(ctx, c.config.OfflineDeadline, c.config.PurgeDeadline); err != nil {
 			log.Print("arp ListenAndServer purgeLoop terminated unexpectedly", err)
-			c.Close() // force error in main loop
+			c.conn.Close() // force error in main loop
 		}
 		c.wg.Done()
 		if Debug {
@@ -202,7 +201,7 @@ func (c *Handler) Start(ctx context.Context) error {
 			time.Sleep(time.Millisecond * 100) // Time to start read loop below
 			if err := c.ScanNetwork(ctx, c.config.HomeLAN); err != nil {
 				log.Print("arp ListenAndServer scanNetwork terminated unexpectedly", err)
-				c.Close() // force error in main loop
+				c.conn.Close() // force error in main loop
 			}
 			c.wg.Done()
 			if Debug {
