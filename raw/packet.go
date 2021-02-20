@@ -159,6 +159,13 @@ func EtherMarshalBinary(b []byte, hType uint16, srcMAC net.HardwareAddr, dstMAC 
 	return Ether(b)
 }
 
+func IsIP6(ip net.IP) bool {
+	if ip.To16() != nil && ip.To4() == nil {
+		return true
+	}
+	return false
+}
+
 // IP4 provide access to IP fields without copying data.
 // see: ipv4.ParseHeader in https://raw.githubusercontent.com/golang/net/master/ipv4/header.go
 type IP4 []byte

@@ -14,13 +14,6 @@ import (
 	"golang.org/x/net/ipv6"
 )
 
-const (
-	icmpv4EchoRequest = 8
-	icmpv4EchoReply   = 0
-	icmpv6EchoRequest = 128
-	icmpv6EchoReply   = 129
-)
-
 type icmpEntry struct {
 	msgRecv *icmp.Message
 	expire  time.Time

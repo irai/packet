@@ -9,6 +9,8 @@ import (
 
 type ICMP6 []byte
 
+// IsValid validates the packet
+// TODO: verify checksum?
 func (p ICMP6) IsValid() bool {
 	if len(p) > 8 {
 		return true

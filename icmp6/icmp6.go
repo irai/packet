@@ -18,6 +18,10 @@ import (
 // Debug packets turn on logging if desirable
 var Debug bool
 
+type ICMP6Data struct {
+	router *Router
+}
+
 // Router holds a router identification
 type Router struct {
 	MAC             net.HardwareAddr // LLA - Local link address
@@ -42,14 +46,23 @@ type Event struct {
 
 // PrintTable logs ICMP6 tables to standard out
 func (h *Handler) PrintTable() {
-	/**
-	if h.LANHosts.Len() > 0 {
-		fmt.Printf("icmp6 hosts table len=%v\n", h.LANHosts.Len())
-		for _, v := range h.LANHosts {
-			fmt.Printf("mac=%s ip=%v online=%v router=%v\n", v.MAC, v.IP, v.Online, v.Router)
+	// Important: Lock the global table
+	h.LANHosts.Lock()
+	defer h.LANHosts.Unlock()
+
+	if len(h.LANHosts.Table) > 0 {
+		fmt.Printf("icmp6 hosts table len=%v\n", len(h.LANHosts.Table))
+		for _, v := range h.LANHosts.Table {
+			if raw.IsIP6(v.IP) {
+				fmt.Printf("mac=%s ip=%v online=%v IP6router=%v\n", v.MAC, v.IP, v.Online, v.IPV6Router)
+			}
 		}
 	}
-	***/
+
+	// lock this handler
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
+
 	if len(h.LANRouters) > 0 {
 		fmt.Printf("icmp6 routers table len=%v\n", len(h.LANRouters))
 		for _, v := range h.LANRouters {
@@ -139,11 +152,19 @@ var repeat int
 
 func (h *Handler) ProcessPacket(host *raw.Host, b []byte) error {
 
+	// retrieve or set store
+	h.LANHosts.Lock()
+	store, _ := host.ICMP6.(*ICMP6Data)
+	if store == nil {
+		store = &ICMP6Data{}
+		host.ICMP6 = store
+	}
+	h.LANHosts.Unlock()
+
 	ether := raw.Ether(b)
 	ip6Frame := raw.IP6(ether.Payload())
 	icmp6Frame := ICMP6(ip6Frame.Payload())
 
-	// TODO: verify checksum?
 	if !icmp6Frame.IsValid() {
 		fmt.Println("error: packet invalid icmp ", icmp6Frame)
 		return fmt.Errorf("invalid icmp msg=%v: %w", icmp6Frame, errParseMessage)
@@ -183,7 +204,11 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) error {
 		router.CurHopLimit = msg.CurrentHopLimit
 		router.DefaultLifetime = msg.RouterLifetime
 		router.Options = msg.Options
-		host.ICMP6 = router
+
+		// update router details in host
+		h.LANHosts.Lock()
+		host.IPV6Router = true
+		h.LANHosts.Unlock()
 
 		prefixes := []PrefixInformation{}
 		for _, v := range msg.Options {
@@ -235,6 +260,7 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) error {
 	case ipv6.ICMPTypeEchoRequest:
 		msg := raw.ICMPEcho(icmp6Frame)
 		fmt.Printf("icmp6: echo request %s\n", msg)
+
 	default:
 		log.Printf("icmp6 not implemented type=%v ip6=%s\n", t, icmp6Frame)
 		return fmt.Errorf("ndp: unrecognized ICMPv6 type %d: %w", t, errParseMessage)

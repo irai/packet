@@ -123,6 +123,8 @@ func cmd(pt *packet.Handler, h *icmp4.Handler, h6 *icmp6.Handler) {
 			return
 		case "l":
 			pt.PrintTable()
+			h6.PrintTable()
+
 		case "g":
 			if icmp4.Debug {
 				fmt.Printf("Debugging is OFF\n")
