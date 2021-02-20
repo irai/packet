@@ -124,7 +124,7 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) error {
 		}
 
 	default:
-		fmt.Printf("icmp4 not implemented type=%d: %s", icmpFrame.Type(), icmpFrame)
+		fmt.Printf("icmp4 not implemented type=%d: frame:0x[% x]\n", icmpFrame.Type(), icmpFrame)
 	}
 	return nil
 }
