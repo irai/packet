@@ -7,7 +7,27 @@ import (
 	"fmt"
 	"net"
 	"syscall"
+
+	"github.com/mdlayher/netx/rfc4193"
 )
+
+var ipv6LinkLocal = func(cidr string) *net.IPNet {
+	_, net, err := net.ParseCIDR(cidr)
+	if err != nil {
+		panic(err)
+	}
+	return net
+}("fe80::/10")
+
+// GenerateULA creates a universal local address
+// Usefule to create a IPv6 prefix when there is no global IPv6 routing
+func GenerateULA(mac net.HardwareAddr, subnet uint16) (*net.IPNet, error) {
+	prefix, err := rfc4193.Generate(mac)
+	if err != nil {
+		return nil, err
+	}
+	return prefix.Subnet(subnet).IPNet(), nil
+}
 
 type PacketProcessor interface {
 	ProcessPacket(*Host, []byte) error
@@ -36,6 +56,7 @@ var (
 	ErrPayloadTooBig = errors.New("payload too big")
 	ErrParseMessage  = errors.New("failed to parse message")
 	ErrInvalidConn   = errors.New("invalid connection")
+	ErrInvalidIP4    = errors.New("invalid ip4")
 )
 
 // CopyIP simply copies the IP to a new buffer with the same len - either 4 or 16
@@ -108,13 +129,17 @@ func (p Ether) Payload() []byte {
 	}
 	return p[14:]
 }
+
+func (p Ether) SetPayload(payload []byte) (Ether, error) {
+	return p[:len(p)+len(payload)], nil
+}
+
 func (p Ether) AppendPayload(payload []byte) (Ether, error) {
 	if len(payload)+14 > cap(p) { //must be enough capcity to store header + payload
 		return nil, ErrPayloadTooBig
 	}
 	copy(p.Payload()[:cap(payload)], payload)
 	return p[:14+len(payload)], nil
-
 }
 
 func (p Ether) String() string {
@@ -164,20 +189,20 @@ func (p IP4) String() string {
 	return fmt.Sprintf("version=%v src=%v dst=%v proto=%v ttl=%v tos=%v", p.Version(), p.Src(), p.Dst(), p.Protocol(), p.TTL(), p.TOS())
 }
 
-type ICMP []byte
+type ICMP4 []byte
 
-func (p ICMP) IsValid() bool {
+func (p ICMP4) IsValid() bool {
 	if len(p) > 8 {
 		return true
 	}
 	return false
 }
 
-func (p ICMP) Type() uint8          { return uint8(p[0]) }
-func (p ICMP) Code() int            { return int(p[1]) }
-func (p ICMP) Checksum() int        { return int(binary.BigEndian.Uint16(p[2:4])) }
-func (p ICMP) RestOfHeader() []byte { return p[4:8] }
-func (p ICMP) Payload() []byte      { return p[8:] }
+func (p ICMP4) Type() uint8          { return uint8(p[0]) }
+func (p ICMP4) Code() uint8          { return p[1] }
+func (p ICMP4) Checksum() uint16     { return binary.BigEndian.Uint16(p[2:4]) }
+func (p ICMP4) RestOfHeader() []byte { return p[4:8] }
+func (p ICMP4) Payload() []byte      { return p[8:] }
 
 type ICMPEcho []byte
 
@@ -194,14 +219,14 @@ func (p ICMPEcho) EchoData() string {
 	return ""
 }
 func (p ICMPEcho) String() string {
+	return fmt.Sprintf("type=%v id=%v code=%v dlen=%v, data=0x% x", p.Type(), p.EchoID(), p.Code(), len(p.EchoData()), p.EchoData())
+}
 
-	switch p.Type() {
-	case ICMPTypeEchoReply:
-		return fmt.Sprintf("echo reply code=%v id=%v data=%v", p.EchoID(), p.Code(), string(p.EchoData()))
-	case ICMPTypeEchoRequest:
-		return fmt.Sprintf("echo request code=%v id=%v data=%v", p.EchoID(), p.Code(), string(p.EchoData()))
-	}
-	return fmt.Sprintf("type=%v code=%v", p.Type(), p.Code())
+func ICMPEchoBinary(b []byte, id uint16, seq uint16, data []byte) []byte {
+	binary.BigEndian.PutUint16(b[:2], id)
+	binary.BigEndian.PutUint16(b[2:4], seq)
+	copy(b[4:], data)
+	return b
 }
 
 // IP6 structure: see https://github.com/golang/net/blob/master/ipv6/header.go
@@ -226,4 +251,41 @@ func (p IP6) Dst() net.IP       { return net.IP(p[24:40]) }                     
 func (p IP6) Payload() []byte   { return p[40:] }
 func (p IP6) String() string {
 	return fmt.Sprintf("version=%v src=%v dst=%v nextHeader=%v hoplimit=%v class=%v", p.Version(), p.Src(), p.Dst(), p.NextHeader(), p.HopLimit(), p.TrafficClass())
+}
+
+func IP6MarshalBinary(b []byte, hopLimit uint8, srcIP net.IP, dstIP net.IP) IP6 {
+	if b == nil || cap(b) < IP6HeaderLen {
+		b = make([]byte, IP6HeaderLen) // enough capacity for a max IP6 frame
+	}
+	b = b[:IP6HeaderLen] // change slice in case slice is less than 40
+
+	var class int = 0
+	var flow int = 0
+	b[0] = 0x60 | uint8(class>>4) // first 4 bits: 6 indicates ipv6, 4 indicates ipv4
+	fmt.Printf("b0: %x\n", b[0])
+	b[1] = uint8(class<<4) | uint8(flow>>16)
+	b[2] = uint8(flow >> 8)
+	b[3] = uint8(flow)
+	binary.BigEndian.PutUint16(b[4:6], 0)
+	b[6] = 59 // 59 indicates there is no payload
+	b[7] = hopLimit
+	copy(b[8:24], srcIP)
+	copy(b[24:40], dstIP)
+	return IP6(b)
+}
+
+func (p IP6) SetPayload(b []byte, nextHeader uint8) IP6 {
+	binary.BigEndian.PutUint16(p[4:6], uint16(len(b)))
+	p[6] = nextHeader
+	return p[:len(p)+len(b)]
+}
+func (p IP6) AppendPayload(b []byte, nextHeader uint8) (IP6, error) {
+	if b == nil || cap(p)-len(p) < len(b) {
+		return nil, ErrPayloadTooBig
+	}
+	p = p[:len(p)+len(b)] // change slice in case slice is less than 40
+	copy(p.Payload(), b)
+	binary.BigEndian.PutUint16(p[4:6], uint16(len(b)))
+	p[6] = nextHeader
+	return p, nil
 }

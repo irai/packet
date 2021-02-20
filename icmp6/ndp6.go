@@ -1,11 +1,7 @@
 package icmp6
 
 import (
-	"log"
-	"net"
-	"time"
-
-	"github.com/mdlayher/ndp"
+	"github.com/irai/packet/raw"
 )
 
 /**
@@ -17,37 +13,17 @@ func (s *Handler) SetPrefixes(prefixes []net.IPNet) error {
 }
 ***/
 
-func (h *Handler) RouterAdvertisement(router Router, addr *net.IPAddr) error {
+func (h *Handler) RouterAdvertisement(router Router, addr *raw.Addr) error {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 	if len(router.Prefixes) == 0 {
 		return nil
 	}
-	if addr == nil {
-		addr = &net.IPAddr{
-			IP:   net.IPv6linklocalallnodes,
-			Zone: h.ifi.Name,
-		}
-	}
 
+	/***
 	var options []ndp.Option
 
 	if len(router.Prefixes) > 0 {
-		addrs, err := h.ifi.Addrs()
-		if err != nil {
-			return err
-		}
-		var linkLocal net.IP
-		for _, addr := range addrs {
-			ipnet, ok := addr.(*net.IPNet)
-			if !ok {
-				continue
-			}
-			if ipv6LinkLocal.Contains(ipnet.IP) {
-				linkLocal = ipnet.IP
-				break
-			}
-		}
 		if !linkLocal.Equal(net.IPv6zero) {
 			options = append(options, &ndp.RecursiveDNSServer{
 				Lifetime: 30 * time.Minute,
@@ -91,9 +67,14 @@ func (h *Handler) RouterAdvertisement(router Router, addr *net.IPAddr) error {
 	if err != nil {
 		return err
 	}
+
+	ether := raw.EtherMarshalBinary(nil, syscall.ETH_P_ARP, h.ifi.HardwareAddr, addr.MAC)
+	ether.AppendPayload(mb)
+
 	log.Printf("sending to %s", addr)
-	if _, err := h.pc.WriteTo(mb, nil, addr); err != nil {
+	if _, err := h.conn.WriteTo(mb, addr); err != nil {
 		return err
 	}
+	***/
 	return nil
 }

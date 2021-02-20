@@ -6,29 +6,17 @@ import (
 	"fmt"
 	"net"
 	"sync"
-	"syscall"
 	"time"
 
 	log "github.com/sirupsen/logrus"
 
 	"github.com/irai/packet/raw"
-	"github.com/mdlayher/netx/rfc4193"
 
-	"golang.org/x/net/bpf"
 	"golang.org/x/net/ipv6"
 )
 
 // Debug packets turn on logging if desirable
 var Debug bool
-
-// Host holds a host identification
-type Host struct {
-	MAC      net.HardwareAddr
-	IP       net.IP
-	Online   bool
-	Router   bool
-	LastSeen time.Time
-}
 
 // Router holds a router identification
 type Router struct {
@@ -49,17 +37,19 @@ type Router struct {
 // Event represents and ICMP6 event from a host
 type Event struct {
 	Type ipv6.ICMPType
-	Host Host
+	Host raw.Host
 }
 
 // PrintTable logs ICMP6 tables to standard out
 func (h *Handler) PrintTable() {
-	if len(h.LANHosts) > 0 {
-		fmt.Printf("icmp6 hosts table len=%v\n", len(h.LANHosts))
+	/**
+	if h.LANHosts.Len() > 0 {
+		fmt.Printf("icmp6 hosts table len=%v\n", h.LANHosts.Len())
 		for _, v := range h.LANHosts {
 			fmt.Printf("mac=%s ip=%v online=%v router=%v\n", v.MAC, v.IP, v.Online, v.Router)
 		}
 	}
+	***/
 	if len(h.LANRouters) > 0 {
 		fmt.Printf("icmp6 routers table len=%v\n", len(h.LANRouters))
 		for _, v := range h.LANRouters {
@@ -80,67 +70,57 @@ func findOrCreateRouter(mac net.HardwareAddr, ip net.IP) (router *Router, found 
 	return router, false
 }
 
-var ipv6LinkLocal = func(cidr string) *net.IPNet {
-	_, net, err := net.ParseCIDR(cidr)
-	if err != nil {
-		panic(err)
-	}
-	return net
-}("fe80::/10")
-
-// GenerateULA creates a universal local address
-// Usefule to create a IPv6 prefix when there is no global IPv6 routing
-func GenerateULA(mac net.HardwareAddr, subnet uint16) (*net.IPNet, error) {
-	prefix, err := rfc4193.Generate(mac)
-	if err != nil {
-		return nil, err
-	}
-	return prefix.Subnet(subnet).IPNet(), nil
-}
+// var _, _ raw.PacketProcessor = New(nil, nil)
 
 // Handler implements ICMPv6 Neighbor Discovery Protocol
 // see: https://mdlayher.com/blog/network-protocol-breakdown-ndp-and-go/
 type Handler struct {
-	pc           *ipv6.PacketConn
 	conn         net.PacketConn
-	mutex        sync.Mutex
 	ifi          *net.Interface
+	mutex        sync.Mutex
 	notification chan<- Event
 	Router       Router
 	LANRouters   map[string]*Router
-	LANHosts     map[string]*Host
+	LANHosts     *raw.HostTable
+	ipNetGUA     net.IPNet // global unicast address
+	ipNetLLA     net.IPNet // local link address
+	ipNetULA     net.IPNet // unique local address (site wide)
 }
 
 // Config define server configuration values
-
-var handler Handler
+type Config struct {
+	GlobalUnicastAddress net.IPNet
+	LocalLinkAddress     net.IPNet
+	UniqueLocalAddress   net.IPNet
+}
 
 // New creates a new instance of ICMP6 on a given interface
-func New(nic string) (*Handler, error) {
-	var err error
+func New(ifi *net.Interface, conn net.PacketConn, table *raw.HostTable, config Config) (*Handler, error) {
 
-	handler = Handler{LANRouters: make(map[string]*Router), LANHosts: make(map[string]*Host)}
-	handler.ifi, err = net.InterfaceByName(nic)
-	if err != nil {
-		return nil, fmt.Errorf("interface not found nic=%s: %w", nic, err)
-	}
+	h := &Handler{LANRouters: make(map[string]*Router), LANHosts: table}
+	h.ipNetGUA = config.GlobalUnicastAddress
+	h.ipNetLLA = config.LocalLinkAddress
+	h.ipNetULA = config.UniqueLocalAddress
+	h.ifi = ifi
+	h.conn = conn
 
-	c, err := net.ListenPacket("ip6:1", "::") // ICMP for IPv6
-	if err != nil {
-		return nil, fmt.Errorf("error in ListenPacket: %w", err)
-	}
+	return h, nil
+}
 
-	handler.pc = ipv6.NewPacketConn(c)
-
-	return &handler, nil
+func (h *Handler) Start(ctx context.Context) error {
+	return nil
 }
 
 // Close closes the underlying sockets
 func (h *Handler) Close() error {
-	if h.pc != nil {
-		return h.pc.Close()
+	if h.conn != nil {
+		return h.conn.Close()
 	}
 	return nil
+}
+
+func (h *Handler) LLA() net.IPNet {
+	return h.ipNetLLA
 }
 
 // AddNotificationChannel set the notification channel for ICMP6 messages
@@ -157,34 +137,38 @@ func (h *Handler) autoConfigureRouter(router Router) {
 
 var repeat int
 
-func (h *Handler) ProcessPacket(host *raw.Host, p []byte) error {
+func (h *Handler) ProcessPacket(host *raw.Host, b []byte) error {
+
+	ether := raw.Ether(b)
+	ip6Frame := raw.IP6(ether.Payload())
+	icmp6Frame := ICMP6(ip6Frame.Payload())
 
 	// TODO: verify checksum?
-	frame := raw.ICMP(p)
-	if !frame.IsValid() {
-		fmt.Println("error: packet invalid icmp ", frame)
-		return fmt.Errorf("invalid icmp msg=%v: %w", frame, errParseMessage)
+	if !icmp6Frame.IsValid() {
+		fmt.Println("error: packet invalid icmp ", icmp6Frame)
+		return fmt.Errorf("invalid icmp msg=%v: %w", icmp6Frame, errParseMessage)
 	}
+	fmt.Printf("icmp6: %s\n", icmp6Frame)
 
-	t := ipv6.ICMPType(p[0])
+	t := ipv6.ICMPType(icmp6Frame.Type())
 	switch t {
 	case ipv6.ICMPTypeNeighborAdvertisement:
 		msg := new(NeighborAdvertisement)
-		if err := msg.unmarshal(p[icmpLen:]); err != nil {
+		if err := msg.unmarshal(icmp6Frame); err != nil {
 			return fmt.Errorf("ndp: failed to unmarshal %s: %w", t, errParseMessage)
 		}
-		fmt.Printf("icmp6 neighbor advertisement: %+v\n", msg)
+		fmt.Printf("icmp6: neighbor advertisement: %+v\n", msg)
 
 	case ipv6.ICMPTypeNeighborSolicitation:
 		msg := new(NeighborSolicitation)
-		if err := msg.unmarshal(p[icmpLen:]); err != nil {
+		if err := msg.unmarshal(icmp6Frame); err != nil {
 			return fmt.Errorf("ndp: failed to unmarshal %s: %w", t, errParseMessage)
 		}
-		fmt.Printf("icmp6 neighbor solicitation: %+v\n", msg)
+		fmt.Printf("icmp6: neighbor solicitation: %+v\n", msg)
 
 	case ipv6.ICMPTypeRouterAdvertisement:
 		msg := new(RouterAdvertisement)
-		if err := msg.unmarshal(p[icmpLen:]); err != nil {
+		if err := msg.unmarshal(icmp6Frame); err != nil {
 			return fmt.Errorf("ndp: failed to unmarshal %s: %w", t, errParseMessage)
 		}
 		if repeat%16 != 0 {
@@ -193,7 +177,7 @@ func (h *Handler) ProcessPacket(host *raw.Host, p []byte) error {
 			break
 		}
 		repeat++
-		fmt.Printf("icmp6 router advertisement : %+v\n", msg)
+		fmt.Printf("icmp6: router advertisement : %+v\n", msg)
 		router, _ := findOrCreateRouter(host.MAC, host.IP)
 		router.ManagedFlag = msg.ManagedConfiguration
 		router.CurHopLimit = msg.CurrentHopLimit
@@ -236,23 +220,23 @@ func (h *Handler) ProcessPacket(host *raw.Host, p []byte) error {
 
 	case ipv6.ICMPTypeRouterSolicitation:
 		msg := new(RouterSolicitation)
-		if err := msg.unmarshal(p[icmpLen:]); err != nil {
+		if err := msg.unmarshal(icmp6Frame); err != nil {
 			return fmt.Errorf("ndp: failed to unmarshal %s: %w", t, errParseMessage)
 		}
 		fmt.Printf("icmp6 router solicitation: %+v\n", msg)
 
 	case ipv6.ICMPTypeEchoReply:
-		fmt.Printf("icmp6 echo reply: \n")
-		msg := raw.ICMPEcho(p)
+		msg := raw.ICMPEcho(icmp6Frame)
 		if !msg.IsValid() {
-			return fmt.Errorf("invalid icmp echo msg len=%d", len(p))
+			return fmt.Errorf("invalid icmp echo msg len=%d", len(icmp6Frame))
 		}
-		fmt.Printf("icmp6 echo msg: %s\n", msg)
+		fmt.Printf("icmp6: echo reply %s\n", msg)
 
 	case ipv6.ICMPTypeEchoRequest:
-		fmt.Printf("icmp6 echo request \n")
+		msg := raw.ICMPEcho(icmp6Frame)
+		fmt.Printf("icmp6: echo request %s\n", msg)
 	default:
-		log.Printf("icmp6 not implemented type=%v ip6=%s\n", t)
+		log.Printf("icmp6 not implemented type=%v ip6=%s\n", t, icmp6Frame)
 		return fmt.Errorf("ndp: unrecognized ICMPv6 type %d: %w", t, errParseMessage)
 	}
 
@@ -261,61 +245,4 @@ func (h *Handler) ProcessPacket(host *raw.Host, p []byte) error {
 	}
 
 	return nil
-}
-
-// ListenAndServe listend for raw ICMP6 packets and process packets
-func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
-
-	bpf, err := bpf.Assemble([]bpf.Instruction{
-		// Check EtherType
-		bpf.LoadAbsolute{Off: 12, Size: 2},
-		// 80221Q?
-		bpf.JumpIf{Cond: bpf.JumpEqual, Val: syscall.ETH_P_8021Q, SkipFalse: 1}, // EtherType is 2 pushed out by two bytes
-		bpf.LoadAbsolute{Off: 14, Size: 2},
-		// IPv6 && ICMPv6?
-		bpf.JumpIf{Cond: bpf.JumpEqual, Val: syscall.ETH_P_IPV6, SkipFalse: 3},
-		bpf.LoadAbsolute{Off: 14 + 6, Size: 1},                 // IPv6 Protocol field - 14 Eth bytes + 6 IPv6 header
-		bpf.JumpIf{Cond: bpf.JumpEqual, Val: 58, SkipFalse: 1}, // ICMPv6 protocol - 58
-		bpf.RetConstant{Val: 1540},                             // matches ICMPv6, accept up to 1540 (1500 payload + ether header)
-		bpf.RetConstant{Val: 0},
-	})
-	if err != nil {
-		log.Fatal("bpf assemble error", err)
-	}
-
-	h.conn, err = raw.ListenPacket(h.ifi, syscall.ETH_P_IPV6, raw.Config{Filter: bpf})
-	if err != nil {
-		h.conn = nil // on windows, not impleted returns a partially completed conn
-		return fmt.Errorf("raw.ListenPacket error: %w", err)
-	}
-	defer h.conn.Close()
-
-	buf := make([]byte, h.ifi.MTU)
-	for {
-		if err = h.conn.SetReadDeadline(time.Now().Add(time.Second * 2)); err != nil {
-			if ctxt.Err() != context.Canceled {
-				return fmt.Errorf("setReadDeadline error: %w", err)
-			}
-			return
-		}
-
-		n, _, err1 := h.conn.ReadFrom(buf)
-		if err1 != nil {
-			if err1, ok := err1.(net.Error); ok && err1.Temporary() {
-				continue
-			}
-			if ctxt.Err() != context.Canceled {
-				return fmt.Errorf("read error: %w", err1)
-			}
-			return
-		}
-
-		ether := raw.Ether(buf[:n])
-		if ether.EtherType() != syscall.ETH_P_IPV6 || !ether.IsValid() {
-			log.Error("icmp invalid ethernet packet ", ether.EtherType())
-			continue
-		}
-
-		fmt.Println("icmp: got ipv6 packet type=", ether.EtherType())
-	}
 }

@@ -77,11 +77,3 @@ func (h *HostTable) FindIP(ip net.IP) *Host {
 
 	return h.table[string(ip)]
 }
-
-var ipv6LinkLocal = func(cidr string) *net.IPNet {
-	_, net, err := net.ParseCIDR(cidr)
-	if err != nil {
-		panic(err)
-	}
-	return net
-}("fe80::/10")

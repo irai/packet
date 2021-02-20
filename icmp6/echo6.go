@@ -3,9 +3,12 @@ package icmp6
 import (
 	"fmt"
 	"net"
+	"os"
 	"sync"
+	"syscall"
 	"time"
 
+	"github.com/irai/packet/raw"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv6"
@@ -39,7 +42,7 @@ func init() {
 
 // SendEcho transmit an icmp echo request
 // Do not wait for response
-func (h *Handler) SendEcho(src net.IP, dst net.IP, id uint16, seq uint16) error {
+func (h *Handler) SendEcho(srcMAC net.HardwareAddr, srcIP net.IP, dstMAC net.HardwareAddr, dstIP net.IP, id uint16, seq uint16) error {
 
 	icmpMessage := icmp.Message{
 		Type: ipv6.ICMPTypeEchoRequest,
@@ -56,7 +59,7 @@ func (h *Handler) SendEcho(src net.IP, dst net.IP, id uint16, seq uint16) error 
 		return err
 	}
 
-	return sendICMP6Packet(h.ifi, src, dst, p)
+	return h.sendICMP6Packet(srcMAC, srcIP, dstMAC, dstIP, p)
 }
 
 // Ping send a ping request and wait for a reply
@@ -69,10 +72,28 @@ func (h *Handler) Ping(src net.IP, dst net.IP, timeout time.Duration) (err error
 	icmpTable.table[id] = &msg
 	icmpTable.cond.L.Unlock()
 
-	if err = h.SendEcho(src, dst, id, 0); err != nil {
-		log.Error("error sending ping packet", err)
+	c, err := icmp.ListenPacket("ip6:ipv6-icmp", src.String()+"%eth0")
+	if err != nil {
 		return err
 	}
+	defer c.Close()
+
+	wm := icmp.Message{
+		Type: ipv6.ICMPTypeEchoRequest, Code: 0,
+		Body: &icmp.Echo{
+			ID: os.Getpid() & 0xffff, Seq: 1,
+			Data: []byte("HELLO-R-U-THERE"),
+		},
+	}
+	wb, err := wm.Marshal(nil)
+	if err != nil {
+		return err
+	}
+	if _, err := c.WriteTo(wb, &net.IPAddr{IP: dst, Zone: "eth0"}); err != nil {
+		return err
+	}
+
+	return nil
 
 	icmpTable.cond.L.Lock()
 	for msg.msgRecv == nil && msg.expire.After(time.Now()) {
@@ -88,46 +109,18 @@ func (h *Handler) Ping(src net.IP, dst net.IP, timeout time.Duration) (err error
 	return nil
 }
 
-func sendICMP6Packet(ifi *net.Interface, src net.IP, dst net.IP, p []byte) error {
+func (h *Handler) sendICMP6Packet(srcMAC net.HardwareAddr, srcIP net.IP, dstMAC net.HardwareAddr, dstIP net.IP, b []byte) error {
 
-	// TODO: reuse h.conn and write directly to socket
-	c, err := net.ListenPacket("ip6:ipv6-icmp", "::")
-	// c, err := net.DialIP("ip6:1", nil, nil) // ICMP for IPv6
-	if err != nil {
-		log.Error("icmp error in listen packet: ", err)
-		return err
-	}
-	defer c.Close()
-
-	pc := ipv6.NewPacketConn(c)
-
-	/***
-	// Hop limit is always 255, per RFC 4861.
-	if err := pc.SetHopLimit(255); err != nil {
-		return err
-	}
-	if err := pc.SetMulticastHopLimit(255); err != nil {
-		return err
-	}
-	***/
-
-	// Calculate and place ICMPv6 checksum at correct offset in all messages.
-	if err := pc.SetChecksum(true, 2); err != nil {
-		return err
-	}
-
-	hopLimit := 64
-	if dst.IsLinkLocalUnicast() || dst.IsLinkLocalMulticast() {
+	hopLimit := uint8(64)
+	if dstIP.IsLinkLocalUnicast() || dstIP.IsLinkLocalMulticast() {
 		hopLimit = 1
 	}
 
-	cm := &ipv6.ControlMessage{
-		HopLimit: hopLimit,
-		Src:      src,
-		IfIndex:  ifi.Index,
-	}
-
-	if _, err := pc.WriteTo(p, cm, &net.IPAddr{IP: dst, Zone: ifi.Name}); err != nil {
+	ether := raw.EtherMarshalBinary(nil, syscall.ETH_P_IPV6, srcMAC, dstMAC)
+	ip6 := raw.IP6MarshalBinary(ether.Payload(), hopLimit, srcIP, dstIP)
+	ip6, _ = ip6.AppendPayload(b, syscall.IPPROTO_ICMPV6)
+	ether.SetPayload(ip6)
+	if _, err := h.conn.WriteTo(ether, nil); err != nil {
 		log.Error("icmp failed to write ", err)
 		return err
 	}

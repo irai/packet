@@ -1,7 +1,6 @@
 package packet
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"net"
@@ -17,8 +16,8 @@ import (
 var Debug bool
 
 type Hook struct {
-	name     string
-	function func(*raw.Host, []byte) error
+	name    string
+	handler raw.PacketProcessor
 }
 
 // Config has a list of configurable parameters that overide package defaults
@@ -43,24 +42,24 @@ type Handler struct {
 	ARP          raw.PacketProcessor
 }
 
-func (h *Handler) IP4Hook(name string, f func(*raw.Host, []byte) error) error {
-	hook := Hook{name: name, function: f}
+func (h *Handler) IP4Hook(name string, f raw.PacketProcessor) error {
+	hook := Hook{name: name, handler: f}
 	h.handlerIP4 = append(h.handlerIP4, hook)
 	return nil
 }
 
-func (h *Handler) IP6Hook(name string, f func(*raw.Host, []byte) error) error {
-	hook := Hook{name: name, function: f}
+func (h *Handler) IP6Hook(name string, f raw.PacketProcessor) error {
+	hook := Hook{name: name, handler: f}
 	h.handlerIP6 = append(h.handlerIP6, hook)
 	return nil
 }
-func (h *Handler) ICMP4Hook(name string, f func(*raw.Host, []byte) error) error {
-	hook := Hook{name: name, function: f}
+func (h *Handler) ICMP4Hook(name string, f raw.PacketProcessor) error {
+	hook := Hook{name: name, handler: f}
 	h.handlerICMP4 = append(h.handlerICMP4, hook)
 	return nil
 }
-func (h *Handler) ICMP6Hook(name string, f func(*raw.Host, []byte) error) error {
-	hook := Hook{name: name, function: f}
+func (h *Handler) ICMP6Hook(name string, f raw.PacketProcessor) error {
+	hook := Hook{name: name, handler: f}
 	h.handlerICMP6 = append(h.handlerICMP6, hook)
 	return nil
 }
@@ -102,6 +101,10 @@ func (h *Handler) Close() error {
 
 func (h *Handler) Conn() net.PacketConn {
 	return h.conn
+}
+
+func (h *Handler) Interface() *net.Interface {
+	return h.ifi
 }
 
 func (h *Handler) HostMAC() net.HardwareAddr {
@@ -198,9 +201,11 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 		// Ignore packets sent via our interface
 		// TODO: should this be in the bpf rules?
+		/***
 		if bytes.Equal(ether.Src(), h.ifi.HardwareAddr) {
 			continue
 		}
+		***/
 
 		// Only interested in unicast ethernet
 		if !isUnicastMAC(ether.Src()) {
@@ -218,11 +223,11 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		case syscall.ETH_P_IP:
 			frame := raw.IP4(ether.Payload())
 			if !frame.IsValid() {
-				fmt.Println("icmp: error invalid ip4 frame type=", ether.EtherType())
+				fmt.Println("packet: error invalid ip4 frame type=", ether.EtherType())
 				continue
 			}
 			if Debug {
-				fmt.Println("ip4  : ", frame)
+				fmt.Println("ip4  :", frame)
 			}
 			if !frame.Src().IsLinkLocalUnicast() && !frame.Src().IsGlobalUnicast() {
 				fmt.Println("ignore IP4 ", frame)
@@ -232,17 +237,17 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			l4Proto = frame.Protocol()
 			l4Payload = frame.Payload()
 			for _, v := range h.handlerIP4 {
-				v.function(host, ether)
+				v.handler.ProcessPacket(host, ether)
 			}
 
 		case syscall.ETH_P_IPV6:
 			frame := raw.IP6(ether.Payload())
 			if !frame.IsValid() {
-				fmt.Println("icmp: error invalid ip6 frame type=", ether.EtherType())
+				fmt.Println("packet: error invalid ip6 frame type=", ether.EtherType())
 				continue
 			}
 			if Debug {
-				fmt.Println("ip6  : ", frame)
+				fmt.Printf("ip6  : %s\n", frame)
 			}
 
 			if !frame.Src().IsLinkLocalUnicast() && !frame.Src().IsGlobalUnicast() {
@@ -254,7 +259,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 			host, _ = h.LANHosts.FindOrCreateHost(ether.Src(), frame.Src())
 			for _, v := range h.handlerIP6 {
-				v.function(host, ether)
+				v.handler.ProcessPacket(host, ether)
 			}
 
 		case syscall.ETH_P_ARP:
@@ -271,11 +276,11 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		switch l4Proto {
 		case syscall.IPPROTO_ICMP:
 			for _, v := range h.handlerICMP4 {
-				v.function(host, l4Payload)
+				v.handler.ProcessPacket(host, l4Payload)
 			}
 		case syscall.IPPROTO_ICMPV6:
 			for _, v := range h.handlerICMP6 {
-				v.function(host, l4Payload)
+				v.handler.ProcessPacket(host, ether)
 			}
 		case syscall.IPPROTO_TCP, syscall.IPPROTO_UDP:
 			// do nothing

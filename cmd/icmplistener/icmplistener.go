@@ -13,8 +13,10 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/arp"
 	"github.com/irai/packet/icmp4"
 	"github.com/irai/packet/icmp6"
+	"github.com/irai/packet/raw"
 )
 
 var (
@@ -32,7 +34,7 @@ func main() {
 	fmt.Printf("icmpListener: Listen and send icmp messages\n")
 	fmt.Printf("Using nic %v src=%v dst=%v\n", *nic, *srcIP, *dstIP)
 
-	_, err := net.InterfaceByName(*nic)
+	mac, ipNet4, lla, gua, err := raw.GetNICInfo(*nic)
 	if err != nil {
 		fmt.Printf("error opening nic=%s: %s\n", *nic, err)
 		iif, _ := net.Interfaces()
@@ -46,57 +48,58 @@ func main() {
 		}
 		return
 	}
+	fmt.Println("mac : ", mac)
+	fmt.Println("ip4 : ", ipNet4)
+	fmt.Println("lla : ", lla)
+	fmt.Println("gua : ", gua)
 
-	src := net.ParseIP(*srcIP).To4()
-	if src.IsUnspecified() {
-		log.Fatal("Invalid src IP ", srcIP)
-	}
+	ctx, cancel := context.WithCancel(context.Background())
 
-	dst := net.ParseIP(*dstIP).To4()
-	if dst.IsUnspecified() {
-		log.Fatal("Invalid dst IP ", dstIP)
-	}
-
-	ctxt, cancel := context.WithCancel(context.Background())
-
-	// Packet processing
-	pt, err := packet.New(*nic)
+	// setup packet listener
+	packet, err := packet.New(*nic)
 	if err != nil {
-		log.Fatalf("Failed to create icmp6 nic=%s handler: ", *nic, err)
+		panic(err)
 	}
-	defer pt.Close()
+	defer packet.Close()
+
+	// setup ARP handler
+	arpHandler, err := arp.New(packet.Conn(), packet.LANHosts, arp.Config{HostMAC: mac, HostIP: ipNet4.IP})
+	packet.ARP = arpHandler
 
 	// ICMPv4
-	h4, err := icmp4.New(*nic)
+	h4, err := icmp4.New(packet.Interface(), packet.Conn(), packet.LANHosts, ipNet4.IP)
 	if err != nil {
 		log.Fatalf("Failed to create icmp nic=%s handler: ", *nic, err)
 	}
 	defer h4.Close()
+	packet.ICMP4Hook("icmp4", h4)
 
 	// ICMPv6
-	h6, err := icmp6.New(*nic)
+	icmp6Config := icmp6.Config{GlobalUnicastAddress: gua, LocalLinkAddress: lla}
+	h6, err := icmp6.New(packet.Interface(), packet.Conn(), packet.LANHosts, icmp6Config)
 	if err != nil {
 		log.Fatalf("Failed to create icmp6 nic=%s handler: ", *nic, err)
 	}
 	defer h6.Close()
+	packet.ICMP6Hook("icmp6", h6)
 
-	// listen to ICMP6 events
-	pt.ICMP4Hook("icmp4", h4.ProcessPacket)
-	pt.ICMP6Hook("icmp6", h6.ProcessPacket)
-
+	// Start server listener
 	go func() {
-		if err := pt.ListenAndServe(ctxt); err != nil {
-			log.Error("icmp6.ListenAndServe terminated unexpectedly: ", err)
+		if err := packet.ListenAndServe(ctx); err != nil {
+			if ctx.Err() != context.Canceled {
+				panic(err)
+			}
 		}
 	}()
 
-	time.Sleep(time.Millisecond * 200) //wait time to open sockets
-	cmd(pt, h4, h6, src, dst)
+	time.Sleep(time.Millisecond * 10) // time for all goroutine to start
+
+	cmd(packet, h4, h6)
 
 	cancel()
 }
 
-func cmd(pt *packet.Handler, h *icmp4.Handler, h6 *icmp6.Handler, srcIP net.IP, dstIP net.IP) {
+func cmd(pt *packet.Handler, h *icmp4.Handler, h6 *icmp6.Handler) {
 	reader := bufio.NewReader(os.Stdin)
 	for {
 		fmt.Println("Command: (q)uit            | (p)ing ip | (l)list | (g) loG <level>")
@@ -144,14 +147,14 @@ func cmd(pt *packet.Handler, h *icmp4.Handler, h6 *icmp6.Handler, srcIP net.IP, 
 			}
 			now := time.Now()
 			if ip.To4() != nil {
-				if err := h.Ping(srcIP, dstIP, time.Second*4); err != nil {
+				if err := h.Ping(h.HostIP, ip, time.Second*4); err != nil {
 					fmt.Println("ping error ", err)
 					continue
 				}
 				fmt.Printf("ping %v time=%v\n", dstIP, time.Now().Sub(now))
 			}
 			if ip.To16() != nil && ip.To4() == nil {
-				if err := h6.SendEcho(nil, ip, 1, 101); err != nil {
+				if err := h6.Ping(h6.LLA().IP, ip, time.Second*2); err != nil {
 					fmt.Println("icmp6 echo error ", err)
 					continue
 				}

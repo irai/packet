@@ -21,12 +21,12 @@ var Debug bool
 
 // Handler maintains the underlying socket connection
 type Handler struct {
-	ifi   *net.Interface
-	conn  net.PacketConn
-	conn6 net.PacketConn
+	ifi    *net.Interface
+	conn   net.PacketConn
+	HostIP net.IP
 }
 
-func (h *Handler) sendRawICMP(src net.IP, dst net.IP, p raw.ICMP) error {
+func (h *Handler) sendRawICMP(src net.IP, dst net.IP, p raw.ICMP4) error {
 
 	// TODO: reuse h.conn and write directly to socket
 	c, err := net.ListenPacket("ip4:1", "0.0.0.0") // ICMP for IPv4
@@ -65,12 +65,10 @@ func (h *Handler) sendRawICMP(src net.IP, dst net.IP, p raw.ICMP) error {
 }
 
 // New returns an ICMPv4 handler
-func New(nic string) (h *Handler, err error) {
+func New(ifi *net.Interface, conn net.PacketConn, hosts *raw.HostTable, hostIP net.IP) (h *Handler, err error) {
 	h = &Handler{}
-	h.ifi, err = net.InterfaceByName(nic)
-	if err != nil {
-		return nil, fmt.Errorf("interface not found nic=%s err=%w", nic, err)
-	}
+	h.ifi = ifi
+	h.HostIP = hostIP
 
 	return h, nil
 }
@@ -83,9 +81,13 @@ func (h *Handler) Close() error {
 	return nil
 }
 
+func (h *Handler) Start(ctx context.Context) error {
+	return nil
+}
+
 func (h *Handler) ProcessPacket(host *raw.Host, b []byte) error {
 
-	icmpFrame := raw.ICMP(b)
+	icmpFrame := raw.ICMP4(b)
 
 	switch icmpFrame.Type() {
 	case raw.ICMPTypeEchoReply:

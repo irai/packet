@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"log"
+
+	"github.com/irai/packet/raw"
 )
 
 // pollingLoop detect new IPs on the network
@@ -126,6 +128,9 @@ func (c *Handler) ScanNetwork(ctx context.Context, lan net.IPNet) error {
 
 	// Copy underneath array so we can modify value.
 	ip := lan.IP.To4()
+	if ip == nil {
+		return raw.ErrInvalidIP4
+	}
 
 	if Debug {
 		log.Printf("arp Discovering IP - sending 254 ARP requests - lan %v", lan)

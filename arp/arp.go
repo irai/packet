@@ -195,7 +195,7 @@ func (c *Handler) Start(ctx context.Context) error {
 	}()
 
 	// Do a full scan on start
-	if c.config.FullNetworkScanInterval != 0 {
+	if c.config.FullNetworkScanInterval != 0 && c.config.HomeLAN.IP.To4() != nil {
 		go func() {
 			c.wg.Add(1)
 			time.Sleep(time.Millisecond * 100) // Time to start read loop below
