@@ -127,7 +127,8 @@ func (c *Handler) purgeLoop(ctx context.Context, offline time.Duration, purge ti
 func (c *Handler) ScanNetwork(ctx context.Context, lan net.IPNet) error {
 
 	// Copy underneath array so we can modify value.
-	ip := lan.IP.To4()
+	ip := raw.CopyIP(lan.IP)
+	ip = ip.To4()
 	if ip == nil {
 		return raw.ErrInvalidIP4
 	}
