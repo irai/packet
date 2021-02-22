@@ -71,6 +71,7 @@ func New(nic string) (*Handler, error) {
 
 // New creates an packet handler with config values
 func (config Config) New(nic string) (*Handler, error) {
+
 	var err error
 
 	h := &Handler{Config: config, LANHosts: raw.New()}

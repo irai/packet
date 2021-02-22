@@ -3,8 +3,16 @@ package icmp6
 import (
 	"encoding/binary"
 	"fmt"
+	"net"
 
 	"github.com/irai/packet/raw"
+)
+
+var (
+	IP6AllNodesMulticast = net.IP{0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}
+
+	EthAllNodesMulticast = net.HardwareAddr{0x33, 0x33, 0, 0, 0, 0x01}
+	EthRoutersMulticast  = net.HardwareAddr{0x33, 0x33, 0, 0, 0, 0x02}
 )
 
 type ICMP6 []byte
@@ -18,11 +26,14 @@ func (p ICMP6) IsValid() bool {
 	return false
 }
 
-func (p ICMP6) Type() uint8          { return uint8(p[0]) }
-func (p ICMP6) Code() uint8          { return p[1] }
-func (p ICMP6) Checksum() uint16     { return binary.BigEndian.Uint16(p[2:4]) }
-func (p ICMP6) RestOfHeader() []byte { return p[4:8] }
-func (p ICMP6) Payload() []byte      { return p[8:] }
+func (p ICMP6) Type() uint8      { return uint8(p[0]) }
+func (p ICMP6) Code() uint8      { return p[1] }
+func (p ICMP6) Checksum() uint16 { return binary.BigEndian.Uint16(p[2:4]) }
+
+// TODO: fix the order
+func (p ICMP6) SetChecksum(cs uint16) { p[3] = uint8(cs >> 8); p[2] = uint8(cs) }
+func (p ICMP6) RestOfHeader() []byte  { return p[4:8] }
+func (p ICMP6) Payload() []byte       { return p[8:] }
 func (p ICMP6) String() string {
 	return fmt.Sprintf("type=%v code=%v checksum=%x payloadLen=%v\n", p.Type(), p.Code(), p.Checksum(), len(p.Payload()))
 }

@@ -57,6 +57,7 @@ var (
 	ErrParseMessage  = errors.New("failed to parse message")
 	ErrInvalidConn   = errors.New("invalid connection")
 	ErrInvalidIP4    = errors.New("invalid ip4")
+	ErrNotFound      = errors.New("not found")
 )
 
 // CopyIP simply copies the IP to a new buffer with the same len - either 4 or 16
@@ -257,7 +258,7 @@ func (p IP6) Src() net.IP       { return net.IP(p[8:24]) }                      
 func (p IP6) Dst() net.IP       { return net.IP(p[24:40]) }                              // destination address
 func (p IP6) Payload() []byte   { return p[40:] }
 func (p IP6) String() string {
-	return fmt.Sprintf("version=%v src=%v dst=%v nextHeader=%v hoplimit=%v class=%v", p.Version(), p.Src(), p.Dst(), p.NextHeader(), p.HopLimit(), p.TrafficClass())
+	return fmt.Sprintf("version=%v src=%v dst=%v nextHeader=%v payloadLen=%v hoplimit=%v class=%v", p.Version(), p.Src(), p.Dst(), p.NextHeader(), p.PayloadLen(), p.HopLimit(), p.TrafficClass())
 }
 
 func IP6MarshalBinary(b []byte, hopLimit uint8, srcIP net.IP, dstIP net.IP) IP6 {
@@ -295,4 +296,20 @@ func (p IP6) AppendPayload(b []byte, nextHeader uint8) (IP6, error) {
 	binary.BigEndian.PutUint16(p[4:6], uint16(len(b)))
 	p[6] = nextHeader
 	return p, nil
+}
+
+// Checksum calculate ICMP6 checksum - is this the same for TCP?
+// In network format already
+func Checksum(b []byte) uint16 {
+	csumcv := len(b) - 1 // checksum coverage
+	s := uint32(0)
+	for i := 0; i < csumcv; i += 2 {
+		s += uint32(b[i+1])<<8 | uint32(b[i])
+	}
+	if csumcv&1 == 0 {
+		s += uint32(b[csumcv])
+	}
+	s = s>>16 + s&0xffff
+	s = s + s>>16
+	return ^uint16(s)
 }

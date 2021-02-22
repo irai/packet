@@ -6,6 +6,10 @@ import (
 	"net"
 )
 
+// GetNICInfo returns the interface configuration
+//
+// TODO: use routing package to identify default router
+// https://github.com/google/gopacket/tree/v1.1.19/routing
 func GetNICInfo(nic string) (mac net.HardwareAddr, ipNet4 net.IPNet, ipNet6LLA net.IPNet, ipNet6GUA net.IPNet, err error) {
 
 	all, err := net.Interfaces()
