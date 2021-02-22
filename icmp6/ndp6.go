@@ -97,3 +97,60 @@ func (h *Handler) SendRouterAdvertisement(router Router, addr raw.Addr) error {
 
 	return h.sendPacket(h.ifi.HardwareAddr, h.LLA().IP, EthAllNodesMulticast, IP6AllNodesMulticast, mb)
 }
+
+func (h *Handler) SendRouterSolicitation() error {
+	m := &RouterSolicitation{
+		Options: []Option{
+			&LinkLayerAddress{
+				Direction: Source,
+				Addr:      h.ifi.HardwareAddr,
+			},
+		},
+	}
+	mb, err := MarshalMessage(m)
+	if err != nil {
+		return err
+	}
+
+	return h.sendPacket(h.ifi.HardwareAddr, h.LLA().IP, EthAllNodesMulticast, IP6AllNodesMulticast, mb)
+}
+
+func (h *Handler) SendNeighborAdvertisement(ip net.IP) error {
+	m := &NeighborAdvertisement{
+		Router:        true,
+		Solicited:     true,
+		Override:      true,
+		TargetAddress: ip,
+		Options: []Option{
+			&LinkLayerAddress{
+				Direction: Target,
+				Addr:      h.ifi.HardwareAddr,
+			},
+		},
+	}
+	mb, err := MarshalMessage(m)
+	if err != nil {
+		return err
+	}
+
+	return h.sendPacket(h.ifi.HardwareAddr, h.LLA().IP, EthAllNodesMulticast, IP6AllNodesMulticast, mb)
+}
+
+// SendNeighbourSolicitation send an ICMP6 NS packet.
+func (h *Handler) SendNeighbourSolicitation(ip net.IP) error {
+	m := &NeighborSolicitation{
+		TargetAddress: ip,
+		Options: []Option{
+			&LinkLayerAddress{
+				Direction: Source,
+				Addr:      h.ifi.HardwareAddr,
+			},
+		},
+	}
+	mb, err := MarshalMessage(m)
+	if err != nil {
+		return err
+	}
+
+	return h.sendPacket(h.ifi.HardwareAddr, h.LLA().IP, EthAllNodesMulticast, IP6AllNodesMulticast, mb)
+}

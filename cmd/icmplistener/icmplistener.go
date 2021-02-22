@@ -103,7 +103,7 @@ func cmd(pt *packet.Handler, h *icmp4.Handler, h6 *icmp6.Handler) {
 	reader := bufio.NewReader(os.Stdin)
 	for {
 		fmt.Println("Command: (q)uit            | (p)ing ip | (l)list | (g) loG <level>")
-		fmt.Println("    ndp: (ra) ip6          | ")
+		fmt.Println("    ndp: (ra) ip6          | (ns) ip6")
 		fmt.Print("Enter command: ")
 		text, _ := reader.ReadString('\n')
 		text = strings.ToLower(text[:len(text)-1])
@@ -163,21 +163,31 @@ func cmd(pt *packet.Handler, h *icmp4.Handler, h6 *icmp6.Handler) {
 				}
 				fmt.Printf("ping %v time=%v\n", dstIP, time.Now().Sub(now))
 			}
+		case "ns":
+			ip := getIP(tokens, 1)
+			if ip == nil || !raw.IsIP6(ip) {
+				continue
+			}
+			if err := h6.SendNeighbourSolicitation(ip); err != nil {
+				fmt.Printf("error in neigbour solicitation: %s\n", err)
+			}
 		case "ra":
 			if err := h6.StartRADVS(); err != nil {
 				fmt.Printf("error in router adversitement: %s\n", err)
 			}
-			/**
-			if len(tokens) < 2 {
-				fmt.Println("missing address")
-				continue
-			}
-			ip := net.ParseIP(tokens[1])
-			if err := h6.RouterAdvertisement(&net.IPAddr{IP: ip}); err != nil {
-				log.Printf("error sending ra: %v", err)
-				continue
-			}
-			**/
 		}
 	}
+}
+
+func getIP(tokens []string, pos int) net.IP {
+	if len(tokens) < pos+1 {
+		fmt.Println("missing ip", tokens)
+		return nil
+	}
+	ip := net.ParseIP(tokens[pos])
+	if ip == nil || ip.IsUnspecified() {
+		fmt.Println("invalid ip=", ip)
+		return nil
+	}
+	return ip
 }
