@@ -2,11 +2,9 @@ package icmp6
 
 import (
 	"net"
-	"syscall"
 	"time"
 
 	"github.com/irai/packet/raw"
-	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/ipv6"
 )
 
@@ -102,11 +100,19 @@ func (h *Handler) SendRouterAdvertisement(router Router, addr raw.Addr) error {
 		Options:         options,
 	}
 
-	mb, err := MarshalMessage(ra)
+	icmpMessage := Message{
+		Type: ipv6.ICMPTypeRouterAdvertisement,
+		Code: 0,
+		Body: ra,
+	}
+
+	mb, err := icmpMessage.Marshal()
 	if err != nil {
 		return err
 	}
 
+	return h.sendPacket(h.ifi.HardwareAddr, h.LLA().IP, EthAllNodesMulticast, IP6AllNodesMulticast, mb)
+	/**
 	ether := raw.EtherMarshalBinary(nil, syscall.ETH_P_IPV6, h.ifi.HardwareAddr, addr.MAC)
 	ip6 := raw.IP6MarshalBinary(ether.Payload(), 1, h.ipNetLLA.IP, IP6AllNodesMulticast)
 	ip6, err = ip6.AppendPayload(mb, uint8(ipv6.ICMPTypeMulticastRouterAdvertisement))
@@ -117,4 +123,5 @@ func (h *Handler) SendRouterAdvertisement(router Router, addr raw.Addr) error {
 		return err
 	}
 	return nil
+	**/
 }

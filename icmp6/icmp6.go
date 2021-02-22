@@ -3,9 +3,11 @@ package icmp6
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"net"
 	"sync"
+	"syscall"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -146,6 +148,47 @@ func (h *Handler) autoConfigureRouter(router Router) {
 		h.Router = router
 
 	}
+}
+
+func (h *Handler) sendPacket(srcMAC net.HardwareAddr, srcIP net.IP, dstMAC net.HardwareAddr, dstIP net.IP, b []byte) error {
+
+	hopLimit := uint8(64)
+	if dstIP.IsLinkLocalUnicast() || dstIP.IsLinkLocalMulticast() {
+		hopLimit = 1
+	}
+
+	ether := raw.EtherMarshalBinary(nil, syscall.ETH_P_IPV6, srcMAC, dstMAC)
+	fmt.Println("DEBUG ether:", ether, len(ether), len(b))
+	ip6 := raw.IP6MarshalBinary(ether.Payload(), hopLimit, srcIP, dstIP)
+	fmt.Println("DEBUG ip6  :", raw.IP6(ether.Payload()))
+	ip6, _ = ip6.AppendPayload(b, syscall.IPPROTO_ICMPV6)
+	ether, _ = ether.SetPayload(ip6)
+
+	// Calculate checksum of the pseudo header
+	// The ICMPv6 checksum takes into account a pseudoheader of 40 bytes, which is a derivative of the real IPv6 header
+	// which is composed as follows (in order):
+	//   - 16 bytes for the source address
+	//   - 16 bytes for the destination address
+	//   - 4 bytes high endian payload length (the same value as in the IPv6 header)
+	//   - 3 bytes zero
+	//   - 1 byte nextheader (so, 58 decimal)
+	psh := make([]byte, 40+len(b))
+	copy(psh[0:16], ip6.Src())
+	copy(psh[16:32], ip6.Dst())
+	binary.BigEndian.PutUint32(psh[32:36], uint32(len(b)))
+	psh[39] = 58
+	copy(psh[40:], b)
+	ICMP6(ip6.Payload()).SetChecksum(raw.Checksum(psh))
+
+	icmp6 := ICMP6(raw.IP6(ether.Payload()).Payload())
+	fmt.Println("DEBUG icmp :", icmp6, len(icmp6))
+	fmt.Println("DEBUG ether:", ether, len(ether), len(b))
+	if _, err := h.conn.WriteTo(ether, &raw.Addr{MAC: dstMAC}); err != nil {
+		log.Error("icmp failed to write ", err)
+		return err
+	}
+
+	return nil
 }
 
 var repeat int
