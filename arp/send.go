@@ -66,9 +66,9 @@ func (c *Handler) requestWithDstEthernet(dstEther net.HardwareAddr, srcHwAddr ne
 	}
 	n := len(ether) + len(arp)
 
-	if err := c.conn.SetWriteDeadline(time.Now().Add(writeTimeout)); err != nil {
-		return err
-	}
+	// if err := c.conn.SetWriteDeadline(time.Now().Add(writeTimeout)); err != nil {
+	// return err
+	// }
 
 	if _, err := c.conn.WriteTo(ether[:n], &raw.Addr{MAC: dstEther}); err != nil {
 		return err
@@ -97,9 +97,9 @@ func (c *Handler) reply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, s
 	}
 	n := len(ether) + len(arp)
 
-	if err := c.conn.SetWriteDeadline(time.Now().Add(writeTimeout)); err != nil {
-		return err
-	}
+	// if err := c.conn.SetWriteDeadline(time.Now().Add(writeTimeout)); err != nil {
+	// return err
+	// }
 
 	_, err = c.conn.WriteTo(ether[:n], &raw.Addr{MAC: dstEther})
 	return err
