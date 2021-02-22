@@ -154,7 +154,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context, pt *packet.Handler) (err 
 		log.Fatal("bpf assemble error", err)
 	}
 
-	h.conn, err = raw.ListenPacket(h.ifi, syscall.ETH_P_IP, raw.Config{Filter: bpf})
+	h.conn, err = raw.NewServerConn(h.ifi, syscall.ETH_P_IP, raw.Config{Filter: bpf})
 	if err != nil {
 		h.conn = nil // on windows, not impleted returns a partially completed conn
 		return fmt.Errorf("raw.ListenPacket error: %w", err)

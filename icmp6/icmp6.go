@@ -36,7 +36,7 @@ type Router struct {
 	CurHopLimit     uint8
 	DefaultLifetime time.Duration // A value of zero means the router is not to be used as a default router
 	Prefixes        []PrefixInformation
-	RDNSS           *RecursiveDNSServer
+	RDNSS           *RecursiveDNSServer // Pointer to facilitate comparison
 	Options         []Option
 }
 
@@ -80,8 +80,13 @@ func (h *Handler) PrintTable() {
 	}
 }
 
-func findOrCreateRouter(mac net.HardwareAddr, ip net.IP) (router *Router, found bool) {
+func (h *Handler) findOrCreateRouter(mac net.HardwareAddr, ip net.IP) (router *Router, found bool) {
+	r, found := h.LANRouters[string(ip)]
+	if found {
+		return r, true
+	}
 	router = &Router{MAC: raw.CopyMAC(mac), IP: raw.CopyIP(ip)}
+	h.LANRouters[string(ip)] = router
 	return router, false
 }
 
@@ -242,7 +247,7 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) error {
 		}
 		repeat++
 		fmt.Printf("icmp6: router advertisement : %+v\n", msg)
-		router, _ := findOrCreateRouter(host.MAC, host.IP)
+		router, _ := h.findOrCreateRouter(host.MAC, host.IP)
 		router.ManagedFlag = msg.ManagedConfiguration
 		router.CurHopLimit = msg.CurrentHopLimit
 		router.DefaultLifetime = msg.RouterLifetime

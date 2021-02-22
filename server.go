@@ -138,9 +138,14 @@ func (h *Handler) setupConn() (conn net.PacketConn, err error) {
 	}
 
 	// see: https://www.man7.org/linux/man-pages/man7/packet.7.html
-	conn, err = raw.ListenPacket(h.ifi, syscall.ETH_P_ALL, raw.Config{Filter: bpf})
+	conn, err = raw.NewServerConn(h.ifi, syscall.ETH_P_ALL, raw.Config{Filter: bpf})
 	if err != nil {
 		return nil, fmt.Errorf("raw.ListenPacket error: %w", err)
+	}
+
+	// don't timeout during write
+	if err := conn.SetWriteDeadline(time.Time{}); err != nil {
+		return nil, err
 	}
 
 	return conn, nil

@@ -100,6 +100,10 @@ func main() {
 }
 
 func cmd(pt *packet.Handler, h *icmp4.Handler, h6 *icmp6.Handler) {
+
+	radvs, _ := h6.StartRADVS(false, false, icmp6.MyHomePrefix, icmp6.RDNSSCLoudflare)
+	defer radvs.Stop()
+
 	reader := bufio.NewReader(os.Stdin)
 	for {
 		fmt.Println("Command: (q)uit            | (p)ing ip | (l)list | (g) loG <level>")
@@ -172,7 +176,7 @@ func cmd(pt *packet.Handler, h *icmp4.Handler, h6 *icmp6.Handler) {
 				fmt.Printf("error in neigbour solicitation: %s\n", err)
 			}
 		case "ra":
-			if err := h6.StartRADVS(); err != nil {
+			if err := radvs.SendRA(); err != nil {
 				fmt.Printf("error in router adversitement: %s\n", err)
 			}
 		}

@@ -6,7 +6,6 @@ package raw
 // as part of the raw package github.com/mdlayher/raw
 
 import (
-	"fmt"
 	"net"
 	"os"
 	"syscall"
@@ -104,9 +103,9 @@ func Dial(ifi *net.Interface) (*packetConn, error) {
 	return pc, nil
 }
 
-// ListenPacket creates a net.PacketConn which can be used to send and receive
+// NewServerConn creates a net.PacketConn which can be used to send and receive
 // data at the device driver level.
-func ListenPacket(ifi *net.Interface, proto uint16, cfg Config) (*packetConn, error) {
+func NewServerConn(ifi *net.Interface, proto uint16, cfg Config) (*packetConn, error) {
 
 	filename := "eth-packet-socket"
 
@@ -212,7 +211,6 @@ func (p *packetConn) WriteTo(b []byte, addr net.Addr) (int, error) {
 	// Ensure correct Addr type.
 	a, ok := addr.(*Addr)
 	if !ok || a.MAC == nil {
-		fmt.Println("DEBUG invalid parameter", ok, addr)
 		return 0, unix.EINVAL
 	}
 

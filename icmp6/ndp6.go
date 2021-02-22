@@ -3,47 +3,9 @@ package icmp6
 import (
 	"net"
 	"time"
-
-	"github.com/irai/packet/raw"
 )
 
-func (h *Handler) StartRADVS() error {
-	// home: 2001:4479:1901:a001
-	prefix := net.IP{0x20, 0x01, 0x44, 0x79, 0x19, 0x01, 0xa0, 0x01, 0, 0, 0, 0, 0, 0, 0, 0}
-
-	// Cloudflare IP6:
-	// 2606:4700:4700::1111
-	// 2606:4700:4700::1001
-	dns6 := net.IP{0x26, 0x06, 0x47, 0x00, 0x47, 0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0x11, 0x11}
-
-	router := Router{
-		MAC:             h.ifi.HardwareAddr,
-		IP:              h.LLA().IP,
-		ManagedFlag:     false,
-		OtherCondigFlag: false,
-		MTU:             uint32(h.ifi.MTU),
-		ReacheableTime:  int((time.Minute * 10).Milliseconds()), // Must be no greater than 3,600,000 milliseconds (1hour)
-		RetransTimer:    int((time.Minute * 2).Milliseconds()),
-		CurHopLimit:     1,
-		DefaultLifetime: time.Minute * 30, // A value of zero means the router is not to be used as a default router
-		Prefixes: []PrefixInformation{
-			{
-				PrefixLength:                   64,
-				Prefix:                         prefix,
-				AutonomousAddressConfiguration: true,
-				ValidLifetime:                  time.Minute * 10,
-				PreferredLifetime:              time.Minute * 5,
-			},
-		},
-		RDNSS: &RecursiveDNSServer{
-			Lifetime: time.Minute * 10,
-			Servers:  []net.IP{dns6},
-		},
-	}
-	return h.SendRouterAdvertisement(router, raw.Addr{MAC: EthAllNodesMulticast})
-}
-
-func (h *Handler) SendRouterAdvertisement(router Router, addr raw.Addr) error {
+func (h *Handler) SendRouterAdvertisement(router *Router) error {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 	if len(router.Prefixes) == 0 {
