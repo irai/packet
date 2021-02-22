@@ -5,17 +5,7 @@ import (
 	"time"
 
 	"github.com/irai/packet/raw"
-	"golang.org/x/net/ipv6"
 )
-
-/**
-func (s *Handler) SetPrefixes(prefixes []net.IPNet) error {
-	s.mutex.Lock()
-	s.prefixes = prefixes
-	s.mutex.Unlock()
-	return s.RouterAdvertisement(nil)
-}
-***/
 
 func (h *Handler) StartRADVS() error {
 	// home: 2001:4479:1901:a001
@@ -100,28 +90,10 @@ func (h *Handler) SendRouterAdvertisement(router Router, addr raw.Addr) error {
 		Options:         options,
 	}
 
-	icmpMessage := Message{
-		Type: ipv6.ICMPTypeRouterAdvertisement,
-		Code: 0,
-		Body: ra,
-	}
-
-	mb, err := icmpMessage.Marshal()
+	mb, err := MarshalMessage(ra)
 	if err != nil {
 		return err
 	}
 
 	return h.sendPacket(h.ifi.HardwareAddr, h.LLA().IP, EthAllNodesMulticast, IP6AllNodesMulticast, mb)
-	/**
-	ether := raw.EtherMarshalBinary(nil, syscall.ETH_P_IPV6, h.ifi.HardwareAddr, addr.MAC)
-	ip6 := raw.IP6MarshalBinary(ether.Payload(), 1, h.ipNetLLA.IP, IP6AllNodesMulticast)
-	ip6, err = ip6.AppendPayload(mb, uint8(ipv6.ICMPTypeMulticastRouterAdvertisement))
-	ether, _ = ether.SetPayload(mb)
-
-	log.Printf("icmp6: sending ra=%+v\n", ra)
-	if _, err := h.conn.WriteTo(ether, &addr); err != nil {
-		return err
-	}
-	return nil
-	**/
 }
