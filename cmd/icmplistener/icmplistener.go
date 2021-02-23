@@ -135,11 +135,13 @@ func cmd(pt *packet.Handler, h *icmp4.Handler, h6 *icmp6.Handler) {
 				icmp4.Debug = false
 				packet.Debug = false
 				icmp6.Debug = false
+				arp.Debug = false
 			} else {
 				fmt.Printf("Debugging is ON\n")
 				icmp4.Debug = true
 				packet.Debug = true
 				icmp6.Debug = true
+				arp.Debug = true
 			}
 		case "p":
 			if len(tokens) < 2 {

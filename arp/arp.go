@@ -10,7 +10,6 @@ import (
 
 	"log"
 
-	"github.com/irai/arp"
 	"github.com/irai/packet/raw"
 )
 
@@ -37,7 +36,7 @@ func (c Config) String() string {
 type Handler struct {
 	conn        net.PacketConn
 	table       *arpTable
-	config      arp.Config
+	config      Config
 	routerEntry MACEntry // store the router mac address
 	sync.RWMutex
 	notification chan<- MACEntry // notification channel for state change
