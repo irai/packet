@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/irai/packet/raw"
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv6"
 )
@@ -32,7 +33,7 @@ func init() {
 
 // SendEchoRequest transmit an icmp echo request
 // Do not wait for response
-func (h *Handler) SendEchoRequest(dstIP net.IP, id uint16, seq uint16) error {
+func (h *Handler) SendEchoRequest(dstAddr raw.Addr, id uint16, seq uint16) error {
 
 	/**
 	e := h.LANHosts.FindIP(dstIP)
@@ -56,7 +57,7 @@ func (h *Handler) SendEchoRequest(dstIP net.IP, id uint16, seq uint16) error {
 		return err
 	}
 
-	return h.sendPacket(h.ifi.HardwareAddr, h.LLA().IP, EthAllNodesMulticast, dstIP, p)
+	return h.sendPacket(raw.Addr{MAC: h.ifi.HardwareAddr, IP: h.LLA().IP}, dstAddr, p)
 }
 
 // Ping send a ping request and wait for a reply

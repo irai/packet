@@ -48,6 +48,7 @@ func (h *Handler) StartRADVS(managed bool, other bool, prefixes []PrefixInformat
 func (h *Handler) startRADVS(managed bool, other bool, prefixes []PrefixInformation, rdnss *RecursiveDNSServer) (radvs *RADVS, err error) {
 	radvs = &RADVS{stopChannel: make(chan bool, 1)}
 	radvs.Router, _ = h.findOrCreateRouter(h.ifi.HardwareAddr, h.LLA().IP)
+	radvs.Router.enableRADVS = true
 	radvs.Router.ManagedFlag = managed
 	radvs.Router.OtherCondigFlag = other
 	radvs.Router.MTU = uint32(h.ifi.MTU)
@@ -69,11 +70,11 @@ func (r *RADVS) Stop() {
 }
 
 func (r *RADVS) SendRA() error {
-	return r.h.SendRouterAdvertisement(r.Router)
+	return r.h.SendRouterAdvertisement(r.Router, AllNodesAddr)
 }
 
 func (r *RADVS) sendAdvertistementLoop() {
-	r.h.SendRouterAdvertisement(r.Router)
+	r.h.SendRouterAdvertisement(r.Router, AllNodesAddr)
 	ticker := time.NewTicker(time.Duration(int(time.Millisecond) * r.Router.RetransTimer)).C
 	for {
 		select {
@@ -81,7 +82,7 @@ func (r *RADVS) sendAdvertistementLoop() {
 			return
 
 		case <-ticker:
-			if err := r.h.SendRouterAdvertisement(r.Router); err != nil {
+			if err := r.h.SendRouterAdvertisement(r.Router, AllNodesAddr); err != nil {
 				fmt.Printf("icmp6: error in send ra: %s", err)
 			}
 		}

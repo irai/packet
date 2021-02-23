@@ -23,7 +23,7 @@ func (c *Handler) scanLoop(ctx context.Context, interval time.Duration) error {
 
 		case <-ticker:
 			if err := c.ScanNetwork(ctx, c.config.HomeLAN); err != nil {
-				return fmt.Errorf("scanLoop goroutine failed: %w", err)
+				return err
 			}
 		}
 	}

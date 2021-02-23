@@ -160,7 +160,7 @@ func cmd(pt *packet.Handler, h *icmp4.Handler, h6 *icmp6.Handler) {
 				fmt.Printf("ping %v time=%v\n", dstIP, time.Now().Sub(now))
 			}
 			if ip.To16() != nil && ip.To4() == nil {
-				if err := h6.SendEchoRequest(ip, 1, 2); err != nil {
+				if err := h6.SendEchoRequest(raw.Addr{MAC: icmp6.EthAllNodesMulticast, IP: ip}, 1, 2); err != nil {
 					// if err := h6.Ping(h6.LLA().IP, ip, time.Second*2); err != nil {
 					fmt.Println("icmp6 echo error ", err)
 					continue

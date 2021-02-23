@@ -367,7 +367,8 @@ var _ Message = &RouterSolicitation{}
 // A RouterSolicitation is a Router Solicitation message as
 // described in RFC 4861, Section 4.1.
 type RouterSolicitation struct {
-	Options []Option
+	SourceLLA net.HardwareAddr
+	Options   []Option
 }
 
 // Type implements Message.
@@ -396,6 +397,15 @@ func (rs *RouterSolicitation) unmarshal(b []byte) error {
 	options, err := parseOptions(b[rsLen:])
 	if err != nil {
 		return err
+	}
+
+	// A SourceLinkAddress is supposed to be included if the sender of the message is using an
+	// IPv6 address other than the unspecified address (used during auto configuration).
+	// SourceLinkAddress is the only valid option for Router Solicitation - RFC4861
+	for _, v := range options {
+		if slla, ok := v.(*LinkLayerAddress); ok {
+			rs.SourceLLA = slla.Addr
+		}
 	}
 
 	*rs = RouterSolicitation{

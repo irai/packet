@@ -28,6 +28,7 @@ type ICMP6Data struct {
 type Router struct {
 	MAC             net.HardwareAddr // LLA - Local link address
 	IP              net.IP
+	enableRADVS     bool // if true, we respond for this server
 	ManagedFlag     bool
 	OtherCondigFlag bool
 	MTU             uint32
@@ -155,16 +156,16 @@ func (h *Handler) autoConfigureRouter(router Router) {
 	}
 }
 
-func (h *Handler) sendPacket(srcMAC net.HardwareAddr, srcIP net.IP, dstMAC net.HardwareAddr, dstIP net.IP, b []byte) error {
+func (h *Handler) sendPacket(srcAddr raw.Addr, dstAddr raw.Addr, b []byte) error {
 
 	hopLimit := uint8(64)
-	if dstIP.IsLinkLocalUnicast() || dstIP.IsLinkLocalMulticast() {
+	if dstAddr.IP.IsLinkLocalUnicast() || dstAddr.IP.IsLinkLocalMulticast() {
 		hopLimit = 1
 	}
 
-	ether := raw.EtherMarshalBinary(nil, syscall.ETH_P_IPV6, srcMAC, dstMAC)
+	ether := raw.EtherMarshalBinary(nil, syscall.ETH_P_IPV6, srcAddr.MAC, dstAddr.MAC)
 	fmt.Println("DEBUG ether:", ether, len(ether), len(b))
-	ip6 := raw.IP6MarshalBinary(ether.Payload(), hopLimit, srcIP, dstIP)
+	ip6 := raw.IP6MarshalBinary(ether.Payload(), hopLimit, srcAddr.IP, dstAddr.IP)
 	fmt.Println("DEBUG ip6  :", raw.IP6(ether.Payload()))
 	ip6, _ = ip6.AppendPayload(b, syscall.IPPROTO_ICMPV6)
 	ether, _ = ether.SetPayload(ip6)
@@ -188,7 +189,7 @@ func (h *Handler) sendPacket(srcMAC net.HardwareAddr, srcIP net.IP, dstMAC net.H
 	icmp6 := ICMP6(raw.IP6(ether.Payload()).Payload())
 	fmt.Println("DEBUG icmp :", icmp6, len(icmp6))
 	fmt.Println("DEBUG ether:", ether, len(ether), len(b))
-	if _, err := h.conn.WriteTo(ether, &raw.Addr{MAC: dstMAC}); err != nil {
+	if _, err := h.conn.WriteTo(ether, &raw.Addr{MAC: dstAddr.MAC}); err != nil {
 		log.Error("icmp failed to write ", err)
 		return err
 	}
@@ -297,6 +298,14 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) error {
 			return fmt.Errorf("ndp: failed to unmarshal %s: %w", t, errParseMessage)
 		}
 		fmt.Printf("icmp6 router solicitation: %+v\n", msg)
+		for _, v := range h.LANRouters {
+			if v.enableRADVS {
+				if bytes.Equal(ether.Src(), msg.SourceLLA) {
+					fmt.Printf("icmp6 error: source link address differ: ether=%s rs=%s\n", ether.Src(), ip6Frame.Src())
+				}
+				h.SendRouterAdvertisement(v, raw.Addr{MAC: ether.Src(), IP: ip6Frame.Src()})
+			}
+		}
 
 	case ipv6.ICMPTypeEchoReply:
 		msg := raw.ICMPEcho(icmp6Frame)

@@ -13,6 +13,8 @@ var (
 
 	EthAllNodesMulticast = net.HardwareAddr{0x33, 0x33, 0, 0, 0, 0x01}
 	EthRoutersMulticast  = net.HardwareAddr{0x33, 0x33, 0, 0, 0, 0x02}
+
+	AllNodesAddr = raw.Addr{MAC: EthAllNodesMulticast, IP: IP6AllNodesMulticast}
 )
 
 type ICMP6 []byte

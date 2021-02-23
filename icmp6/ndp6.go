@@ -3,9 +3,11 @@ package icmp6
 import (
 	"net"
 	"time"
+
+	"github.com/irai/packet/raw"
 )
 
-func (h *Handler) SendRouterAdvertisement(router *Router) error {
+func (h *Handler) SendRouterAdvertisement(router *Router, dstAddr raw.Addr) error {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 	if len(router.Prefixes) == 0 {
@@ -57,7 +59,7 @@ func (h *Handler) SendRouterAdvertisement(router *Router) error {
 		return err
 	}
 
-	return h.sendPacket(h.ifi.HardwareAddr, h.LLA().IP, EthAllNodesMulticast, IP6AllNodesMulticast, mb)
+	return h.sendPacket(raw.Addr{MAC: h.ifi.HardwareAddr, IP: h.LLA().IP}, dstAddr, mb)
 }
 
 func (h *Handler) SendRouterSolicitation() error {
@@ -74,10 +76,10 @@ func (h *Handler) SendRouterSolicitation() error {
 		return err
 	}
 
-	return h.sendPacket(h.ifi.HardwareAddr, h.LLA().IP, EthAllNodesMulticast, IP6AllNodesMulticast, mb)
+	return h.sendPacket(raw.Addr{MAC: h.ifi.HardwareAddr, IP: h.LLA().IP}, AllNodesAddr, mb)
 }
 
-func (h *Handler) SendNeighborAdvertisement(ip net.IP) error {
+func (h *Handler) SendNeighborAdvertisement(ip net.IP, dstAddr raw.Addr) error {
 	m := &NeighborAdvertisement{
 		Router:        true,
 		Solicited:     true,
@@ -95,7 +97,7 @@ func (h *Handler) SendNeighborAdvertisement(ip net.IP) error {
 		return err
 	}
 
-	return h.sendPacket(h.ifi.HardwareAddr, h.LLA().IP, EthAllNodesMulticast, IP6AllNodesMulticast, mb)
+	return h.sendPacket(raw.Addr{MAC: h.ifi.HardwareAddr, IP: h.LLA().IP}, dstAddr, mb)
 }
 
 // SendNeighbourSolicitation send an ICMP6 NS packet.
@@ -114,5 +116,5 @@ func (h *Handler) SendNeighbourSolicitation(ip net.IP) error {
 		return err
 	}
 
-	return h.sendPacket(h.ifi.HardwareAddr, h.LLA().IP, EthAllNodesMulticast, IP6AllNodesMulticast, mb)
+	return h.sendPacket(raw.Addr{MAC: h.ifi.HardwareAddr, IP: h.LLA().IP}, AllNodesAddr, mb)
 }
