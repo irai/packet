@@ -726,7 +726,6 @@ func parseOptions(b []byte) ([]Option, error) {
 		switch t {
 		case optSourceLLA, optTargetLLA:
 			o = new(LinkLayerAddress)
-			fmt.Println("DEBUG: LLA", t)
 		case optMTU:
 			o = new(MTU)
 		case optPrefixInformation:
@@ -743,7 +742,6 @@ func parseOptions(b []byte) ([]Option, error) {
 
 		// Unmarshal at the current offset, up to the expected length.
 		if err := o.unmarshal(b[i : i+l]); err != nil {
-			fmt.Println("DEBUG: ", t)
 			return nil, err
 		}
 

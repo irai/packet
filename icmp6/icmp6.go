@@ -164,9 +164,7 @@ func (h *Handler) sendPacket(srcAddr raw.Addr, dstAddr raw.Addr, b []byte) error
 	}
 
 	ether := raw.EtherMarshalBinary(nil, syscall.ETH_P_IPV6, srcAddr.MAC, dstAddr.MAC)
-	fmt.Println("DEBUG ether:", ether, len(ether), len(b))
 	ip6 := raw.IP6MarshalBinary(ether.Payload(), hopLimit, srcAddr.IP, dstAddr.IP)
-	fmt.Println("DEBUG ip6  :", raw.IP6(ether.Payload()))
 	ip6, _ = ip6.AppendPayload(b, syscall.IPPROTO_ICMPV6)
 	ether, _ = ether.SetPayload(ip6)
 
@@ -186,9 +184,9 @@ func (h *Handler) sendPacket(srcAddr raw.Addr, dstAddr raw.Addr, b []byte) error
 	copy(psh[40:], b)
 	ICMP6(ip6.Payload()).SetChecksum(raw.Checksum(psh))
 
-	icmp6 := ICMP6(raw.IP6(ether.Payload()).Payload())
-	fmt.Println("DEBUG icmp :", icmp6, len(icmp6))
-	fmt.Println("DEBUG ether:", ether, len(ether), len(b))
+	// icmp6 := ICMP6(raw.IP6(ether.Payload()).Payload())
+	// fmt.Println("DEBUG icmp :", icmp6, len(icmp6))
+	// fmt.Println("DEBUG ether:", ether, len(ether), len(b))
 	if _, err := h.conn.WriteTo(ether, &raw.Addr{MAC: dstAddr.MAC}); err != nil {
 		log.Error("icmp failed to write ", err)
 		return err
