@@ -8,6 +8,7 @@ import (
 	"github.com/irai/packet/raw"
 )
 
+// Global variables
 var (
 	IP6AllNodesMulticast = net.IP{0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}
 
