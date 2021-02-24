@@ -282,11 +282,15 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		switch l4Proto {
 		case syscall.IPPROTO_ICMP:
 			for _, v := range h.handlerICMP4 {
-				v.handler.ProcessPacket(host, l4Payload)
+				if err := v.handler.ProcessPacket(host, l4Payload); err != nil {
+					fmt.Printf("packet: error processing icmp4: %s\n", err)
+				}
 			}
 		case syscall.IPPROTO_ICMPV6:
 			for _, v := range h.handlerICMP6 {
-				v.handler.ProcessPacket(host, ether)
+				if err := v.handler.ProcessPacket(host, ether); err != nil {
+					fmt.Printf("packet: error processing icmp6: %s\n", err)
+				}
 			}
 		case syscall.IPPROTO_TCP, syscall.IPPROTO_UDP:
 			// do nothing

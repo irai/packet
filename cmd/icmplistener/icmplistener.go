@@ -131,19 +131,23 @@ func cmd(pt *packet.Handler, h *icmp4.Handler, h6 *icmp6.Handler) {
 			h6.PrintTable()
 
 		case "g":
-			if icmp4.Debug {
-				fmt.Printf("Debugging is OFF\n")
-				icmp4.Debug = false
-				packet.Debug = false
-				icmp6.Debug = false
-				arp.Debug = false
-			} else {
-				fmt.Printf("Debugging is ON\n")
-				icmp4.Debug = true
-				packet.Debug = true
-				icmp6.Debug = true
-				arp.Debug = true
+			p := getString(tokens, 1)
+			switch p {
+			case "icmp4":
+				icmp4.Debug = !icmp4.Debug
+			case "icmp6":
+				icmp6.Debug = !icmp6.Debug
+			case "packet":
+				packet.Debug = !packet.Debug
+			case "arp":
+				arp.Debug = !arp.Debug
+			default:
+				fmt.Println("invalid package - use 'g icmp4|icmp6|arp|packet'")
 			}
+			fmt.Println("icmp4 debug:", icmp4.Debug)
+			fmt.Println("icmp6 debug:", icmp6.Debug)
+			fmt.Println("packet debug:", packet.Debug)
+			fmt.Println("arp debug:", arp.Debug)
 		case "p":
 			if len(tokens) < 2 {
 				fmt.Println("missing ip")
@@ -186,6 +190,13 @@ func cmd(pt *packet.Handler, h *icmp4.Handler, h6 *icmp6.Handler) {
 	}
 }
 
+func getString(tokens []string, pos int) string {
+	if len(tokens) < pos+1 {
+		fmt.Println("missing value", tokens)
+		return ""
+	}
+	return tokens[pos]
+}
 func getIP(tokens []string, pos int) net.IP {
 	if len(tokens) < pos+1 {
 		fmt.Println("missing ip", tokens)

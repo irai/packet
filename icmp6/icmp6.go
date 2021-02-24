@@ -29,8 +29,8 @@ type Router struct {
 	MAC             net.HardwareAddr // LLA - Local link address
 	IP              net.IP
 	enableRADVS     bool // if true, we respond for this server
-	ManagedFlag     bool
-	OtherCondigFlag bool
+	ManagedFlag     bool // if true, hosts should get IP from DHCP, if false, use SLAAC IP
+	OtherCondigFlag bool // if true, hosts should get other info from DHCP
 	MTU             uint32
 	ReacheableTime  int // Must be no greater than 3,600,000 milliseconds (1hour)
 	RetransTimer    int //
@@ -215,10 +215,9 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) error {
 	icmp6Frame := ICMP6(ip6Frame.Payload())
 
 	if !icmp6Frame.IsValid() {
-		fmt.Println("error: packet invalid icmp ", icmp6Frame)
 		return fmt.Errorf("invalid icmp msg=%v: %w", icmp6Frame, errParseMessage)
 	}
-	fmt.Printf("icmp6: %s\n", icmp6Frame)
+	// fmt.Printf("icmp6: %s\n", icmp6Frame)
 
 	t := ipv6.ICMPType(icmp6Frame.Type())
 	switch t {
@@ -227,26 +226,32 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) error {
 		if err := msg.unmarshal(icmp6Frame); err != nil {
 			return fmt.Errorf("ndp: failed to unmarshal %s: %w", t, errParseMessage)
 		}
-		fmt.Printf("icmp6: neighbor advertisement: %+v\n", msg)
+		if Debug {
+			fmt.Printf("icmp6: neighbor advertisement: %+v\n", msg)
+		}
 
 	case ipv6.ICMPTypeNeighborSolicitation:
 		msg := new(NeighborSolicitation)
 		if err := msg.unmarshal(icmp6Frame); err != nil {
 			return fmt.Errorf("ndp: failed to unmarshal %s: %w", t, errParseMessage)
 		}
-		fmt.Printf("icmp6: neighbor solicitation: %+v\n", msg)
+		if Debug {
+			fmt.Printf("icmp6: neighbor solicitation: %+v\n", msg)
+		}
 
 	case ipv6.ICMPTypeRouterAdvertisement:
 		msg := new(RouterAdvertisement)
 		if err := msg.unmarshal(icmp6Frame); err != nil {
 			return fmt.Errorf("ndp: failed to unmarshal %s: %w", t, errParseMessage)
 		}
-		if repeat%16 != 0 {
-			fmt.Printf("icmp6 repeated router advertisement : \n")
+		if Debug {
+			if repeat%16 != 0 {
+				fmt.Printf("icmp6 repeated router advertisement : \n")
+				repeat++
+				break
+			}
 			repeat++
-			break
 		}
-		repeat++
 		fmt.Printf("icmp6: router advertisement : %+v\n", msg)
 		router, _ := h.findOrCreateRouter(host.MAC, host.IP)
 		router.ManagedFlag = msg.ManagedConfiguration
