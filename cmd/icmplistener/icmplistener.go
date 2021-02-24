@@ -63,7 +63,8 @@ func main() {
 	defer packet.Close()
 
 	// setup ARP handler
-	arpHandler, err := arp.New(packet.Conn(), packet.LANHosts, arp.Config{HostMAC: mac, HostIP: ipNet4.IP})
+	homeLAN := net.IPNet{IP: ipNet4.IP.Mask(ipNet4.Mask), Mask: ipNet4.Mask}
+	arpHandler, err := arp.New(packet.Conn(), packet.LANHosts, arp.Config{HostMAC: mac, HostIP: ipNet4.IP, HomeLAN: homeLAN})
 	packet.ARP = arpHandler
 
 	// ICMPv4
