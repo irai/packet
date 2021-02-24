@@ -184,9 +184,9 @@ func (h *Handler) sendPacket(srcAddr raw.Addr, dstAddr raw.Addr, b []byte) error
 	copy(psh[40:], b)
 	ICMP6(ip6.Payload()).SetChecksum(raw.Checksum(psh))
 
-	// icmp6 := ICMP6(raw.IP6(ether.Payload()).Payload())
-	// fmt.Println("DEBUG icmp :", icmp6, len(icmp6))
-	// fmt.Println("DEBUG ether:", ether, len(ether), len(b))
+	icmp6 := ICMP6(raw.IP6(ether.Payload()).Payload())
+	fmt.Println("DEBUG icmp :", icmp6, len(icmp6))
+	fmt.Println("DEBUG ether:", ether, len(ether), len(b))
 	if _, err := h.conn.WriteTo(ether, &raw.Addr{MAC: dstAddr.MAC}); err != nil {
 		log.Error("icmp failed to write ", err)
 		return err
@@ -200,13 +200,16 @@ var repeat int
 func (h *Handler) ProcessPacket(host *raw.Host, b []byte) error {
 
 	// retrieve or set store
-	h.LANHosts.Lock()
-	store, _ := host.ICMP6.(*ICMP6Data)
-	if store == nil {
-		store = &ICMP6Data{}
-		host.ICMP6 = store
+	var store *ICMP6Data
+	if host != nil {
+		h.LANHosts.Lock()
+		store, _ = host.ICMP6.(*ICMP6Data)
+		if store == nil {
+			store = &ICMP6Data{}
+			host.ICMP6 = store
+		}
+		h.LANHosts.Unlock()
 	}
-	h.LANHosts.Unlock()
 
 	ether := raw.Ether(b)
 	ip6Frame := raw.IP6(ether.Payload())
@@ -225,6 +228,13 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) error {
 		}
 		if Debug {
 			fmt.Printf("icmp6: neighbor advertisement: %+v\n", msg)
+		}
+		// NS source IP is sometimes ff02::1 multicast, which means the host is nil
+		if host == nil {
+			if raw.IsIP6(msg.TargetAddress) {
+				// will lock mutex in LANHosts
+				host, _ = h.LANHosts.FindOrCreateHost(ether.Src(), msg.TargetAddress)
+			}
 		}
 
 	case ipv6.ICMPTypeNeighborSolicitation:
@@ -248,6 +258,11 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) error {
 				break
 			}
 			repeat++
+		}
+		// Protect agains nil host
+		// NS source IP is sometimes ff02::1 multicast, which means the host is nil
+		if host == nil {
+			return fmt.Errorf("ra host cannot be nil")
 		}
 		router, _ := h.findOrCreateRouter(host.MAC, host.IP)
 		router.ManagedFlag = msg.ManagedConfiguration

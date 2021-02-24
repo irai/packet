@@ -256,14 +256,13 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				fmt.Printf("ip6  : %s\n", frame)
 			}
 
-			if !frame.Src().IsLinkLocalUnicast() && !frame.Src().IsGlobalUnicast() {
-				fmt.Println("ignore IP6 ", frame)
-				continue
-			}
 			l4Proto = frame.NextHeader()
 			l4Payload = frame.Payload()
 
-			host, _ = h.LANHosts.FindOrCreateHost(ether.Src(), frame.Src())
+			// lookup host only if unicast
+			if frame.Src().IsLinkLocalUnicast() || frame.Src().IsGlobalUnicast() {
+				host, _ = h.LANHosts.FindOrCreateHost(ether.Src(), frame.Src())
+			}
 			for _, v := range h.handlerIP6 {
 				v.handler.ProcessPacket(host, ether)
 			}
