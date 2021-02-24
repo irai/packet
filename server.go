@@ -292,11 +292,14 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 					fmt.Printf("packet: error processing icmp6: %s\n", err)
 				}
 			}
+		case syscall.IPPROTO_IGMP:
+			// Internet Group Management Protocol - Ipv4 multicast groups
+			// do nothing
 		case syscall.IPPROTO_TCP, syscall.IPPROTO_UDP:
 			// do nothing
 
 		default:
-			fmt.Println("unsupported level 4 header", l4Proto)
+			fmt.Println("packet: unsupported level 4 header", l4Proto)
 		}
 	}
 }

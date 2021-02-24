@@ -217,13 +217,12 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) error {
 	if !icmp6Frame.IsValid() {
 		return fmt.Errorf("invalid icmp msg=%v: %w", icmp6Frame, errParseMessage)
 	}
-	// fmt.Printf("icmp6: %s\n", icmp6Frame)
 
 	t := ipv6.ICMPType(icmp6Frame.Type())
 	switch t {
 	case ipv6.ICMPTypeNeighborAdvertisement:
 		msg := new(NeighborAdvertisement)
-		if err := msg.unmarshal(icmp6Frame); err != nil {
+		if err := msg.unmarshal(icmp6Frame[4:]); err != nil {
 			return fmt.Errorf("ndp: failed to unmarshal %s: %w", t, errParseMessage)
 		}
 		if Debug {
@@ -232,7 +231,7 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) error {
 
 	case ipv6.ICMPTypeNeighborSolicitation:
 		msg := new(NeighborSolicitation)
-		if err := msg.unmarshal(icmp6Frame); err != nil {
+		if err := msg.unmarshal(icmp6Frame[4:]); err != nil {
 			return fmt.Errorf("ndp: failed to unmarshal %s: %w", t, errParseMessage)
 		}
 		if Debug {
@@ -241,18 +240,17 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) error {
 
 	case ipv6.ICMPTypeRouterAdvertisement:
 		msg := new(RouterAdvertisement)
-		if err := msg.unmarshal(icmp6Frame); err != nil {
+		if err := msg.unmarshal(icmp6Frame[4:]); err != nil {
 			return fmt.Errorf("ndp: failed to unmarshal %s: %w", t, errParseMessage)
 		}
 		if Debug {
-			if repeat%16 != 0 {
+			if repeat%4 != 0 {
 				fmt.Printf("icmp6 repeated router advertisement : \n")
 				repeat++
 				break
 			}
 			repeat++
 		}
-		fmt.Printf("icmp6: router advertisement : %+v\n", msg)
 		router, _ := h.findOrCreateRouter(host.MAC, host.IP)
 		router.ManagedFlag = msg.ManagedConfiguration
 		router.CurHopLimit = msg.CurrentHopLimit
@@ -299,10 +297,12 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) error {
 
 	case ipv6.ICMPTypeRouterSolicitation:
 		msg := new(RouterSolicitation)
-		if err := msg.unmarshal(icmp6Frame); err != nil {
+		if err := msg.unmarshal(icmp6Frame[4:]); err != nil {
 			return fmt.Errorf("ndp: failed to unmarshal %s: %w", t, errParseMessage)
 		}
-		fmt.Printf("icmp6 router solicitation: %+v\n", msg)
+		if Debug {
+			fmt.Printf("icmp6 router solicitation: %+v\n", msg)
+		}
 		for _, v := range h.LANRouters {
 			if v.enableRADVS {
 				if bytes.Equal(ether.Src(), msg.SourceLLA) {
@@ -317,15 +317,19 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) error {
 		if !msg.IsValid() {
 			return fmt.Errorf("invalid icmp echo msg len=%d", len(icmp6Frame))
 		}
-		fmt.Printf("icmp6: echo reply %s\n", msg)
+		if Debug {
+			fmt.Printf("icmp6: echo reply %s\n", msg)
+		}
 
 	case ipv6.ICMPTypeEchoRequest:
 		msg := raw.ICMPEcho(icmp6Frame)
-		fmt.Printf("icmp6: echo request %s\n", msg)
+		if Debug {
+			fmt.Printf("icmp6: echo request %s\n", msg)
+		}
 
 	default:
 		log.Printf("icmp6 not implemented type=%v ip6=%s\n", t, icmp6Frame)
-		return fmt.Errorf("ndp: unrecognized ICMPv6 type %d: %w", t, errParseMessage)
+		return fmt.Errorf("unrecognized icmp6 type %d: %w", t, errParseMessage)
 	}
 
 	if h.notification != nil {
