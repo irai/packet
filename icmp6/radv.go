@@ -75,7 +75,7 @@ func (r *RADVS) SendRA() error {
 
 func (r *RADVS) sendAdvertistementLoop() {
 	r.h.SendRouterAdvertisement(r.Router, AllNodesAddr)
-	ticker := time.NewTicker(time.Duration(int(time.Millisecond) * r.Router.RetransTimer)).C
+	ticker := time.NewTicker(time.Duration(int64(time.Millisecond) * int64(r.Router.RetransTimer))).C
 	for {
 		select {
 		case <-r.stopChannel:
