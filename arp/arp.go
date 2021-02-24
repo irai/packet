@@ -62,6 +62,10 @@ func New(conn net.PacketConn, table *raw.HostTable, config Config) (h *Handler, 
 	h.config.PurgeDeadline = config.PurgeDeadline
 	h.conn = conn
 
+	if h.config.HomeLAN.IP == nil && h.config.HomeLAN.IP.IsUnspecified() {
+		return nil, raw.ErrInvalidIP4
+	}
+
 	if h.config.FullNetworkScanInterval <= 0 || h.config.FullNetworkScanInterval > time.Hour*12 {
 		h.config.FullNetworkScanInterval = time.Minute * 60
 	}
