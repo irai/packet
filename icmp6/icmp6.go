@@ -20,7 +20,8 @@ import (
 // Debug packets turn on logging if desirable
 var Debug bool
 
-type ICMP6Data struct {
+// Data stores private icmp6 data in host entry
+type Data struct {
 	router *Router
 }
 
@@ -128,6 +129,7 @@ func New(ifi *net.Interface, conn net.PacketConn, table *raw.HostTable, config C
 	return h, nil
 }
 
+// Start prepares to accept packets
 func (h *Handler) Start(ctx context.Context) error {
 	return nil
 }
@@ -197,15 +199,16 @@ func (h *Handler) sendPacket(srcAddr raw.Addr, dstAddr raw.Addr, b []byte) error
 
 var repeat int
 
+// ProcessPacket handles icmp6 packets
 func (h *Handler) ProcessPacket(host *raw.Host, b []byte) error {
 
 	// retrieve or set store
-	var store *ICMP6Data
+	var store *Data
 	if host != nil {
 		h.LANHosts.Lock()
-		store, _ = host.ICMP6.(*ICMP6Data)
+		store, _ = host.ICMP6.(*Data)
 		if store == nil {
-			store = &ICMP6Data{}
+			store = &Data{}
 			host.ICMP6 = store
 		}
 		h.LANHosts.Unlock()
