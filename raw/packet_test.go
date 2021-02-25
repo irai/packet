@@ -1,7 +1,9 @@
 package raw
 
 import (
+	"fmt"
 	"net"
+	"sync"
 	"syscall"
 	"testing"
 
@@ -89,7 +91,8 @@ func TestIP6Payload(t *testing.T) {
 
 	mypayload := []byte{0xf, 0xb, 0xa}
 
-	ether := EtherMarshalBinary(nil, syscall.ETH_P_IPV6, hostMAC, mac2)
+	buf := make([]byte, EthMaxSize) // allocate in the stack
+	ether := EtherMarshalBinary(buf, syscall.ETH_P_IPV6, hostMAC, mac2)
 	if len(ether) != 14 {
 		t.Fatal("invalid ether len", len(ether))
 	}
@@ -126,4 +129,68 @@ func TestIP6Payload(t *testing.T) {
 		t.Fatal("invalid dst ip ", header.Src)
 	}
 
+}
+
+var resultByte []byte
+
+func Benchmark_packetAlloc(b *testing.B) {
+
+	ether := Ether([]byte{})
+	for i := 0; i < b.N; i++ {
+		func() {
+			buf := make([]byte, EthMaxSize)
+			ether = EtherMarshalBinary(buf[:], syscall.ETH_P_IPV6, hostMAC, mac2)
+			if ether.EtherType() == 0 {
+				fmt.Println("test")
+			}
+		}()
+	}
+	resultByte = ether
+}
+func Benchmark_packetNoAlloc(b *testing.B) {
+
+	ether := Ether([]byte{})
+	var mutex sync.Mutex
+	buf := make([]byte, EthMaxSize) // allocate in the stack
+	for i := 0; i < b.N; i++ {
+		func() {
+			mutex.Lock()
+			defer mutex.Unlock()
+			ether = EtherMarshalBinary(buf[:], syscall.ETH_P_IPV6, hostMAC, mac2)
+			if ether.EtherType() == 0 {
+				fmt.Println("test")
+			}
+		}()
+	}
+}
+
+func Benchmark_Pool(b *testing.B) {
+	var Buffer = sync.Pool{New: func() interface{} { return make([]byte, EthMaxSize) }}
+	for i := 0; i < b.N; i++ {
+		func() {
+			buf := Buffer.Get().([]byte)
+			defer Buffer.Put(buf)
+
+			ether := EtherMarshalBinary(buf, syscall.ETH_P_IPV6, hostMAC, mac2)
+			if ether.EtherType() == 0 {
+				fmt.Println("test")
+			}
+		}()
+	}
+}
+
+func Benchmark_EthBuffer(b *testing.B) {
+	// This seems to be the faster approach for sequential access to buffer
+	var buffer = EtherBuffer{}
+	for i := 0; i < b.N; i++ {
+		func() {
+			ether := buffer.Alloc()
+			defer buffer.Free()
+
+			ether = EtherMarshalBinary(ether, syscall.ETH_P_IPV6, hostMAC, mac2)
+			if ether.EtherType() == 0 {
+				fmt.Println("test")
+			}
+		}()
+	}
 }

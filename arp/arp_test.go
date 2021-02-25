@@ -16,7 +16,8 @@ import (
 )
 
 func newEtherPacket(hType uint16, srcMAC net.HardwareAddr, dstMAC net.HardwareAddr) raw.Ether {
-	p := raw.EtherMarshalBinary(nil, hType, srcMAC, dstMAC)
+	buf := make([]byte, raw.EthMaxSize) // allocate in the stack
+	p := raw.EtherMarshalBinary(buf, hType, srcMAC, dstMAC)
 	return p
 }
 

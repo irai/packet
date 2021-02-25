@@ -158,6 +158,9 @@ func (h *Handler) autoConfigureRouter(router Router) {
 	}
 }
 
+// buffer is a lockable buffer to avoid allocation
+var buffer = raw.EtherBuffer{}
+
 func (h *Handler) sendPacket(srcAddr raw.Addr, dstAddr raw.Addr, b []byte) error {
 
 	hopLimit := uint8(64)
@@ -165,7 +168,10 @@ func (h *Handler) sendPacket(srcAddr raw.Addr, dstAddr raw.Addr, b []byte) error
 		hopLimit = 1
 	}
 
-	ether := raw.EtherMarshalBinary(nil, syscall.ETH_P_IPV6, srcAddr.MAC, dstAddr.MAC)
+	ether := buffer.Alloc()
+	defer buffer.Free()
+
+	ether = raw.EtherMarshalBinary(ether, syscall.ETH_P_IPV6, srcAddr.MAC, dstAddr.MAC)
 	ip6 := raw.IP6MarshalBinary(ether.Payload(), hopLimit, srcAddr.IP, dstAddr.IP)
 	ip6, _ = ip6.AppendPayload(b, syscall.IPPROTO_ICMPV6)
 	ether, _ = ether.SetPayload(ip6)

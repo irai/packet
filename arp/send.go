@@ -58,8 +58,14 @@ func (c *Handler) request(srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr ne
 	return c.requestWithDstEthernet(EthernetBroadcast, srcHwAddr, srcIP, dstHwAddr, dstIP)
 }
 
+// buffer is a lockable buffer to avoid allocation
+var buffer = raw.EtherBuffer{}
+
 func (c *Handler) requestWithDstEthernet(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
-	ether := raw.EtherMarshalBinary(nil, syscall.ETH_P_ARP, srcHwAddr, dstEther)
+	ether := buffer.Alloc()
+	defer buffer.Free()
+
+	ether = raw.EtherMarshalBinary(ether, syscall.ETH_P_ARP, srcHwAddr, dstEther)
 	arp, err := ARPMarshalBinary(ether.Payload(), OperationRequest, srcHwAddr, srcIP, dstHwAddr, dstIP)
 	if err != nil {
 		return err
@@ -90,7 +96,10 @@ func (c *Handler) Reply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, s
 //
 // dstEther identifies the target for the Ethernet packet : i.e. use EthernetBroadcast for gratuitous ARP
 func (c *Handler) reply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
-	ether := raw.EtherMarshalBinary(nil, syscall.ETH_P_ARP, srcHwAddr, dstEther)
+	ether := buffer.Alloc()
+	defer buffer.Free()
+
+	ether = raw.EtherMarshalBinary(ether, syscall.ETH_P_ARP, srcHwAddr, dstEther)
 	arp, err := ARPMarshalBinary(ether.Payload(), OperationReply, srcHwAddr, srcIP, dstHwAddr, dstIP)
 	if err != nil {
 		return err

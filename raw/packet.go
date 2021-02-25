@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sync"
 	"syscall"
 
 	"github.com/mdlayher/netx/rfc4193"
@@ -49,6 +50,24 @@ const (
 
 	IP6HeaderLen = 40 // IP6 header len
 )
+
+// EtherBuffer creates a lockable buffer to avoid mem allocation
+// during send packets. Benchmark shows this technique is 20x faster than allocating each time.
+type EtherBuffer struct {
+	b [EthMaxSize]byte
+	sync.Mutex
+}
+
+// Alloc locks and return the buffer
+func (e *EtherBuffer) Alloc() Ether {
+	e.Lock()
+	return Ether(e.b[0:14])
+}
+
+// Free release the lock on the buffer
+func (e *EtherBuffer) Free() {
+	e.Unlock()
+}
 
 // Sentinel errors
 var (
@@ -151,7 +170,7 @@ func (p Ether) String() string {
 // It automatically allocates a buffer if b is nil or not sufficient to store a full len ethernet packet
 func EtherMarshalBinary(b []byte, hType uint16, srcMAC net.HardwareAddr, dstMAC net.HardwareAddr) Ether {
 	if b == nil || cap(b) < 14 {
-		b = make([]byte, EthMaxSize) // enough capacity for a max ethernet frame
+		panic("ether buffer too small")
 	}
 	b = b[:14] // change slice in case slice is less than 14
 	copy(b[0:6], dstMAC)

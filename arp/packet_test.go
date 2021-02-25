@@ -16,7 +16,8 @@ func tFrame(proto uint16, operation uint16, srcMAC net.HardwareAddr, srcIP net.I
 
 func TestMarshalUnmarshall(t *testing.T) {
 	// marshall
-	ether := raw.EtherMarshalBinary(nil, syscall.ETH_P_ARP, mac1, mac2)
+	buf := make([]byte, raw.EthMaxSize) // allocate in the stack
+	ether := raw.EtherMarshalBinary(buf, syscall.ETH_P_ARP, mac1, mac2)
 	arpFrame, err := ARPMarshalBinary(ether.Payload(), OperationRequest, mac1, ip1, mac2, ip2)
 	if err != nil {
 		t.Errorf("error in marshall binary: %s", err)
