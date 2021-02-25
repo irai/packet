@@ -32,6 +32,9 @@ func (c Config) String() string {
 		c.HostMAC, c.HostIP, c.RouterIP, c.HomeLAN, c.FullNetworkScanInterval, c.ProbeInterval, c.OfflineDeadline, c.PurgeDeadline)
 }
 
+// must implement interface
+var _ raw.PacketProcessor = &Handler{}
+
 // Handler stores instance variables
 type Handler struct {
 	conn        net.PacketConn
@@ -230,12 +233,12 @@ func (c *Handler) Start(ctx context.Context) error {
 // Virtual MACs
 // A virtual MAC is a fake mac address used when claiming an existing IP during spoofing.
 // ListenAndServe will send ARP reply on behalf of virtual MACs
-func (c *Handler) ProcessPacket(host *raw.Host, b []byte) error {
+func (c *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
 	notify := 0
 
 	frame := ARP(b)
 	if !frame.IsValid() {
-		return raw.ErrParseMessage
+		return host, raw.ErrParseMessage
 	}
 	if Debug {
 		fmt.Printf("arp  : %s\n", frame)
@@ -246,7 +249,7 @@ func (c *Handler) ProcessPacket(host *raw.Host, b []byte) error {
 		if Debug {
 			log.Printf("arp skipping link local packet smac=%v sip=%v tmac=%v tip=%v", frame.SrcMAC(), frame.SrcIP(), frame.DstMAC(), frame.DstIP())
 		}
-		return nil
+		return host, nil
 	}
 
 	if Debug {
@@ -264,7 +267,7 @@ func (c *Handler) ProcessPacket(host *raw.Host, b []byte) error {
 			}
 		default:
 			log.Printf("arp invalid operation: %s", frame)
-			return nil
+			return host, nil
 		}
 	}
 
@@ -274,12 +277,12 @@ func (c *Handler) ProcessPacket(host *raw.Host, b []byte) error {
 			c.routerEntry.MAC = dupMAC(frame.SrcMAC())
 			c.routerEntry.IPArray[0] = IPEntry{IP: c.config.RouterIP}
 		}
-		return nil
+		return host, nil
 	}
 
 	// Ignore host packets
 	if bytes.Equal(frame.SrcMAC(), c.config.HostMAC) {
-		return nil
+		return host, nil
 	}
 
 	// if targetIP is a virtual host, we are claiming the ip; reply and return
@@ -291,7 +294,7 @@ func (c *Handler) ProcessPacket(host *raw.Host, b []byte) error {
 			log.Printf("arp ip=%s is virtual - send reply smac=%v", frame.DstIP(), mac)
 		}
 		c.reply(frame.SrcMAC(), mac, frame.DstIP(), EthernetBroadcast, frame.DstIP())
-		return nil
+		return host, nil
 	}
 	c.RUnlock()
 
@@ -305,7 +308,7 @@ func (c *Handler) ProcessPacket(host *raw.Host, b []byte) error {
 	// | ACD announ | 1 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  clientIP |
 	// +============+===+===========+===========+============+============+===================+===========+
 	if frame.SrcIP().Equal(net.IPv4zero) {
-		return nil
+		return host, nil
 	}
 
 	c.Lock()
@@ -325,7 +328,7 @@ func (c *Handler) ProcessPacket(host *raw.Host, b []byte) error {
 
 	// Skip packets that we sent as virtual host (i.e. we sent these)
 	if sender.State == StateVirtualHost {
-		return nil
+		return host, nil
 	}
 
 	sender.LastUpdated = time.Now()
@@ -375,5 +378,5 @@ func (c *Handler) ProcessPacket(host *raw.Host, b []byte) error {
 		}
 	}
 
-	return nil
+	return host, nil
 }

@@ -19,6 +19,8 @@ import (
 // Debug packets turn on logging if desirable
 var Debug bool
 
+var _ raw.PacketProcessor = &Handler{}
+
 // Handler maintains the underlying socket connection
 type Handler struct {
 	ifi    *net.Interface
@@ -85,7 +87,7 @@ func (h *Handler) Start(ctx context.Context) error {
 	return nil
 }
 
-func (h *Handler) ProcessPacket(host *raw.Host, b []byte) error {
+func (h *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
 
 	icmpFrame := raw.ICMP4(b)
 
@@ -98,14 +100,14 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) error {
 		if len(icmpTable.table) <= 0 {
 			icmpTable.cond.L.Unlock()
 			// log.Info("no waiting")
-			return nil
+			return host, nil
 		}
 		icmpTable.cond.L.Unlock()
 
 		// parse message - create a copy
 		icmpMsg, err := icmp.ParseMessage(1, b)
 		if err != nil {
-			return fmt.Errorf("icmp invalid icmp4 packet: %w ", err)
+			return host, fmt.Errorf("icmp invalid icmp4 packet: %w ", err)
 		}
 
 		icmpTable.cond.L.Lock()
@@ -126,7 +128,7 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) error {
 	default:
 		fmt.Printf("icmp4 not implemented type=%d: frame:0x[% x]\n", icmpFrame.Type(), icmpFrame)
 	}
-	return nil
+	return host, nil
 }
 
 func (h *Handler) ListenAndServe(ctxt context.Context, pt *packet.Handler) (err error) {

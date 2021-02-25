@@ -56,37 +56,42 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// setup packet listener
-	packet, err := packet.New(*nic)
+	pkt, err := packet.New(*nic)
 	if err != nil {
 		panic(err)
 	}
-	defer packet.Close()
+	defer pkt.Close()
+
+	pkt.AddCallback(func(n packet.Notification) error {
+		fmt.Println("Got notification : ", n)
+		return nil
+	})
 
 	// setup ARP handler
 	homeLAN := net.IPNet{IP: ipNet4.IP.Mask(ipNet4.Mask), Mask: ipNet4.Mask}
-	arpHandler, err := arp.New(packet.Conn(), packet.LANHosts, arp.Config{HostMAC: mac, HostIP: ipNet4.IP, HomeLAN: homeLAN})
-	packet.ARP = arpHandler
+	arpHandler, err := arp.New(pkt.Conn(), pkt.LANHosts, arp.Config{HostMAC: mac, HostIP: ipNet4.IP, HomeLAN: homeLAN})
+	pkt.ARP = arpHandler
 
 	// ICMPv4
-	h4, err := icmp4.New(packet.Interface(), packet.Conn(), packet.LANHosts, ipNet4.IP)
+	h4, err := icmp4.New(pkt.Interface(), pkt.Conn(), pkt.LANHosts, ipNet4.IP)
 	if err != nil {
 		log.Fatalf("Failed to create icmp nic=%s handler: ", *nic, err)
 	}
 	defer h4.Close()
-	packet.ICMP4Hook("icmp4", h4)
+	pkt.ICMP4Hook("icmp4", h4)
 
 	// ICMPv6
 	icmp6Config := icmp6.Config{GlobalUnicastAddress: gua, LocalLinkAddress: lla}
-	h6, err := icmp6.New(packet.Interface(), packet.Conn(), packet.LANHosts, icmp6Config)
+	h6, err := icmp6.New(pkt.Interface(), pkt.Conn(), pkt.LANHosts, icmp6Config)
 	if err != nil {
 		log.Fatalf("Failed to create icmp6 nic=%s handler: ", *nic, err)
 	}
 	defer h6.Close()
-	packet.ICMP6Hook("icmp6", h6)
+	pkt.ICMP6Hook("icmp6", h6)
 
 	// Start server listener
 	go func() {
-		if err := packet.ListenAndServe(ctx); err != nil {
+		if err := pkt.ListenAndServe(ctx); err != nil {
 			if ctx.Err() != context.Canceled {
 				panic(err)
 			}
@@ -95,7 +100,7 @@ func main() {
 
 	time.Sleep(time.Millisecond * 10) // time for all goroutine to start
 
-	cmd(packet, h4, h6)
+	cmd(pkt, h4, h6)
 
 	cancel()
 }

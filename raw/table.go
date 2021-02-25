@@ -1,6 +1,7 @@
 package raw
 
 import (
+	"bytes"
 	"fmt"
 	"net"
 	"sync"
@@ -27,6 +28,14 @@ type Host struct {
 	MDNS       interface{}
 	NBNS       interface{}
 	ARP        interface{}
+}
+
+func (e *Host) SetOffline() {
+	e.Online = false
+}
+
+func (e *Host) SetOnline() {
+	e.Online = true
 }
 
 // New returns a HostTable handler
@@ -63,8 +72,11 @@ func (h *HostTable) FindOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Hos
 
 func (h *HostTable) findOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host, found bool) {
 	if host, ok := h.Table[string(ip)]; ok {
+		if !bytes.Equal(host.MAC, mac) {
+			fmt.Println("packet: error mac address differ", host.MAC, mac)
+			host.MAC = CopyMAC(mac)
+		}
 		host.LastSeen = time.Now()
-		host.Online = true
 		return host, true
 	}
 	host = &Host{MAC: CopyMAC(mac), IP: CopyIP(ip), LastSeen: time.Now(), Online: true}
@@ -77,4 +89,10 @@ func (h *HostTable) FindIP(ip net.IP) *Host {
 	defer h.Unlock()
 
 	return h.Table[string(ip)]
+}
+
+func (h *HostTable) Delete(ip net.IP) {
+	h.Lock()
+	defer h.Unlock()
+	delete(h.Table, string(ip))
 }

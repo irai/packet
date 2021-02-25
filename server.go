@@ -40,6 +40,7 @@ type Handler struct {
 	handlerICMP4 []Hook
 	handlerICMP6 []Hook
 	ARP          raw.PacketProcessor
+	callback     []func(Notification) error
 }
 
 func (h *Handler) IP4Hook(name string, f raw.PacketProcessor) error {
@@ -179,6 +180,9 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		fmt.Println("error: in ARP start:", err)
 	}
 
+	// Offline in 5 minutes, purge in 30
+	go h.purgeLoop(ctxt, time.Minute*5, time.Minute*30)
+
 	buf := make([]byte, raw.EthMaxSize)
 	for {
 		if err = h.conn.SetReadDeadline(time.Now().Add(time.Second * 2)); err != nil {
@@ -268,10 +272,10 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			}
 
 		case syscall.ETH_P_ARP:
-			if err := h.ARP.ProcessPacket(host, ether.Payload()); err != nil {
+			if host, err = h.ARP.ProcessPacket(host, ether.Payload()); err != nil {
 				fmt.Printf("packet: error processing arp: %s\n", err)
 			}
-			continue // Skip nextHeader check
+			l4Proto = 0 // skip next check
 
 		default:
 			fmt.Printf("packet: error invalid ethernet type=%x\n", ether.EtherType())
@@ -281,13 +285,13 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		switch l4Proto {
 		case syscall.IPPROTO_ICMP:
 			for _, v := range h.handlerICMP4 {
-				if err := v.handler.ProcessPacket(host, l4Payload); err != nil {
+				if host, err = v.handler.ProcessPacket(host, l4Payload); err != nil {
 					fmt.Printf("packet: error processing icmp4: %s\n", err)
 				}
 			}
 		case syscall.IPPROTO_ICMPV6:
 			for _, v := range h.handlerICMP6 {
-				if err := v.handler.ProcessPacket(host, ether); err != nil {
+				if host, err = v.handler.ProcessPacket(host, ether); err != nil {
 					fmt.Printf("packet: error processing icmp6: %s\n", err)
 				}
 			}
@@ -297,8 +301,16 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		case syscall.IPPROTO_TCP, syscall.IPPROTO_UDP:
 			// do nothing
 
+		case 0: // skip ARP
+
 		default:
 			fmt.Println("packet: unsupported level 4 header", l4Proto)
+		}
+
+		// Set to online
+		if host != nil && !host.Online {
+			host.SetOnline()
+			h.notifyCallback(host)
 		}
 	}
 }

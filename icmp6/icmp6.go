@@ -92,7 +92,7 @@ func (h *Handler) findOrCreateRouter(mac net.HardwareAddr, ip net.IP) (router *R
 	return router, false
 }
 
-// var _, _ raw.PacketProcessor = New(nil, nil)
+var _ raw.PacketProcessor = &Handler{}
 
 // Handler implements ICMPv6 Neighbor Discovery Protocol
 // see: https://mdlayher.com/blog/network-protocol-breakdown-ndp-and-go/
@@ -206,7 +206,7 @@ func (h *Handler) sendPacket(srcAddr raw.Addr, dstAddr raw.Addr, b []byte) error
 var repeat int
 
 // ProcessPacket handles icmp6 packets
-func (h *Handler) ProcessPacket(host *raw.Host, b []byte) error {
+func (h *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
 
 	// retrieve or set store
 	var store *Data
@@ -225,7 +225,7 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) error {
 	icmp6Frame := ICMP6(ip6Frame.Payload())
 
 	if !icmp6Frame.IsValid() {
-		return fmt.Errorf("invalid icmp msg=%v: %w", icmp6Frame, errParseMessage)
+		return host, fmt.Errorf("invalid icmp msg=%v: %w", icmp6Frame, errParseMessage)
 	}
 
 	t := ipv6.ICMPType(icmp6Frame.Type())
@@ -233,7 +233,7 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) error {
 	case ipv6.ICMPTypeNeighborAdvertisement:
 		msg := new(NeighborAdvertisement)
 		if err := msg.unmarshal(icmp6Frame[4:]); err != nil {
-			return fmt.Errorf("ndp: failed to unmarshal %s: %w", t, errParseMessage)
+			return host, fmt.Errorf("ndp: failed to unmarshal %s: %w", t, errParseMessage)
 		}
 		if Debug {
 			fmt.Printf("icmp6: neighbor advertisement: %+v\n", msg)
@@ -249,7 +249,7 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) error {
 	case ipv6.ICMPTypeNeighborSolicitation:
 		msg := new(NeighborSolicitation)
 		if err := msg.unmarshal(icmp6Frame[4:]); err != nil {
-			return fmt.Errorf("ndp: failed to unmarshal %s: %w", t, errParseMessage)
+			return host, fmt.Errorf("ndp: failed to unmarshal %s: %w", t, errParseMessage)
 		}
 		if Debug {
 			fmt.Printf("icmp6: neighbor solicitation: %+v\n", msg)
@@ -258,7 +258,7 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) error {
 	case ipv6.ICMPTypeRouterAdvertisement:
 		msg := new(RouterAdvertisement)
 		if err := msg.unmarshal(icmp6Frame[4:]); err != nil {
-			return fmt.Errorf("ndp: failed to unmarshal %s: %w", t, errParseMessage)
+			return host, fmt.Errorf("ndp: failed to unmarshal %s: %w", t, errParseMessage)
 		}
 		if Debug {
 			if repeat%4 != 0 {
@@ -271,7 +271,7 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) error {
 		// Protect agains nil host
 		// NS source IP is sometimes ff02::1 multicast, which means the host is nil
 		if host == nil {
-			return fmt.Errorf("ra host cannot be nil")
+			return host, fmt.Errorf("ra host cannot be nil")
 		}
 		router, _ := h.findOrCreateRouter(host.MAC, host.IP)
 		router.ManagedFlag = msg.ManagedConfiguration
@@ -320,7 +320,7 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) error {
 	case ipv6.ICMPTypeRouterSolicitation:
 		msg := new(RouterSolicitation)
 		if err := msg.unmarshal(icmp6Frame[4:]); err != nil {
-			return fmt.Errorf("ndp: failed to unmarshal %s: %w", t, errParseMessage)
+			return host, fmt.Errorf("ndp: failed to unmarshal %s: %w", t, errParseMessage)
 		}
 		if Debug {
 			fmt.Printf("icmp6 router solicitation: %+v\n", msg)
@@ -337,7 +337,7 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) error {
 	case ipv6.ICMPTypeEchoReply:
 		msg := raw.ICMPEcho(icmp6Frame)
 		if !msg.IsValid() {
-			return fmt.Errorf("invalid icmp echo msg len=%d", len(icmp6Frame))
+			return host, fmt.Errorf("invalid icmp echo msg len=%d", len(icmp6Frame))
 		}
 		if Debug {
 			fmt.Printf("icmp6: echo reply %s\n", msg)
@@ -351,12 +351,12 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) error {
 
 	default:
 		log.Printf("icmp6 not implemented type=%v ip6=%s\n", t, icmp6Frame)
-		return fmt.Errorf("unrecognized icmp6 type %d: %w", t, errParseMessage)
+		return host, fmt.Errorf("unrecognized icmp6 type %d: %w", t, errParseMessage)
 	}
 
 	if h.notification != nil {
 		go func() { h.notification <- Event{Type: t} }()
 	}
 
-	return nil
+	return host, nil
 }
