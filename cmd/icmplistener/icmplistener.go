@@ -62,7 +62,7 @@ func main() {
 		FullNetworkScanInterval: time.Minute * 20,
 		PurgeDeadline:           time.Minute * 10}
 	arpHandler, err := arp.New(pkt.NICInfo, pkt.Conn(), pkt.LANHosts, arpConfig)
-	pkt.ARP = arpHandler
+	pkt.HandlerARP = arpHandler
 
 	// ICMPv4
 	h4, err := icmp4.New(pkt.NICInfo, pkt.Conn(), pkt.LANHosts)
@@ -70,7 +70,7 @@ func main() {
 		log.Fatalf("Failed to create icmp nic=%s handler: ", *nic, err)
 	}
 	defer h4.Close()
-	pkt.ICMP4Hook("icmp4", h4)
+	pkt.HandlerICMP4 = h4
 
 	// ICMPv6
 	h6, err := icmp6.New(pkt.NICInfo, pkt.Conn(), pkt.LANHosts)
@@ -78,7 +78,7 @@ func main() {
 		log.Fatalf("Failed to create icmp6 nic=%s handler: ", *nic, err)
 	}
 	defer h6.Close()
-	pkt.ICMP6Hook("icmp6", h6)
+	pkt.HandlerICMP6 = h6
 
 	// Start server listener
 	go func() {
@@ -103,6 +103,7 @@ func cmd(pt *packet.Handler, a4 *arp.Handler, h *icmp4.Handler, h6 *icmp6.Handle
 
 	for {
 		fmt.Println("Command: (q)uit            | (p)ing ip | (l)list | (g) loG <level>")
+		fmt.Println(" packet: (hunt) mac        | (release) mac")
 		fmt.Println("    ndp: (ra) ip6          | (ns) ip6")
 		fmt.Println("    arp: (af)orce mac      | (as)stop mac        | (scan) ")
 		fmt.Print("Enter command: ")
@@ -188,6 +189,18 @@ func cmd(pt *packet.Handler, a4 *arp.Handler, h *icmp4.Handler, h6 *icmp6.Handle
 		case "scan":
 			if err := a4.ScanNetwork(context.Background(), pt.NICInfo.HostIP4); err != nil {
 				fmt.Println("failed scan: ", err)
+			}
+		case "hunt":
+			if mac := getMAC(tokens, 1); mac != nil {
+				if err := pt.StartHunt(mac); err != nil {
+					fmt.Println("error in start hunt ", err)
+				}
+			}
+		case "release":
+			if mac := getMAC(tokens, 1); mac != nil {
+				if err := pt.StopHunt(mac); err != nil {
+					fmt.Println("error in start hunt ", err)
+				}
 			}
 		}
 	}

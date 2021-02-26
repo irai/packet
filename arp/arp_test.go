@@ -104,7 +104,7 @@ func setupTestHandler(t *testing.T) *testContext {
 	tc.arp, err = New(&nicInfo, tc.inConn, tc.packet.LANHosts, arpConfig)
 	tc.arp.virtual = newARPTable() // we want an empty table
 	tc.arp.LANHosts = raw.New()
-	tc.packet.ARP = tc.arp
+	tc.packet.HandlerARP = tc.arp
 
 	go func() {
 		if err := tc.packet.ListenAndServe(tc.ctx); err != nil {

@@ -42,7 +42,7 @@ var (
 // | ACD announ | 1 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  clientIP |
 // +============+===+===========+===========+============+============+===================+===========+
 //
-func (c *Handler) Request(srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
+func (h *Handler) Request(srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
 	if Debug {
 		if srcIP.Equal(dstIP) {
 			log.Printf("arp send announcement - I am ip=%s mac=%s", srcIP, srcHwAddr)
@@ -51,17 +51,17 @@ func (c *Handler) Request(srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr ne
 		}
 	}
 
-	return c.requestWithDstEthernet(EthernetBroadcast, srcHwAddr, srcIP, dstHwAddr, dstIP)
+	return h.requestWithDstEthernet(EthernetBroadcast, srcHwAddr, srcIP, dstHwAddr, dstIP)
 }
 
-func (c *Handler) request(srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
-	return c.requestWithDstEthernet(EthernetBroadcast, srcHwAddr, srcIP, dstHwAddr, dstIP)
+func (h *Handler) request(srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
+	return h.requestWithDstEthernet(EthernetBroadcast, srcHwAddr, srcIP, dstHwAddr, dstIP)
 }
 
 // buffer is a lockable buffer to avoid allocation
 var buffer = raw.EtherBuffer{}
 
-func (c *Handler) requestWithDstEthernet(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
+func (h *Handler) requestWithDstEthernet(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
 	ether := buffer.Alloc()
 	defer buffer.Free()
 
@@ -76,7 +76,7 @@ func (c *Handler) requestWithDstEthernet(dstEther net.HardwareAddr, srcHwAddr ne
 	// return err
 	// }
 
-	if _, err := c.conn.WriteTo(ether[:n], &raw.Addr{MAC: dstEther}); err != nil {
+	if _, err := h.conn.WriteTo(ether[:n], &raw.Addr{MAC: dstEther}); err != nil {
 		return err
 	}
 	return nil
@@ -85,17 +85,17 @@ func (c *Handler) requestWithDstEthernet(dstEther net.HardwareAddr, srcHwAddr ne
 // Reply send ARP reply from the src to the dst
 //
 // Call with dstHwAddr = ethernet.Broadcast to reply to all
-func (c *Handler) Reply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
+func (h *Handler) Reply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
 	if Debug {
 		log.Printf("arp send reply - ip=%s is at mac=%s", srcIP, srcHwAddr)
 	}
-	return c.reply(dstEther, srcHwAddr, srcIP, dstHwAddr, dstIP)
+	return h.reply(dstEther, srcHwAddr, srcIP, dstHwAddr, dstIP)
 }
 
 // reply sends a ARP reply packet from src to dst.
 //
 // dstEther identifies the target for the Ethernet packet : i.e. use EthernetBroadcast for gratuitous ARP
-func (c *Handler) reply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
+func (h *Handler) reply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
 	ether := buffer.Alloc()
 	defer buffer.Free()
 
@@ -110,7 +110,7 @@ func (c *Handler) reply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, s
 	// return err
 	// }
 
-	_, err = c.conn.WriteTo(ether[:n], &raw.Addr{MAC: dstEther})
+	_, err = h.conn.WriteTo(ether[:n], &raw.Addr{MAC: dstEther})
 	return err
 }
 
@@ -123,13 +123,13 @@ func (c *Handler) reply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, s
 // to be already in use by another host. The 'target IP address' field MUST be set to the address being probed.
 // An ARP Probe conveys both a question ("Is anyone using this address?") and an
 // implied statement ("This is the address I hope to use.").
-func (c *Handler) Probe(ip net.IP) error {
-	return c.Request(c.NICInfo.HostMAC, net.IPv4zero, EthernetBroadcast, ip)
+func (h *Handler) Probe(ip net.IP) error {
+	return h.Request(h.NICInfo.HostMAC, net.IPv4zero, EthernetBroadcast, ip)
 }
 
 // probeUnicast is used to validate the client is still online; same as ARP probe but unicast to target
-func (c *Handler) probeUnicast(mac net.HardwareAddr, ip net.IP) error {
-	return c.Request(c.NICInfo.HostMAC, net.IPv4zero, mac, ip)
+func (h *Handler) probeUnicast(mac net.HardwareAddr, ip net.IP) error {
+	return h.Request(h.NICInfo.HostMAC, net.IPv4zero, mac, ip)
 }
 
 // announce sends arp announcement packet
@@ -146,7 +146,7 @@ func (c *Handler) probeUnicast(mac net.HardwareAddr, ip net.IP) error {
 // previously have been using the same address.  The host may begin
 // legitimately using the IP address immediately after sending the first
 // of the two ARP Announcements;
-func (c *Handler) announce(dstEther net.HardwareAddr, mac net.HardwareAddr, ip net.IP, targetMac net.HardwareAddr, repeats int) (err error) {
+func (h *Handler) announce(dstEther net.HardwareAddr, mac net.HardwareAddr, ip net.IP, targetMac net.HardwareAddr, repeats int) (err error) {
 	if Debug {
 		if bytes.Equal(dstEther, EthernetBroadcast) {
 			log.Printf("arp send announcement broadcast - I am ip=%s mac=%s", ip, mac)
@@ -155,12 +155,12 @@ func (c *Handler) announce(dstEther net.HardwareAddr, mac net.HardwareAddr, ip n
 		}
 	}
 
-	err = c.requestWithDstEthernet(dstEther, mac, ip, targetMac, ip)
+	err = h.requestWithDstEthernet(dstEther, mac, ip, targetMac, ip)
 
 	go func() {
 		for i := 1; i < repeats; i++ {
 			time.Sleep(time.Millisecond * 500)
-			c.requestWithDstEthernet(dstEther, mac, ip, targetMac, ip)
+			h.requestWithDstEthernet(dstEther, mac, ip, targetMac, ip)
 		}
 	}()
 	return err
@@ -168,13 +168,13 @@ func (c *Handler) announce(dstEther net.HardwareAddr, mac net.HardwareAddr, ip n
 
 // WhoIs will send a request packet to get the MAC address for the IP. Retry 3 times.
 //
-func (c *Handler) WhoIs(ip net.IP) (raw.Addr, error) {
+func (h *Handler) WhoIs(ip net.IP) (raw.Addr, error) {
 
 	for i := 0; i < 3; i++ {
-		if host := c.LANHosts.FindIP(ip); host != nil {
+		if host := h.LANHosts.FindIP(ip); host != nil {
 			return raw.Addr{IP: host.IP, MAC: host.MAC}, nil
 		}
-		if err := c.Request(c.NICInfo.HostMAC, c.NICInfo.HostIP4.IP, EthernetBroadcast, ip); err != nil {
+		if err := h.Request(h.NICInfo.HostMAC, h.NICInfo.HostIP4.IP, EthernetBroadcast, ip); err != nil {
 			return raw.Addr{}, fmt.Errorf("arp WhoIs error: %w", err)
 		}
 		time.Sleep(time.Millisecond * 50)
@@ -182,7 +182,7 @@ func (c *Handler) WhoIs(ip net.IP) (raw.Addr, error) {
 
 	if Debug {
 		log.Printf("arp ip=%s whois not found", ip)
-		c.LANHosts.PrintTable()
+		h.LANHosts.PrintTable()
 	}
 	return raw.Addr{}, ErrNotFound
 }

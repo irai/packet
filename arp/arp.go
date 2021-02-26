@@ -96,33 +96,48 @@ func New(info *raw.NICInfo, conn net.PacketConn, table *raw.HostTable, config Co
 	return h, nil
 }
 
+// StartHunt implements PacketProcessor interface
+func (h *Handler) StartHunt(mac net.HardwareAddr) error {
+	return h.StartSpoofMAC(mac)
+}
+
+// StopHunt implements PacketProcessor interface
+func (h *Handler) StopHunt(mac net.HardwareAddr) error {
+	return h.StopSpoofMAC(mac)
+}
+
+// Stop implements PacketProcessor interface
+func (h *Handler) Stop() error {
+	return nil
+}
+
 // PrintTable print the ARP table to stdout.
-func (c *Handler) PrintTable() {
-	c.virtual.printTable()
+func (h *Handler) PrintTable() {
+	h.virtual.printTable()
 }
 
 // Close will terminate the ListenAndServer goroutine as well as all other pending goroutines.
-func (c *Handler) End() {
+func (h *Handler) End() {
 	// Don't close the socket - it is shared with packet
 }
 
 // Start start background processes
-func (c *Handler) Start(ctx context.Context) error {
+func (h *Handler) Start(ctx context.Context) error {
 
 	// Set ZERO timeout to block forever
 	// if err := c.conn.SetReadDeadline(time.Time{}); err != nil {
 	// return fmt.Errorf("arp error in socket: %w", err)
 	// }
 
-	if c.config.FullNetworkScanInterval != 0 {
+	if h.config.FullNetworkScanInterval != 0 {
 		// continuosly scan for network devices
 		go func() {
-			c.wg.Add(1)
-			if err := c.scanLoop(ctx, c.config.FullNetworkScanInterval); err != nil {
+			h.wg.Add(1)
+			if err := h.scanLoop(ctx, h.config.FullNetworkScanInterval); err != nil {
 				log.Print("arp goroutine scanLoop terminated unexpectedly", err)
-				c.conn.Close() // force error in main loop
+				h.conn.Close() // force error in main loop
 			}
-			c.wg.Done()
+			h.wg.Done()
 			if Debug {
 				log.Print("arp goroutine scanLoop ended")
 			}
@@ -130,15 +145,15 @@ func (c *Handler) Start(ctx context.Context) error {
 	}
 
 	// Do a full scan on start
-	if c.config.FullNetworkScanInterval != 0 && c.NICInfo.HomeLAN4.IP.To4() != nil {
+	if h.config.FullNetworkScanInterval != 0 && h.NICInfo.HomeLAN4.IP.To4() != nil {
 		go func() {
-			c.wg.Add(1)
+			h.wg.Add(1)
 			time.Sleep(time.Millisecond * 100) // Time to start read loop below
-			if err := c.ScanNetwork(ctx, c.NICInfo.HomeLAN4); err != nil {
+			if err := h.ScanNetwork(ctx, h.NICInfo.HomeLAN4); err != nil {
 				log.Print("arp ListenAndServer scanNetwork terminated unexpectedly", err)
-				c.conn.Close() // force error in main loop
+				h.conn.Close() // force error in main loop
 			}
-			c.wg.Done()
+			h.wg.Done()
 			if Debug {
 				log.Print("arp goroutine scanNetwork ended normally")
 			}
@@ -173,7 +188,7 @@ const (
 // | ACD probe  | 1 | broadcast | clientMAC | clientMAC  | 0x00       | 0x00              |  targetIP |
 // | ACD announ | 1 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  clientIP |
 // +============+===+===========+===========+============+============+===================+===========+
-func (c *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
+func (h *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
 
 	frame := ARP(b)
 	if !frame.IsValid() {
@@ -207,16 +222,16 @@ func (c *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
 	}
 
 	// Ignore router packets
-	if bytes.Equal(frame.SrcIP(), c.NICInfo.RouterIP4.IP) {
-		if c.routerEntry.MAC == nil { // store router MAC
-			c.routerEntry.MAC = raw.CopyMAC(frame.SrcMAC())
-			c.routerEntry.IPArray[0] = IPEntry{IP: c.NICInfo.RouterIP4.IP}
+	if bytes.Equal(frame.SrcIP(), h.NICInfo.RouterIP4.IP) {
+		if h.routerEntry.MAC == nil { // store router MAC
+			h.routerEntry.MAC = raw.CopyMAC(frame.SrcMAC())
+			h.routerEntry.IPArray[0] = IPEntry{IP: h.NICInfo.RouterIP4.IP}
 		}
 		return host, nil
 	}
 
 	// Ignore host packets
-	if bytes.Equal(frame.SrcMAC(), c.NICInfo.HostMAC) {
+	if bytes.Equal(frame.SrcMAC(), h.NICInfo.HostMAC) {
 		return host, nil
 	}
 
@@ -226,21 +241,21 @@ func (c *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
 			log.Printf("arp  : who is %s: %s ", frame.DstIP(), frame)
 		}
 		// if targetIP is a virtual host, we are claiming the ip; reply and return
-		c.RLock()
-		if target := c.virtual.findVirtualIP(frame.DstIP()); target != nil {
+		h.RLock()
+		if target := h.virtual.findVirtualIP(frame.DstIP()); target != nil {
 			mac := target.MAC
-			c.RUnlock()
+			h.RUnlock()
 			if Debug {
 				log.Printf("arp ip=%s is virtual - send reply smac=%v", frame.DstIP(), mac)
 			}
-			c.reply(frame.SrcMAC(), mac, frame.DstIP(), EthernetBroadcast, frame.DstIP())
+			h.reply(frame.SrcMAC(), mac, frame.DstIP(), EthernetBroadcast, frame.DstIP())
 			return host, nil
 		}
-		c.RUnlock()
+		h.RUnlock()
 
-		if host == nil && c.NICInfo.HostIP4.Contains(frame.SrcIP()) {
+		if host == nil && h.NICInfo.HostIP4.Contains(frame.SrcIP()) {
 			// If new client, then create a MACEntry in table
-			host, _ = c.LANHosts.FindOrCreateHost(frame.SrcMAC(), frame.SrcIP())
+			host, _ = h.LANHosts.FindOrCreateHost(frame.SrcMAC(), frame.SrcIP())
 		}
 		return host, nil
 
@@ -268,17 +283,17 @@ func (c *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
 			log.Printf("arp  : announcement recvd: %s", frame)
 		}
 		// if targetIP is a virtual host, we are claiming the ip; reply and return
-		c.RLock()
-		if target := c.virtual.findVirtualIP(frame.DstIP()); target != nil {
+		h.RLock()
+		if target := h.virtual.findVirtualIP(frame.DstIP()); target != nil {
 			mac := target.MAC
-			c.RUnlock()
+			h.RUnlock()
 			if Debug {
 				log.Printf("arp ip=%s is virtual - send reply smac=%v", frame.DstIP(), mac)
 			}
-			c.reply(frame.SrcMAC(), mac, frame.DstIP(), EthernetBroadcast, frame.DstIP())
+			h.reply(frame.SrcMAC(), mac, frame.DstIP(), EthernetBroadcast, frame.DstIP())
 			return host, nil
 		}
-		c.RUnlock()
+		h.RUnlock()
 
 	default:
 		// +============+===+===========+===========+============+============+===================+===========+
@@ -291,7 +306,7 @@ func (c *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
 			log.Printf("arp  : reply recvd: %s", frame)
 		}
 		if !bytes.Equal(frame.DstMAC(), EthernetBroadcast) && !frame.DstIP().IsUnspecified() {
-			host, _ = c.LANHosts.FindOrCreateHost(frame.DstMAC(), frame.DstIP())
+			host, _ = h.LANHosts.FindOrCreateHost(frame.DstMAC(), frame.DstIP())
 		}
 		return host, nil
 

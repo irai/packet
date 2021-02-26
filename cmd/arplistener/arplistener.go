@@ -60,7 +60,7 @@ func main() {
 		FullNetworkScanInterval: time.Minute * 20,
 		PurgeDeadline:           time.Minute * 10}
 	arpHandler, err := arp.New(packet.NICInfo, packet.Conn(), packet.LANHosts, arpConfig)
-	packet.ARP = arpHandler
+	packet.HandlerARP = arpHandler
 
 	// Start server listener
 	go func() {

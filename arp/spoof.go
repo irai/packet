@@ -13,46 +13,46 @@ import (
 //  2. start spoof goroutine to poison client arp table
 //
 // client will revert back to "normal" when a new IP is detected for the MAC
-func (c *Handler) StartSpoofMAC(mac net.HardwareAddr) error {
+func (h *Handler) StartSpoofMAC(mac net.HardwareAddr) error {
 	if Debug {
 		log.Printf("arp force IP change mac=%s", mac)
 	}
 
-	c.Lock()
-	defer c.Unlock()
+	h.Lock()
+	defer h.Unlock()
 
-	entry, _ := c.virtual.upsert(StateHunt, mac, nil)
+	entry, _ := h.virtual.upsert(StateHunt, mac, nil)
 	var ip net.IP
-	for _, v := range c.LANHosts.FindMAC(mac) {
+	for _, v := range h.LANHosts.FindMAC(mac) {
 		if ip = v.IP.To4(); ip != nil {
 			break
 		}
 	}
-	go c.spoofLoop(context.Background(), entry, ip)
+	go h.spoofLoop(context.Background(), entry, ip)
 	return nil
 }
 
 // StopSpoofMAC terminate the hunting process
-func (c *Handler) StopSpoofMAC(mac net.HardwareAddr) error {
+func (h *Handler) StopSpoofMAC(mac net.HardwareAddr) error {
 	if Debug {
 		log.Printf("arp stop IP change mac=%s", mac)
 	}
 
-	c.Lock()
-	defer c.Unlock()
-	c.virtual.delete(mac)
+	h.Lock()
+	defer h.Unlock()
+	h.virtual.delete(mac)
 	return nil
 }
 
 // ClaimIP creates a virtual host to claim the ip
 // When a virtual host exist, the handler will respond to ACD and request packets for the ip
-func (c *Handler) ClaimIP(ip net.IP) {
-	c.Lock()
-	if virtual := c.virtual.findVirtualIP(ip); virtual == nil {
-		virtual, _ = c.virtual.upsert(StateVirtualHost, newVirtualHardwareAddr(), ip)
+func (h *Handler) ClaimIP(ip net.IP) {
+	h.Lock()
+	if virtual := h.virtual.findVirtualIP(ip); virtual == nil {
+		virtual, _ = h.virtual.upsert(StateVirtualHost, newVirtualHardwareAddr(), ip)
 		virtual.Online = false // indicates spoof goroutine is not running
 	}
-	c.Unlock()
+	h.Unlock()
 }
 
 // IPChanged is used to notify that the IP has changed.
@@ -62,7 +62,7 @@ func (c *Handler) ClaimIP(ip net.IP) {
 // This method is used to accelerate the change for example when a
 // new DHCP MACEntry has been allocated.
 //
-func (c *Handler) IPChanged(mac net.HardwareAddr, clientIP net.IP) {
+func (h *Handler) IPChanged(mac net.HardwareAddr, clientIP net.IP) {
 	/****
 	// Do nothing if we already have this mac and ip
 	c.RLock()
@@ -112,12 +112,12 @@ func (c *Handler) IPChanged(mac net.HardwareAddr, clientIP net.IP) {
 //   1. spoof the client arp table to send router packets to us
 //   2. optionally, claim the ownership of the IP to force client to change IP or go offline
 //
-func (c *Handler) spoofLoop(ctx context.Context, client *MACEntry, ip net.IP) {
+func (h *Handler) spoofLoop(ctx context.Context, client *MACEntry, ip net.IP) {
 
-	c.Lock()
+	h.Lock()
 	mac := client.MAC
 	client.Online = true // goroutine started
-	c.Unlock()
+	h.Unlock()
 
 	// 4 second re-arp seem to be adequate;
 	// Experimented with 300ms but no noticeable improvement other the chatty net.
@@ -126,22 +126,22 @@ func (c *Handler) spoofLoop(ctx context.Context, client *MACEntry, ip net.IP) {
 	nTimes := 0
 	log.Printf("arp attack ip=%s client=%s time=%v", ip, mac, startTime)
 	for {
-		c.Lock()
+		h.Lock()
 		// Always search for MAC in case it has been deleted.
-		client := c.virtual.findByMAC(mac)
+		client := h.virtual.findByMAC(mac)
 		if client == nil || client.State != StateHunt {
 			log.Printf("arp attack end client=%s repeat=%v duration=%v", mac, nTimes, time.Now().Sub(startTime))
-			c.Unlock()
+			h.Unlock()
 			return
 		}
 
-		c.Unlock()
+		h.Unlock()
 
 		// Re-arp target to change router to host so all traffic comes to us
 		// i.e. tell target I am 192.168.0.1
 		//
 		// Use virtual IP as it is guaranteed to not change.
-		c.forceSpoof(mac, ip)
+		h.forceSpoof(mac, ip)
 
 		if nTimes%16 == 0 {
 			log.Printf("arp attack client=%s repeat=%v duration=%v", mac, nTimes, time.Now().Sub(startTime))
@@ -163,11 +163,11 @@ func (c *Handler) spoofLoop(ctx context.Context, client *MACEntry, ip net.IP) {
 // The client ARP table is refreshed often and only last for a short while (few minutes)
 // hence the goroutine that re-arp clients
 // To make sure the cache stays poisoned, replay every 5 seconds with a loop.
-func (c *Handler) forceSpoof(mac net.HardwareAddr, ip net.IP) error {
+func (h *Handler) forceSpoof(mac net.HardwareAddr, ip net.IP) error {
 
 	// Announce to target that we own the router IP
 	// This will update the target arp table with our mac
-	err := c.announce(mac, c.NICInfo.HostMAC, c.NICInfo.RouterIP4.IP, EthernetBroadcast, 2)
+	err := h.announce(mac, h.NICInfo.HostMAC, h.NICInfo.RouterIP4.IP, EthernetBroadcast, 2)
 	if err != nil {
 		log.Printf("arp error send announcement packet mac=%s ip=%s: %s", mac, ip, err)
 		return err
@@ -175,7 +175,7 @@ func (c *Handler) forceSpoof(mac net.HardwareAddr, ip net.IP) error {
 
 	// Send 3 unsolicited ARP reply; clients may discard this
 	for i := 0; i < 2; i++ {
-		err = c.reply(mac, c.NICInfo.HostMAC, c.NICInfo.RouterIP4.IP, mac, ip)
+		err = h.reply(mac, h.NICInfo.HostMAC, h.NICInfo.RouterIP4.IP, mac, ip)
 		if err != nil {
 			log.Printf("arp error spoof client mac=%s ip=%s: %s", mac, ip, err)
 			return err
@@ -188,15 +188,15 @@ func (c *Handler) forceSpoof(mac net.HardwareAddr, ip net.IP) error {
 
 // forceAnnounce send a ARP packets to tell the network we are using the IP.
 // NOT used anymore
-func (c *Handler) forceAnnouncement(dstEther net.HardwareAddr, mac net.HardwareAddr, ip net.IP) error {
-	err := c.announce(dstEther, mac, ip, EthernetBroadcast, 4) // many repeats to force client to reaquire IP
+func (h *Handler) forceAnnouncement(dstEther net.HardwareAddr, mac net.HardwareAddr, ip net.IP) error {
+	err := h.announce(dstEther, mac, ip, EthernetBroadcast, 4) // many repeats to force client to reaquire IP
 	if err != nil {
 		log.Printf("arp error send announcement packet mac=%s ip=%s: %s", mac, ip, err)
 	}
 
 	// Send gratuitous ARP replies : Log the first one only
 	// err = c.Reply(mac, ip, EthernetBroadcast, ip) // Send broadcast gratuitous ARP reply
-	err = c.reply(dstEther, mac, ip, EthernetBroadcast, ip) // Send gratuitous ARP reply - unicast to target
+	err = h.reply(dstEther, mac, ip, EthernetBroadcast, ip) // Send gratuitous ARP reply - unicast to target
 	for i := 0; i < 3; i++ {
 		if err != nil {
 			log.Printf("arp error send gratuitous packet mac=%s ip=%s: %s", mac, ip, err)
@@ -204,7 +204,7 @@ func (c *Handler) forceAnnouncement(dstEther net.HardwareAddr, mac net.HardwareA
 		time.Sleep(time.Millisecond * 10)
 
 		// Dont show in log
-		err = c.reply(dstEther, mac, ip, EthernetBroadcast, ip) // Send gratuitous ARP reply
+		err = h.reply(dstEther, mac, ip, EthernetBroadcast, ip) // Send gratuitous ARP reply
 	}
 
 	return nil

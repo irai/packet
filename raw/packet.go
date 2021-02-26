@@ -30,10 +30,13 @@ func GenerateULA(mac net.HardwareAddr, subnet uint16) (*net.IPNet, error) {
 	return prefix.Subnet(subnet).IPNet(), nil
 }
 
+// PacketProcessor defines the interface for packet processing modules
 type PacketProcessor interface {
-	ProcessPacket(*Host, []byte) (*Host, error)
 	Start(context.Context) error
-	// Stop() error
+	Stop() error
+	ProcessPacket(*Host, []byte) (*Host, error)
+	StartHunt(net.HardwareAddr) error
+	StopHunt(net.HardwareAddr) error
 }
 
 // Ethernet packet types - ETHER_TYPE

@@ -128,6 +128,21 @@ func (h *Handler) Start(ctx context.Context) error {
 	return nil
 }
 
+// Stop implements PacketProcessor interface
+func (h *Handler) Stop() error {
+	return nil
+}
+
+// StartHunt implements PacketProcessor interface
+func (h *Handler) StartHunt(mac net.HardwareAddr) error {
+	return nil
+}
+
+// StopHunt implements PacketProcessor interface
+func (h *Handler) StopHunt(mac net.HardwareAddr) error {
+	return nil
+}
+
 // Close closes the underlying sockets
 func (h *Handler) Close() error {
 	if h.conn != nil {

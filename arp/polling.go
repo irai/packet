@@ -13,7 +13,7 @@ import (
 
 // pollingLoop detect new IPs on the network
 // Send ARP request to all 255 IP addresses first time then send ARP request every so many minutes.
-func (c *Handler) scanLoop(ctx context.Context, interval time.Duration) error {
+func (h *Handler) scanLoop(ctx context.Context, interval time.Duration) error {
 	ticker := time.NewTicker(interval).C
 	for {
 		select {
@@ -21,7 +21,7 @@ func (c *Handler) scanLoop(ctx context.Context, interval time.Duration) error {
 			return nil
 
 		case <-ticker:
-			if err := c.ScanNetwork(ctx, c.NICInfo.HomeLAN4); err != nil {
+			if err := h.ScanNetwork(ctx, h.NICInfo.HomeLAN4); err != nil {
 				return err
 			}
 		}
@@ -30,7 +30,7 @@ func (c *Handler) scanLoop(ctx context.Context, interval time.Duration) error {
 
 /***
 // Probe known macs more often in case they left the network.
-func (c *Handler) probeOnlineLoop(ctx context.Context, interval time.Duration) error {
+func (h *Handler) probeOnlineLoop(ctx context.Context, interval time.Duration) error {
 	dur := time.Second * 30
 	if interval <= dur {
 		dur = interval / 2
@@ -67,7 +67,7 @@ func (c *Handler) probeOnlineLoop(ctx context.Context, interval time.Duration) e
 ***/
 
 // ScanNetwork sends 256 arp requests to identify IPs on the lan
-func (c *Handler) ScanNetwork(ctx context.Context, lan net.IPNet) error {
+func (h *Handler) ScanNetwork(ctx context.Context, lan net.IPNet) error {
 
 	// Copy underneath array so we can modify value.
 	ip := raw.CopyIP(lan.IP)
@@ -83,11 +83,11 @@ func (c *Handler) ScanNetwork(ctx context.Context, lan net.IPNet) error {
 		ip[3] = byte(host)
 
 		// Don't scan router and host
-		if bytes.Equal(ip, c.NICInfo.RouterIP4.IP) || bytes.Equal(ip, c.NICInfo.HostIP4.IP) {
+		if bytes.Equal(ip, h.NICInfo.RouterIP4.IP) || bytes.Equal(ip, h.NICInfo.HostIP4.IP) {
 			continue
 		}
 
-		err := c.request(c.NICInfo.HostMAC, c.NICInfo.HostIP4.IP, EthernetBroadcast, ip)
+		err := h.request(h.NICInfo.HostMAC, h.NICInfo.HostIP4.IP, EthernetBroadcast, ip)
 		if ctx.Err() == context.Canceled {
 			return nil
 		}

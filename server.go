@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"sync"
 	"syscall"
 	"time"
 
@@ -13,14 +14,11 @@ import (
 )
 
 // Debug packets turn on logging if desirable
-var Debug bool
-var DebugIP6 bool
-var DebugIP4 bool
-
-type Hook struct {
-	name    string
-	handler raw.PacketProcessor
-}
+var (
+	Debug    bool
+	DebugIP6 bool
+	DebugIP4 bool
+)
 
 // Config has a list of configurable parameters that overide package defaults
 type Config struct {
@@ -37,35 +35,26 @@ type Handler struct {
 	conn         net.PacketConn
 	LANHosts     *raw.HostTable
 	Config       Config
-	handlerIP4   []Hook
-	handlerIP6   []Hook
-	handlerICMP4 []Hook
-	handlerICMP6 []Hook
-	ARP          raw.PacketProcessor
+	HandlerIP4   raw.PacketProcessor
+	HandlerIP6   raw.PacketProcessor
+	HandlerICMP4 raw.PacketProcessor
+	HandlerICMP6 raw.PacketProcessor
+	HandlerARP   raw.PacketProcessor
 	callback     []func(Notification) error
+	captureList  []net.HardwareAddr
+	sync.Mutex
 }
 
-func (h *Handler) IP4Hook(name string, f raw.PacketProcessor) error {
-	hook := Hook{name: name, handler: f}
-	h.handlerIP4 = append(h.handlerIP4, hook)
-	return nil
-}
+// ppNOOP is a no op packet processor
+type ppNOOP struct{}
 
-func (h *Handler) IP6Hook(name string, f raw.PacketProcessor) error {
-	hook := Hook{name: name, handler: f}
-	h.handlerIP6 = append(h.handlerIP6, hook)
-	return nil
-}
-func (h *Handler) ICMP4Hook(name string, f raw.PacketProcessor) error {
-	hook := Hook{name: name, handler: f}
-	h.handlerICMP4 = append(h.handlerICMP4, hook)
-	return nil
-}
-func (h *Handler) ICMP6Hook(name string, f raw.PacketProcessor) error {
-	hook := Hook{name: name, handler: f}
-	h.handlerICMP6 = append(h.handlerICMP6, hook)
-	return nil
-}
+var _ raw.PacketProcessor = ppNOOP{}
+
+func (p ppNOOP) Start(context.Context) error                        { return nil }
+func (p ppNOOP) Stop() error                                        { return nil }
+func (p ppNOOP) ProcessPacket(*raw.Host, []byte) (*raw.Host, error) { return nil, nil }
+func (p ppNOOP) StartHunt(net.HardwareAddr) error                   { return nil }
+func (p ppNOOP) StopHunt(net.HardwareAddr) error                    { return nil }
 
 // New creates an ICMPv6 handler with default values
 func New(nic string) (*Handler, error) {
@@ -92,6 +81,14 @@ func (config Config) New(nic string) (*Handler, error) {
 			return nil, err
 		}
 	}
+
+	// no plugins to start
+	h.HandlerARP = ppNOOP{}
+	h.HandlerIP4 = ppNOOP{}
+	h.HandlerIP6 = ppNOOP{}
+	h.HandlerARP = ppNOOP{}
+	h.HandlerICMP4 = ppNOOP{}
+	h.HandlerICMP6 = ppNOOP{}
 
 	return h, nil
 }
@@ -166,11 +163,11 @@ func isUnicastMAC(mac net.HardwareAddr) bool {
 func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 	// start arp handler
-	if h.ARP == nil {
+	if h.HandlerARP == nil {
 		return fmt.Errorf("nil ARP handler")
 	}
 
-	if err := h.ARP.Start(ctxt); err != nil {
+	if err := h.HandlerARP.Start(ctxt); err != nil {
 		fmt.Println("error: in ARP start:", err)
 	}
 
@@ -242,9 +239,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			host, _ = h.LANHosts.FindOrCreateHost(ether.Src(), frame.Src())
 			l4Proto = frame.Protocol()
 			l4Payload = frame.Payload()
-			for _, v := range h.handlerIP4 {
-				v.handler.ProcessPacket(host, ether)
-			}
+			// h.handlerIP4.ProcessPacket(host, ether)
 
 		case syscall.ETH_P_IPV6:
 			frame := raw.IP6(ether.Payload())
@@ -264,12 +259,10 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			if frame.Src().IsLinkLocalUnicast() || frame.Src().IsGlobalUnicast() {
 				host, _ = h.LANHosts.FindOrCreateHost(ether.Src(), frame.Src())
 			}
-			for _, v := range h.handlerIP6 {
-				v.handler.ProcessPacket(host, ether)
-			}
+			// h.handlerIP6.ProcessPacket(host, ether)
 
 		case syscall.ETH_P_ARP:
-			if host, err = h.ARP.ProcessPacket(host, ether.Payload()); err != nil {
+			if host, err = h.HandlerARP.ProcessPacket(host, ether.Payload()); err != nil {
 				fmt.Printf("packet: error processing arp: %s\n", err)
 			}
 			l4Proto = 0 // skip next check
@@ -281,16 +274,12 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 		switch l4Proto {
 		case syscall.IPPROTO_ICMP:
-			for _, v := range h.handlerICMP4 {
-				if host, err = v.handler.ProcessPacket(host, l4Payload); err != nil {
-					fmt.Printf("packet: error processing icmp4: %s\n", err)
-				}
+			if host, err = h.HandlerICMP4.ProcessPacket(host, l4Payload); err != nil {
+				fmt.Printf("packet: error processing icmp4: %s\n", err)
 			}
 		case syscall.IPPROTO_ICMPV6:
-			for _, v := range h.handlerICMP6 {
-				if host, err = v.handler.ProcessPacket(host, ether); err != nil {
-					fmt.Printf("packet: error processing icmp6: %s\n", err)
-				}
+			if host, err = h.HandlerICMP6.ProcessPacket(host, ether); err != nil {
+				fmt.Printf("packet: error processing icmp6: %s\n", err)
 			}
 		case syscall.IPPROTO_IGMP:
 			// Internet Group Management Protocol - Ipv4 multicast groups
