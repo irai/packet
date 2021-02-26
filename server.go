@@ -243,7 +243,8 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				fmt.Println("ether: ", ether)
 				fmt.Println("ip4  :", frame)
 			}
-			if !frame.Src().IsLinkLocalUnicast() && !frame.Src().IsGlobalUnicast() {
+			if !h.HostIP4.Contains(frame.Src()) { // must be on the same net
+				// if !frame.Src().IsLinkLocalUnicast() && !frame.Src().IsGlobalUnicast() {
 				fmt.Println("ignore IP4 ", frame)
 				continue
 			}
