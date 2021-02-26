@@ -215,7 +215,7 @@ func (c *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
 	// Ignore router packets
 	if bytes.Equal(frame.SrcIP(), c.config.RouterIP) {
 		if c.routerEntry.MAC == nil { // store router MAC
-			c.routerEntry.MAC = dupMAC(frame.SrcMAC())
+			c.routerEntry.MAC = raw.CopyMAC(frame.SrcMAC())
 			c.routerEntry.IPArray[0] = IPEntry{IP: c.config.RouterIP}
 		}
 		return host, nil
