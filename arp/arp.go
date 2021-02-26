@@ -228,7 +228,9 @@ func (c *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
 
 	switch operation {
 	case request:
-		log.Printf("arp  : who is %s: %s ", frame.DstIP(), frame)
+		if Debug {
+			log.Printf("arp  : who is %s: %s ", frame.DstIP(), frame)
+		}
 		// if targetIP is a virtual host, we are claiming the ip; reply and return
 		c.RLock()
 		if target := c.virtual.findVirtualIP(frame.DstIP()); target != nil {
@@ -257,7 +259,9 @@ func (c *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
 		// +============+===+===========+===========+============+============+===================+===========+
 		// | ACD probe  | 1 | broadcast | clientMAC | clientMAC  | 0x00       | 0x00              |  targetIP |
 		// +============+===+===========+===========+============+============+===================+===========+
-		log.Printf("arp  : probe recvd: %s", frame)
+		if Debug {
+			log.Printf("arp  : probe recvd: %s", frame)
+		}
 		return host, nil
 
 	case announcement:
@@ -266,7 +270,9 @@ func (c *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
 		// +============+===+===========+===========+============+============+===================+===========+
 		// | ACD announ | 1 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  clientIP |
 		// +============+===+===========+===========+============+============+===================+===========+
-		log.Printf("arp  : announcement recvd: %s", frame)
+		if Debug {
+			log.Printf("arp  : announcement recvd: %s", frame)
+		}
 		// if targetIP is a virtual host, we are claiming the ip; reply and return
 		c.RLock()
 		if target := c.virtual.findVirtualIP(frame.DstIP()); target != nil {
@@ -287,7 +293,9 @@ func (c *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
 		// | reply      | 2 | clientMAC | targetMAC | targetMAC  | targetIP   | clientMAC         |  clientIP |
 		// | gratuitous | 2 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  clientIP |
 		// +============+===+===========+===========+============+============+===================+===========+
-		log.Printf("arp  : reply recvd: %s", frame)
+		if Debug {
+			log.Printf("arp  : reply recvd: %s", frame)
+		}
 		if !bytes.Equal(frame.DstMAC(), EthernetBroadcast) && !frame.DstIP().IsUnspecified() {
 			host, _ = c.LANHosts.FindOrCreateHost(frame.DstMAC(), frame.DstIP())
 		}
