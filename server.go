@@ -245,7 +245,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			}
 			if !h.HostIP4.Contains(frame.Src()) { // must be on the same net
 				// if !frame.Src().IsLinkLocalUnicast() && !frame.Src().IsGlobalUnicast() {
-				fmt.Println("ignore IP4 ", frame)
+				// fmt.Println("ignore IP4 ", frame)
 				continue
 			}
 			host, _ = h.LANHosts.FindOrCreateHost(ether.Src(), frame.Src())
