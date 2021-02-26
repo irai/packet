@@ -120,7 +120,7 @@ func cmd(pt *packet.Handler, a4 *arp.Handler, h *icmp4.Handler, h6 *icmp6.Handle
 	for {
 		fmt.Println("Command: (q)uit            | (p)ing ip | (l)list | (g) loG <level>")
 		fmt.Println("    ndp: (ra) ip6          | (ns) ip6")
-		fmt.Println("    arp: (af)orce mac      | (as)stop mac")
+		fmt.Println("    arp: (af)orce mac      | (as)stop mac        | (scan) ")
 		fmt.Print("Enter command: ")
 		tokens := readInput()
 
@@ -163,7 +163,7 @@ func cmd(pt *packet.Handler, a4 *arp.Handler, h *icmp4.Handler, h6 *icmp6.Handle
 			}
 			now := time.Now()
 			if ip.To4() != nil {
-				if err := h.Ping(h.HostIP, ip, time.Second*4); err != nil {
+				if err := h.SendEchoRequest(raw.Addr{MAC: icmp6.EthAllNodesMulticast, IP: ip}, 2, 2); err != nil {
 					fmt.Println("ping error ", err)
 					continue
 				}
@@ -201,7 +201,10 @@ func cmd(pt *packet.Handler, a4 *arp.Handler, h *icmp4.Handler, h6 *icmp6.Handle
 				continue
 			}
 			a4.StopSpoofMAC(mac)
-
+		case "scan":
+			if err := a4.ScanNetwork(context.Background(), pt.HostIP4); err != nil {
+				fmt.Println("failed scan: ", err)
+			}
 		}
 	}
 }

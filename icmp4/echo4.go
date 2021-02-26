@@ -2,10 +2,10 @@ package icmp4
 
 import (
 	"fmt"
-	"net"
 	"sync"
 	"time"
 
+	"github.com/irai/packet/raw"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv4"
@@ -37,9 +37,9 @@ func init() {
 	icmpTable.cond = sync.NewCond(&icmpTable.mutex)
 }
 
-// SendICMPEcho transmit an icmp echo request
+// SendEchoRequest transmit an icmp echo request
 // Do not wait for response
-func (h *Handler) SendICMPEcho(src net.IP, dst net.IP, id uint16, seq uint16) error {
+func (h *Handler) SendEchoRequest(dstAddr raw.Addr, id uint16, seq uint16) error {
 
 	icmpMessage := icmp.Message{
 		Type: ipv4.ICMPTypeEcho,
@@ -56,11 +56,11 @@ func (h *Handler) SendICMPEcho(src net.IP, dst net.IP, id uint16, seq uint16) er
 		return err
 	}
 
-	return h.sendRawICMP(src, dst, p)
+	return h.sendPacket(raw.Addr{MAC: h.ifi.HardwareAddr, IP: h.HostIP}, dstAddr, p)
 }
 
 // Ping send a ping request and wait for a reply
-func (h *Handler) Ping(src net.IP, dst net.IP, timeout time.Duration) (err error) {
+func (h *Handler) Ping(dstAddr raw.Addr, timeout time.Duration) (err error) {
 
 	icmpTable.cond.L.Lock()
 	msg := icmpEntry{expire: time.Now().Add(timeout)}
@@ -69,10 +69,12 @@ func (h *Handler) Ping(src net.IP, dst net.IP, timeout time.Duration) (err error
 	icmpTable.table[id] = &msg
 	icmpTable.cond.L.Unlock()
 
-	if err = h.SendICMPEcho(src, dst, id, 0); err != nil {
+	if err = h.SendEchoRequest(dstAddr, id, 0); err != nil {
 		log.Error("error sending ping packet", err)
 		return err
 	}
+
+	return nil
 
 	icmpTable.cond.L.Lock()
 	for msg.msgRecv == nil && msg.expire.After(time.Now()) {
@@ -82,7 +84,7 @@ func (h *Handler) Ping(src net.IP, dst net.IP, timeout time.Duration) (err error
 	icmpTable.cond.L.Unlock()
 
 	if msg.msgRecv == nil {
-		return fmt.Errorf("ping timeout ip= %v id=%v", dst, id)
+		return fmt.Errorf("ping timeout ip= %v id=%v", dstAddr, id)
 	}
 
 	return nil

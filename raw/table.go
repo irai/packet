@@ -76,8 +76,9 @@ func (h *HostTable) FindOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Hos
 func (h *HostTable) findOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host, found bool) {
 
 	// trick to avoid buffer allocation in lookup
-	// this function is called VERY often
 	// see: net.IPv4() function
+	//
+	// this function is called VERY often
 	var v4InV6Prefix = net.IP{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00} // go ipv4 prefix
 	if len(ip) == 4 {
 		v4InV6Prefix[12] = ip[0]

@@ -104,7 +104,7 @@ func (c *Handler) ScanNetwork(ctx context.Context, lan net.IPNet) error {
 			}
 			return err
 		}
-		time.Sleep(time.Millisecond * 25)
+		time.Sleep(time.Millisecond * 8)
 	}
 
 	return nil

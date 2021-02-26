@@ -28,7 +28,7 @@ type Handler struct {
 	HostIP net.IP
 }
 
-func (h *Handler) sendRawICMP(src net.IP, dst net.IP, p raw.ICMP4) error {
+func (h *Handler) sendPacket(srcAddr raw.Addr, dstAddr raw.Addr, p raw.ICMP4) error {
 
 	// TODO: reuse h.conn and write directly to socket
 	c, err := net.ListenPacket("ip4:1", "0.0.0.0") // ICMP for IPv4
@@ -51,12 +51,12 @@ func (h *Handler) sendRawICMP(src net.IP, dst net.IP, p raw.ICMP4) error {
 		TotalLen: ipv4.HeaderLen + len(p),
 		TTL:      10,
 		Protocol: 1,
-		Src:      src,
-		Dst:      dst,
+		Src:      srcAddr.IP,
+		Dst:      dstAddr.IP,
 	}
 
 	if Debug {
-		log.WithFields(log.Fields{"group": "icmp", "src": src, "dst": dst}).Debugf("icmp send msg type=%v", p.Type())
+		log.WithFields(log.Fields{"group": "icmp", "src": srcAddr, "dst": dstAddr}).Debugf("icmp send msg type=%v", p.Type())
 	}
 	if err := r.WriteTo(iph, p, nil); err != nil {
 		log.Error("icmp failed to write ", err)
