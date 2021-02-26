@@ -63,6 +63,9 @@ func (h *HostTable) PrintTable() {
 	}
 }
 
+// FindOrCreateHost will create a new host entry or return existing
+//
+// The funcion copies both the mac and the ip; it is safe to call this with a frame.IP(), frame.MAC()
 func (h *HostTable) FindOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host, found bool) {
 	h.Lock()
 	defer h.Unlock()
@@ -79,7 +82,7 @@ func (h *HostTable) findOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Hos
 		host.LastSeen = time.Now()
 		return host, true
 	}
-	host = &Host{MAC: CopyMAC(mac), IP: CopyIP(ip), LastSeen: time.Now(), Online: true}
+	host = &Host{MAC: CopyMAC(mac), IP: CopyIP(ip), LastSeen: time.Now(), Online: false}
 	h.Table[string(host.IP)] = host
 	return host, false
 }

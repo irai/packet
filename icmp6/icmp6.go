@@ -289,19 +289,15 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
 			switch v.Code() {
 			case optMTU:
 				o := v.(*MTU)
-				fmt.Println(" options mtu ", v.Code(), o)
 				router.MTU = uint32(*o)
 			case optPrefixInformation:
 				o := v.(*PrefixInformation)
-				fmt.Println(" options prefix ", v.Code(), o)
 				prefixes = append(prefixes, *o)
 			case optRDNSS:
 				o := v.(*RecursiveDNSServer)
-				fmt.Println(" options RDNSS ", v.Code(), o)
 				router.RDNSS = o
 			case optSourceLLA:
 				o := v.(*LinkLayerAddress)
-				fmt.Println(" options LLA ", v.Code(), o)
 				if !bytes.Equal(o.Addr, host.MAC) {
 					log.Printf("error: icmp6 unexpected sourceLLA=%s etherFrame=%s", o.Addr, host.MAC)
 				}

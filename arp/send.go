@@ -174,7 +174,7 @@ func (c *Handler) WhoIs(ip net.IP) (raw.Addr, error) {
 		if host := c.table.FindIP(ip); host != nil {
 			return raw.Addr{IP: host.IP, MAC: host.MAC}, nil
 		}
-		if err := c.Request(c.config.HostMAC, c.config.HostIP, EthernetBroadcast, ip); err != nil {
+		if err := c.Request(c.config.HostMAC, c.config.HostIP.IP, EthernetBroadcast, ip); err != nil {
 			return raw.Addr{}, fmt.Errorf("arp WhoIs error: %w", err)
 		}
 		time.Sleep(time.Millisecond * 50)

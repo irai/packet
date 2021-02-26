@@ -71,7 +71,7 @@ func main() {
 	homeLAN := net.IPNet{IP: pkt.HostIP4.IP.Mask(pkt.HostIP4.Mask), Mask: pkt.HostIP4.Mask}
 	arpConfig := arp.Config{
 		HostMAC:  pkt.HostMAC,
-		HostIP:   pkt.HostIP4.IP,
+		HostIP:   pkt.HostIP4,
 		RouterIP: defaultGW, HomeLAN: homeLAN,
 		ProbeInterval:           time.Minute * 1,
 		FullNetworkScanInterval: time.Minute * 20,

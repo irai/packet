@@ -83,11 +83,11 @@ func (c *Handler) ScanNetwork(ctx context.Context, lan net.IPNet) error {
 		ip[3] = byte(host)
 
 		// Don't scan router and host
-		if bytes.Equal(ip, c.config.RouterIP) || bytes.Equal(ip, c.config.HostIP) {
+		if bytes.Equal(ip, c.config.RouterIP) || bytes.Equal(ip, c.config.HostIP.IP) {
 			continue
 		}
 
-		err := c.request(c.config.HostMAC, c.config.HostIP, EthernetBroadcast, ip)
+		err := c.request(c.config.HostMAC, c.config.HostIP.IP, EthernetBroadcast, ip)
 		if ctx.Err() == context.Canceled {
 			return nil
 		}

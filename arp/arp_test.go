@@ -91,7 +91,7 @@ func setupTestHandler(t *testing.T) *testContext {
 
 	arpConfig := Config{
 		HostMAC:  hostMAC,
-		HostIP:   hostIP,
+		HostIP:   net.IPNet{IP: hostIP, Mask: net.IPv4Mask(255, 255, 255, 0)},
 		RouterIP: routerIP, HomeLAN: homeLAN,
 		FullNetworkScanInterval: time.Second * 60,
 		ProbeInterval:           time.Second * 1,

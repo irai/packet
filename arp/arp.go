@@ -18,7 +18,7 @@ import (
 // Set FullNetworkScanInterval = 0 to avoid network scan
 type Config struct {
 	HostMAC                 net.HardwareAddr `yaml:"-"`
-	HostIP                  net.IP           `yaml:"-"`
+	HostIP                  net.IPNet        `yaml:"-"`
 	RouterIP                net.IP           `yaml:"-"`
 	HomeLAN                 net.IPNet        `yaml:"-"`
 	FullNetworkScanInterval time.Duration    `yaml:"-"` // Set it to zero if no scan required
@@ -65,7 +65,8 @@ func New(conn net.PacketConn, table *raw.HostTable, config Config) (h *Handler, 
 	h.table = table
 	h.virtual = newARPTable()
 	h.config.HostMAC = config.HostMAC
-	if h.config.HostIP = config.HostIP.To4(); h.config.HostIP == nil {
+	h.config.HostIP = config.HostIP
+	if h.config.HostIP.IP = config.HostIP.IP.To4(); h.config.HostIP.IP == nil {
 		return nil, raw.ErrInvalidIP4
 	}
 	h.config.RouterIP = config.RouterIP.To4()
@@ -241,9 +242,9 @@ func (c *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
 		}
 		c.RUnlock()
 
-		if host == nil {
+		if host == nil && c.config.HostIP.Contains(frame.SrcIP()) {
 			// If new client, then create a MACEntry in table
-			host, _ = c.table.FindOrCreateHost(raw.CopyMAC(frame.SrcMAC()), raw.CopyIP(frame.SrcIP()))
+			host, _ = c.table.FindOrCreateHost(frame.SrcMAC(), frame.SrcIP())
 		}
 		return host, nil
 
@@ -288,7 +289,7 @@ func (c *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
 		// +============+===+===========+===========+============+============+===================+===========+
 		log.Printf("arp  : reply recvd: %s", frame)
 		if !bytes.Equal(frame.DstMAC(), EthernetBroadcast) && !frame.DstIP().IsUnspecified() {
-			host, _ = c.table.FindOrCreateHost(raw.CopyMAC(frame.DstMAC()), raw.CopyIP(frame.DstIP()))
+			host, _ = c.table.FindOrCreateHost(frame.DstMAC(), frame.DstIP())
 		}
 		return host, nil
 
