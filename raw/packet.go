@@ -122,6 +122,7 @@ func (p Ether) EtherType() uint16     { return binary.BigEndian.Uint16(p[12:14])
 func (p Ether) Payload() []byte {
 
 	if p.EtherType() == syscall.ETH_P_IP || p.EtherType() == syscall.ETH_P_IPV6 || p.EtherType() == syscall.ETH_P_ARP {
+		// fmt.Println("DEBUG: arp payload ", len(p), cap(p))
 		if len(p) <= 14 { // change p in case the payload is empty
 			p = p[:cap(p)]
 		}
@@ -289,7 +290,6 @@ func IP6MarshalBinary(b []byte, hopLimit uint8, srcIP net.IP, dstIP net.IP) IP6 
 	var class int = 0
 	var flow int = 0
 	b[0] = 0x60 | uint8(class>>4) // first 4 bits: 6 indicates ipv6, 4 indicates ipv4
-	fmt.Printf("b0: %x\n", b[0])
 	b[1] = uint8(class<<4) | uint8(flow>>16)
 	b[2] = uint8(flow >> 8)
 	b[3] = uint8(flow)

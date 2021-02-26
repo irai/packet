@@ -1,13 +1,10 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"flag"
 	"fmt"
 	"net"
-	"os"
-	"strings"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -32,9 +29,18 @@ func main() {
 	log.SetLevel(log.DebugLevel)
 
 	fmt.Printf("icmpListener: Listen and send icmp messages\n")
-	fmt.Printf("Using nic %v src=%v dst=%v\n", *nic, *srcIP, *dstIP)
+	fmt.Printf("Using nic %v \n", *nic)
 
-	mac, ipNet4, lla, gua, err := raw.GetNICInfo(*nic)
+	defaultGW, err := raw.GetLinuxDefaultGateway()
+	if err != nil {
+		log.Println("failed to get default gw:", err)
+		defaultGW = net.IPv4(192, 168, 1, 1)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// setup packet listener
+	pkt, err := packet.New(*nic)
 	if err != nil {
 		fmt.Printf("error opening nic=%s: %s\n", *nic, err)
 		iif, _ := net.Interfaces()
@@ -48,32 +54,33 @@ func main() {
 		}
 		return
 	}
-	fmt.Println("mac : ", mac)
-	fmt.Println("ip4 : ", ipNet4)
-	fmt.Println("lla : ", lla)
-	fmt.Println("gua : ", gua)
-
-	ctx, cancel := context.WithCancel(context.Background())
-
-	// setup packet listener
-	pkt, err := packet.New(*nic)
-	if err != nil {
-		panic(err)
-	}
 	defer pkt.Close()
 
+	fmt.Println("mac  :", pkt.HostMAC)
+	fmt.Println("ip4  :", pkt.HostIP4)
+	fmt.Println("gw4  :", defaultGW)
+	fmt.Println("lla  :", pkt.HostLLA)
+	fmt.Println("gua  :", pkt.HostGUA)
 	pkt.AddCallback(func(n packet.Notification) error {
 		fmt.Println("Got notification : ", n)
 		return nil
 	})
 
 	// setup ARP handler
-	homeLAN := net.IPNet{IP: ipNet4.IP.Mask(ipNet4.Mask), Mask: ipNet4.Mask}
-	arpHandler, err := arp.New(pkt.Conn(), pkt.LANHosts, arp.Config{HostMAC: mac, HostIP: ipNet4.IP, HomeLAN: homeLAN})
+	// setup ARP handler
+	homeLAN := net.IPNet{IP: pkt.HostIP4.IP.Mask(pkt.HostIP4.Mask), Mask: pkt.HostIP4.Mask}
+	arpConfig := arp.Config{
+		HostMAC:  pkt.HostMAC,
+		HostIP:   pkt.HostIP4.IP,
+		RouterIP: defaultGW, HomeLAN: homeLAN,
+		ProbeInterval:           time.Minute * 1,
+		FullNetworkScanInterval: time.Minute * 20,
+		PurgeDeadline:           time.Minute * 10}
+	arpHandler, err := arp.New(pkt.Conn(), pkt.LANHosts, arpConfig)
 	pkt.ARP = arpHandler
 
 	// ICMPv4
-	h4, err := icmp4.New(pkt.Interface(), pkt.Conn(), pkt.LANHosts, ipNet4.IP)
+	h4, err := icmp4.New(pkt.Interface(), pkt.Conn(), pkt.LANHosts, pkt.HostIP4.IP)
 	if err != nil {
 		log.Fatalf("Failed to create icmp nic=%s handler: ", *nic, err)
 	}
@@ -81,7 +88,7 @@ func main() {
 	pkt.ICMP4Hook("icmp4", h4)
 
 	// ICMPv6
-	icmp6Config := icmp6.Config{GlobalUnicastAddress: gua, LocalLinkAddress: lla}
+	icmp6Config := icmp6.Config{GlobalUnicastAddress: pkt.HostGUA, LocalLinkAddress: pkt.HostLLA}
 	h6, err := icmp6.New(pkt.Interface(), pkt.Conn(), pkt.LANHosts, icmp6Config)
 	if err != nil {
 		log.Fatalf("Failed to create icmp6 nic=%s handler: ", *nic, err)
@@ -100,33 +107,22 @@ func main() {
 
 	time.Sleep(time.Millisecond * 10) // time for all goroutine to start
 
-	cmd(pkt, h4, h6)
+	cmd(pkt, arpHandler, h4, h6)
 
 	cancel()
 }
 
-func cmd(pt *packet.Handler, h *icmp4.Handler, h6 *icmp6.Handler) {
+func cmd(pt *packet.Handler, a4 *arp.Handler, h *icmp4.Handler, h6 *icmp6.Handler) {
 
 	radvs, _ := h6.StartRADVS(false, false, icmp6.MyHomePrefix, icmp6.RDNSSCLoudflare)
 	defer radvs.Stop()
 
-	reader := bufio.NewReader(os.Stdin)
 	for {
 		fmt.Println("Command: (q)uit            | (p)ing ip | (l)list | (g) loG <level>")
 		fmt.Println("    ndp: (ra) ip6          | (ns) ip6")
+		fmt.Println("    arp: (af)orce mac      | (as)stop mac")
 		fmt.Print("Enter command: ")
-		text, _ := reader.ReadString('\n')
-		text = strings.ToLower(text[:len(text)-1])
-
-		// handle windows line feed
-		if len(text) > 1 && text[len(text)-1] == '\r' {
-			text = strings.ToLower(text[:len(text)-1])
-		}
-
-		if text == "" {
-			continue
-		}
-		tokens := strings.Split(text, " ")
+		tokens := readInput()
 
 		switch tokens[0] {
 		case "q":
@@ -134,12 +130,17 @@ func cmd(pt *packet.Handler, h *icmp4.Handler, h6 *icmp6.Handler) {
 		case "l":
 			pt.PrintTable()
 			h6.PrintTable()
+			a4.PrintTable()
 
 		case "g":
 			p := getString(tokens, 1)
 			switch p {
+			case "ip4":
+				packet.DebugIP4 = !packet.DebugIP4
 			case "icmp4":
 				icmp4.Debug = !icmp4.Debug
+			case "ip6":
+				packet.DebugIP6 = !packet.DebugIP6
 			case "icmp6":
 				icmp6.Debug = !icmp6.Debug
 			case "packet":
@@ -149,18 +150,15 @@ func cmd(pt *packet.Handler, h *icmp4.Handler, h6 *icmp6.Handler) {
 			default:
 				fmt.Println("invalid package - use 'g icmp4|icmp6|arp|packet'")
 			}
+			fmt.Println("ip4 debug  :", packet.DebugIP4)
 			fmt.Println("icmp4 debug:", icmp4.Debug)
+			fmt.Println("ip6 debug  :", packet.DebugIP6)
 			fmt.Println("icmp6 debug:", icmp6.Debug)
 			fmt.Println("packet debug:", packet.Debug)
 			fmt.Println("arp debug:", arp.Debug)
 		case "p":
-			if len(tokens) < 2 {
-				fmt.Println("missing ip")
-				continue
-			}
-			ip := net.ParseIP(tokens[1])
-			if ip == nil || ip.IsUnspecified() {
-				fmt.Println("invalid ip=", ip)
+			ip := getIP(tokens, 1)
+			if ip == nil {
 				continue
 			}
 			now := time.Now()
@@ -171,7 +169,7 @@ func cmd(pt *packet.Handler, h *icmp4.Handler, h6 *icmp6.Handler) {
 				}
 				fmt.Printf("ping %v time=%v\n", dstIP, time.Now().Sub(now))
 			}
-			if ip.To16() != nil && ip.To4() == nil {
+			if raw.IsIP6(ip) {
 				if err := h6.SendEchoRequest(raw.Addr{MAC: icmp6.EthAllNodesMulticast, IP: ip}, 1, 2); err != nil {
 					// if err := h6.Ping(h6.LLA().IP, ip, time.Second*2); err != nil {
 					fmt.Println("icmp6 echo error ", err)
@@ -191,26 +189,19 @@ func cmd(pt *packet.Handler, h *icmp4.Handler, h6 *icmp6.Handler) {
 			if err := radvs.SendRA(); err != nil {
 				fmt.Printf("error in router adversitement: %s\n", err)
 			}
+		case "af":
+			mac := getMAC(tokens, 1)
+			if mac == nil {
+				continue
+			}
+			a4.StartSpoofMAC(mac)
+		case "as":
+			mac := getMAC(tokens, 1)
+			if mac == nil {
+				continue
+			}
+			a4.StopSpoofMAC(mac)
+
 		}
 	}
-}
-
-func getString(tokens []string, pos int) string {
-	if len(tokens) < pos+1 {
-		fmt.Println("missing value", tokens)
-		return ""
-	}
-	return tokens[pos]
-}
-func getIP(tokens []string, pos int) net.IP {
-	if len(tokens) < pos+1 {
-		fmt.Println("missing ip", tokens)
-		return nil
-	}
-	ip := net.ParseIP(tokens[pos])
-	if ip == nil || ip.IsUnspecified() {
-		fmt.Println("invalid ip=", ip)
-		return nil
-	}
-	return ip
 }

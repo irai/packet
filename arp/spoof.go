@@ -2,80 +2,45 @@ package arp
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"time"
 
 	"log"
 )
 
-// ForceIPChange performs the following:
+// StartSpoofMAC performs the following:
 //  1. set client state to "hunt" which will continuously spoof the client ARP table
-//  2. create a virtual host for each IP and claim the IP
-//  3. spoof the client ARP table to redirect all traffic to host
-//  4. claim the client IP to force client to reaquire DHCP
-//  5. notify when client change IP
+//  2. start spoof goroutine to poison client arp table
 //
 // client will revert back to "normal" when a new IP is detected for the MAC
-func (c *Handler) ForceIPChange(mac net.HardwareAddr, claimIP bool) error {
+func (c *Handler) StartSpoofMAC(mac net.HardwareAddr) error {
 	if Debug {
 		log.Printf("arp force IP change mac=%s", mac)
 	}
 
 	c.Lock()
-	client := c.table.findByMAC(mac)
-	if client == nil || !client.Online || client.State == StateVirtualHost {
-		err := fmt.Errorf("mac %s is not online", mac)
-		c.Unlock()
-		return err
+	defer c.Unlock()
+
+	entry, _ := c.virtual.upsert(StateHunt, mac, nil)
+	var ip net.IP
+	for _, v := range c.table.FindMAC(mac) {
+		if ip = v.IP.To4(); ip != nil {
+			break
+		}
 	}
-
-	if client.State == StateHunt {
-		err := fmt.Errorf("mac %s already in hunt state", mac)
-		c.Unlock()
-		return err
-	}
-
-	client.State = StateHunt
-	client.ClaimIP = claimIP
-	ips := client.IPs()
-	c.Unlock()
-
-	// one virtual mac per IP
-	// TODO: pass a cancelable context - FB Feb 2020
-	for _, v := range ips {
-		go c.spoofLoop(context.TODO(), client, v)
-	}
-
+	go c.spoofLoop(context.Background(), entry, ip)
 	return nil
 }
 
-// StopIPChange terminate the hunting process
-func (c *Handler) StopIPChange(mac net.HardwareAddr) error {
+// StopSpoofMAC terminate the hunting process
+func (c *Handler) StopSpoofMAC(mac net.HardwareAddr) error {
 	if Debug {
 		log.Printf("arp stop IP change mac=%s", mac)
 	}
 
 	c.Lock()
 	defer c.Unlock()
-
-	client := c.table.findByMAC(mac)
-	if client == nil {
-		err := fmt.Errorf("mac %s not found", mac)
-		return err
-	}
-
-	if client.State != StateHunt {
-		err := fmt.Errorf("not in hunt state mac=%s state=%s", mac, client.State)
-		if Debug {
-			log.Printf("arp %s", err)
-		}
-		return err
-	}
-
-	// This will end the spoof goroutine
-	client.State = StateNormal
-	client.ClaimIP = false
+	c.virtual.delete(mac)
 	return nil
 }
 
@@ -83,8 +48,8 @@ func (c *Handler) StopIPChange(mac net.HardwareAddr) error {
 // When a virtual host exist, the handler will respond to ACD and request packets for the ip
 func (c *Handler) ClaimIP(ip net.IP) {
 	c.Lock()
-	if virtual := c.table.findVirtualIP(ip); virtual == nil {
-		virtual, _ = c.table.upsert(StateVirtualHost, newVirtualHardwareAddr(), ip)
+	if virtual := c.virtual.findVirtualIP(ip); virtual == nil {
+		virtual, _ = c.virtual.upsert(StateVirtualHost, newVirtualHardwareAddr(), ip)
 		virtual.Online = false // indicates spoof goroutine is not running
 	}
 	c.Unlock()
@@ -98,6 +63,7 @@ func (c *Handler) ClaimIP(ip net.IP) {
 // new DHCP MACEntry has been allocated.
 //
 func (c *Handler) IPChanged(mac net.HardwareAddr, clientIP net.IP) {
+	/****
 	// Do nothing if we already have this mac and ip
 	c.RLock()
 	if client := c.table.findByMAC(mac); client != nil && client.Online && client.IP().Equal(clientIP) {
@@ -133,10 +99,11 @@ func (c *Handler) IPChanged(mac net.HardwareAddr, clientIP net.IP) {
 		}
 		log.Printf("arp ip=%s not detect for mac=%s", clientIP, mac)
 
-		c.RLock()
-		c.table.printTable()
-		c.RUnlock()
+		// c.RLock()
+		// c.table.printTable()
+		// c.RUnlock()
 	}()
+	****/
 }
 
 // spoofLoop attacks the client with ARP attacks
@@ -147,25 +114,9 @@ func (c *Handler) IPChanged(mac net.HardwareAddr, clientIP net.IP) {
 //
 func (c *Handler) spoofLoop(ctx context.Context, client *MACEntry, ip net.IP) {
 
-	// create a virtual host and move IPs to it
-	// Virtual Host will exist until they get deleted by the purge goroutine
-	var virtual *MACEntry
 	c.Lock()
-	if client.ClaimIP {
-		virtual = c.table.findVirtualIP(ip)
-
-		// Online virtual hosts are still running in a goroutine
-		if virtual != nil && virtual.Online {
-			c.Unlock()
-			return
-		}
-
-		if virtual == nil {
-			virtual, _ = c.table.upsert(StateVirtualHost, newVirtualHardwareAddr(), ip)
-		}
-		virtual.Online = true // online indicates goroutine is running
-	}
 	mac := client.MAC
+	client.Online = true // goroutine started
 	c.Unlock()
 
 	// 4 second re-arp seem to be adequate;
@@ -177,24 +128,11 @@ func (c *Handler) spoofLoop(ctx context.Context, client *MACEntry, ip net.IP) {
 	for {
 		c.Lock()
 		// Always search for MAC in case it has been deleted.
-		client := c.table.findByMAC(mac)
+		client := c.virtual.findByMAC(mac)
 		if client == nil || client.State != StateHunt {
-			log.Printf("arp attack end ip=%s client=%s repeat=%v duration=%v", ip, mac, nTimes, time.Now().Sub(startTime))
-			if virtual != nil {
-				virtual.Online = false // goroutine ended
-			}
+			log.Printf("arp attack end client=%s repeat=%v duration=%v", mac, nTimes, time.Now().Sub(startTime))
 			c.Unlock()
-			/** This causes a network lock up - why? all routes and arp table lose state
-				// Restore target ARP table to default gw
-			if c.routerEntry.MAC != nil {
-				c.announce(mac, c.routerEntry.MAC, c.config.RouterIP, EthernetBroadcast, 2)
-			}
-			***/
 			return
-		}
-
-		if virtual != nil {
-			virtual.LastUpdated = time.Now()
 		}
 
 		c.Unlock()
@@ -205,13 +143,8 @@ func (c *Handler) spoofLoop(ctx context.Context, client *MACEntry, ip net.IP) {
 		// Use virtual IP as it is guaranteed to not change.
 		c.forceSpoof(mac, ip)
 
-		// Use VirtualHost to claim ownership of the IP and force target to acquire another IP
-		if virtual != nil && nTimes < 5 {
-			c.forceAnnouncement(mac, virtual.MAC, ip)
-		}
-
 		if nTimes%16 == 0 {
-			log.Printf("arp attack ip=%s client=%s repeat=%v duration=%v", ip, mac, nTimes, time.Now().Sub(startTime))
+			log.Printf("arp attack client=%s repeat=%v duration=%v", mac, nTimes, time.Now().Sub(startTime))
 		}
 		nTimes++
 
@@ -254,6 +187,7 @@ func (c *Handler) forceSpoof(mac net.HardwareAddr, ip net.IP) error {
 }
 
 // forceAnnounce send a ARP packets to tell the network we are using the IP.
+// NOT used anymore
 func (c *Handler) forceAnnouncement(dstEther net.HardwareAddr, mac net.HardwareAddr, ip net.IP) error {
 	err := c.announce(dstEther, mac, ip, EthernetBroadcast, 4) // many repeats to force client to reaquire IP
 	if err != nil {

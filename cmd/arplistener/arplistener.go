@@ -16,6 +16,7 @@ import (
 
 	"github.com/irai/packet"
 	"github.com/irai/packet/arp"
+	"github.com/irai/packet/raw"
 )
 
 var (
@@ -30,7 +31,7 @@ func main() {
 
 	nic := *ifaceFlag
 
-	_, err := net.InterfaceByName(nic)
+	ifi, ipNet4, lla, gua, err := raw.GetNICInfo(nic)
 	if err != nil {
 		fmt.Printf("error opening nic=%s: %s\n", nic, err)
 		iif, _ := net.Interfaces()
@@ -44,13 +45,12 @@ func main() {
 		}
 		return
 	}
+	fmt.Println("mac : ", ifi.HardwareAddr)
+	fmt.Println("ip4 : ", ipNet4)
+	fmt.Println("lla : ", lla)
+	fmt.Println("gua : ", gua)
 
-	HostIP, _, err := getNICInfo(nic)
-	if err != nil {
-		log.Fatal("error cannot get host ip and mac ", err)
-	}
-
-	HomeLAN := net.IPNet{IP: net.IPv4(HostIP[0], HostIP[1], HostIP[2], 0), Mask: net.CIDRMask(25, 32)}
+	HomeLAN := net.IPNet{IP: ipNet4.IP.Mask(ipNet4.Mask).To4(), Mask: ipNet4.Mask}
 	HomeRouterIP := net.ParseIP(*defaultGw)
 	if HomeRouterIP == nil {
 		HomeRouterIP, err = getLinuxDefaultGateway()
@@ -71,8 +71,8 @@ func main() {
 
 	// setup ARP handler
 	arpConfig := arp.Config{
-		HostMAC:  packet.HostMAC(),
-		HostIP:   HostIP,
+		HostMAC: packet.HostMAC,
+		// HostIP:   HostIP,
 		RouterIP: HomeRouterIP, HomeLAN: HomeLAN,
 		ProbeInterval:           time.Minute * 1,
 		FullNetworkScanInterval: time.Minute * 20,
@@ -92,7 +92,6 @@ func main() {
 	time.Sleep(time.Millisecond * 10) // time for all goroutine to start
 
 	arpChannel := make(chan arp.MACEntry, 16)
-	packet.ARP.(*arp.Handler).AddNotificationChannel(arpChannel)
 
 	go arpNotification(arpChannel)
 
@@ -112,8 +111,11 @@ func arpNotification(arpChannel chan arp.MACEntry) {
 	}
 }
 
+/*****
+ALL BROKEN - TO BE DELETED - FEB 2021
+***/
 func cmd(packet *packet.Handler) {
-	arpHandler := packet.ARP.(*arp.Handler)
+	// arpHandler := packet.ARP.(*arp.Handler)
 	reader := bufio.NewReader(os.Stdin)
 	for {
 		fmt.Println("Command: (q)uit | (l)ist | (f)force <mac> | (s) stop <mac> | (g) toggle log")
@@ -126,6 +128,7 @@ func cmd(packet *packet.Handler) {
 			continue
 		}
 
+		/**
 		switch text[0] {
 		case 'q':
 			return
@@ -143,74 +146,29 @@ func cmd(packet *packet.Handler) {
 				log.Print(err)
 				break
 			}
-			arpHandler.ForceIPChange(entry.MAC, true)
+			arpHandler.StartSpoofMAC(entry.MAC)
 		case 's':
 			MACEntry, err := getMAC(arpHandler, text)
 			if err != nil {
 				log.Print(err)
 				break
 			}
-			arpHandler.StopIPChange(MACEntry.MAC)
+			arpHandler.StopSpoofMAC(MACEntry.MAC)
 		}
+		**/
 	}
 }
 
-func getMAC(c *arp.Handler, text string) (arp.MACEntry, error) {
-	if len(text) <= 3 {
-		return arp.MACEntry{}, fmt.Errorf("Invalid MAC")
+func getMAC(text []string, pos int) net.HardwareAddr {
+	if len(text) < pos-1 {
+		return nil
 	}
-	mac, err := net.ParseMAC(text[2:])
+	mac, err := net.ParseMAC(text[pos])
 	if err != nil {
-		return arp.MACEntry{}, fmt.Errorf("Invalid MAC: %w", err)
+		return nil
 	}
 
-	entry, found := c.FindMAC(mac)
-	if !found {
-		return arp.MACEntry{}, fmt.Errorf("MAC not found")
-	}
-	return entry, nil
-}
-
-func getNICInfo(nic string) (ip net.IP, mac net.HardwareAddr, err error) {
-
-	all, err := net.Interfaces()
-	for _, v := range all {
-		log.Print("interface name ", v.Name, v.HardwareAddr.String())
-	}
-	ifi, err := net.InterfaceByName(nic)
-	if err != nil {
-		log.Printf("NIC cannot open nic %s error %s ", nic, err)
-		return ip, mac, err
-	}
-
-	mac = ifi.HardwareAddr
-
-	addrs, err := ifi.Addrs()
-	if err != nil {
-		log.Printf("NIC cannot get addresses nic %s error %s ", nic, err)
-		return ip, mac, err
-	}
-
-	for i := range addrs {
-		tmp, _, err := net.ParseCIDR(addrs[i].String())
-		if err != nil {
-			log.Printf("NIC cannot parse IP %s error %s ", addrs[i].String(), err)
-		}
-		log.Print("IP=", tmp)
-		ip = tmp.To4()
-		if ip != nil && !ip.Equal(net.IPv4zero) {
-			break
-		}
-	}
-
-	if ip == nil || ip.Equal(net.IPv4zero) {
-		err = fmt.Errorf("NIC cannot find IPv4 address list - is %s up?", nic)
-		log.Print(err)
-		return ip, mac, err
-	}
-
-	log.Printf("NIC successfull acquired host nic information mac=%s ip=%s", mac, ip)
-	return ip, mac, err
+	return mac
 }
 
 const (

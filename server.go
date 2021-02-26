@@ -14,6 +14,8 @@ import (
 
 // Debug packets turn on logging if desirable
 var Debug bool
+var DebugIP6 bool
+var DebugIP4 bool
 
 type Hook struct {
 	name    string
@@ -33,6 +35,10 @@ type Config struct {
 type Handler struct {
 	conn         net.PacketConn
 	ifi          *net.Interface
+	HostMAC      net.HardwareAddr
+	HostIP4      net.IPNet
+	HostLLA      net.IPNet
+	HostGUA      net.IPNet
 	LANHosts     *raw.HostTable
 	Config       Config
 	handlerIP4   []Hook
@@ -77,10 +83,11 @@ func (config Config) New(nic string) (*Handler, error) {
 
 	h := &Handler{Config: config, LANHosts: raw.New()}
 
-	h.ifi, err = net.InterfaceByName(nic)
+	h.ifi, h.HostIP4, h.HostLLA, h.HostGUA, err = raw.GetNICInfo(nic)
 	if err != nil {
 		return nil, fmt.Errorf("interface not found nic=%s: %w", nic, err)
 	}
+	h.HostMAC = h.ifi.HardwareAddr
 
 	// Skip if conn is overriden
 	h.conn = config.Conn
@@ -107,10 +114,6 @@ func (h *Handler) Conn() net.PacketConn {
 
 func (h *Handler) Interface() *net.Interface {
 	return h.ifi
-}
-
-func (h *Handler) HostMAC() net.HardwareAddr {
-	return h.ifi.HardwareAddr
 }
 
 func (h *Handler) setupConn() (conn net.PacketConn, err error) {
@@ -236,7 +239,8 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				fmt.Println("packet: error invalid ip4 frame type=", ether.EtherType())
 				continue
 			}
-			if Debug {
+			if DebugIP4 {
+				fmt.Println("ether: ", ether)
 				fmt.Println("ip4  :", frame)
 			}
 			if !frame.Src().IsLinkLocalUnicast() && !frame.Src().IsGlobalUnicast() {
@@ -256,7 +260,8 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				fmt.Println("packet: error invalid ip6 frame type=", ether.EtherType())
 				continue
 			}
-			if Debug {
+			if DebugIP6 {
+				fmt.Println("ether: ", ether)
 				fmt.Printf("ip6  : %s\n", frame)
 			}
 
@@ -309,6 +314,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 		// Set to online
 		if host != nil && !host.Online {
+			fmt.Println("DEBUG set online", host, host.Online)
 			host.SetOnline()
 			h.notifyCallback(host)
 		}

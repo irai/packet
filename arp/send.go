@@ -168,42 +168,21 @@ func (c *Handler) announce(dstEther net.HardwareAddr, mac net.HardwareAddr, ip n
 
 // WhoIs will send a request packet to get the MAC address for the IP. Retry 3 times.
 //
-func (c *Handler) WhoIs(ip net.IP) (MACEntry, error) {
-
-	// test first before sending request; useful for testing
-	c.RLock()
-	if e := c.table.findByIP(ip); e != nil {
-		entry := *e
-		c.RUnlock()
-		return entry, nil
-	}
-	c.RUnlock()
+func (c *Handler) WhoIs(ip net.IP) (raw.Addr, error) {
 
 	for i := 0; i < 3; i++ {
+		if host := c.table.FindIP(ip); host != nil {
+			return raw.Addr{IP: host.IP, MAC: host.MAC}, nil
+		}
 		if err := c.Request(c.config.HostMAC, c.config.HostIP, EthernetBroadcast, ip); err != nil {
-			return MACEntry{}, fmt.Errorf("arp WhoIs error: %w", err)
+			return raw.Addr{}, fmt.Errorf("arp WhoIs error: %w", err)
 		}
 		time.Sleep(time.Millisecond * 50)
-
-		c.RLock()
-		if e := c.table.findByIP(ip); e != nil {
-			c.RUnlock()
-			return *e, nil
-		}
-		c.RUnlock()
-	}
-
-	// hack to return routerMAC
-	// need a better way to do this without including it in the table!!!
-	if ip.Equal(c.config.RouterIP) && c.routerEntry.MAC != nil {
-		return c.routerEntry, nil
 	}
 
 	if Debug {
 		log.Printf("arp ip=%s whois not found", ip)
-		c.RLock()
-		c.table.printTable()
-		c.RUnlock()
+		c.table.PrintTable()
 	}
-	return MACEntry{}, ErrNotFound
+	return raw.Addr{}, ErrNotFound
 }

@@ -32,13 +32,20 @@ func (c Config) String() string {
 		c.HostMAC, c.HostIP, c.RouterIP, c.HomeLAN, c.FullNetworkScanInterval, c.ProbeInterval, c.OfflineDeadline, c.PurgeDeadline)
 }
 
+type Data struct {
+	IPArray [nIPs]IPEntry
+	State   arpState
+	ClaimIP bool // if true, will claim the target IP; likely to force the target IP to stop working
+}
+
 // must implement interface
 var _ raw.PacketProcessor = &Handler{}
 
 // Handler stores instance variables
 type Handler struct {
 	conn        net.PacketConn
-	table       *arpTable
+	table       *raw.HostTable
+	virtual     *arpTable
 	config      Config
 	routerEntry MACEntry // store the router mac address
 	sync.RWMutex
@@ -54,9 +61,13 @@ var (
 // New creates an ARP handler for a given connection
 func New(conn net.PacketConn, table *raw.HostTable, config Config) (h *Handler, err error) {
 	h = &Handler{}
-	h.table, _ = loadARPProcTable() // load linux proc table
+	// h.table, _ = loadARPProcTable() // load linux proc table
+	h.table = table
+	h.virtual = newARPTable()
 	h.config.HostMAC = config.HostMAC
-	h.config.HostIP = config.HostIP.To4()
+	if h.config.HostIP = config.HostIP.To4(); h.config.HostIP == nil {
+		return nil, raw.ErrInvalidIP4
+	}
 	h.config.RouterIP = config.RouterIP.To4()
 	h.config.HomeLAN = config.HomeLAN
 	h.config.FullNetworkScanInterval = config.FullNetworkScanInterval
@@ -90,60 +101,9 @@ func New(conn net.PacketConn, table *raw.HostTable, config Config) (h *Handler, 
 	return h, nil
 }
 
-// AddNotificationChannel set the notification channel for when the MACEntry
-// change state between online and offline.
-func (c *Handler) AddNotificationChannel(notification chan<- MACEntry) {
-	c.notification = notification
-
-	c.Lock()
-	table := c.table.getTable()
-	c.Unlock()
-	go func() {
-		for i := range table {
-			c.notification <- table[i]
-		}
-	}()
-}
-
-// FindMAC returns a MACEntry or empty if not found
-func (c *Handler) FindMAC(mac net.HardwareAddr) (entry MACEntry, found bool) {
-	c.RLock()
-	defer c.RUnlock()
-
-	e := c.table.findByMAC(mac)
-	if e == nil {
-		return MACEntry{}, false
-	}
-	return *e, true
-}
-
-// FindIP returns a MACEntry or empty if not found
-func (c *Handler) FindIP(ip net.IP) (entry MACEntry, found bool) {
-	c.RLock()
-	defer c.RUnlock()
-
-	e := c.table.findByIP(ip)
-	if e == nil {
-		return MACEntry{}, false
-	}
-	return *e, true
-}
-
 // PrintTable print the ARP table to stdout.
 func (c *Handler) PrintTable() {
-	c.RLock()
-	defer c.RUnlock()
-	c.printTable()
-}
-
-func (c *Handler) printTable() {
-	log.Printf("arp Table: %v entries", len(c.table.macTable))
-	c.table.printTable()
-}
-
-// GetTable return the mac table as a shallow array of MACEntry
-func (c *Handler) GetTable() []MACEntry {
-	return c.table.getTable()
+	c.virtual.printTable()
 }
 
 // Close will terminate the ListenAndServer goroutine as well as all other pending goroutines.
@@ -174,32 +134,6 @@ func (c *Handler) Start(ctx context.Context) error {
 		}()
 	}
 
-	// continously probe for online reply
-	go func() {
-		c.wg.Add(1)
-		if err := c.probeOnlineLoop(ctx, c.config.ProbeInterval); err != nil {
-			log.Print("arp goroutine probeOnlineLoop terminated unexpectedly", err)
-			c.conn.Close()
-		}
-		c.wg.Done()
-		if Debug {
-			log.Print("arp goroutine probeOnlineLoop ended")
-		}
-	}()
-
-	// continously check for online-offline transition
-	go func() {
-		c.wg.Add(1)
-		if err := c.purgeLoop(ctx, c.config.OfflineDeadline, c.config.PurgeDeadline); err != nil {
-			log.Print("arp ListenAndServer purgeLoop terminated unexpectedly", err)
-			c.conn.Close() // force error in main loop
-		}
-		c.wg.Done()
-		if Debug {
-			log.Print("arp goroutine purgeLoop ended")
-		}
-	}()
-
 	// Do a full scan on start
 	if c.config.FullNetworkScanInterval != 0 && c.config.HomeLAN.IP.To4() != nil {
 		go func() {
@@ -219,29 +153,36 @@ func (c *Handler) Start(ctx context.Context) error {
 	return nil
 }
 
+const (
+	request = iota
+	reply
+	announcement
+	gratuitous
+	probe
+)
+
 // ProcessPacket handles an incoming ARP packet
-//
-// When a new MAC is detected, it is automatically added to the ARP table and marked as online.
-// Use packet buffer and selectivelly copy mac and ip if we need to keep it
-//
-// Online and offline notifications
-// It will track when a MAC switch between online and offline and will send a message
-// in the notification channel set via AddNotificationChannel(). It will poll each known device
-// based on the scanInterval parameter using a unicast ARP request.
-//
 //
 // Virtual MACs
 // A virtual MAC is a fake mac address used when claiming an existing IP during spoofing.
 // ListenAndServe will send ARP reply on behalf of virtual MACs
+//
+// ARP: packet types
+//      note that RFC 3927 specifies 00:00:00:00:00:00 for Request TargetMAC
+// +============+===+===========+===========+============+============+===================+===========+
+// | Type       | op| EthDstMAC | EthSRCMAC | SenderMAC  | SenderIP   | TargetMAC         |  TargetIP |
+// +============+===+===========+===========+============+============+===================+===========+
+// | request    | 1 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  targetIP |
+// | reply      | 2 | clientMAC | targetMAC | targetMAC  | targetIP   | clientMAC         |  clientIP |
+// | gratuitous | 2 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  clientIP |
+// | ACD probe  | 1 | broadcast | clientMAC | clientMAC  | 0x00       | 0x00              |  targetIP |
+// | ACD announ | 1 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  clientIP |
+// +============+===+===========+===========+============+============+===================+===========+
 func (c *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
-	notify := 0
 
 	frame := ARP(b)
 	if !frame.IsValid() {
 		return host, raw.ErrParseMessage
-	}
-	if Debug {
-		fmt.Printf("arp  : %s\n", frame)
 	}
 
 	// skip link local packets
@@ -252,23 +193,22 @@ func (c *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
 		return host, nil
 	}
 
-	if Debug {
+	var operation int
+	switch {
+	case frame.Operation() == OperationReply:
+		operation = reply
+	case frame.Operation() == OperationRequest:
 		switch {
-		case frame.Operation() == OperationReply:
-			log.Printf("arp reply recvd: %s", frame)
-		case frame.Operation() == OperationRequest:
-			switch {
-			case frame.SrcIP().Equal(frame.DstIP()):
-				log.Printf("arp announcement recvd: %s", frame)
-			case frame.SrcIP().Equal(net.IPv4zero):
-				log.Printf("arp probe recvd: %s", frame)
-			default:
-				log.Printf("arp who is %s: %s ", frame.DstIP(), frame)
-			}
+		case frame.SrcIP().Equal(frame.DstIP()):
+			operation = announcement
+		case frame.SrcIP().Equal(net.IPv4zero):
+			operation = probe
 		default:
-			log.Printf("arp invalid operation: %s", frame)
-			return host, nil
+			operation = request
 		}
+	default:
+		log.Printf("arp invalid operation: %s", frame)
+		return host, nil
 	}
 
 	// Ignore router packets
@@ -285,98 +225,73 @@ func (c *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
 		return host, nil
 	}
 
-	// if targetIP is a virtual host, we are claiming the ip; reply and return
-	c.RLock()
-	if target := c.table.findVirtualIP(frame.DstIP()); target != nil {
-		mac := target.MAC
+	switch operation {
+	case request:
+		log.Printf("arp  : who is %s: %s ", frame.DstIP(), frame)
+		// if targetIP is a virtual host, we are claiming the ip; reply and return
+		c.RLock()
+		if target := c.virtual.findVirtualIP(frame.DstIP()); target != nil {
+			mac := target.MAC
+			c.RUnlock()
+			if Debug {
+				log.Printf("arp ip=%s is virtual - send reply smac=%v", frame.DstIP(), mac)
+			}
+			c.reply(frame.SrcMAC(), mac, frame.DstIP(), EthernetBroadcast, frame.DstIP())
+			return host, nil
+		}
 		c.RUnlock()
-		if Debug {
-			log.Printf("arp ip=%s is virtual - send reply smac=%v", frame.DstIP(), mac)
+
+		if host == nil {
+			// If new client, then create a MACEntry in table
+			host, _ = c.table.FindOrCreateHost(raw.CopyMAC(frame.SrcMAC()), raw.CopyIP(frame.SrcIP()))
 		}
-		c.reply(frame.SrcMAC(), mac, frame.DstIP(), EthernetBroadcast, frame.DstIP())
 		return host, nil
-	}
-	c.RUnlock()
 
-	// We are not interested in probe ACD (Address Conflict Detection) packets
-	// if this is a probe, the sender IP will be zeros; do nothing as the sender IP is not valid yet.
-	//
-	// +============+===+===========+===========+============+============+===================+===========+
-	// | Type       | op| dstMAC    | srcMAC    | SenderMAC  | SenderIP   | TargetMAC         |  TargetIP |
-	// +============+===+===========+===========+============+============+===================+===========+
-	// | ACD probe  | 1 | broadcast | clientMAC | clientMAC  | 0x00       | 0x00              |  targetIP |
-	// | ACD announ | 1 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  clientIP |
-	// +============+===+===========+===========+============+============+===================+===========+
-	if frame.SrcIP().Equal(net.IPv4zero) {
+	case probe:
+		// We are not interested in probe ACD (Address Conflict Detection) packets
+		// if this is a probe, the sender IP will be zeros; do nothing as the sender IP is not valid yet.
+		//
+		// +============+===+===========+===========+============+============+===================+===========+
+		// | Type       | op| dstMAC    | srcMAC    | SenderMAC  | SenderIP   | TargetMAC         |  TargetIP |
+		// +============+===+===========+===========+============+============+===================+===========+
+		// | ACD probe  | 1 | broadcast | clientMAC | clientMAC  | 0x00       | 0x00              |  targetIP |
+		// +============+===+===========+===========+============+============+===================+===========+
+		log.Printf("arp  : probe recvd: %s", frame)
 		return host, nil
-	}
 
-	c.Lock()
-	defer c.Unlock()
-
-	sender := c.table.findByMAC(frame.SrcMAC())
-	if sender == nil {
-		// If new client, then create a MACEntry in table
-		sender, _ = c.table.upsert(StateNormal, dupMAC(frame.SrcMAC()), dupIP(frame.SrcIP()))
-		notify++
-	} else {
-		// notify online transition
-		if sender.Online == false {
-			notify++
-		}
-	}
-
-	// Skip packets that we sent as virtual host (i.e. we sent these)
-	if sender.State == StateVirtualHost {
-		return host, nil
-	}
-
-	sender.LastUpdated = time.Now()
-
-	switch frame.Operation() {
-
-	case OperationRequest:
-
-		switch sender.State {
-		case StateHunt:
-			// If this is a new IP, stop hunting it.
-			// The spoof goroutine will detect the mac changed to normal and terminate.
-			if !c.table.updateIP(sender, dupIP(frame.SrcIP())) {
-				sender.State = StateNormal
-				notify++
+	case announcement:
+		// +============+===+===========+===========+============+============+===================+===========+
+		// | Type       | op| dstMAC    | srcMAC    | SenderMAC  | SenderIP   | TargetMAC         |  TargetIP |
+		// +============+===+===========+===========+============+============+===================+===========+
+		// | ACD announ | 1 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  clientIP |
+		// +============+===+===========+===========+============+============+===================+===========+
+		log.Printf("arp  : announcement recvd: %s", frame)
+		// if targetIP is a virtual host, we are claiming the ip; reply and return
+		c.RLock()
+		if target := c.virtual.findVirtualIP(frame.DstIP()); target != nil {
+			mac := target.MAC
+			c.RUnlock()
+			if Debug {
+				log.Printf("arp ip=%s is virtual - send reply smac=%v", frame.DstIP(), mac)
 			}
-
-		case StateNormal:
-			if !c.table.updateIP(sender, dupIP(frame.SrcIP())) {
-				notify++
-			}
-
-		default:
-			log.Print("arp unexpected client state in request =", sender.State)
+			c.reply(frame.SrcMAC(), mac, frame.DstIP(), EthernetBroadcast, frame.DstIP())
+			return host, nil
 		}
+		c.RUnlock()
 
-	case OperationReply:
-		// Android does not send collision detection request,
-		// we will see a reply instead. Check if the address has changed.
-		if !c.table.updateIP(sender, dupIP(frame.SrcIP())) {
-			sender.State = StateNormal // will end hunt goroutine
-			notify++
+	default:
+		// +============+===+===========+===========+============+============+===================+===========+
+		// | Type       | op| EthDstMAC | EthSRCMAC | SenderMAC  | SenderIP   | TargetMAC         |  TargetIP |
+		// +============+===+===========+===========+============+============+===================+===========+
+		// | reply      | 2 | clientMAC | targetMAC | targetMAC  | targetIP   | clientMAC         |  clientIP |
+		// | gratuitous | 2 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  clientIP |
+		// +============+===+===========+===========+============+============+===================+===========+
+		log.Printf("arp  : reply recvd: %s", frame)
+		if !bytes.Equal(frame.DstMAC(), EthernetBroadcast) && !frame.DstIP().IsUnspecified() {
+			host, _ = c.table.FindOrCreateHost(raw.CopyMAC(frame.DstMAC()), raw.CopyIP(frame.DstIP()))
 		}
+		return host, nil
+
 	}
-
-	if notify > 0 {
-		if sender.Online == false {
-			sender.Online = true
-			log.Printf("arp ip=%s is online mac=%s state=%s ips=%s", frame.SrcIP(), sender.MAC, sender.State, sender.IPs())
-		} else {
-			log.Printf("arp ip=%s is online - updated ip for mac=%s state=%s ips=%s", frame.SrcIP(), sender.MAC, sender.State, sender.IPs())
-		}
-
-		if c.notification != nil {
-			fmt.Println("DEBUG: will notify")
-			c.notification <- *sender
-		}
-	}
-
 	return host, nil
 }

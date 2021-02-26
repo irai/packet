@@ -91,6 +91,17 @@ func (h *HostTable) FindIP(ip net.IP) *Host {
 	return h.Table[string(ip)]
 }
 
+func (h *HostTable) FindMAC(mac net.HardwareAddr) (list []*Host) {
+	h.Lock()
+	defer h.Unlock()
+	for _, v := range h.Table {
+		if bytes.Equal(v.MAC, mac) {
+			list = append(list, v)
+		}
+	}
+	return list
+}
+
 func (h *HostTable) Delete(ip net.IP) {
 	h.Lock()
 	defer h.Unlock()

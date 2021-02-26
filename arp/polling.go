@@ -28,6 +28,7 @@ func (c *Handler) scanLoop(ctx context.Context, interval time.Duration) error {
 	}
 }
 
+/***
 // Probe known macs more often in case they left the network.
 func (c *Handler) probeOnlineLoop(ctx context.Context, interval time.Duration) error {
 	dur := time.Second * 30
@@ -63,63 +64,7 @@ func (c *Handler) probeOnlineLoop(ctx context.Context, interval time.Duration) e
 		}
 	}
 }
-
-func (c *Handler) purgeLoop(ctx context.Context, offline time.Duration, purge time.Duration) error {
-
-	dur := time.Minute * 1
-	if offline <= dur {
-		dur = offline / 2
-	}
-	ticker := time.NewTicker(dur).C
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-
-		case <-ticker:
-
-			now := time.Now()
-			offlineCutoff := now.Add(offline * -1) // Mark offline entries last updated before this time
-			deleteCutoff := now.Add(purge * -1)    // Delete entries that have not responded in last hour
-			macs := make([]net.HardwareAddr, 0, 16)
-
-			c.Lock()
-			for _, e := range c.table.macTable {
-
-				// Delete from ARP table if the device was not seen for the last hour
-				// This will delete Virtual hosts too
-				if e.LastUpdated.Before(deleteCutoff) {
-					macs = append(macs, e.MAC)
-					continue
-				}
-
-				// Set offline if no updates since the offline deadline
-				// Ignore virtual hosts; offline controlled by spoofing goroutine
-				if e.State != StateVirtualHost && e.Online && e.LastUpdated.Before(offlineCutoff) {
-					c.table.printTable()
-					log.Printf("arp ip=%s offline cutoff reached mac=%s state=%s ips=%s", e.IP(), e.MAC, e.State, e.IPs())
-
-					e.Online = false
-					e.State = StateNormal // Stop hunt if in progress
-
-					// Notify upstream the device changed to offline
-					if c.notification != nil {
-						c.notification <- *e
-					}
-				}
-			}
-
-			// delete after loop because this will change the ipTable map
-			if len(macs) > 0 {
-				c.table.printTable()
-				for i := range macs {
-					c.table.delete(macs[i])
-				}
-			}
-			c.Unlock()
-		}
-	}
-}
+***/
 
 // ScanNetwork sends 256 arp requests to identify IPs on the lan
 func (c *Handler) ScanNetwork(ctx context.Context, lan net.IPNet) error {

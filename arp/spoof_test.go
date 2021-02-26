@@ -17,14 +17,14 @@ func Test_Spoof_ForceIPChange(t *testing.T) {
 
 	packet.Debug = true
 
-	e2, _ := tc.arp.table.upsert(StateNormal, mac2, ip2)
+	e2, _ := tc.arp.virtual.upsert(StateNormal, mac2, ip2)
 	e2.Online = true
-	tc.arp.table.updateIP(e2, ip3)
-	tc.arp.table.updateIP(e2, ip4)
-	tc.arp.ForceIPChange(e2.MAC, true)
+	tc.arp.virtual.updateIP(e2, ip3)
+	tc.arp.virtual.updateIP(e2, ip4)
+	tc.arp.StartSpoofMAC(e2.MAC)
 
 	tc.arp.Lock()
-	if e := tc.arp.table.findByMAC(mac2); e == nil || e.State != StateHunt || !e.Online {
+	if e := tc.arp.virtual.findByMAC(mac2); e == nil || e.State != StateHunt || !e.Online {
 		t.Fatalf("Test_ForceIPChange entry2 state=%s, online=%v", e.State, e.Online)
 	}
 	tc.arp.Unlock()
@@ -64,12 +64,12 @@ func Test_Spoof_ForceIPChange(t *testing.T) {
 			tc.arp.Lock()
 			defer tc.arp.Unlock()
 
-			if len(tc.arp.table.macTable) != tt.wantLen {
+			if len(tc.arp.virtual.macTable) != tt.wantLen {
 				tc.arp.PrintTable()
-				t.Errorf("TestHandler_ForceIPChange:%s table len = %v, wantLen %v", tt.name, len(tc.arp.table.macTable), tt.wantLen)
+				t.Errorf("TestHandler_ForceIPChange:%s table len = %v, wantLen %v", tt.name, len(tc.arp.virtual.macTable), tt.wantLen)
 			}
 			if tt.wantIPs != 0 {
-				e := tc.arp.table.findByMAC(tt.arp.SrcMAC())
+				e := tc.arp.virtual.findByMAC(tt.arp.SrcMAC())
 				if e == nil || len(e.IPs()) != tt.wantIPs {
 					t.Errorf("TestHandler_ForceIPChange:%s table IP entry=%+v, wantLen %v", tt.name, e, tt.wantLen)
 				}
@@ -80,19 +80,19 @@ func Test_Spoof_ForceIPChange(t *testing.T) {
 	tc.arp.Lock()
 	defer tc.arp.Unlock()
 
-	if entry := tc.arp.table.findVirtualIP(ip2); entry == nil {
+	if entry := tc.arp.virtual.findVirtualIP(ip2); entry == nil {
 		t.Errorf("TestHandler_ForceIPChange invalid virtual ip2")
 	}
-	if entry := tc.arp.table.findVirtualIP(ip3); entry == nil {
+	if entry := tc.arp.virtual.findVirtualIP(ip3); entry == nil {
 		t.Errorf("TestHandler_ForceIPChange invalid virtual ip3")
 	}
-	if entry := tc.arp.table.findVirtualIP(ip4); entry == nil {
+	if entry := tc.arp.virtual.findVirtualIP(ip4); entry == nil {
 		t.Errorf("TestHandler_ForceIPChange invalid virtual ip4")
 	}
-	if entry := tc.arp.table.findVirtualIP(ip5); entry != nil {
+	if entry := tc.arp.virtual.findVirtualIP(ip5); entry != nil {
 		t.Errorf("TestHandler_ForceIPChange invalid virtual ip5")
 	}
-	if entry := tc.arp.table.findByIP(ip5); entry == nil || entry.State != StateNormal || len(entry.IPs()) != 4 {
+	if entry := tc.arp.virtual.findByIP(ip5); entry == nil || entry.State != StateNormal || len(entry.IPs()) != 4 {
 		tc.arp.PrintTable()
 		t.Errorf("TestHandler_ForceIPChange invalid virtual ip52 entry=%+v", entry)
 	}
