@@ -74,13 +74,34 @@ func (h *HostTable) FindOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Hos
 }
 
 func (h *HostTable) findOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host, found bool) {
-	if host, ok := h.Table[string(ip)]; ok {
+
+	// trick to avoid buffer allocation in lookup
+	// this function is called VERY often
+	// see: net.IPv4() function
+	var v4InV6Prefix = net.IP{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00} // go ipv4 prefix
+	if len(ip) == 4 {
+		v4InV6Prefix[12] = ip[0]
+		v4InV6Prefix[13] = ip[1]
+		v4InV6Prefix[14] = ip[2]
+		v4InV6Prefix[15] = ip[3]
+	} else {
+		v4InV6Prefix = ip
+	}
+
+	if host, ok := h.Table[string(v4InV6Prefix)]; ok {
 		if !bytes.Equal(host.MAC, mac) {
 			fmt.Println("packet: error mac address differ", host.MAC, mac)
 			host.MAC = CopyMAC(mac)
 		}
 		host.LastSeen = time.Now()
 		return host, true
+	}
+	// Chasing a duplicated bug
+	for _, v := range h.Table {
+		if v.IP.Equal(ip) {
+			h.PrintTable()
+			panic("duplicated IP=" + ip.String())
+		}
 	}
 	host = &Host{MAC: CopyMAC(mac), IP: CopyIP(ip), LastSeen: time.Now(), Online: false}
 	h.Table[string(host.IP)] = host
@@ -91,7 +112,7 @@ func (h *HostTable) FindIP(ip net.IP) *Host {
 	h.Lock()
 	defer h.Unlock()
 
-	return h.Table[string(ip)]
+	return h.Table[string(ip.To16())]
 }
 
 func (h *HostTable) FindMAC(mac net.HardwareAddr) (list []*Host) {

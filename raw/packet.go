@@ -79,8 +79,12 @@ var (
 	ErrNotFound      = errors.New("not found")
 )
 
-// CopyIP simply copies the IP to a new buffer with the same len - either 4 or 16
+// CopyIP simply copies the IP to a new buffer
+// Always return len 16 - using go internal 16 bytes for ipv4
 func CopyIP(srcIP net.IP) net.IP {
+	if len(srcIP) == 4 {
+		return srcIP.To16() // this will copy to a new 16 len buffer
+	}
 	ip := make(net.IP, len(srcIP))
 	copy(ip, srcIP)
 	return ip

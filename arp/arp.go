@@ -44,7 +44,7 @@ var _ raw.PacketProcessor = &Handler{}
 // Handler stores instance variables
 type Handler struct {
 	conn        net.PacketConn
-	table       *raw.HostTable
+	LANHosts    *raw.HostTable
 	virtual     *arpTable
 	config      Config
 	routerEntry MACEntry // store the router mac address
@@ -62,7 +62,7 @@ var (
 func New(conn net.PacketConn, table *raw.HostTable, config Config) (h *Handler, err error) {
 	h = &Handler{}
 	// h.table, _ = loadARPProcTable() // load linux proc table
-	h.table = table
+	h.LANHosts = table
 	h.virtual = newARPTable()
 	h.config.HostMAC = config.HostMAC
 	h.config.HostIP = config.HostIP
@@ -244,7 +244,7 @@ func (c *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
 
 		if host == nil && c.config.HostIP.Contains(frame.SrcIP()) {
 			// If new client, then create a MACEntry in table
-			host, _ = c.table.FindOrCreateHost(frame.SrcMAC(), frame.SrcIP())
+			host, _ = c.LANHosts.FindOrCreateHost(frame.SrcMAC(), frame.SrcIP())
 		}
 		return host, nil
 
@@ -289,7 +289,7 @@ func (c *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
 		// +============+===+===========+===========+============+============+===================+===========+
 		log.Printf("arp  : reply recvd: %s", frame)
 		if !bytes.Equal(frame.DstMAC(), EthernetBroadcast) && !frame.DstIP().IsUnspecified() {
-			host, _ = c.table.FindOrCreateHost(frame.DstMAC(), frame.DstIP())
+			host, _ = c.LANHosts.FindOrCreateHost(frame.DstMAC(), frame.DstIP())
 		}
 		return host, nil
 

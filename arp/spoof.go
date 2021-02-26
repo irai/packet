@@ -23,7 +23,7 @@ func (c *Handler) StartSpoofMAC(mac net.HardwareAddr) error {
 
 	entry, _ := c.virtual.upsert(StateHunt, mac, nil)
 	var ip net.IP
-	for _, v := range c.table.FindMAC(mac) {
+	for _, v := range c.LANHosts.FindMAC(mac) {
 		if ip = v.IP.To4(); ip != nil {
 			break
 		}
