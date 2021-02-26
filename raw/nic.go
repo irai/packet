@@ -11,25 +11,36 @@ import (
 	"strings"
 )
 
+// NICInfo stores the network interface info
+type NICInfo struct {
+	IFI       *net.Interface
+	HostMAC   net.HardwareAddr
+	HostIP4   net.IPNet
+	RouterIP4 net.IPNet
+	HomeLAN4  net.IPNet
+	HostLLA   net.IPNet
+	HostGUA   net.IPNet
+}
+
+func (e NICInfo) String() string {
+	return fmt.Sprintf("mac=%s ip4=%s lla=%s gua=%s router=%s", e.HostMAC, e.HostIP4, e.HostLLA, e.HostGUA, e.RouterIP4)
+}
+
 // GetNICInfo returns the interface configuration
 //
 // TODO: use routing package to identify default router
 // https://github.com/google/gopacket/tree/v1.1.19/routing
-func GetNICInfo(nic string) (ifi *net.Interface, ipNet4 net.IPNet, ipNet6LLA net.IPNet, ipNet6GUA net.IPNet, err error) {
+func GetNICInfo(nic string) (info *NICInfo, err error) {
 
-	all, err := net.Interfaces()
-	for _, v := range all {
-		log.Print("interface name ", v.Name, v.HardwareAddr.String())
+	info = &NICInfo{}
+	info.IFI, err = net.InterfaceByName(nic)
+	if err != nil {
+		return nil, err
 	}
 
-	ifi, err = net.InterfaceByName(nic)
+	addrs, err := info.IFI.Addrs()
 	if err != nil {
-		return nil, net.IPNet{}, net.IPNet{}, net.IPNet{}, err
-	}
-
-	addrs, err := ifi.Addrs()
-	if err != nil {
-		return nil, net.IPNet{}, net.IPNet{}, net.IPNet{}, err
+		return nil, err
 	}
 
 	for i := range addrs {
@@ -40,23 +51,30 @@ func GetNICInfo(nic string) (ifi *net.Interface, ipNet4 net.IPNet, ipNet6LLA net
 		}
 
 		if ipNet.IP.To4() != nil && ipNet.IP.IsGlobalUnicast() {
-			ipNet4 = net.IPNet{IP: ip.To4(), Mask: ipNet.Mask}
+			info.HostIP4 = net.IPNet{IP: ip.To4(), Mask: ipNet.Mask}
 		}
 		if ipNet.IP.To16() != nil && ipNet.IP.To4() == nil {
 			if ipNet.IP.IsLinkLocalUnicast() {
-				ipNet6LLA = net.IPNet{IP: ip, Mask: ipNet.Mask}
+				info.HostLLA = net.IPNet{IP: ip, Mask: ipNet.Mask}
 			}
 			if ipNet.IP.IsGlobalUnicast() {
-				ipNet6GUA = net.IPNet{IP: ip, Mask: ipNet.Mask}
+				info.HostGUA = net.IPNet{IP: ip, Mask: ipNet.Mask}
 			}
 		}
 	}
 
-	if ipNet4.IP == nil || ipNet4.IP.IsUnspecified() {
-		return nil, net.IPNet{}, net.IPNet{}, net.IPNet{}, fmt.Errorf("ipv4 not found on interface")
+	if info.HostIP4.IP == nil || info.HostIP4.IP.IsUnspecified() {
+		return nil, fmt.Errorf("ipv4 not found on interface")
 	}
 
-	return ifi, ipNet4, ipNet6LLA, ipNet6GUA, nil
+	var router net.IP
+	if router, err = GetLinuxDefaultGateway(); err != nil {
+		fmt.Println("error getting router ", err)
+	}
+	info.RouterIP4 = net.IPNet{IP: router.To4(), Mask: info.HostIP4.Mask}
+	info.HomeLAN4 = net.IPNet{IP: info.HostIP4.IP.Mask(info.HostIP4.Mask).To4(), Mask: info.HostIP4.Mask}
+	info.HostMAC = info.IFI.HardwareAddr
+	return info, nil
 }
 
 const (

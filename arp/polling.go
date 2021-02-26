@@ -21,7 +21,7 @@ func (c *Handler) scanLoop(ctx context.Context, interval time.Duration) error {
 			return nil
 
 		case <-ticker:
-			if err := c.ScanNetwork(ctx, c.config.HomeLAN); err != nil {
+			if err := c.ScanNetwork(ctx, c.NICInfo.HomeLAN4); err != nil {
 				return err
 			}
 		}
@@ -53,7 +53,7 @@ func (c *Handler) probeOnlineLoop(ctx context.Context, interval time.Duration) e
 						if Debug {
 							log.Printf("arp ip=%s online? mac=%s", v, entry.MAC)
 						}
-						if err := c.request(c.config.HostMAC, c.config.HostIP, entry.MAC, v); err != nil {
+						if err := c.request(c.NICInfo.HostMAC, c.config.HostIP, entry.MAC, v); err != nil {
 							log.Printf("Error ARP request mac=%s ip=%s: %s ", entry.MAC, v, err)
 						}
 					}
@@ -83,11 +83,11 @@ func (c *Handler) ScanNetwork(ctx context.Context, lan net.IPNet) error {
 		ip[3] = byte(host)
 
 		// Don't scan router and host
-		if bytes.Equal(ip, c.config.RouterIP) || bytes.Equal(ip, c.config.HostIP.IP) {
+		if bytes.Equal(ip, c.NICInfo.RouterIP4.IP) || bytes.Equal(ip, c.NICInfo.HostIP4.IP) {
 			continue
 		}
 
-		err := c.request(c.config.HostMAC, c.config.HostIP.IP, EthernetBroadcast, ip)
+		err := c.request(c.NICInfo.HostMAC, c.NICInfo.HostIP4.IP, EthernetBroadcast, ip)
 		if ctx.Err() == context.Canceled {
 			return nil
 		}

@@ -75,7 +75,7 @@ func (c *Handler) IPChanged(mac net.HardwareAddr, clientIP net.IP) {
 	if Debug {
 		log.Printf("arp ip%s validating for mac=%s", clientIP, mac)
 	}
-	if err := c.Request(c.config.HostMAC, c.config.HostIP, EthernetBroadcast, clientIP); err != nil {
+	if err := c.Request(c.NICInfo.HostMAC, c.config.HostIP, EthernetBroadcast, clientIP); err != nil {
 		log.Printf("arp request failed mac=%s: %s", mac, err)
 	}
 
@@ -93,7 +93,7 @@ func (c *Handler) IPChanged(mac net.HardwareAddr, clientIP net.IP) {
 			c.RUnlock()
 
 			// Silent request
-			if err := c.request(c.config.HostMAC, c.config.HostIP, EthernetBroadcast, clientIP); err != nil {
+			if err := c.request(c.NICInfo.HostMAC, c.config.HostIP, EthernetBroadcast, clientIP); err != nil {
 				log.Printf("arp request 2 failed mac=%s ip=%s: %s", mac, clientIP, err)
 			}
 		}
@@ -167,7 +167,7 @@ func (c *Handler) forceSpoof(mac net.HardwareAddr, ip net.IP) error {
 
 	// Announce to target that we own the router IP
 	// This will update the target arp table with our mac
-	err := c.announce(mac, c.config.HostMAC, c.config.RouterIP, EthernetBroadcast, 2)
+	err := c.announce(mac, c.NICInfo.HostMAC, c.NICInfo.RouterIP4.IP, EthernetBroadcast, 2)
 	if err != nil {
 		log.Printf("arp error send announcement packet mac=%s ip=%s: %s", mac, ip, err)
 		return err
@@ -175,7 +175,7 @@ func (c *Handler) forceSpoof(mac net.HardwareAddr, ip net.IP) error {
 
 	// Send 3 unsolicited ARP reply; clients may discard this
 	for i := 0; i < 2; i++ {
-		err = c.reply(mac, c.config.HostMAC, c.config.RouterIP, mac, ip)
+		err = c.reply(mac, c.NICInfo.HostMAC, c.NICInfo.RouterIP4.IP, mac, ip)
 		if err != nil {
 			log.Printf("arp error spoof client mac=%s ip=%s: %s", mac, ip, err)
 			return err

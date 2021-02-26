@@ -17,19 +17,15 @@ import (
 //
 // Set FullNetworkScanInterval = 0 to avoid network scan
 type Config struct {
-	HostMAC                 net.HardwareAddr `yaml:"-"`
-	HostIP                  net.IPNet        `yaml:"-"`
-	RouterIP                net.IP           `yaml:"-"`
-	HomeLAN                 net.IPNet        `yaml:"-"`
-	FullNetworkScanInterval time.Duration    `yaml:"-"` // Set it to zero if no scan required
-	ProbeInterval           time.Duration    `yaml:"-"` // how often to probe if IP is online
-	OfflineDeadline         time.Duration    `yaml:"-"` // mark offline if more than OfflineInte
-	PurgeDeadline           time.Duration    `yaml:"-"`
+	FullNetworkScanInterval time.Duration `yaml:"-"` // Set it to zero if no scan required
+	ProbeInterval           time.Duration `yaml:"-"` // how often to probe if IP is online
+	OfflineDeadline         time.Duration `yaml:"-"` // mark offline if more than OfflineInte
+	PurgeDeadline           time.Duration `yaml:"-"`
 }
 
 func (c Config) String() string {
-	return fmt.Sprintf("hostmac=%s hostIP=%s routerIP=%s homeLAN=%s scan=%v probe=%s offline=%v purge=%v",
-		c.HostMAC, c.HostIP, c.RouterIP, c.HomeLAN, c.FullNetworkScanInterval, c.ProbeInterval, c.OfflineDeadline, c.PurgeDeadline)
+	return fmt.Sprintf("scan=%v probe=%s offline=%v purge=%v",
+		c.FullNetworkScanInterval, c.ProbeInterval, c.OfflineDeadline, c.PurgeDeadline)
 }
 
 type Data struct {
@@ -46,6 +42,7 @@ type Handler struct {
 	conn        net.PacketConn
 	LANHosts    *raw.HostTable
 	virtual     *arpTable
+	NICInfo     *raw.NICInfo
 	config      Config
 	routerEntry MACEntry // store the router mac address
 	sync.RWMutex
@@ -59,25 +56,22 @@ var (
 )
 
 // New creates an ARP handler for a given connection
-func New(conn net.PacketConn, table *raw.HostTable, config Config) (h *Handler, err error) {
+func New(info *raw.NICInfo, conn net.PacketConn, table *raw.HostTable, config Config) (h *Handler, err error) {
 	h = &Handler{}
 	// h.table, _ = loadARPProcTable() // load linux proc table
 	h.LANHosts = table
 	h.virtual = newARPTable()
-	h.config.HostMAC = config.HostMAC
-	h.config.HostIP = config.HostIP
-	if h.config.HostIP.IP = config.HostIP.IP.To4(); h.config.HostIP.IP == nil {
+	h.NICInfo = info
+	if h.NICInfo.HostIP4.IP = info.HostIP4.IP.To4(); h.NICInfo.HostIP4.IP == nil {
 		return nil, raw.ErrInvalidIP4
 	}
-	h.config.RouterIP = config.RouterIP.To4()
-	h.config.HomeLAN = config.HomeLAN
 	h.config.FullNetworkScanInterval = config.FullNetworkScanInterval
 	h.config.ProbeInterval = config.ProbeInterval
 	h.config.OfflineDeadline = config.OfflineDeadline
 	h.config.PurgeDeadline = config.PurgeDeadline
 	h.conn = conn
 
-	if h.config.HomeLAN.IP == nil && h.config.HomeLAN.IP.IsUnspecified() {
+	if h.NICInfo.HomeLAN4.IP == nil && h.NICInfo.HomeLAN4.IP.IsUnspecified() {
 		return nil, raw.ErrInvalidIP4
 	}
 
@@ -136,11 +130,11 @@ func (c *Handler) Start(ctx context.Context) error {
 	}
 
 	// Do a full scan on start
-	if c.config.FullNetworkScanInterval != 0 && c.config.HomeLAN.IP.To4() != nil {
+	if c.config.FullNetworkScanInterval != 0 && c.NICInfo.HomeLAN4.IP.To4() != nil {
 		go func() {
 			c.wg.Add(1)
 			time.Sleep(time.Millisecond * 100) // Time to start read loop below
-			if err := c.ScanNetwork(ctx, c.config.HomeLAN); err != nil {
+			if err := c.ScanNetwork(ctx, c.NICInfo.HomeLAN4); err != nil {
 				log.Print("arp ListenAndServer scanNetwork terminated unexpectedly", err)
 				c.conn.Close() // force error in main loop
 			}
@@ -213,16 +207,16 @@ func (c *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
 	}
 
 	// Ignore router packets
-	if bytes.Equal(frame.SrcIP(), c.config.RouterIP) {
+	if bytes.Equal(frame.SrcIP(), c.NICInfo.RouterIP4.IP) {
 		if c.routerEntry.MAC == nil { // store router MAC
 			c.routerEntry.MAC = raw.CopyMAC(frame.SrcMAC())
-			c.routerEntry.IPArray[0] = IPEntry{IP: c.config.RouterIP}
+			c.routerEntry.IPArray[0] = IPEntry{IP: c.NICInfo.RouterIP4.IP}
 		}
 		return host, nil
 	}
 
 	// Ignore host packets
-	if bytes.Equal(frame.SrcMAC(), c.config.HostMAC) {
+	if bytes.Equal(frame.SrcMAC(), c.NICInfo.HostMAC) {
 		return host, nil
 	}
 
@@ -244,7 +238,7 @@ func (c *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
 		}
 		c.RUnlock()
 
-		if host == nil && c.config.HostIP.Contains(frame.SrcIP()) {
+		if host == nil && c.NICInfo.HostIP4.Contains(frame.SrcIP()) {
 			// If new client, then create a MACEntry in table
 			host, _ = c.LANHosts.FindOrCreateHost(frame.SrcMAC(), frame.SrcIP())
 		}

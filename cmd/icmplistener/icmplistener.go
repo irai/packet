@@ -31,12 +31,6 @@ func main() {
 	fmt.Printf("icmpListener: Listen and send icmp messages\n")
 	fmt.Printf("Using nic %v \n", *nic)
 
-	defaultGW, err := raw.GetLinuxDefaultGateway()
-	if err != nil {
-		log.Println("failed to get default gw:", err)
-		defaultGW = net.IPv4(192, 168, 1, 1)
-	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// setup packet listener
@@ -55,32 +49,23 @@ func main() {
 		return
 	}
 	defer pkt.Close()
+	fmt.Println("nic info  :", pkt.NICInfo)
 
-	fmt.Println("mac  :", pkt.HostMAC)
-	fmt.Println("ip4  :", pkt.HostIP4)
-	fmt.Println("gw4  :", defaultGW)
-	fmt.Println("lla  :", pkt.HostLLA)
-	fmt.Println("gua  :", pkt.HostGUA)
 	pkt.AddCallback(func(n packet.Notification) error {
 		fmt.Println("Got notification : ", n)
 		return nil
 	})
 
 	// setup ARP handler
-	// setup ARP handler
-	homeLAN := net.IPNet{IP: pkt.HostIP4.IP.Mask(pkt.HostIP4.Mask), Mask: pkt.HostIP4.Mask}
 	arpConfig := arp.Config{
-		HostMAC:  pkt.HostMAC,
-		HostIP:   pkt.HostIP4,
-		RouterIP: defaultGW, HomeLAN: homeLAN,
 		ProbeInterval:           time.Minute * 1,
 		FullNetworkScanInterval: time.Minute * 20,
 		PurgeDeadline:           time.Minute * 10}
-	arpHandler, err := arp.New(pkt.Conn(), pkt.LANHosts, arpConfig)
+	arpHandler, err := arp.New(pkt.NICInfo, pkt.Conn(), pkt.LANHosts, arpConfig)
 	pkt.ARP = arpHandler
 
 	// ICMPv4
-	h4, err := icmp4.New(pkt.Interface(), pkt.Conn(), pkt.LANHosts, pkt.HostIP4.IP)
+	h4, err := icmp4.New(pkt.NICInfo, pkt.Conn(), pkt.LANHosts)
 	if err != nil {
 		log.Fatalf("Failed to create icmp nic=%s handler: ", *nic, err)
 	}
@@ -88,8 +73,7 @@ func main() {
 	pkt.ICMP4Hook("icmp4", h4)
 
 	// ICMPv6
-	icmp6Config := icmp6.Config{GlobalUnicastAddress: pkt.HostGUA, LocalLinkAddress: pkt.HostLLA}
-	h6, err := icmp6.New(pkt.Interface(), pkt.Conn(), pkt.LANHosts, icmp6Config)
+	h6, err := icmp6.New(pkt.NICInfo, pkt.Conn(), pkt.LANHosts)
 	if err != nil {
 		log.Fatalf("Failed to create icmp6 nic=%s handler: ", *nic, err)
 	}
@@ -202,7 +186,7 @@ func cmd(pt *packet.Handler, a4 *arp.Handler, h *icmp4.Handler, h6 *icmp6.Handle
 			}
 			a4.StopSpoofMAC(mac)
 		case "scan":
-			if err := a4.ScanNetwork(context.Background(), pt.HostIP4); err != nil {
+			if err := a4.ScanNetwork(context.Background(), pt.NICInfo.HostIP4); err != nil {
 				fmt.Println("failed scan: ", err)
 			}
 		}

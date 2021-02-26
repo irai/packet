@@ -23,9 +23,8 @@ var _ raw.PacketProcessor = &Handler{}
 
 // Handler maintains the underlying socket connection
 type Handler struct {
-	ifi    *net.Interface
-	conn   net.PacketConn
-	HostIP net.IP
+	NICInfo *raw.NICInfo
+	conn    net.PacketConn
 }
 
 func (h *Handler) sendPacket(srcAddr raw.Addr, dstAddr raw.Addr, p raw.ICMP4) error {
@@ -67,10 +66,9 @@ func (h *Handler) sendPacket(srcAddr raw.Addr, dstAddr raw.Addr, p raw.ICMP4) er
 }
 
 // New returns an ICMPv4 handler
-func New(ifi *net.Interface, conn net.PacketConn, hosts *raw.HostTable, hostIP net.IP) (h *Handler, err error) {
+func New(info *raw.NICInfo, conn net.PacketConn, hosts *raw.HostTable) (h *Handler, err error) {
 	h = &Handler{}
-	h.ifi = ifi
-	h.HostIP = hostIP
+	h.NICInfo = info
 
 	return h, nil
 }
@@ -156,14 +154,14 @@ func (h *Handler) ListenAndServe(ctxt context.Context, pt *packet.Handler) (err 
 		log.Fatal("bpf assemble error", err)
 	}
 
-	h.conn, err = raw.NewServerConn(h.ifi, syscall.ETH_P_IP, raw.Config{Filter: bpf})
+	h.conn, err = raw.NewServerConn(h.NICInfo.IFI, syscall.ETH_P_IP, raw.Config{Filter: bpf})
 	if err != nil {
 		h.conn = nil // on windows, not impleted returns a partially completed conn
 		return fmt.Errorf("raw.ListenPacket error: %w", err)
 	}
 	defer h.conn.Close()
 
-	buf := make([]byte, h.ifi.MTU)
+	buf := make([]byte, h.NICInfo.IFI.MTU)
 	for {
 		if err = h.conn.SetReadDeadline(time.Now().Add(time.Second * 2)); err != nil {
 			if ctxt.Err() != context.Canceled {

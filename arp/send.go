@@ -124,12 +124,12 @@ func (c *Handler) reply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, s
 // An ARP Probe conveys both a question ("Is anyone using this address?") and an
 // implied statement ("This is the address I hope to use.").
 func (c *Handler) Probe(ip net.IP) error {
-	return c.Request(c.config.HostMAC, net.IPv4zero, EthernetBroadcast, ip)
+	return c.Request(c.NICInfo.HostMAC, net.IPv4zero, EthernetBroadcast, ip)
 }
 
 // probeUnicast is used to validate the client is still online; same as ARP probe but unicast to target
 func (c *Handler) probeUnicast(mac net.HardwareAddr, ip net.IP) error {
-	return c.Request(c.config.HostMAC, net.IPv4zero, mac, ip)
+	return c.Request(c.NICInfo.HostMAC, net.IPv4zero, mac, ip)
 }
 
 // announce sends arp announcement packet
@@ -174,7 +174,7 @@ func (c *Handler) WhoIs(ip net.IP) (raw.Addr, error) {
 		if host := c.LANHosts.FindIP(ip); host != nil {
 			return raw.Addr{IP: host.IP, MAC: host.MAC}, nil
 		}
-		if err := c.Request(c.config.HostMAC, c.config.HostIP.IP, EthernetBroadcast, ip); err != nil {
+		if err := c.Request(c.NICInfo.HostMAC, c.NICInfo.HostIP4.IP, EthernetBroadcast, ip); err != nil {
 			return raw.Addr{}, fmt.Errorf("arp WhoIs error: %w", err)
 		}
 		time.Sleep(time.Millisecond * 50)

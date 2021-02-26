@@ -97,16 +97,13 @@ var _ raw.PacketProcessor = &Handler{}
 // Handler implements ICMPv6 Neighbor Discovery Protocol
 // see: https://mdlayher.com/blog/network-protocol-breakdown-ndp-and-go/
 type Handler struct {
+	NICInfo      *raw.NICInfo
 	conn         net.PacketConn
-	ifi          *net.Interface
 	mutex        sync.Mutex
 	notification chan<- Event
 	Router       Router
 	LANRouters   map[string]*Router
 	LANHosts     *raw.HostTable
-	ipNetGUA     net.IPNet // global unicast address
-	ipNetLLA     net.IPNet // local link address
-	ipNetULA     net.IPNet // unique local address (site wide)
 }
 
 // Config define server configuration values
@@ -117,13 +114,10 @@ type Config struct {
 }
 
 // New creates a new instance of ICMP6 on a given interface
-func New(ifi *net.Interface, conn net.PacketConn, table *raw.HostTable, config Config) (*Handler, error) {
+func New(info *raw.NICInfo, conn net.PacketConn, table *raw.HostTable) (*Handler, error) {
 
 	h := &Handler{LANRouters: make(map[string]*Router), LANHosts: table}
-	h.ipNetGUA = config.GlobalUnicastAddress
-	h.ipNetLLA = config.LocalLinkAddress
-	h.ipNetULA = config.UniqueLocalAddress
-	h.ifi = ifi
+	h.NICInfo = info
 	h.conn = conn
 
 	return h, nil
@@ -140,10 +134,6 @@ func (h *Handler) Close() error {
 		return h.conn.Close()
 	}
 	return nil
-}
-
-func (h *Handler) LLA() net.IPNet {
-	return h.ipNetLLA
 }
 
 // AddNotificationChannel set the notification channel for ICMP6 messages

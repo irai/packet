@@ -89,16 +89,19 @@ func setupTestHandler(t *testing.T) *testContext {
 		panic(err)
 	}
 
+	nicInfo := raw.NICInfo{
+		HostMAC:   hostMAC,
+		HostIP4:   net.IPNet{IP: hostIP, Mask: net.IPv4Mask(255, 255, 255, 0)},
+		RouterIP4: net.IPNet{IP: routerIP, Mask: net.IPv4Mask(255, 255, 255, 0)},
+		HomeLAN4:  homeLAN,
+	}
 	arpConfig := Config{
-		HostMAC:  hostMAC,
-		HostIP:   net.IPNet{IP: hostIP, Mask: net.IPv4Mask(255, 255, 255, 0)},
-		RouterIP: routerIP, HomeLAN: homeLAN,
 		FullNetworkScanInterval: time.Second * 60,
 		ProbeInterval:           time.Second * 1,
 		OfflineDeadline:         time.Second * 2,
 		PurgeDeadline:           time.Second * 4,
 	}
-	tc.arp, err = New(tc.inConn, tc.packet.LANHosts, arpConfig)
+	tc.arp, err = New(&nicInfo, tc.inConn, tc.packet.LANHosts, arpConfig)
 	tc.arp.virtual = newARPTable() // we want an empty table
 	tc.arp.LANHosts = raw.New()
 	tc.packet.ARP = tc.arp

@@ -49,7 +49,7 @@ func (h *Handler) SendEchoRequest(dstAddr raw.Addr, id uint16, seq uint16) error
 		return err
 	}
 
-	return h.sendPacket(raw.Addr{MAC: h.ifi.HardwareAddr, IP: h.LLA().IP}, dstAddr, p)
+	return h.sendPacket(raw.Addr{MAC: h.NICInfo.HostMAC, IP: h.NICInfo.HostLLA.IP}, dstAddr, p)
 }
 
 // Ping send a ping request and wait for a reply

@@ -47,11 +47,11 @@ func (h *Handler) StartRADVS(managed bool, other bool, prefixes []PrefixInformat
 
 func (h *Handler) startRADVS(managed bool, other bool, prefixes []PrefixInformation, rdnss *RecursiveDNSServer) (radvs *RADVS, err error) {
 	radvs = &RADVS{stopChannel: make(chan bool, 1)}
-	radvs.Router, _ = h.findOrCreateRouter(h.ifi.HardwareAddr, h.LLA().IP)
+	radvs.Router, _ = h.findOrCreateRouter(h.NICInfo.HostMAC, h.NICInfo.HostLLA.IP)
 	radvs.Router.enableRADVS = true
 	radvs.Router.ManagedFlag = managed
 	radvs.Router.OtherCondigFlag = other
-	radvs.Router.MTU = uint32(h.ifi.MTU)
+	radvs.Router.MTU = uint32(h.NICInfo.IFI.MTU)
 	radvs.Router.ReacheableTime = int((time.Minute * 10).Milliseconds()) // Must be no greater than 3,600,000 milliseconds (1hour)
 	radvs.Router.RetransTimer = int((time.Minute * 2).Milliseconds())
 	radvs.Router.CurHopLimit = 1

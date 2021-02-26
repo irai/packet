@@ -33,12 +33,8 @@ type Config struct {
 // Handler implements ICMPv6 Neighbor Discovery Protocol
 // see: https://mdlayher.com/blog/network-protocol-breakdown-ndp-and-go/
 type Handler struct {
+	NICInfo      *raw.NICInfo
 	conn         net.PacketConn
-	ifi          *net.Interface
-	HostMAC      net.HardwareAddr
-	HostIP4      net.IPNet
-	HostLLA      net.IPNet
-	HostGUA      net.IPNet
 	LANHosts     *raw.HostTable
 	Config       Config
 	handlerIP4   []Hook
@@ -83,11 +79,10 @@ func (config Config) New(nic string) (*Handler, error) {
 
 	h := &Handler{Config: config, LANHosts: raw.New()}
 
-	h.ifi, h.HostIP4, h.HostLLA, h.HostGUA, err = raw.GetNICInfo(nic)
+	h.NICInfo, err = raw.GetNICInfo(nic)
 	if err != nil {
 		return nil, fmt.Errorf("interface not found nic=%s: %w", nic, err)
 	}
-	h.HostMAC = h.ifi.HardwareAddr
 
 	// Skip if conn is overriden
 	h.conn = config.Conn
@@ -110,10 +105,6 @@ func (h *Handler) Close() error {
 
 func (h *Handler) Conn() net.PacketConn {
 	return h.conn
-}
-
-func (h *Handler) Interface() *net.Interface {
-	return h.ifi
 }
 
 func (h *Handler) setupConn() (conn net.PacketConn, err error) {
@@ -142,7 +133,7 @@ func (h *Handler) setupConn() (conn net.PacketConn, err error) {
 	}
 
 	// see: https://www.man7.org/linux/man-pages/man7/packet.7.html
-	conn, err = raw.NewServerConn(h.ifi, syscall.ETH_P_ALL, raw.Config{Filter: bpf})
+	conn, err = raw.NewServerConn(h.NICInfo.IFI, syscall.ETH_P_ALL, raw.Config{Filter: bpf})
 	if err != nil {
 		return nil, fmt.Errorf("raw.ListenPacket error: %w", err)
 	}
@@ -215,7 +206,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		// Ignore packets sent via our interface
 		// TODO: should this be in the bpf rules?
 		/***
-		if bytes.Equal(ether.Src(), h.ifi.HardwareAddr) {
+		if bytes.Equal(ether.Src(), h.NICInfo.HostMAC) {
 			continue
 		}
 		***/
@@ -243,7 +234,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				fmt.Println("ether: ", ether)
 				fmt.Println("ip4  :", frame)
 			}
-			if !h.HostIP4.Contains(frame.Src()) { // must be on the same net
+			if !h.NICInfo.HostIP4.Contains(frame.Src()) { // must be on the same net
 				// if !frame.Src().IsLinkLocalUnicast() && !frame.Src().IsGlobalUnicast() {
 				// fmt.Println("ignore IP4 ", frame)
 				continue

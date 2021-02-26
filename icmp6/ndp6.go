@@ -41,10 +41,10 @@ func (h *Handler) SendRouterAdvertisement(router *Router, dstAddr raw.Addr) erro
 			// TODO: single source of truth for search domain name
 			DomainNames: []string{"lan"},
 		},
-		NewMTU(uint32(h.ifi.MTU)),
+		NewMTU(uint32(h.NICInfo.IFI.MTU)),
 		&LinkLayerAddress{
 			Direction: Source,
-			Addr:      h.ifi.HardwareAddr,
+			Addr:      h.NICInfo.HostMAC,
 		},
 	)
 
@@ -59,7 +59,7 @@ func (h *Handler) SendRouterAdvertisement(router *Router, dstAddr raw.Addr) erro
 		return err
 	}
 
-	return h.sendPacket(raw.Addr{MAC: h.ifi.HardwareAddr, IP: h.LLA().IP}, dstAddr, mb)
+	return h.sendPacket(raw.Addr{MAC: h.NICInfo.HostMAC, IP: h.NICInfo.HostLLA.IP}, dstAddr, mb)
 }
 
 func (h *Handler) SendRouterSolicitation() error {
@@ -67,7 +67,7 @@ func (h *Handler) SendRouterSolicitation() error {
 		Options: []Option{
 			&LinkLayerAddress{
 				Direction: Source,
-				Addr:      h.ifi.HardwareAddr,
+				Addr:      h.NICInfo.HostMAC,
 			},
 		},
 	}
@@ -76,7 +76,7 @@ func (h *Handler) SendRouterSolicitation() error {
 		return err
 	}
 
-	return h.sendPacket(raw.Addr{MAC: h.ifi.HardwareAddr, IP: h.LLA().IP}, AllNodesAddr, mb)
+	return h.sendPacket(raw.Addr{MAC: h.NICInfo.HostMAC, IP: h.NICInfo.HostLLA.IP}, AllNodesAddr, mb)
 }
 
 func (h *Handler) SendNeighborAdvertisement(ip net.IP, dstAddr raw.Addr) error {
@@ -88,7 +88,7 @@ func (h *Handler) SendNeighborAdvertisement(ip net.IP, dstAddr raw.Addr) error {
 		Options: []Option{
 			&LinkLayerAddress{
 				Direction: Target,
-				Addr:      h.ifi.HardwareAddr,
+				Addr:      h.NICInfo.HostMAC,
 			},
 		},
 	}
@@ -97,7 +97,7 @@ func (h *Handler) SendNeighborAdvertisement(ip net.IP, dstAddr raw.Addr) error {
 		return err
 	}
 
-	return h.sendPacket(raw.Addr{MAC: h.ifi.HardwareAddr, IP: h.LLA().IP}, dstAddr, mb)
+	return h.sendPacket(raw.Addr{MAC: h.NICInfo.HostMAC, IP: h.NICInfo.HostLLA.IP}, dstAddr, mb)
 }
 
 // SendNeighbourSolicitation send an ICMP6 NS packet.
@@ -107,7 +107,7 @@ func (h *Handler) SendNeighbourSolicitation(ip net.IP) error {
 		Options: []Option{
 			&LinkLayerAddress{
 				Direction: Source,
-				Addr:      h.ifi.HardwareAddr,
+				Addr:      h.NICInfo.HostMAC,
 			},
 		},
 	}
@@ -116,5 +116,5 @@ func (h *Handler) SendNeighbourSolicitation(ip net.IP) error {
 		return err
 	}
 
-	return h.sendPacket(raw.Addr{MAC: h.ifi.HardwareAddr, IP: h.LLA().IP}, AllNodesAddr, mb)
+	return h.sendPacket(raw.Addr{MAC: h.NICInfo.HostMAC, IP: h.NICInfo.HostLLA.IP}, AllNodesAddr, mb)
 }
