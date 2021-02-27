@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net"
 	"time"
+
+	"github.com/irai/packet/raw"
 )
 
 // Cloudflare DNS IP6: 2606:4700:4700::1111 or 2606:4700:4700::1001
@@ -70,11 +72,11 @@ func (r *RADVS) Stop() {
 }
 
 func (r *RADVS) SendRA() error {
-	return r.h.SendRouterAdvertisement(r.Router, AllNodesAddr)
+	return r.h.SendRouterAdvertisement(r.Router, raw.IP6AllNodesAddr)
 }
 
 func (r *RADVS) sendAdvertistementLoop() {
-	r.h.SendRouterAdvertisement(r.Router, AllNodesAddr)
+	r.h.SendRouterAdvertisement(r.Router, raw.IP6AllNodesAddr)
 	ticker := time.NewTicker(time.Duration(int64(time.Millisecond) * int64(r.Router.RetransTimer))).C
 	for {
 		select {
@@ -82,7 +84,7 @@ func (r *RADVS) sendAdvertistementLoop() {
 			return
 
 		case <-ticker:
-			if err := r.h.SendRouterAdvertisement(r.Router, AllNodesAddr); err != nil {
+			if err := r.h.SendRouterAdvertisement(r.Router, raw.IP6AllNodesAddr); err != nil {
 				fmt.Printf("icmp6: error in send ra: %s", err)
 			}
 		}

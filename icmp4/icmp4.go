@@ -82,7 +82,7 @@ func (h *Handler) Close() error {
 }
 
 // Start implements PacketProcessor interface
-func (h *Handler) Start(ctx context.Context) error {
+func (h *Handler) Start() error {
 	return nil
 }
 

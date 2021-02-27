@@ -41,6 +41,9 @@ func init() {
 // Do not wait for response
 func (h *Handler) SendEchoRequest(dstAddr raw.Addr, id uint16, seq uint16) error {
 
+	if id == 0 {
+		id = uint16(time.Now().Nanosecond())
+	}
 	icmpMessage := icmp.Message{
 		Type: ipv4.ICMPTypeEcho,
 		Code: 0,

@@ -1,7 +1,6 @@
 package raw
 
 import (
-	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -32,7 +31,7 @@ func GenerateULA(mac net.HardwareAddr, subnet uint16) (*net.IPNet, error) {
 
 // PacketProcessor defines the interface for packet processing modules
 type PacketProcessor interface {
-	Start(context.Context) error
+	Start() error
 	Stop() error
 	ProcessPacket(*Host, []byte) (*Host, error)
 	StartHunt(net.HardwareAddr) error
@@ -263,6 +262,25 @@ func ICMPEchoBinary(b []byte, id uint16, seq uint16, data []byte) []byte {
 	copy(b[4:], data)
 	return b
 }
+
+// Global variables
+var (
+	// An IP host group address is mapped to an Ethernet multicast address
+	// by placing the low-order 23-bits of the IP address into the low-order
+	// 23 bits of the Ethernet multicast address 01-00-5E-00-00-00 (hex).
+	Eth4AllNodesMulticast = net.HardwareAddr{0x01, 0x00, 0x5e, 0, 0, 0x01}
+	IP4AllNodesMulticast  = net.IPv4(224, 0, 0, 1)
+
+	Eth4RoutersMulticast   = net.HardwareAddr{0x01, 0x00, 0x5e, 0, 0, 0x02}
+	IP4AllRoutersMulticast = net.IPv4(224, 0, 0, 2)
+	IP4AllNodesAddr        = Addr{MAC: Eth4AllNodesMulticast, IP: IP4AllNodesMulticast}
+
+	Eth6AllNodesMulticast = net.HardwareAddr{0x33, 0x33, 0, 0, 0, 0x01}
+	IP6AllNodesMulticast  = net.IP{0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}
+	Eth6RoutersMulticast  = net.HardwareAddr{0x33, 0x33, 0, 0, 0, 0x02}
+
+	IP6AllNodesAddr = Addr{MAC: Eth6AllNodesMulticast, IP: IP6AllNodesMulticast}
+)
 
 // IP6 structure: see https://github.com/golang/net/blob/master/ipv6/header.go
 type IP6 []byte

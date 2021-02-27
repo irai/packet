@@ -2,7 +2,6 @@ package icmp6
 
 import (
 	"bytes"
-	"context"
 	"encoding/binary"
 	"fmt"
 	"net"
@@ -124,7 +123,10 @@ func New(info *raw.NICInfo, conn net.PacketConn, table *raw.HostTable) (*Handler
 }
 
 // Start prepares to accept packets
-func (h *Handler) Start(ctx context.Context) error {
+func (h *Handler) Start() error {
+	if err := h.SendEchoRequest(raw.IP6AllNodesAddr, 0, 0); err != nil {
+		return err
+	}
 	return nil
 }
 

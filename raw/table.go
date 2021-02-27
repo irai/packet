@@ -38,6 +38,10 @@ func (e *Host) SetOnline() {
 	e.Online = true
 }
 
+func (e *Host) String() string {
+	return fmt.Sprintf("mac=%s ip=%v online=%v lastSeen=%s", e.MAC, e.IP, e.Online, time.Since(e.LastSeen))
+}
+
 // New returns a HostTable handler
 func New() *HostTable {
 	return &HostTable{Table: make(map[string]*Host, 64)}
@@ -56,9 +60,9 @@ func (h *HostTable) PrintTable() {
 	defer h.Unlock()
 
 	if len(h.Table) > 0 {
-		fmt.Printf("icmp6 hosts table len=%v\n", len(h.Table))
+		fmt.Printf("hosts table len=%v\n", len(h.Table))
 		for _, v := range h.Table {
-			fmt.Printf("mac=%s ip=%v online=%v \n", v.MAC, v.IP, v.Online)
+			fmt.Println(v)
 		}
 	}
 }

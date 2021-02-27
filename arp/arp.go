@@ -122,13 +122,9 @@ func (h *Handler) End() {
 }
 
 // Start start background processes
-func (h *Handler) Start(ctx context.Context) error {
+func (h *Handler) Start() error {
 
-	// Set ZERO timeout to block forever
-	// if err := c.conn.SetReadDeadline(time.Time{}); err != nil {
-	// return fmt.Errorf("arp error in socket: %w", err)
-	// }
-
+	ctx := context.Background()
 	if h.config.FullNetworkScanInterval != 0 {
 		// continuosly scan for network devices
 		go func() {
@@ -148,7 +144,6 @@ func (h *Handler) Start(ctx context.Context) error {
 	if h.config.FullNetworkScanInterval != 0 && h.NICInfo.HomeLAN4.IP.To4() != nil {
 		go func() {
 			h.wg.Add(1)
-			time.Sleep(time.Millisecond * 100) // Time to start read loop below
 			if err := h.ScanNetwork(ctx, h.NICInfo.HomeLAN4); err != nil {
 				log.Print("arp ListenAndServer scanNetwork terminated unexpectedly", err)
 				h.conn.Close() // force error in main loop

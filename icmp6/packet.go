@@ -3,19 +3,8 @@ package icmp6
 import (
 	"encoding/binary"
 	"fmt"
-	"net"
 
 	"github.com/irai/packet/raw"
-)
-
-// Global variables
-var (
-	IP6AllNodesMulticast = net.IP{0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}
-
-	EthAllNodesMulticast = net.HardwareAddr{0x33, 0x33, 0, 0, 0, 0x01}
-	EthRoutersMulticast  = net.HardwareAddr{0x33, 0x33, 0, 0, 0, 0x02}
-
-	AllNodesAddr = raw.Addr{MAC: EthAllNodesMulticast, IP: IP6AllNodesMulticast}
 )
 
 type ICMP6 []byte

@@ -50,7 +50,7 @@ type ppNOOP struct{}
 
 var _ raw.PacketProcessor = ppNOOP{}
 
-func (p ppNOOP) Start(context.Context) error                        { return nil }
+func (p ppNOOP) Start() error                                       { return nil }
 func (p ppNOOP) Stop() error                                        { return nil }
 func (p ppNOOP) ProcessPacket(*raw.Host, []byte) (*raw.Host, error) { return nil, nil }
 func (p ppNOOP) StartHunt(net.HardwareAddr) error                   { return nil }
@@ -159,17 +159,52 @@ func isUnicastMAC(mac net.HardwareAddr) bool {
 	return false
 }
 
+func (h *Handler) start() error {
+	time.Sleep(time.Millisecond * 200) // wait for read to start
+
+	if err := h.HandlerIP4.Start(); err != nil {
+		fmt.Println("error: in IP4 start:", err)
+	}
+	if err := h.HandlerIP6.Start(); err != nil {
+		fmt.Println("error: in IP6 start:", err)
+	}
+	if err := h.HandlerICMP4.Start(); err != nil {
+		fmt.Println("error: in ICMP4 start:", err)
+	}
+	if err := h.HandlerICMP6.Start(); err != nil {
+		fmt.Println("error: in ICMP6 start:", err)
+	}
+	if err := h.HandlerARP.Start(); err != nil {
+		fmt.Println("error: in ARP start:", err)
+	}
+	return nil
+}
+
+func (h *Handler) end() error {
+	if err := h.HandlerIP4.Stop(); err != nil {
+		fmt.Println("error: in IP4 stop:", err)
+	}
+	if err := h.HandlerIP6.Stop(); err != nil {
+		fmt.Println("error: in IP6 stop:", err)
+	}
+	if err := h.HandlerICMP4.Stop(); err != nil {
+		fmt.Println("error: in ICMP4 stop:", err)
+	}
+	if err := h.HandlerICMP6.Stop(); err != nil {
+		fmt.Println("error: in ICMP6 stop:", err)
+	}
+	if err := h.HandlerARP.Stop(); err != nil {
+		fmt.Println("error: in ARP stop:", err)
+	}
+	return nil
+}
+
 // ListenAndServe listen for raw packets and invoke hooks as required
 func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
-	// start arp handler
-	if h.HandlerARP == nil {
-		return fmt.Errorf("nil ARP handler")
-	}
-
-	if err := h.HandlerARP.Start(ctxt); err != nil {
-		fmt.Println("error: in ARP start:", err)
-	}
+	// start all plugins
+	go h.start()
+	defer h.end()
 
 	// Offline in 5 minutes, purge in 30
 	go h.purgeLoop(ctxt, time.Minute*5, time.Minute*30)
@@ -295,7 +330,6 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 		// Set to online
 		if host != nil && !host.Online {
-			fmt.Println("DEBUG set online", host, host.Online)
 			host.SetOnline()
 			h.notifyCallback(host)
 		}
