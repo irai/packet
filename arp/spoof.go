@@ -22,13 +22,11 @@ func (h *Handler) StartSpoofMAC(mac net.HardwareAddr) error {
 	defer h.Unlock()
 
 	entry, _ := h.virtual.upsert(StateHunt, mac, nil)
-	var ip net.IP
 	for _, v := range h.LANHosts.FindMAC(mac) {
-		if ip = v.IP.To4(); ip != nil {
-			break
+		if ip := v.IP.To4(); ip != nil {
+			go h.spoofLoop(context.Background(), entry, ip)
 		}
 	}
-	go h.spoofLoop(context.Background(), entry, ip)
 	return nil
 }
 
