@@ -138,12 +138,12 @@ func (h *Handler) Stop() error {
 
 // StartHunt implements PacketProcessor interface
 func (h *Handler) StartHunt(mac net.HardwareAddr) error {
-	return h.StartSpoofMAC(mac)
+	return h.startHunt(mac)
 }
 
 // StopHunt implements PacketProcessor interface
 func (h *Handler) StopHunt(mac net.HardwareAddr) error {
-	return h.StopSpoofMAC(mac)
+	return h.stopHunt(mac)
 }
 
 // Close closes the underlying sockets

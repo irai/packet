@@ -10,10 +10,10 @@ import (
 	"github.com/irai/packet/raw"
 )
 
-// StartSpoofMAC performs the following:
-func (h *Handler) StartSpoofMAC(mac net.HardwareAddr) error {
+// startHunt performs the following:
+func (h *Handler) startHunt(mac net.HardwareAddr) error {
 	if Debug {
-		log.Printf("arp force IP change mac=%s", mac)
+		log.Printf("icmp6 force neighbor spoof mac=%s", mac)
 	}
 
 	h.setHandler.Add(mac)
@@ -21,10 +21,10 @@ func (h *Handler) StartSpoofMAC(mac net.HardwareAddr) error {
 	return nil
 }
 
-// StopSpoofMAC terminate the hunting process
-func (h *Handler) StopSpoofMAC(mac net.HardwareAddr) error {
+// stopHunt terminate the hunting process
+func (h *Handler) stopHunt(mac net.HardwareAddr) error {
 	if Debug {
-		log.Printf("arp stop IP change mac=%s", mac)
+		log.Printf("icmp6 stop neighbor spoof mac=%s", mac)
 	}
 	h.setHandler.Del(mac) // will exit the goroutine
 
@@ -47,27 +47,30 @@ func (h *Handler) spoofLoop(mac net.HardwareAddr) {
 	for {
 		if h.setHandler.Index(mac) == -1 {
 			log.Printf("icmp6 na attack end mac=%s time=%v", mac, time.Since(startTime))
+			return
 		}
 		list := h.LANHosts.FindMAC(mac)
 		if len(list) == 0 {
+			log.Printf("icmp6 empty list in na attack mac=%s time=%v. goroutine terminated.", mac, time.Since(startTime))
 			return
 		}
 
+		// Send NA to any IPv6 IP associated with mac
 		for _, v := range list {
 			if raw.IsIP6(v.IP) && v.IP.IsLinkLocalUnicast() {
 				if err := h.SendNeighborAdvertisement(raw.IP6DefaultRouter, raw.Addr{MAC: v.MAC, IP: v.IP}); err != nil {
 					fmt.Println("icmp6 error sending na ", err)
 				}
 			}
+		}
 
-			if nTimes%16 == 0 {
-				log.Printf("icmp6 attack client=%s repeat=%v duration=%v", mac, nTimes, time.Now().Sub(startTime))
-			}
-			nTimes++
+		if nTimes%16 == 0 {
+			log.Printf("icmp6 attack client=%s repeat=%v duration=%v", mac, nTimes, time.Now().Sub(startTime))
+		}
+		nTimes++
 
-			select {
-			case <-ticker:
-			}
+		select {
+		case <-ticker:
 		}
 	}
 }

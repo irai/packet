@@ -104,8 +104,9 @@ func cmd(pt *packet.Handler, a4 *arp.Handler, h *icmp4.Handler, h6 *icmp6.Handle
 	for {
 		fmt.Println("Command: (q)uit            | (p)ing ip | (l)list | (g) loG <level>")
 		fmt.Println(" packet: (hunt) mac        | (release) mac")
+		fmt.Println("  icmp6: (icmp6hunt) mac   | (icmp6release) mac ")
 		fmt.Println("    ndp: (ra) ip6          | (ns) ip6")
-		fmt.Println("    arp: (af)orce mac      | (as)stop mac        | (scan) ")
+		fmt.Println("    arp: (arphunt) mac     | (arprelease) mac        | (arpscan) ")
 		fmt.Print("Enter command: ")
 		tokens := readInput()
 
@@ -174,21 +175,33 @@ func cmd(pt *packet.Handler, a4 *arp.Handler, h *icmp4.Handler, h6 *icmp6.Handle
 			if err := radvs.SendRA(); err != nil {
 				fmt.Printf("error in router adversitement: %s\n", err)
 			}
-		case "af":
-			mac := getMAC(tokens, 1)
-			if mac == nil {
-				continue
+		case "arphunt":
+			if mac := getMAC(tokens, 1); mac != nil {
+				if err := a4.StartHunt(mac); err != nil {
+					fmt.Println("error in start hunt ", err)
+				}
 			}
-			a4.StartSpoofMAC(mac)
-		case "as":
-			mac := getMAC(tokens, 1)
-			if mac == nil {
-				continue
+		case "arprelease":
+			if mac := getMAC(tokens, 1); mac != nil {
+				if err := a4.StopHunt(mac); err != nil {
+					fmt.Println("error in start hunt ", err)
+				}
 			}
-			a4.StopSpoofMAC(mac)
-		case "scan":
+		case "arpscan":
 			if err := a4.ScanNetwork(context.Background(), pt.NICInfo.HostIP4); err != nil {
 				fmt.Println("failed scan: ", err)
+			}
+		case "icmp6hunt":
+			if mac := getMAC(tokens, 1); mac != nil {
+				if err := h6.StartHunt(mac); err != nil {
+					fmt.Println("error in start hunt ", err)
+				}
+			}
+		case "icmp6release":
+			if mac := getMAC(tokens, 1); mac != nil {
+				if err := h6.StopHunt(mac); err != nil {
+					fmt.Println("error in start hunt ", err)
+				}
 			}
 		case "hunt":
 			if mac := getMAC(tokens, 1); mac != nil {
