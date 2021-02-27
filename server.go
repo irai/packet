@@ -1,6 +1,7 @@
 package packet
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net"
@@ -108,6 +109,16 @@ func (h *Handler) setupConn() (conn net.PacketConn, err error) {
 
 	// see syscall constants for full list of available network protocols
 	// https://golang.org/pkg/syscall/
+	//
+	// For a list of bpf instructions
+	// https://tshark.dev/packetcraft/arcana/bpf_instructions/
+	//
+	// TODO: Set direction - aparently this only works on bsd
+	// https://github.com/google/gopacket/blob/master/pcap/pcap.go
+	// https://github.com/mdlayher/raw/blob/master/raw.go
+	//
+	// TODO: use zero copy in bpf
+	// https://www.gsp.com/cgi-bin/man.cgi?topic=BPF
 	bpf, err := bpf.Assemble([]bpf.Instruction{
 		// Check EtherType
 		bpf.LoadAbsolute{Off: 12, Size: 2},
@@ -236,12 +247,12 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		}
 
 		// Ignore packets sent via our interface
+		// If we don't have this, then we received all forward packets with client IPs but our mac
+		//
 		// TODO: should this be in the bpf rules?
-		/***
 		if bytes.Equal(ether.Src(), h.NICInfo.HostMAC) {
 			continue
 		}
-		***/
 
 		// Only interested in unicast ethernet
 		if !isUnicastMAC(ether.Src()) {
