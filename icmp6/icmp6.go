@@ -103,6 +103,7 @@ type Handler struct {
 	Router       Router
 	LANRouters   map[string]*Router
 	LANHosts     *raw.HostTable
+	setHandler   raw.SetHandler // set to manage captured macs
 }
 
 // Config define server configuration values
@@ -137,12 +138,12 @@ func (h *Handler) Stop() error {
 
 // StartHunt implements PacketProcessor interface
 func (h *Handler) StartHunt(mac net.HardwareAddr) error {
-	return nil
+	return h.StartSpoofMAC(mac)
 }
 
 // StopHunt implements PacketProcessor interface
 func (h *Handler) StopHunt(mac net.HardwareAddr) error {
-	return nil
+	return h.StopSpoofMAC(mac)
 }
 
 // Close closes the underlying sockets

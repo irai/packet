@@ -95,7 +95,7 @@ func (h *HostTable) findOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Hos
 
 	if host, ok := h.Table[string(v4InV6Prefix)]; ok {
 		if !bytes.Equal(host.MAC, mac) {
-			fmt.Println("packet: error mac address differ", host.MAC, mac)
+			fmt.Println("packet: error mac address differ", host.MAC, mac, v4InV6Prefix)
 			host.MAC = CopyMAC(mac)
 		}
 		host.LastSeen = time.Now()
