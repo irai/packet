@@ -232,6 +232,11 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
 
 	switch operation {
 	case request:
+		// +============+===+===========+===========+============+============+===================+===========+
+		// | Type       | op| EthDstMAC | EthSRCMAC | SenderMAC  | SenderIP   | TargetMAC         |  TargetIP |
+		// +============+===+===========+===========+============+============+===================+===========+
+		// | request    | 1 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  targetIP |
+		// +============+===+===========+===========+============+============+===================+===========+
 		if Debug {
 			log.Printf("arp  : who is %s: %s ", frame.DstIP(), frame)
 		}
@@ -248,12 +253,6 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
 		}
 		h.RUnlock()
 
-		if host == nil && h.NICInfo.HostIP4.Contains(frame.SrcIP()) {
-			// If new client, then create a MACEntry in table
-			host, _ = h.LANHosts.FindOrCreateHost(frame.SrcMAC(), frame.SrcIP())
-		}
-		return host, nil
-
 	case probe:
 		// We are not interested in probe ACD (Address Conflict Detection) packets
 		// if this is a probe, the sender IP will be zeros; do nothing as the sender IP is not valid yet.
@@ -266,6 +265,8 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
 		if Debug {
 			log.Printf("arp  : probe recvd: %s", frame)
 		}
+
+		// don't continue
 		return host, nil
 
 	case announcement:
@@ -300,11 +301,11 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
 		if Debug {
 			log.Printf("arp  : reply recvd: %s", frame)
 		}
-		if !bytes.Equal(frame.DstMAC(), EthernetBroadcast) && !frame.DstIP().IsUnspecified() {
-			host, _ = h.LANHosts.FindOrCreateHost(frame.DstMAC(), frame.DstIP())
-		}
-		return host, nil
+	}
 
+	// If new client, then create a MACEntry in table
+	if host == nil && h.NICInfo.HostIP4.Contains(frame.SrcIP()) {
+		host, _ = h.LANHosts.FindOrCreateHost(frame.SrcMAC(), frame.SrcIP())
 	}
 	return host, nil
 }

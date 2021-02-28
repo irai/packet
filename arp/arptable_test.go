@@ -13,8 +13,8 @@ var (
 	hostMAC   = net.HardwareAddr{0xff, 0xff, 0x03, 0x04, 0x05, 0x01}
 	hostIP    = net.ParseIP("192.168.0.129").To4()
 	homeLAN   = net.IPNet{IP: net.IPv4(192, 168, 0, 0), Mask: net.IPv4Mask(255, 255, 255, 0)}
-	routerMAC = net.HardwareAddr{0xff, 0xff, 0x03, 0x04, 0x05, 0x02}
-	routerIP  = net.ParseIP("192.168.0.1").To4()
+	routerMAC = net.HardwareAddr{0xff, 0xff, 0x03, 0x04, 0x05, 0x11}
+	routerIP  = net.ParseIP("192.168.0.11").To4()
 	ip1       = net.ParseIP("192.168.0.1").To4()
 	ip2       = net.ParseIP("192.168.0.2").To4()
 	ip3       = net.ParseIP("192.168.0.3").To4()

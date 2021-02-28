@@ -103,7 +103,7 @@ func setupTestHandler(t *testing.T) *testContext {
 	}
 	tc.arp, err = New(&nicInfo, tc.inConn, tc.packet.LANHosts, arpConfig)
 	tc.arp.virtual = newARPTable() // we want an empty table
-	tc.arp.LANHosts = raw.New()
+	// tc.arp.LANHosts = raw.New()
 	tc.packet.HandlerARP = tc.arp
 
 	go func() {
@@ -124,7 +124,8 @@ func (tc *testContext) Close() {
 }
 
 func Test_Handler_ARPRequests(t *testing.T) {
-	//Debug = true
+	// packet.DebugIP4 = true
+	// Debug = true
 	// log.SetLevel(log.DebugLevel)
 	tc := setupTestHandler(t)
 	defer tc.Close()
@@ -140,49 +141,37 @@ func Test_Handler_ARPRequests(t *testing.T) {
 		wantIPs int
 	}{
 		{name: "whois1",
-			ether:   newEtherPacket(syscall.ETH_P_ARP, mac1, EthernetBroadcast),
-			arp:     newPacket(OperationRequest, mac2, ip2, zeroMAC, ip3),
+			ether:   newEtherPacket(syscall.ETH_P_ARP, mac2, EthernetBroadcast),
+			arp:     newPacket(OperationRequest, mac2, ip2, EthernetBroadcast, ip3),
 			wantErr: nil, wantLen: 1, wantIPs: 1},
 		{name: "whois1-dup2",
-			ether:   newEtherPacket(syscall.ETH_P_ARP, mac1, EthernetBroadcast),
-			arp:     newPacket(OperationRequest, mac2, ip2, zeroMAC, ip3),
+			ether:   newEtherPacket(syscall.ETH_P_ARP, mac2, EthernetBroadcast),
+			arp:     newPacket(OperationRequest, mac2, ip2, EthernetBroadcast, ip3),
 			wantErr: nil, wantLen: 1, wantIPs: 1},
 		{name: "whois1-dup3",
-			ether:   newEtherPacket(syscall.ETH_P_ARP, mac1, EthernetBroadcast),
-			arp:     newPacket(OperationRequest, mac2, ip2, zeroMAC, ip3),
+			ether:   newEtherPacket(syscall.ETH_P_ARP, mac2, EthernetBroadcast),
+			arp:     newPacket(OperationRequest, mac2, ip2, EthernetBroadcast, ip3),
 			wantErr: nil, wantLen: 1, wantIPs: 1},
 		{name: "whois2",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac3, EthernetBroadcast),
-			arp:     newPacket(OperationRequest, mac3, ip3, zeroMAC, routerIP),
+			arp:     newPacket(OperationRequest, mac3, ip3, EthernetBroadcast, routerIP),
 			wantErr: nil, wantLen: 2, wantIPs: 1},
 		{name: "announce-ip4",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac4, EthernetBroadcast),
-			arp:     newPacket(OperationRequest, mac4, ip4, zeroMAC, ip4),
+			arp:     newPacket(OperationRequest, mac4, ip4, EthernetBroadcast, ip4),
 			wantErr: nil, wantLen: 3, wantIPs: 1},
-		{name: "router",
+		{name: "router-whois-ip3", // will ignore router mac - so don't insert in table
 			ether:   newEtherPacket(syscall.ETH_P_ARP, routerMAC, EthernetBroadcast),
-			arp:     newPacket(OperationRequest, zeroMAC, routerIP, zeroMAC, ip3),
+			arp:     newPacket(OperationRequest, routerMAC, routerIP, EthernetBroadcast, ip3),
 			wantErr: nil, wantLen: 3, wantIPs: 0},
 		{name: "probe",
-			ether:   newEtherPacket(syscall.ETH_P_ARP, mac2, EthernetBroadcast),
-			arp:     newPacket(OperationRequest, mac2, net.IPv4zero.To4(), zeroMAC, ip4),
+			ether:   newEtherPacket(syscall.ETH_P_ARP, mac5, EthernetBroadcast),
+			arp:     newPacket(OperationRequest, mac5, net.IPv4zero.To4(), zeroMAC, ip5),
 			wantErr: nil, wantLen: 3, wantIPs: 0},
 		{name: "localink",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac2, EthernetBroadcast),
-			arp:     newPacket(OperationRequest, mac2, localIP, zeroMAC, localIP2),
+			arp:     newPacket(OperationRequest, mac2, localIP, EthernetBroadcast, localIP2),
 			wantErr: nil, wantLen: 3, wantIPs: 0},
-		/***
-		{name:"announceRouter", newPacket(OperationRequest, zeroMAC, routerIP, zeroMAC, routerIP), nil, 3, 0},
-		{name:"announceHost", newPacket(OperationRequest, hostMAC, hostIP, zeroMAC, hostIP), nil, 3, 0},
-		{name:"host", newPacket(OperationRequest, hostMAC, hostIP, zeroMAC, ip4), nil, 3, 0},
-		{name:"announce5", newPacket(OperationRequest, mac5, ip5, zeroMAC, ip5), nil, 4, 1},
-		{name:"request5", newPacket(OperationRequest, mac5, ip5, zeroMAC, routerIP), nil, 4, 1},
-		{name:"request5-2", newPacket(OperationRequest, mac5, ip2, zeroMAC, routerIP), nil, 4, 2},
-		{name:"request5-3", newPacket(OperationRequest, mac5, ip3, zeroMAC, routerIP), nil, 4, 3},
-		{name:"announce5-4", newPacket(OperationRequest, mac5, ip4, zeroMAC, ip4), nil, 4, 4},
-		{name:"probe", newPacket(OperationRequest, mac2, net.IPv4zero, zeroMAC, ip4), nil, 4, 0},                                        // probe has sIP zero
-		{name:"locallink", newPacket(OperationRequest, mac2, net.IPv4(169, 254, 0, 10), zeroMAC, net.IPv4(169, 254, 0, 10)), nil, 4, 0}, // link local 169.254.x.x
-		***/
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -199,17 +188,10 @@ func Test_Handler_ARPRequests(t *testing.T) {
 			tc.arp.Lock()
 			defer tc.arp.Unlock()
 
-			/**
-			if len(tc.arp.table.macTable) != tt.wantLen {
-				t.Errorf("Test_Requests:%s table len = %v, wantLen %v", tt.name, len(tc.arp.table.macTable), tt.wantLen)
+			if len(tc.packet.LANHosts.Table) != tt.wantLen {
+				tc.packet.LANHosts.PrintTable()
+				t.Errorf("Test_Requests:%s table len = %v, wantLen %v", tt.name, len(tc.packet.LANHosts.Table), tt.wantLen)
 			}
-			if tt.wantIPs != 0 {
-				e := tc.arp.table.findByMAC(tt.arp.SrcMAC())
-				if e == nil || len(e.IPs()) != tt.wantIPs {
-					t.Errorf("Test_Requests:%s table IP entry=%+v, wantLen %v", tt.name, e, tt.wantLen)
-				}
-			}
-			**/
 		})
 	}
 }
