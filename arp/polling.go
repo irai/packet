@@ -14,6 +14,10 @@ import (
 // pollingLoop detect new IPs on the network
 // Send ARP request to all 255 IP addresses first time then send ARP request every so many minutes.
 func (h *Handler) scanLoop(ctx context.Context, interval time.Duration) error {
+	// first scan
+	if err := h.ScanNetwork(ctx, h.NICInfo.HomeLAN4); err != nil {
+		return err
+	}
 	ticker := time.NewTicker(interval).C
 	for {
 		select {

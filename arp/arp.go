@@ -121,37 +121,29 @@ func (h *Handler) End() {
 
 // Start start background processes
 func (h *Handler) Start() error {
+	if h.config.FullNetworkScanInterval == 0 {
+		return nil
+	}
+	if h.NICInfo.HomeLAN4.IP.To4() == nil {
+		return raw.ErrInvalidIP4
+	}
 
+	// continuosly scan for network devices
 	ctx := context.Background()
-	if h.config.FullNetworkScanInterval != 0 {
-		// continuosly scan for network devices
-		go func() {
-			h.wg.Add(1)
-			if err := h.scanLoop(ctx, h.config.FullNetworkScanInterval); err != nil {
-				log.Print("arp goroutine scanLoop terminated unexpectedly", err)
-				h.conn.Close() // force error in main loop
-			}
-			h.wg.Done()
-			if Debug {
-				log.Print("arp goroutine scanLoop ended")
-			}
-		}()
-	}
-
-	// Do a full scan on start
-	if h.config.FullNetworkScanInterval != 0 && h.NICInfo.HomeLAN4.IP.To4() != nil {
-		go func() {
-			h.wg.Add(1)
-			if err := h.ScanNetwork(ctx, h.NICInfo.HomeLAN4); err != nil {
-				log.Print("arp ListenAndServer scanNetwork terminated unexpectedly", err)
-				h.conn.Close() // force error in main loop
-			}
-			h.wg.Done()
-			if Debug {
-				log.Print("arp goroutine scanNetwork ended normally")
-			}
-		}()
-	}
+	go func() {
+		if Debug {
+			fmt.Println("arp goroutine scanLoop started")
+		}
+		h.wg.Add(1)
+		if err := h.scanLoop(ctx, h.config.FullNetworkScanInterval); err != nil {
+			fmt.Println("arp goroutine scanLoop terminated unexpectedly", err)
+			h.conn.Close() // force error in main loop
+		}
+		h.wg.Done()
+		if Debug {
+			fmt.Println("arp goroutine scanLoop ended")
+		}
+	}()
 
 	return nil
 }
