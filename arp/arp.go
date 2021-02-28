@@ -96,12 +96,12 @@ func New(info *raw.NICInfo, conn net.PacketConn, table *raw.HostTable, config Co
 
 // StartHunt implements PacketProcessor interface
 func (h *Handler) StartHunt(mac net.HardwareAddr) error {
-	return h.StartSpoofMAC(mac)
+	return h.startSpoof(mac)
 }
 
 // StopHunt implements PacketProcessor interface
 func (h *Handler) StopHunt(mac net.HardwareAddr) error {
-	return h.StopSpoofMAC(mac)
+	return h.stopSpoof(mac)
 }
 
 // Stop implements PacketProcessor interface

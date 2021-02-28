@@ -24,8 +24,8 @@ type MACEntry struct {
 	IPArray     [nIPs]IPEntry
 	State       arpState
 	LastUpdated time.Time
-	Online      bool
-	ClaimIP     bool // if true, will claim the target IP; likely to force the target IP to stop working
+	// Online      bool
+	ClaimIP bool // if true, will claim the target IP; likely to force the target IP to stop working
 }
 
 // IP returns the last IP detected
@@ -78,10 +78,7 @@ const (
 
 // String interface
 func (e MACEntry) String() string {
-	if e.Online {
-		return fmt.Sprintf("online  %7s mac=%17s since=%v ips=%v", e.State, e.MAC, time.Since(e.LastUpdated), e.IPs())
-	}
-	return fmt.Sprintf("offline %7s mac=%17s since=%v ips=%v", e.State, e.MAC, time.Since(e.LastUpdated), e.IPs())
+	return fmt.Sprintf("mac=%17s since=%v ips=%v", e.State, e.MAC, time.Since(e.LastUpdated), e.IPs())
 }
 
 func (t *arpTable) printTable() {
@@ -201,7 +198,7 @@ func (t *arpTable) upsert(state arpState, mac net.HardwareAddr, ip net.IP) (entr
 	now := time.Now()
 	e, found := t.macTable[string(mac)]
 	if !found {
-		e = &MACEntry{State: state, MAC: mac, LastUpdated: now, Online: false}
+		e = &MACEntry{State: state, MAC: mac, LastUpdated: now}
 		t.macTable[string(mac)] = e
 		if Debug {
 			log.Printf("arp new mac=%s ip=%s state=%s created", mac, ip, state)
@@ -209,7 +206,6 @@ func (t *arpTable) upsert(state arpState, mac net.HardwareAddr, ip net.IP) (entr
 	} else {
 		e.State = state
 		e.LastUpdated = now
-		e.Online = false
 	}
 
 	if ip == nil {

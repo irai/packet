@@ -104,10 +104,6 @@ func Test_Delete(t *testing.T) {
 	}
 	tc.arp.virtual.delete(mac3)
 
-	tc.arp.ClaimIP(ip4)
-	if len(tc.arp.virtual.macTable) != 3 || tc.arp.virtual.findVirtualIP(ip4) == nil {
-		t.Error("expected cannot find virtual MACEntry 4", len(tc.arp.virtual.macTable), tc.arp.virtual.findVirtualIP(ip4))
-	}
 }
 
 func Test_DuplicateIP(t *testing.T) {
@@ -115,7 +111,6 @@ func Test_DuplicateIP(t *testing.T) {
 	defer tc.Close()
 
 	e, _ := tc.arp.virtual.upsert(StateNormal, mac1, ip2)
-	e.Online = true
 	tc.arp.virtual.updateIP(e, ip3)
 	if !e.IP().Equal(ip3) && len(e.IPs()) != 2 {
 		t.Fatal("expected ip3 ", e.IP())
@@ -147,7 +142,6 @@ func Test_HuntIP(t *testing.T) {
 
 	e, _ := tc.arp.virtual.upsert(StateNormal, mac1, ip2)
 	tc.arp.virtual.updateIP(e, ip3)
-	e.Online = true
 	e.State = StateHunt
 
 	tc.arp.virtual.updateIP(e, ip3)
@@ -186,7 +180,6 @@ func Test_arpTable_deleteStaleIP(t *testing.T) {
 	defer tc.Close()
 
 	e, _ := tc.arp.virtual.upsert(StateNormal, mac1, ip2)
-	e.Online = true
 
 	tc.arp.virtual.updateIP(e, ip3)
 	tc.arp.virtual.updateIP(e, ip4)

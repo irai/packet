@@ -41,8 +41,7 @@ func loadARPProcTable() (table *arpTable, err error) {
 		if err != nil || bytes.Equal(mac, net.HardwareAddr{0, 0, 0, 0, 0, 0}) || bytes.Equal(mac, net.HardwareAddr{}) {
 			continue
 		}
-		entry, _ := table.upsert(StateNormal, mac, ip)
-		entry.Online = true
+		table.upsert(StateNormal, mac, ip)
 	}
 
 	return table, nil

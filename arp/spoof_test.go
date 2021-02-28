@@ -18,14 +18,13 @@ func Test_Spoof_ForceIPChange(t *testing.T) {
 	packet.Debug = true
 
 	e2, _ := tc.arp.virtual.upsert(StateNormal, mac2, ip2)
-	e2.Online = true
 	tc.arp.virtual.updateIP(e2, ip3)
 	tc.arp.virtual.updateIP(e2, ip4)
-	tc.arp.StartSpoofMAC(e2.MAC)
+	tc.arp.startSpoof(e2.MAC)
 
 	tc.arp.Lock()
-	if e := tc.arp.virtual.findByMAC(mac2); e == nil || e.State != StateHunt || !e.Online {
-		t.Fatalf("Test_ForceIPChange entry2 state=%s, online=%v", e.State, e.Online)
+	if e := tc.arp.virtual.findByMAC(mac2); e == nil || e.State != StateHunt {
+		t.Fatalf("Test_ForceIPChange entry2 state=%s", e.State)
 	}
 	tc.arp.Unlock()
 

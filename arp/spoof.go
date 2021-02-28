@@ -8,12 +8,12 @@ import (
 	"log"
 )
 
-// StartSpoofMAC performs the following:
+// startSpoof performs the following:
 //  1. set client state to "hunt" which will continuously spoof the client ARP table
 //  2. start spoof goroutine to poison client arp table
 //
 // client will revert back to "normal" when a new IP is detected for the MAC
-func (h *Handler) StartSpoofMAC(mac net.HardwareAddr) error {
+func (h *Handler) startSpoof(mac net.HardwareAddr) error {
 	if Debug {
 		log.Printf("arp force IP change mac=%s", mac)
 	}
@@ -30,8 +30,8 @@ func (h *Handler) StartSpoofMAC(mac net.HardwareAddr) error {
 	return nil
 }
 
-// StopSpoofMAC terminate the hunting process
-func (h *Handler) StopSpoofMAC(mac net.HardwareAddr) error {
+// stopSpoof terminate the hunting process
+func (h *Handler) stopSpoof(mac net.HardwareAddr) error {
 	if Debug {
 		log.Printf("arp stop IP change mac=%s", mac)
 	}
@@ -42,6 +42,7 @@ func (h *Handler) StopSpoofMAC(mac net.HardwareAddr) error {
 	return nil
 }
 
+/****
 // ClaimIP creates a virtual host to claim the ip
 // When a virtual host exist, the handler will respond to ACD and request packets for the ip
 func (h *Handler) ClaimIP(ip net.IP) {
@@ -61,7 +62,6 @@ func (h *Handler) ClaimIP(ip net.IP) {
 // new DHCP MACEntry has been allocated.
 //
 func (h *Handler) IPChanged(mac net.HardwareAddr, clientIP net.IP) {
-	/****
 	// Do nothing if we already have this mac and ip
 	c.RLock()
 	if client := c.table.findByMAC(mac); client != nil && client.Online && client.IP().Equal(clientIP) {
@@ -101,8 +101,8 @@ func (h *Handler) IPChanged(mac net.HardwareAddr, clientIP net.IP) {
 		// c.table.printTable()
 		// c.RUnlock()
 	}()
-	****/
 }
+	****/
 
 // spoofLoop attacks the client with ARP attacks
 //
@@ -114,7 +114,6 @@ func (h *Handler) spoofLoop(ctx context.Context, client *MACEntry, ip net.IP) {
 
 	h.Lock()
 	mac := client.MAC
-	client.Online = true // goroutine started
 	h.Unlock()
 
 	// 4 second re-arp seem to be adequate;
