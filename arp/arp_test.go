@@ -74,20 +74,8 @@ func setupTestHandler(t *testing.T) *testContext {
 				s := fmt.Sprintf("error arp client packet %s %s", ether, arp)
 				panic(s)
 			}
-			// fmt.Println("read client packet", raw.Ether(buf), ARP(raw.Ether(buf).Payload()))
 		}
 	}()
-
-	// setup server with server conn
-	tc.packet, err = packet.Config{Conn: tc.inConn}.New("eth0")
-	if err != nil {
-		all, _ := net.Interfaces()
-		fmt.Println("valid interfaces")
-		for _, v := range all {
-			fmt.Printf("%s: %+v\n", v.Name, v)
-		}
-		panic(err)
-	}
 
 	nicInfo := raw.NICInfo{
 		HostMAC:   hostMAC,
@@ -95,15 +83,24 @@ func setupTestHandler(t *testing.T) *testContext {
 		RouterIP4: net.IPNet{IP: routerIP, Mask: net.IPv4Mask(255, 255, 255, 0)},
 		HomeLAN4:  homeLAN,
 	}
+
+	// override handler with conn and nicInfo
+	tc.packet, err = packet.Config{Conn: tc.inConn, NICInfo: &nicInfo}.New("eth0")
+	if err != nil {
+		panic(err)
+	}
+	if Debug {
+		fmt.Println("nicinfo: ", tc.packet.NICInfo)
+	}
+
 	arpConfig := Config{
 		FullNetworkScanInterval: time.Second * 60,
 		ProbeInterval:           time.Second * 1,
 		OfflineDeadline:         time.Second * 2,
 		PurgeDeadline:           time.Second * 4,
 	}
-	tc.arp, err = New(&nicInfo, tc.inConn, tc.packet.LANHosts, arpConfig)
+	tc.arp, err = New(tc.packet.NICInfo, tc.packet.Conn(), tc.packet.LANHosts, arpConfig)
 	tc.arp.virtual = newARPTable() // we want an empty table
-	// tc.arp.LANHosts = raw.New()
 	tc.packet.HandlerARP = tc.arp
 
 	go func() {
@@ -118,13 +115,15 @@ func setupTestHandler(t *testing.T) *testContext {
 
 func (tc *testContext) Close() {
 	time.Sleep(time.Millisecond * 20) // wait for all packets to finish
-	fmt.Println("teminating context")
+	if Debug {
+		fmt.Println("teminating context")
+	}
 	tc.cancel()
 	tc.wg.Wait()
 }
 
 func Test_Handler_ARPRequests(t *testing.T) {
-	// packet.DebugIP4 = true
+	// packet.Debug = true
 	// Debug = true
 	// log.SetLevel(log.DebugLevel)
 	tc := setupTestHandler(t)
@@ -160,18 +159,22 @@ func Test_Handler_ARPRequests(t *testing.T) {
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac4, EthernetBroadcast),
 			arp:     newPacket(OperationRequest, mac4, ip4, EthernetBroadcast, ip4),
 			wantErr: nil, wantLen: 3, wantIPs: 1},
-		{name: "router-whois-ip3", // will ignore router mac - so don't insert in table
+		{name: "host-whois-ip3", // will ignore host mac - so don't insert in table
+			ether:   newEtherPacket(syscall.ETH_P_ARP, hostMAC, EthernetBroadcast),
+			arp:     newPacket(OperationRequest, hostMAC, hostIP, EthernetBroadcast, ip3),
+			wantErr: nil, wantLen: 3, wantIPs: 0},
+		{name: "router-whois-ip3",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, routerMAC, EthernetBroadcast),
 			arp:     newPacket(OperationRequest, routerMAC, routerIP, EthernetBroadcast, ip3),
-			wantErr: nil, wantLen: 3, wantIPs: 0},
+			wantErr: nil, wantLen: 4, wantIPs: 0},
 		{name: "probe",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac5, EthernetBroadcast),
 			arp:     newPacket(OperationRequest, mac5, net.IPv4zero.To4(), zeroMAC, ip5),
-			wantErr: nil, wantLen: 3, wantIPs: 0},
+			wantErr: nil, wantLen: 4, wantIPs: 0},
 		{name: "localink",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac2, EthernetBroadcast),
 			arp:     newPacket(OperationRequest, mac2, localIP, EthernetBroadcast, localIP2),
-			wantErr: nil, wantLen: 3, wantIPs: 0},
+			wantErr: nil, wantLen: 4, wantIPs: 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -195,8 +198,6 @@ func Test_Handler_ARPRequests(t *testing.T) {
 		})
 	}
 }
-
-/******
 
 func Test_Handler_ServeReplies(t *testing.T) {
 	// Debug = true
@@ -268,18 +269,14 @@ func Test_Handler_ServeReplies(t *testing.T) {
 			tc.arp.Lock()
 			defer tc.arp.Unlock()
 
-			if len(tc.arp.table.macTable) != tt.wantLen {
-				t.Errorf("Test_Requests:%s table len = %v, wantLen %v", tt.name, len(tc.arp.table.macTable), tt.wantLen)
-			}
-			if tt.wantIPs != 0 {
-				e := tc.arp.table.findByMAC(tt.arp.SrcMAC())
-				if e == nil || len(e.IPs()) != tt.wantIPs {
-					t.Errorf("Test_Requests:%s table IP entry=%+v, wantLen %v", tt.name, e, tt.wantLen)
-				}
+			if len(tc.packet.LANHosts.Table) != tt.wantLen {
+				t.Errorf("Test_Requests:%s table len = %v, wantLen %v", tt.name, len(tc.packet.LANHosts.Table), tt.wantLen)
 			}
 		})
 	}
 }
+
+/******
 func Test_Handler_CaptureSameIP(t *testing.T) {
 	Debug = true
 	tc := setupTestHandler(t)

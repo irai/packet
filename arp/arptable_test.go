@@ -10,10 +10,10 @@ import (
 var (
 	zeroMAC = net.HardwareAddr{0, 0, 0, 0, 0, 0}
 
-	hostMAC   = net.HardwareAddr{0xff, 0xff, 0x03, 0x04, 0x05, 0x01}
+	hostMAC   = net.HardwareAddr{0x00, 0xff, 0x03, 0x04, 0x05, 0x01} // key first byte zero for unicast mac
 	hostIP    = net.ParseIP("192.168.0.129").To4()
 	homeLAN   = net.IPNet{IP: net.IPv4(192, 168, 0, 0), Mask: net.IPv4Mask(255, 255, 255, 0)}
-	routerMAC = net.HardwareAddr{0xff, 0xff, 0x03, 0x04, 0x05, 0x11}
+	routerMAC = net.HardwareAddr{0x00, 0xff, 0x03, 0x04, 0x05, 0x11} // key first byte zero for unicast mac
 	routerIP  = net.ParseIP("192.168.0.11").To4()
 	ip1       = net.ParseIP("192.168.0.1").To4()
 	ip2       = net.ParseIP("192.168.0.2").To4()

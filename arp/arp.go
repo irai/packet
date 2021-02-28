@@ -1,7 +1,6 @@
 package arp
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"net"
@@ -39,12 +38,11 @@ var _ raw.PacketProcessor = &Handler{}
 
 // Handler stores instance variables
 type Handler struct {
-	conn        net.PacketConn
-	LANHosts    *raw.HostTable
-	virtual     *arpTable
-	NICInfo     *raw.NICInfo
-	config      Config
-	routerEntry MACEntry // store the router mac address
+	conn     net.PacketConn
+	LANHosts *raw.HostTable
+	virtual  *arpTable
+	NICInfo  *raw.NICInfo
+	config   Config
 	sync.RWMutex
 	notification chan<- MACEntry // notification channel for state change
 	wg           sync.WaitGroup
@@ -185,7 +183,8 @@ const (
 // +============+===+===========+===========+============+============+===================+===========+
 func (h *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
 
-	frame := ARP(b)
+	ether := raw.Ether(b)
+	frame := ARP(ether.Payload())
 	if !frame.IsValid() {
 		return host, raw.ErrParseMessage
 	}
@@ -216,20 +215,6 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
 		return host, nil
 	}
 
-	// Ignore router packets
-	if bytes.Equal(frame.SrcIP(), h.NICInfo.RouterIP4.IP) {
-		if h.routerEntry.MAC == nil { // store router MAC
-			h.routerEntry.MAC = raw.CopyMAC(frame.SrcMAC())
-			h.routerEntry.IPArray[0] = IPEntry{IP: h.NICInfo.RouterIP4.IP}
-		}
-		return host, nil
-	}
-
-	// Ignore host packets
-	if bytes.Equal(frame.SrcMAC(), h.NICInfo.HostMAC) {
-		return host, nil
-	}
-
 	switch operation {
 	case request:
 		// +============+===+===========+===========+============+============+===================+===========+
@@ -238,7 +223,8 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
 		// | request    | 1 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  targetIP |
 		// +============+===+===========+===========+============+============+===================+===========+
 		if Debug {
-			log.Printf("arp  : who is %s: %s ", frame.DstIP(), frame)
+			fmt.Println("ether:", ether)
+			fmt.Printf("arp  : who is %s: %s\n", frame.DstIP(), frame)
 		}
 		// if targetIP is a virtual host, we are claiming the ip; reply and return
 		h.RLock()
@@ -263,7 +249,8 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
 		// | ACD probe  | 1 | broadcast | clientMAC | clientMAC  | 0x00       | 0x00              |  targetIP |
 		// +============+===+===========+===========+============+============+===================+===========+
 		if Debug {
-			log.Printf("arp  : probe recvd: %s", frame)
+			fmt.Println("ether:", ether)
+			fmt.Printf("arp  : probe recvd: %s\n", frame)
 		}
 
 		// don't continue
@@ -276,7 +263,8 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
 		// | ACD announ | 1 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  clientIP |
 		// +============+===+===========+===========+============+============+===================+===========+
 		if Debug {
-			log.Printf("arp  : announcement recvd: %s", frame)
+			fmt.Println("ether:", ether)
+			fmt.Printf("arp  : announcement recvd: %s\n", frame)
 		}
 		// if targetIP is a virtual host, we are claiming the ip; reply and return
 		h.RLock()
@@ -299,7 +287,8 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
 		// | gratuitous | 2 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  clientIP |
 		// +============+===+===========+===========+============+============+===================+===========+
 		if Debug {
-			log.Printf("arp  : reply recvd: %s", frame)
+			fmt.Println("ether:", ether)
+			fmt.Printf("arp  : reply recvd: %s\n", frame)
 		}
 	}
 

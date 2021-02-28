@@ -23,7 +23,7 @@ type NICInfo struct {
 }
 
 func (e NICInfo) String() string {
-	return fmt.Sprintf("mac=%s ip4=%s lla=%s gua=%s router=%s", e.HostMAC, e.HostIP4, e.HostLLA, e.HostGUA, e.RouterIP4)
+	return fmt.Sprintf("mac=%s hostip4=%s lla=%s gua=%s router=%s", e.HostMAC, e.HostIP4, e.HostLLA, e.HostGUA, e.RouterIP4)
 }
 
 // GetNICInfo returns the interface configuration

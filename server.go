@@ -26,7 +26,8 @@ type Config struct {
 
 	// Conn enables the client to override the connection with a another packet conn
 	// usefule for testing
-	Conn net.PacketConn // listen connectinon
+	Conn    net.PacketConn // listen connectinon
+	NICInfo *raw.NICInfo   // override nic information
 }
 
 // Handler implements ICMPv6 Neighbor Discovery Protocol
@@ -35,7 +36,6 @@ type Handler struct {
 	NICInfo      *raw.NICInfo
 	conn         net.PacketConn
 	LANHosts     *raw.HostTable
-	Config       Config
 	HandlerIP4   raw.PacketProcessor
 	HandlerIP6   raw.PacketProcessor
 	HandlerICMP4 raw.PacketProcessor
@@ -67,11 +67,14 @@ func (config Config) New(nic string) (*Handler, error) {
 
 	var err error
 
-	h := &Handler{Config: config, LANHosts: raw.New()}
+	h := &Handler{LANHosts: raw.New()}
 
-	h.NICInfo, err = raw.GetNICInfo(nic)
-	if err != nil {
-		return nil, fmt.Errorf("interface not found nic=%s: %w", nic, err)
+	h.NICInfo = config.NICInfo
+	if h.NICInfo == nil {
+		h.NICInfo, err = raw.GetNICInfo(nic)
+		if err != nil {
+			return nil, fmt.Errorf("interface not found nic=%s: %w", nic, err)
+		}
 	}
 
 	// Skip if conn is overriden
@@ -101,6 +104,7 @@ func (h *Handler) Close() error {
 	return nil
 }
 
+// Conn return the underlying raw socket conn
 func (h *Handler) Conn() net.PacketConn {
 	return h.conn
 }
@@ -259,10 +263,6 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			continue
 		}
 
-		if Debug {
-			fmt.Println("ether: ", ether)
-		}
-
 		var l4Proto int
 		var l4Payload []byte
 		var host *raw.Host
@@ -274,7 +274,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				continue
 			}
 			if DebugIP4 {
-				fmt.Println("ether: ", ether)
+				fmt.Println("ether:", ether)
 				fmt.Println("ip4  :", frame)
 			}
 			if !h.NICInfo.HostIP4.Contains(frame.Src()) { // must be on the same net
@@ -294,7 +294,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				continue
 			}
 			if DebugIP6 {
-				fmt.Println("ether: ", ether)
+				fmt.Println("ether:", ether)
 				fmt.Printf("ip6  : %s\n", frame)
 			}
 
@@ -308,7 +308,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			// h.handlerIP6.ProcessPacket(host, ether)
 
 		case syscall.ETH_P_ARP:
-			if host, err = h.HandlerARP.ProcessPacket(host, ether.Payload()); err != nil {
+			if host, err = h.HandlerARP.ProcessPacket(host, ether); err != nil {
 				fmt.Printf("packet: error processing arp: %s\n", err)
 			}
 			l4Proto = 0 // skip next check
