@@ -122,7 +122,7 @@ func (h *Handler) setupConn() (conn net.PacketConn, err error) {
 	bpf, err := bpf.Assemble([]bpf.Instruction{
 		// Check EtherType
 		bpf.LoadAbsolute{Off: 12, Size: 2},
-		// 80221Q?
+		// 80221Q? Virtual LAN over 802.3 Ethernet
 		bpf.JumpIf{Cond: bpf.JumpEqual, Val: syscall.ETH_P_8021Q, SkipFalse: 1}, // EtherType is 2 pushed out by two bytes
 		bpf.LoadAbsolute{Off: 14, Size: 2},
 		// IPv4?
