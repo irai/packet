@@ -1,7 +1,6 @@
 package packet
 
 import (
-	"bytes"
 	"net"
 )
 
@@ -10,10 +9,17 @@ func (h *Handler) StartHunt(mac net.HardwareAddr) error {
 	h.Lock()
 	defer h.Unlock()
 
-	if h.capturedIndex(mac) != -1 {
+	if h.captureList.Index(mac) != -1 {
 		return nil
 	}
+	if err := h.startHuntHandlers(mac); err != nil {
+		return err
+	}
+	h.captureList.Add(mac)
+	return nil
+}
 
+func (h *Handler) startHuntHandlers(mac net.HardwareAddr) error {
 	if err := h.HandlerARP.StartHunt(mac); err != nil {
 		return err
 	}
@@ -23,7 +29,6 @@ func (h *Handler) StartHunt(mac net.HardwareAddr) error {
 	if err := h.HandlerICMP6.StartHunt(mac); err != nil {
 		return err
 	}
-	h.captureList = append(h.captureList, mac)
 	return nil
 }
 
@@ -33,10 +38,17 @@ func (h *Handler) StopHunt(mac net.HardwareAddr) error {
 	defer h.Unlock()
 
 	var pos int
-	if pos = h.capturedIndex(mac); pos == -1 {
+	if pos = h.captureList.Index(mac); pos == -1 {
 		return nil
 	}
+	if err := h.stopHuntHandlers(mac); err != nil {
+		return err
+	}
+	h.captureList.Del(mac)
+	return nil
+}
 
+func (h *Handler) stopHuntHandlers(mac net.HardwareAddr) error {
 	if err := h.HandlerICMP4.StopHunt(mac); err != nil {
 		return err
 	}
@@ -47,20 +59,5 @@ func (h *Handler) StopHunt(mac net.HardwareAddr) error {
 		return err
 	}
 
-	if pos+1 == len(h.captureList) { // last element?
-		h.captureList = h.captureList[:pos]
-		return nil
-	}
-	copy(h.captureList[pos:], h.captureList[pos+1:])
-	h.captureList = h.captureList[:len(h.captureList)-1]
 	return nil
-}
-
-func (h *Handler) capturedIndex(mac net.HardwareAddr) int {
-	for i := range h.captureList {
-		if bytes.Equal(h.captureList[i], mac) {
-			return i
-		}
-	}
-	return -1
 }

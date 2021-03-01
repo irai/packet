@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"net"
 	"time"
-
-	"github.com/irai/packet/raw"
 )
 
 type Notification struct {
@@ -21,6 +19,7 @@ func (h *Handler) AddCallback(f func(Notification) error) {
 
 func (h *Handler) purgeLoop(ctx context.Context, offline time.Duration, purge time.Duration) error {
 
+	// Typically one minute but loop more often if offline smaller than 1 minute
 	dur := time.Minute * 1
 	if offline <= dur {
 		dur = offline / 2
@@ -38,7 +37,6 @@ func (h *Handler) purgeLoop(ctx context.Context, offline time.Duration, purge ti
 			deleteCutoff := now.Add(purge * -1)    // Delete entries that have not responded in last hour
 
 			purge := make([]net.IP, 0, 16)
-			notify := make([]Notification, 0, 16)
 
 			h.LANHosts.Lock()
 			for _, e := range h.LANHosts.Table {
@@ -50,13 +48,10 @@ func (h *Handler) purgeLoop(ctx context.Context, offline time.Duration, purge ti
 				}
 
 				// Set offline if no updates since the offline deadline
-				// Ignore virtual hosts; offline controlled by spoofing goroutine
 				if e.Online && e.LastSeen.Before(offlineCutoff) {
-					e.Online = false
-					notify = append(notify, Notification{IP: e.IP, MAC: e.MAC, Online: e.Online})
+					h.makeOffline(e)
 				}
 			}
-			callback := h.callback // keep a copy
 			h.LANHosts.Unlock()
 
 			// delete after loop because this will change the table
@@ -65,20 +60,11 @@ func (h *Handler) purgeLoop(ctx context.Context, offline time.Duration, purge ti
 					h.LANHosts.Delete(v)
 				}
 			}
-
-			for _, v := range notify {
-				for _, f := range callback {
-					if err := f(v); err != nil {
-						fmt.Printf("packet: error in call back: %s", err)
-					}
-				}
-			}
 		}
 	}
 }
 
-func (h *Handler) notifyCallback(host *raw.Host) {
-	notification := Notification{IP: host.IP, MAC: host.MAC, Online: host.Online}
+func (h *Handler) notifyCallback(notification Notification) {
 	for _, f := range h.callback {
 		if err := f(notification); err != nil {
 			fmt.Printf("packet: error in call back: %s", err)

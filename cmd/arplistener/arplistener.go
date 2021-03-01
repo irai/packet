@@ -54,12 +54,7 @@ func main() {
 	}
 	defer packet.Close()
 
-	// setup ARP handler
-	arpConfig := arp.Config{
-		ProbeInterval:           time.Minute * 1,
-		FullNetworkScanInterval: time.Minute * 20,
-		PurgeDeadline:           time.Minute * 10}
-	arpHandler, err := arp.New(packet.NICInfo, packet.Conn(), packet.LANHosts, arpConfig)
+	arpHandler, err := arp.New(packet.NICInfo, packet.Conn(), packet.LANHosts)
 	packet.HandlerARP = arpHandler
 
 	// Start server listener

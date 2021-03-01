@@ -78,7 +78,7 @@ const (
 
 // String interface
 func (e MACEntry) String() string {
-	return fmt.Sprintf("mac=%17s since=%v ips=%v", e.State, e.MAC, time.Since(e.LastUpdated), e.IPs())
+	return fmt.Sprintf("state=%s mac=%17s since=%v ips=%v", e.State, e.MAC, time.Since(e.LastUpdated), e.IPs())
 }
 
 func (t *arpTable) printTable() {

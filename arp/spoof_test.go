@@ -1,14 +1,6 @@
 package arp
 
-import (
-	"syscall"
-	"testing"
-	"time"
-
-	"github.com/irai/packet"
-	"github.com/irai/packet/raw"
-)
-
+/***
 func Test_Spoof_ForceIPChange(t *testing.T) {
 	//Debug = true
 	// log.SetLevel(log.DebugLevel)
@@ -96,3 +88,4 @@ func Test_Spoof_ForceIPChange(t *testing.T) {
 		t.Errorf("TestHandler_ForceIPChange invalid virtual ip52 entry=%+v", entry)
 	}
 }
+***/

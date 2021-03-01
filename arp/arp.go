@@ -1,31 +1,14 @@
 package arp
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"sync"
-	"time"
 
 	"log"
 
 	"github.com/irai/packet/raw"
 )
-
-// Config holds configuration parameters
-//
-// Set FullNetworkScanInterval = 0 to avoid network scan
-type Config struct {
-	FullNetworkScanInterval time.Duration `yaml:"-"` // Set it to zero if no scan required
-	ProbeInterval           time.Duration `yaml:"-"` // how often to probe if IP is online
-	OfflineDeadline         time.Duration `yaml:"-"` // mark offline if more than OfflineInte
-	PurgeDeadline           time.Duration `yaml:"-"`
-}
-
-func (c Config) String() string {
-	return fmt.Sprintf("scan=%v probe=%s offline=%v purge=%v",
-		c.FullNetworkScanInterval, c.ProbeInterval, c.OfflineDeadline, c.PurgeDeadline)
-}
 
 type Data struct {
 	IPArray [nIPs]IPEntry
@@ -42,7 +25,6 @@ type Handler struct {
 	LANHosts *raw.HostTable
 	virtual  *arpTable
 	NICInfo  *raw.NICInfo
-	config   Config
 	sync.RWMutex
 	notification chan<- MACEntry // notification channel for state change
 	wg           sync.WaitGroup
@@ -54,7 +36,7 @@ var (
 )
 
 // New creates an ARP handler for a given connection
-func New(info *raw.NICInfo, conn net.PacketConn, table *raw.HostTable, config Config) (h *Handler, err error) {
+func New(info *raw.NICInfo, conn net.PacketConn, table *raw.HostTable) (h *Handler, err error) {
 	h = &Handler{}
 	// h.table, _ = loadARPProcTable() // load linux proc table
 	h.LANHosts = table
@@ -63,32 +45,10 @@ func New(info *raw.NICInfo, conn net.PacketConn, table *raw.HostTable, config Co
 	if h.NICInfo.HostIP4.IP = info.HostIP4.IP.To4(); h.NICInfo.HostIP4.IP == nil {
 		return nil, raw.ErrInvalidIP4
 	}
-	h.config.FullNetworkScanInterval = config.FullNetworkScanInterval
-	h.config.ProbeInterval = config.ProbeInterval
-	h.config.OfflineDeadline = config.OfflineDeadline
-	h.config.PurgeDeadline = config.PurgeDeadline
 	h.conn = conn
 
 	if h.NICInfo.HomeLAN4.IP == nil && h.NICInfo.HomeLAN4.IP.IsUnspecified() {
 		return nil, raw.ErrInvalidIP4
-	}
-
-	if h.config.FullNetworkScanInterval <= 0 || h.config.FullNetworkScanInterval > time.Hour*12 {
-		h.config.FullNetworkScanInterval = time.Minute * 60
-	}
-	if h.config.ProbeInterval <= 0 || h.config.ProbeInterval > time.Minute*10 {
-		h.config.ProbeInterval = time.Minute * 2
-	}
-	if h.config.OfflineDeadline <= h.config.ProbeInterval {
-		h.config.OfflineDeadline = h.config.ProbeInterval * 2
-	}
-	if h.config.PurgeDeadline <= h.config.OfflineDeadline {
-		h.config.PurgeDeadline = time.Minute * 61
-	}
-
-	if Debug {
-		log.Printf("arp Config %s", h.config)
-		h.PrintTable()
 	}
 
 	return h, nil
@@ -121,6 +81,7 @@ func (h *Handler) End() {
 
 // Start start background processes
 func (h *Handler) Start() error {
+	/***
 	if h.config.FullNetworkScanInterval == 0 {
 		return nil
 	}
@@ -144,6 +105,7 @@ func (h *Handler) Start() error {
 			fmt.Println("arp goroutine scanLoop ended")
 		}
 	}()
+	***/
 
 	return nil
 }

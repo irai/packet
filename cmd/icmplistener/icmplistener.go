@@ -33,8 +33,13 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
+	// setup packet handler
+	config := packet.Config{
+		ProbeInterval:           time.Minute * 1,
+		FullNetworkScanInterval: time.Minute * 20,
+		PurgeDeadline:           time.Minute * 10}
 	// setup packet listener
-	pkt, err := packet.New(*nic)
+	pkt, err := config.New(*nic)
 	if err != nil {
 		fmt.Printf("error opening nic=%s: %s\n", *nic, err)
 		iif, _ := net.Interfaces()
@@ -56,12 +61,7 @@ func main() {
 		return nil
 	})
 
-	// setup ARP handler
-	arpConfig := arp.Config{
-		ProbeInterval:           time.Minute * 1,
-		FullNetworkScanInterval: time.Minute * 20,
-		PurgeDeadline:           time.Minute * 10}
-	arpHandler, err := arp.New(pkt.NICInfo, pkt.Conn(), pkt.LANHosts, arpConfig)
+	arpHandler, err := arp.New(pkt.NICInfo, pkt.Conn(), pkt.LANHosts)
 	pkt.HandlerARP = arpHandler
 
 	// ICMPv4

@@ -3,6 +3,7 @@ package arp
 import (
 	"context"
 	"fmt"
+	"log"
 	"net"
 	"sync"
 	"syscall"
@@ -85,7 +86,8 @@ func setupTestHandler(t *testing.T) *testContext {
 	}
 
 	// override handler with conn and nicInfo
-	tc.packet, err = packet.Config{Conn: tc.inConn, NICInfo: &nicInfo}.New("eth0")
+	config := &packet.Config{Conn: tc.inConn, NICInfo: &nicInfo, OfflineDeadline: time.Second, PurgeDeadline: time.Second * 2}
+	tc.packet, err = config.New("eth0")
 	if err != nil {
 		panic(err)
 	}
@@ -93,13 +95,7 @@ func setupTestHandler(t *testing.T) *testContext {
 		fmt.Println("nicinfo: ", tc.packet.NICInfo)
 	}
 
-	arpConfig := Config{
-		FullNetworkScanInterval: time.Second * 60,
-		ProbeInterval:           time.Second * 1,
-		OfflineDeadline:         time.Second * 2,
-		PurgeDeadline:           time.Second * 4,
-	}
-	tc.arp, err = New(tc.packet.NICInfo, tc.packet.Conn(), tc.packet.LANHosts, arpConfig)
+	tc.arp, err = New(tc.packet.NICInfo, tc.packet.Conn(), tc.packet.LANHosts)
 	tc.arp.virtual = newARPTable() // we want an empty table
 	tc.packet.HandlerARP = tc.arp
 
@@ -387,69 +383,47 @@ func Test_Handler_CaptureSameIP(t *testing.T) {
 		})
 	}
 }
+***/
 
 func Test_Handler_CaptureEnterOffline(t *testing.T) {
-	// Debug = true
+	Debug = true
+	packet.Debug = true
 	// log.SetLevel(log.DebugLevel)
 	tc := setupTestHandler(t)
 	defer tc.Close()
 
-	packet.Debug = true
-
-	notification := addNotification(tc.ctx, tc.arp)
-
-	e2, _ := tc.arp.table.upsert(StateNormal, mac2, ip2)
-	e2.Online = true
-	e3, _ := tc.arp.table.upsert(StateNormal, mac3, ip3)
-	e3.Online = true
-	e4, _ := tc.arp.table.upsert(StateNormal, mac4, ip4)
-	e4.Online = true
-	tc.arp.ForceIPChange(mac2, true)
-	time.Sleep(time.Millisecond * 20)
-
-	tc.arp.Lock()
-	if e := tc.arp.table.findByMAC(mac2); e == nil || e.State != StateHunt || !e.Online {
-		t.Fatalf("Test_CaptureEnterOffline entry2 state=%s, online=%v", e.State, e.Online)
-	}
-	if e := tc.arp.table.findVirtualIP(ip2); e == nil || e.State != StateVirtualHost || !e.Online {
-		tc.arp.PrintTable()
-		t.Fatalf("Test_CaptureEnterOffline wrong virtualip entry=%v", e)
-	}
-	if e := tc.arp.table.findByMAC(mac3); e == nil || e.State != StateNormal || !e.Online {
-		t.Fatalf("Test_CaptureEnterOffline entry3 state=%s, online=%v", e.State, e.Online)
-	}
-	if e := tc.arp.table.findByMAC(mac4); e == nil || e.State != StateNormal || !e.Online {
-		t.Fatalf("Test_CaptureEnterOffline entry4 state=%s, online=%v", e.State, e.Online)
-	}
-	tc.arp.Unlock()
-
-	time.Sleep(tc.arp.config.ProbeInterval / 2)
-
 	tests := []struct {
-		name      string
-		ether     raw.Ether
-		arp       ARP
-		wantErr   error
-		wantLen   int
-		wantIPs   int
-		wantState arpState
+		name    string
+		ether   raw.Ether
+		arp     ARP
+		wantErr error
+		wantLen int
 	}{
-		{name: "replyMAC3",
-			ether:   newEtherPacket(syscall.ETH_P_ARP, mac3, EthernetBroadcast),
-			arp:     newPacket(OperationReply, mac3, ip3, zeroMAC, hostIP),
-			wantErr: nil, wantLen: 4, wantIPs: 1, wantState: StateNormal},
-		{name: "replyMAC4",
-			ether:   newEtherPacket(syscall.ETH_P_ARP, mac4, EthernetBroadcast),
-			arp:     newPacket(OperationReply, mac4, ip4, zeroMAC, hostIP),
-			wantErr: nil, wantLen: 4, wantIPs: 1, wantState: StateNormal},
-		{name: "replyMAC5",
-			ether:   newEtherPacket(syscall.ETH_P_ARP, mac5, EthernetBroadcast),
-			arp:     newPacket(OperationReply, mac5, ip5, zeroMAC, hostIP),
-			wantErr: nil, wantLen: 5, wantIPs: 1, wantState: StateNormal},
-		// {"reply3-1", newPacket(OperationReply, mac3, ip3, zeroMAC, hostIP), nil, 4, 1, StateNormal},
-		// {"reply4-1", newPacket(OperationReply, mac4, ip4, zeroMAC, hostIP), nil, 4, 1, StateNormal},
-		// {"reply5-1", newPacket(OperationReply, mac5, ip5, zeroMAC, hostIP), nil, 5, 1, StateNormal},
+		{name: "replymac2",
+			ether:   newEtherPacket(syscall.ETH_P_ARP, mac2, routerMAC),
+			arp:     newPacket(OperationReply, mac2, ip2, routerMAC, routerIP),
+			wantErr: nil, wantLen: 1},
+		{name: "replymac3",
+			ether:   newEtherPacket(syscall.ETH_P_ARP, mac3, routerMAC),
+			arp:     newPacket(OperationReply, mac3, ip3, routerMAC, routerIP),
+			wantErr: nil, wantLen: 2},
+		{name: "replymac4",
+			ether:   newEtherPacket(syscall.ETH_P_ARP, mac4, routerMAC),
+			arp:     newPacket(OperationReply, mac4, ip4, routerMAC, routerIP),
+			wantErr: nil, wantLen: 3},
 	}
+
+	count := 0
+	tc.packet.AddCallback(
+		func(n packet.Notification) error {
+			if n.Online {
+				count++
+			} else {
+				count--
+			}
+			return nil
+		})
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ether, err := tt.ether.AppendPayload(tt.arp)
@@ -457,55 +431,34 @@ func Test_Handler_CaptureEnterOffline(t *testing.T) {
 				panic(err)
 			}
 			if _, err := tc.outConn.WriteTo(ether, nil); err != tt.wantErr {
-				t.Errorf("Test_Capture:%s error = %v, wantErr %v", tt.name, err, tt.wantErr)
+				t.Errorf("Test_Requests:%s error = %v, wantErr %v", tt.name, err, tt.wantErr)
 			}
 			time.Sleep(time.Millisecond * 10)
 
-			tc.arp.Lock()
-			defer tc.arp.Unlock()
+			tc.arp.LANHosts.Lock()
+			defer tc.arp.LANHosts.Unlock()
 
-			if len(tc.arp.table.macTable) != tt.wantLen {
-				t.Errorf("Test_Capture:%s table len = %v, wantLen %v", tt.name, len(tc.arp.table.macTable), tt.wantLen)
-			}
-			if tt.wantIPs != 0 {
-				e := tc.arp.table.findByMAC(tt.arp.SrcMAC())
-				if e == nil || len(e.IPs()) != tt.wantIPs {
-					t.Fatalf("Test_Capture:%s table IP entry=%+v, wantLen %v", tt.name, e, tt.wantIPs)
-				}
-				if e.State != tt.wantState {
-					t.Errorf("Test_Capture:%s entry state=%s, wantState %v", tt.name, e.State, tt.wantState)
-
-				}
+			if len(tc.arp.LANHosts.Table) != tt.wantLen {
+				t.Errorf("Test_Requests:%s table len = %v, wantLen %v", tt.name, len(tc.arp.LANHosts.Table), tt.wantLen)
 			}
 		})
 	}
 
+	tc.packet.StartHunt(mac2)
+	tc.arp.Lock()
+	if e := tc.arp.virtual.findByMAC(mac2); e == nil || e.State != StateHunt {
+		t.Fatalf("Test_CaptureEnterOffline entry2 state=%s", e.State)
+	}
+	tc.arp.Unlock()
+
 	// wait until offline
-	time.Sleep(tc.arp.config.OfflineDeadline + time.Second)
+	time.Sleep(tc.packet.OfflineDeadline + time.Second)
 
 	tc.arp.Lock()
-	if e := tc.arp.table.findByMAC(mac2); e == nil || e.State != StateNormal || e.Online {
-		t.Fatalf("Test_CaptureEnterOffline is not normal entry=%+v", e)
-	}
-	if e := tc.arp.table.findVirtualIP(ip2); e == nil || e.State != StateVirtualHost || !e.Online {
-		t.Fatalf("Test_CaptureEnterOffline wrong virtualip entry=%v", e)
+	if e := tc.arp.virtual.findByMAC(mac2); e != nil {
+		t.Fatalf("Test_CaptureEnterOffline is not empty entry=%+v", e)
 	}
 	tc.arp.Unlock()
 
-	// wait until purge
-	time.Sleep(tc.arp.config.PurgeDeadline - tc.arp.config.OfflineDeadline)
-
-	tc.arp.Lock()
-	if e := tc.arp.table.findByMAC(mac2); e != nil {
-		t.Fatalf("Test_CaptureEnterOffline is not offline entry=%+v", e)
-	}
-	if e := tc.arp.table.findVirtualIP(ip2); e == nil || e.State != StateVirtualHost || e.Online {
-		tc.arp.printTable()
-		t.Fatalf("Test_CaptureEnterOffline wrong virtualip entry=%v", e)
-	}
-	tc.arp.Unlock()
-
-	log.Printf("notification %+v", notification)
+	log.Printf("notification count=%+v", count)
 }
-
-***/

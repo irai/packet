@@ -26,23 +26,31 @@ type Config struct {
 
 	// Conn enables the client to override the connection with a another packet conn
 	// usefule for testing
-	Conn    net.PacketConn // listen connectinon
-	NICInfo *raw.NICInfo   // override nic information
+	Conn                    net.PacketConn // listen connectinon
+	NICInfo                 *raw.NICInfo   // override nic information
+	FullNetworkScanInterval time.Duration  // Set it to zero if no scan required
+	ProbeInterval           time.Duration  // how often to probe if IP is online
+	OfflineDeadline         time.Duration  // mark offline if more than OfflineInte
+	PurgeDeadline           time.Duration
 }
 
 // Handler implements ICMPv6 Neighbor Discovery Protocol
 // see: https://mdlayher.com/blog/network-protocol-breakdown-ndp-and-go/
 type Handler struct {
-	NICInfo      *raw.NICInfo
-	conn         net.PacketConn
-	LANHosts     *raw.HostTable
-	HandlerIP4   raw.PacketProcessor
-	HandlerIP6   raw.PacketProcessor
-	HandlerICMP4 raw.PacketProcessor
-	HandlerICMP6 raw.PacketProcessor
-	HandlerARP   raw.PacketProcessor
-	callback     []func(Notification) error
-	captureList  []net.HardwareAddr
+	NICInfo                 *raw.NICInfo
+	conn                    net.PacketConn
+	LANHosts                *raw.HostTable
+	HandlerIP4              raw.PacketProcessor
+	HandlerIP6              raw.PacketProcessor
+	HandlerICMP4            raw.PacketProcessor
+	HandlerICMP6            raw.PacketProcessor
+	HandlerARP              raw.PacketProcessor
+	callback                []func(Notification) error
+	captureList             *raw.SetHandler
+	FullNetworkScanInterval time.Duration // Set it to -1 if no scan required
+	ProbeInterval           time.Duration // how often to probe if IP is online
+	OfflineDeadline         time.Duration // mark offline if no updates
+	PurgeDeadline           time.Duration // purge entry if no updates
 	sync.Mutex
 }
 
@@ -67,7 +75,7 @@ func (config Config) New(nic string) (*Handler, error) {
 
 	var err error
 
-	h := &Handler{LANHosts: raw.New()}
+	h := &Handler{LANHosts: raw.New(), captureList: &raw.SetHandler{}}
 
 	h.NICInfo = config.NICInfo
 	if h.NICInfo == nil {
@@ -75,6 +83,23 @@ func (config Config) New(nic string) (*Handler, error) {
 		if err != nil {
 			return nil, fmt.Errorf("interface not found nic=%s: %w", nic, err)
 		}
+	}
+
+	h.FullNetworkScanInterval = config.FullNetworkScanInterval
+	if h.FullNetworkScanInterval != -1 && (h.FullNetworkScanInterval <= 0 || h.FullNetworkScanInterval > time.Hour*12) {
+		h.FullNetworkScanInterval = time.Minute * 60
+	}
+	h.ProbeInterval = config.ProbeInterval
+	if h.ProbeInterval <= 0 || h.ProbeInterval > time.Minute*10 {
+		h.ProbeInterval = time.Minute * 2
+	}
+	h.OfflineDeadline = config.OfflineDeadline
+	if h.OfflineDeadline <= h.ProbeInterval {
+		h.OfflineDeadline = h.ProbeInterval * 2
+	}
+	h.PurgeDeadline = config.PurgeDeadline
+	if h.PurgeDeadline <= h.OfflineDeadline {
+		h.PurgeDeadline = time.Minute * 61
 	}
 
 	// Skip if conn is overriden
@@ -221,8 +246,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 	go h.start()
 	defer h.end()
 
-	// Offline in 5 minutes, purge in 30
-	go h.purgeLoop(ctxt, time.Minute*5, time.Minute*30)
+	go h.purgeLoop(ctxt, h.OfflineDeadline, h.PurgeDeadline)
 
 	buf := make([]byte, raw.EthMaxSize)
 	for {
@@ -340,9 +364,28 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		}
 
 		// Set to online
+		h.LANHosts.Lock()
 		if host != nil && !host.Online {
-			host.SetOnline()
-			h.notifyCallback(host)
+			h.makeOnline(host)
 		}
+		h.LANHosts.Unlock()
 	}
+}
+
+func (h *Handler) makeOnline(host *raw.Host) {
+	host.Online = true
+	if h.captureList.Index(host.MAC) != -1 {
+		h.startHuntHandlers(host.MAC)
+	}
+	notification := Notification{IP: host.IP, MAC: host.MAC, Online: host.Online}
+	go h.notifyCallback(notification)
+}
+
+func (h *Handler) makeOffline(host *raw.Host) {
+	host.Online = false
+	if h.captureList.Index(host.MAC) != -1 {
+		h.stopHuntHandlers(host.MAC)
+	}
+	notification := Notification{IP: host.IP, MAC: host.MAC, Online: host.Online}
+	go h.notifyCallback(notification)
 }

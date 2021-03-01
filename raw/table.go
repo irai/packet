@@ -34,10 +34,6 @@ func (e *Host) SetOffline() {
 	e.Online = false
 }
 
-func (e *Host) SetOnline() {
-	e.Online = true
-}
-
 func (e *Host) String() string {
 	return fmt.Sprintf("mac=%s ip=%v online=%v lastSeen=%s", e.MAC, e.IP, e.Online, time.Since(e.LastSeen))
 }
