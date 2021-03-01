@@ -2,6 +2,7 @@ package raw
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"log"
@@ -16,6 +17,7 @@ type NICInfo struct {
 	IFI       *net.Interface
 	HostMAC   net.HardwareAddr
 	HostIP4   net.IPNet
+	RouterMAC net.HardwareAddr
 	RouterIP4 net.IPNet
 	HomeLAN4  net.IPNet
 	HostLLA   net.IPNet
@@ -23,7 +25,7 @@ type NICInfo struct {
 }
 
 func (e NICInfo) String() string {
-	return fmt.Sprintf("mac=%s hostip4=%s lla=%s gua=%s router=%s", e.HostMAC, e.HostIP4, e.HostLLA, e.HostGUA, e.RouterIP4)
+	return fmt.Sprintf("mac=%s hostip4=%s lla=%s gua=%s routerIP4=%s routerMAC=%s", e.HostMAC, e.HostIP4, e.HostLLA, e.HostGUA, e.RouterIP4, e.RouterMAC)
 }
 
 // GetNICInfo returns the interface configuration
@@ -67,11 +69,12 @@ func GetNICInfo(nic string) (info *NICInfo, err error) {
 		return nil, fmt.Errorf("ipv4 not found on interface")
 	}
 
-	var router net.IP
-	if router, err = GetLinuxDefaultGateway(); err != nil {
-		fmt.Println("error getting router ", err)
+	defaultGW, err := GetIP4DefaultGatewayAddr(nic)
+	if err != nil {
+		return nil, err
 	}
-	info.RouterIP4 = net.IPNet{IP: router.To4(), Mask: info.HostIP4.Mask}
+	info.RouterIP4 = net.IPNet{IP: defaultGW.IP.To4(), Mask: info.HostIP4.Mask}
+	info.RouterMAC = defaultGW.MAC
 	info.HomeLAN4 = net.IPNet{IP: info.HostIP4.IP.Mask(info.HostIP4.Mask).To4(), Mask: info.HostIP4.Mask}
 	info.HostMAC = info.IFI.HardwareAddr
 	return info, nil
@@ -129,4 +132,75 @@ func GetLinuxDefaultGateway() (gw net.IP, err error) {
 		break
 	}
 	return ipd32, nil
+}
+
+// LoadLinuxARPTable read arp entries from linux proc file
+//
+// /proc/net/arp format:
+//   IP address       HW type     Flags       HW address            Mask     Device
+//   192.168.0.1      0x1         0x2         20:0c:c8:23:f7:1a     *        eth0
+//   192.168.0.4      0x1         0x2         4c:bb:58:f4:b2:d7     *        eth0
+//   192.168.0.5      0x1         0x2         84:b1:53:ea:1f:40     *        eth0
+//
+func LoadLinuxARPTable(nic string) (list []Addr, err error) {
+	const name = "/proc/net/arp"
+
+	file, err := os.Open(name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open proc file=%s: %w ", name, err)
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	scanner.Scan() // skip first row with fields description
+
+	for scanner.Scan() {
+		tokens := strings.Fields(scanner.Text())
+		if len(tokens) < 6 {
+			fmt.Println("raw: error in loadARPProcTable - missing fields", tokens)
+			continue
+		}
+		if tokens[5] != nic {
+			continue
+		}
+		ip := net.ParseIP(tokens[0]).To4()
+		if ip == nil || ip.IsUnspecified() {
+			fmt.Println("raw: error in loadARPProcTable - invalid IP", tokens)
+			continue
+		}
+		mac, err := net.ParseMAC(tokens[3])
+		if err != nil || bytes.Equal(mac, net.HardwareAddr{0, 0, 0, 0, 0, 0}) || bytes.Equal(mac, net.HardwareAddr{}) {
+			fmt.Println("raw: error in loadARPProcTable - invalid MAC", tokens)
+			continue
+		}
+		list = append(list, Addr{MAC: mac, IP: ip})
+	}
+
+	return list, nil
+}
+
+// GetIP4DefaultGatewayAddr return the IP4 default gatewy for nic
+func GetIP4DefaultGatewayAddr(nic string) (addr Addr, err error) {
+
+	if addr.IP, err = GetLinuxDefaultGateway(); err != nil {
+		fmt.Println("error getting router ", err)
+		return Addr{}, ErrInvalidIP4
+	}
+	addr.IP = addr.IP.To4()
+
+	arpList, err := LoadLinuxARPTable(nic)
+	if arpList == nil || err != nil {
+		return Addr{}, fmt.Errorf("default gw mac not available on interface")
+	}
+	for _, v := range arpList {
+		if v.IP.Equal(addr.IP) {
+			addr.MAC = v.MAC
+			break
+		}
+	}
+	if addr.MAC == nil {
+		return Addr{}, fmt.Errorf("default gw mac not found on interface")
+	}
+
+	return addr, nil
 }
