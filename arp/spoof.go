@@ -15,11 +15,11 @@ import (
 // client will revert back to "normal" when a new IP is detected for the MAC
 func (h *Handler) startSpoof(mac net.HardwareAddr) error {
 	if Debug {
-		log.Printf("arp force IP change mac=%s", mac)
+		log.Printf("arp start spoof mac=%s", mac)
 	}
 
-	h.Lock()
-	defer h.Unlock()
+	h.arpMutex.Lock()
+	defer h.arpMutex.Unlock()
 
 	entry, _ := h.virtual.upsert(StateHunt, mac, nil)
 	for _, v := range h.LANHosts.FindMAC(mac) {
@@ -33,11 +33,11 @@ func (h *Handler) startSpoof(mac net.HardwareAddr) error {
 // stopSpoof terminate the hunting process
 func (h *Handler) stopSpoof(mac net.HardwareAddr) error {
 	if Debug {
-		log.Printf("arp stop IP change mac=%s", mac)
+		log.Printf("arp stop spoof mac=%s", mac)
 	}
 
-	h.Lock()
-	defer h.Unlock()
+	h.arpMutex.Lock()
+	defer h.arpMutex.Unlock()
 	h.virtual.delete(mac)
 	return nil
 }
@@ -112,9 +112,9 @@ func (h *Handler) IPChanged(mac net.HardwareAddr, clientIP net.IP) {
 //
 func (h *Handler) spoofLoop(ctx context.Context, client *MACEntry, ip net.IP) {
 
-	h.Lock()
+	h.arpMutex.Lock()
 	mac := client.MAC
-	h.Unlock()
+	h.arpMutex.Unlock()
 
 	// 4 second re-arp seem to be adequate;
 	// Experimented with 300ms but no noticeable improvement other the chatty net.
@@ -123,16 +123,16 @@ func (h *Handler) spoofLoop(ctx context.Context, client *MACEntry, ip net.IP) {
 	nTimes := 0
 	log.Printf("arp attack ip=%s client=%s time=%v", ip, mac, startTime)
 	for {
-		h.Lock()
+		h.arpMutex.Lock()
 		// Always search for MAC in case it has been deleted.
 		client := h.virtual.findByMAC(mac)
 		if client == nil || client.State != StateHunt {
 			log.Printf("arp attack end client=%s repeat=%v duration=%v", mac, nTimes, time.Now().Sub(startTime))
-			h.Unlock()
+			h.arpMutex.Unlock()
 			return
 		}
 
-		h.Unlock()
+		h.arpMutex.Unlock()
 
 		// Re-arp target to change router to host so all traffic comes to us
 		// i.e. tell target I am 192.168.0.1

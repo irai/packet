@@ -9,6 +9,20 @@ import (
 	"github.com/irai/packet/raw"
 )
 
+func newEtherPacket(hType uint16, srcMAC net.HardwareAddr, dstMAC net.HardwareAddr) raw.Ether {
+	buf := make([]byte, raw.EthMaxSize) // allocate in the stack
+	p := raw.EtherMarshalBinary(buf, hType, srcMAC, dstMAC)
+	return p
+}
+
+func newPacket(op uint16, sMAC net.HardwareAddr, sIP net.IP, tMAC net.HardwareAddr, tIP net.IP) ARP {
+	p, err := ARPMarshalBinary(nil, op, sMAC, sIP, tMAC, tIP)
+	if err != nil {
+		panic(err)
+	}
+	return p
+}
+
 func tFrame(proto uint16, operation uint16, srcMAC net.HardwareAddr, srcIP net.IP, dstMAC net.HardwareAddr, dstIP net.IP) []byte {
 	b, _ := ARPMarshalBinary(nil, operation, srcMAC, srcIP, dstMAC, dstIP)
 	return b

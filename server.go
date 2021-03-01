@@ -363,29 +363,34 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			fmt.Println("packet: unsupported level 4 header", l4Proto)
 		}
 
-		// Set to online
+		// Lock and sset to online
 		h.LANHosts.Lock()
 		if host != nil && !host.Online {
-			h.makeOnline(host)
+			host.Online = true // make sure we don't have a lock
+			mac := host.MAC
+			ip := host.IP
+			h.LANHosts.Unlock()
+			h.makeOnline(mac, ip)
+		} else {
+			h.LANHosts.Unlock()
 		}
-		h.LANHosts.Unlock()
 	}
 }
 
-func (h *Handler) makeOnline(host *raw.Host) {
-	host.Online = true
-	if h.captureList.Index(host.MAC) != -1 {
-		h.startHuntHandlers(host.MAC)
+func (h *Handler) makeOnline(mac net.HardwareAddr, ip net.IP) {
+	fmt.Printf("packet: IP is online ip=%s mac=%s\n", ip, mac)
+	if h.captureList.Index(mac) != -1 {
+		h.startHuntHandlers(mac)
 	}
-	notification := Notification{IP: host.IP, MAC: host.MAC, Online: host.Online}
+	notification := Notification{IP: ip, MAC: mac, Online: true}
 	go h.notifyCallback(notification)
 }
 
-func (h *Handler) makeOffline(host *raw.Host) {
-	host.Online = false
-	if h.captureList.Index(host.MAC) != -1 {
-		h.stopHuntHandlers(host.MAC)
+func (h *Handler) makeOffline(mac net.HardwareAddr, ip net.IP) {
+	fmt.Printf("packet: IP is offline ip=%s mac=%s\n", ip, mac)
+	if h.captureList.Index(mac) != -1 {
+		h.stopHuntHandlers(mac)
 	}
-	notification := Notification{IP: host.IP, MAC: host.MAC, Online: host.Online}
+	notification := Notification{IP: ip, MAC: mac, Online: false}
 	go h.notifyCallback(notification)
 }

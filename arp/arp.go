@@ -21,13 +21,13 @@ var _ raw.PacketProcessor = &Handler{}
 
 // Handler stores instance variables
 type Handler struct {
-	conn     net.PacketConn
-	LANHosts *raw.HostTable
-	virtual  *arpTable
-	NICInfo  *raw.NICInfo
-	sync.RWMutex
+	conn         net.PacketConn
+	LANHosts     *raw.HostTable
+	virtual      *arpTable
+	NICInfo      *raw.NICInfo
 	notification chan<- MACEntry // notification channel for state change
 	wg           sync.WaitGroup
+	arpMutex     sync.RWMutex
 }
 
 var (
@@ -181,17 +181,17 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
 			fmt.Printf("arp  : who is %s: %s\n", frame.DstIP(), frame)
 		}
 		// if targetIP is a virtual host, we are claiming the ip; reply and return
-		h.RLock()
+		h.arpMutex.RLock()
 		if target := h.virtual.findVirtualIP(frame.DstIP()); target != nil {
 			mac := target.MAC
-			h.RUnlock()
+			h.arpMutex.RUnlock()
 			if Debug {
 				log.Printf("arp ip=%s is virtual - send reply smac=%v", frame.DstIP(), mac)
 			}
 			h.reply(frame.SrcMAC(), mac, frame.DstIP(), EthernetBroadcast, frame.DstIP())
 			return host, nil
 		}
-		h.RUnlock()
+		h.arpMutex.RUnlock()
 
 	case probe:
 		// We are not interested in probe ACD (Address Conflict Detection) packets
@@ -221,17 +221,17 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
 			fmt.Printf("arp  : announcement recvd: %s\n", frame)
 		}
 		// if targetIP is a virtual host, we are claiming the ip; reply and return
-		h.RLock()
+		h.arpMutex.RLock()
 		if target := h.virtual.findVirtualIP(frame.DstIP()); target != nil {
 			mac := target.MAC
-			h.RUnlock()
+			h.arpMutex.RUnlock()
 			if Debug {
 				log.Printf("arp ip=%s is virtual - send reply smac=%v", frame.DstIP(), mac)
 			}
 			h.reply(frame.SrcMAC(), mac, frame.DstIP(), EthernetBroadcast, frame.DstIP())
 			return host, nil
 		}
-		h.RUnlock()
+		h.arpMutex.RUnlock()
 
 	default:
 		// +============+===+===========+===========+============+============+===================+===========+
