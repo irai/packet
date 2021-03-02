@@ -127,6 +127,17 @@ func (h *HostTable) FindMAC(mac net.HardwareAddr) (list []Addr) {
 	return list
 }
 
+// GetTable returns a copy of the current table
+func (h *HostTable) GetTable() (list []Host) {
+	h.Lock()
+	defer h.Unlock()
+	list = make([]Host, len(h.Table))
+	for _, v := range h.Table {
+		list = append(list, *v)
+	}
+	return list
+}
+
 func (h *HostTable) Delete(ip net.IP) {
 	h.Lock()
 	defer h.Unlock()
