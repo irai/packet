@@ -13,8 +13,25 @@ type Notification struct {
 	Online bool
 }
 
+// AddCallback sets the call back function for notifications
+// the callback function is invoked immediately for each existing entry
 func (h *Handler) AddCallback(f func(Notification) error) {
+	h.Lock()
 	h.callback = append(h.callback, f)
+	list := []Notification{}
+	for _, v := range h.LANHosts.Table {
+		list = append(list, Notification{MAC: v.MAC, IP: v.IP, Online: v.Online})
+	}
+	h.Unlock()
+	// notify without lock
+	go func() {
+		time.Sleep(time.Millisecond * 10)
+		for _, v := range list {
+			if err := f(v); err != nil {
+				fmt.Printf("packet: error in call back %+v error: %s", v, err)
+			}
+		}
+	}()
 }
 
 func (h *Handler) purgeLoop(ctx context.Context, offline time.Duration, purge time.Duration) error {
