@@ -3,7 +3,6 @@ package icmp6
 import (
 	"fmt"
 	"net"
-	"os"
 	"sync"
 	"time"
 
@@ -13,29 +12,26 @@ import (
 )
 
 type icmpEntry struct {
-	msgRecv *icmp.Message
+	msgRecv packet.ICMPEcho
 	expire  time.Time
 }
 
 var icmpTable = struct {
-	echoIdentifier uint16
-	mutex          sync.Mutex
-	cond           *sync.Cond
-	table          map[uint16]*icmpEntry
+	mutex sync.Mutex
+	cond  *sync.Cond
+	table map[uint16]*icmpEntry
 }{
-	echoIdentifier: 5000,
-	table:          make(map[uint16]*icmpEntry),
+	table: make(map[uint16]*icmpEntry),
 }
 
 func init() {
 	icmpTable.cond = sync.NewCond(&icmpTable.mutex)
 }
 
-// SendEchoRequest transmit an icmp echo request
-// Do not wait for response
-func (h *Handler) SendEchoRequest(dstAddr packet.Addr, id uint16, seq uint16) error {
-	if id == 0 {
-		id = uint16(time.Now().Nanosecond())
+// SendEchoRequest transmit an icmp6 echo request and do not wait for response
+func (h *Handler) SendEchoRequest(srcAddr packet.Addr, dstAddr packet.Addr, id uint16, seq uint16) error {
+	if !packet.IsIP6(srcAddr.IP) || !packet.IsIP6(dstAddr.IP) {
+		return packet.ErrInvalidIP4
 	}
 	icmpMessage := icmp.Message{
 		Type: ipv6.ICMPTypeEchoRequest,
@@ -52,16 +48,49 @@ func (h *Handler) SendEchoRequest(dstAddr packet.Addr, id uint16, seq uint16) er
 		return err
 	}
 
-	return h.sendPacket(packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, dstAddr, p)
+	return h.sendPacket(srcAddr, dstAddr, p)
 }
 
 // Ping send a ping request and wait for a reply
-func (h *Handler) Ping(src net.IP, dst net.IP, timeout time.Duration) (err error) {
+func (h *Handler) Ping(dstAddr packet.Addr, timeout time.Duration) (err error) {
+	if timeout <= 0 || timeout > time.Second*10 {
+		timeout = time.Second * 2
+	}
+	icmpTable.cond.L.Lock()
+	msg := icmpEntry{expire: time.Now().Add(timeout)}
+	id := uint16(time.Now().Nanosecond())
+	seq := uint16(1)
+	icmpTable.table[id] = &msg
+	icmpTable.cond.L.Unlock()
+
+	if err = h.SendEchoRequest(packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, dstAddr, id, seq); err != nil {
+		// fmt.Println("error sending ping packet", err)
+		return err
+	}
+
+	// wait with mutex locked
+	icmpTable.cond.L.Lock()
+	for msg.msgRecv == nil && msg.expire.After(time.Now()) {
+		go func() { time.Sleep(timeout); icmpTable.cond.Broadcast() }() // wake up in timeout if not before
+		icmpTable.cond.Wait()
+	}
+	delete(icmpTable.table, id)
+	icmpTable.cond.L.Unlock()
+
+	if msg.msgRecv == nil {
+		return packet.ErrTimeout
+	}
+
+	return nil
+}
+
+// Ping send a ping request and wait for a reply
+func (h *Handler) PING(src net.IP, dst net.IP, timeout time.Duration) (err error) {
 
 	icmpTable.cond.L.Lock()
 	msg := icmpEntry{expire: time.Now().Add(timeout)}
-	id := icmpTable.echoIdentifier
-	icmpTable.echoIdentifier++
+	id := uint16(time.Now().Nanosecond())
+	seq := uint16(1)
 	icmpTable.table[id] = &msg
 	icmpTable.cond.L.Unlock()
 
@@ -74,7 +103,7 @@ func (h *Handler) Ping(src net.IP, dst net.IP, timeout time.Duration) (err error
 	wm := icmp.Message{
 		Type: ipv6.ICMPTypeEchoRequest, Code: 0,
 		Body: &icmp.Echo{
-			ID: os.Getpid() & 0xffff, Seq: 1,
+			ID: int(id), Seq: int(seq),
 			Data: []byte("HELLO-R-U-THERE"),
 		},
 	}

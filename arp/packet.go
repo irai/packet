@@ -13,6 +13,7 @@ const (
 	OperationReply   = 2
 )
 
+// ARP memory mapped arp packet
 type ARP []byte
 
 // arpLen length is header + 2 * MACs + 2 IPs

@@ -57,24 +57,24 @@ func main() {
 	fmt.Println("nic info  :", engine.NICInfo)
 
 	// ARP
-	arpHandler, err := arp.Open(engine)
+	arpHandler, err := arp.Attach(engine)
 	if err != nil {
 		log.Fatalf("Failed to create arp handler nic=%s handler: %s", *nic, err)
 	}
 
 	// ICMPv4
-	h4, err := icmp4.Open(engine)
+	h4, err := icmp4.Attach(engine)
 	if err != nil {
 		log.Fatalf("Failed to create icmp nic=%s handler: %s", *nic, err)
 	}
-	defer h4.Close()
+	defer h4.Detach()
 
 	// ICMPv6
-	h6, err := icmp6.New(engine)
+	h6, err := icmp6.Attach(engine)
 	if err != nil {
 		log.Fatalf("Failed to create icmp6 nic=%s handler: %s", *nic, err)
 	}
-	defer h6.Close()
+	defer h6.Detach()
 
 	engine.AddCallback(func(n packet.Notification) error {
 		fmt.Println("Got notification : ", n)
@@ -162,7 +162,7 @@ func cmd(pt *packet.Handler, a4 *arp.Handler, h *icmp4.Handler, h6 *icmp6.Handle
 				fmt.Printf("ping %v time=%v\n", dstIP, time.Now().Sub(now))
 			}
 			if packet.IsIP6(ip) {
-				if err := h6.SendEchoRequest(packet.Addr{MAC: packet.Eth6AllNodesMulticast, IP: ip}, 1, 2); err != nil {
+				if err := h6.Ping(packet.Addr{MAC: packet.Eth6AllNodesMulticast, IP: ip}, time.Second*2); err != nil {
 					// if err := h6.Ping(h6.LLA().IP, ip, time.Second*2); err != nil {
 					fmt.Println("icmp6 echo error ", err)
 					continue

@@ -233,9 +233,7 @@ func IP4MarshalBinary(p []byte, ttl byte, src net.IP, dst net.IP) IP4 {
 	const totalLen = ipv4.HeaderLen + 0 // 0 payload
 	const id = 0
 	const protocol = 0 // invalid
-
-	// TODO: calculate IPv4 checksum
-	checksum := 0
+	const checksum = 0
 
 	flagsAndFragOff := (fragOffset & 0x1fff) | int(flags<<13)
 	if src = src.To4(); src == nil {

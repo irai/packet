@@ -20,8 +20,8 @@ type Handler struct {
 	engine *packet.Handler
 }
 
-// Open create a ICMPv4 handler and attach to the engine
-func Open(engine *packet.Handler) (h *Handler, err error) {
+// Attach create a ICMPv4 handler and attach to the engine
+func Attach(engine *packet.Handler) (h *Handler, err error) {
 	h = &Handler{engine: engine}
 	h.engine.Lock()
 	h.engine.HandlerICMP4 = h
@@ -30,8 +30,8 @@ func Open(engine *packet.Handler) (h *Handler, err error) {
 	return h, nil
 }
 
-// Close remove the plugin from the engine
-func (h *Handler) Close() error {
+// Detach remove the plugin from the engine
+func (h *Handler) Detach() error {
 	h.engine.Lock()
 	defer h.engine.Unlock()
 	h.engine.HandlerICMP4 = packet.PacketNOOP{}
@@ -75,17 +75,18 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 			return host, fmt.Errorf("icmp invalid icmp4 packet")
 		}
 
+		fmt.Println("DEBUGwill wait")
 		icmpTable.cond.L.Lock()
 		if len(icmpTable.table) <= 0 {
 			icmpTable.cond.L.Unlock()
 			log.Info("no waiting")
 			return host, nil
 		}
+		fmt.Println("DEBUGdone wait")
 
 		entry, ok := icmpTable.table[echo.EchoID()]
 		if ok {
 			entry.msgRecv = echo
-			log.Info("wakingup", echo.EchoID)
 		}
 		icmpTable.cond.L.Unlock()
 		icmpTable.cond.Broadcast()

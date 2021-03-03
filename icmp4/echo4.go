@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/irai/packet"
-	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv4"
 )
@@ -23,13 +22,11 @@ type icmpEntry struct {
 }
 
 var icmpTable = struct {
-	echoIdentifier uint16
-	mutex          sync.Mutex
-	cond           *sync.Cond
-	table          map[uint16]*icmpEntry
+	mutex sync.Mutex
+	cond  *sync.Cond
+	table map[uint16]*icmpEntry
 }{
-	echoIdentifier: 5000,
-	table:          make(map[uint16]*icmpEntry),
+	table: make(map[uint16]*icmpEntry),
 }
 
 func init() {
@@ -38,10 +35,9 @@ func init() {
 
 // SendEchoRequest transmit an icmp echo request
 // Do not wait for response
-func (h *Handler) SendEchoRequest(dstAddr packet.Addr, id uint16, seq uint16) error {
-
-	if id == 0 {
-		id = uint16(time.Now().Nanosecond())
+func (h *Handler) SendEchoRequest(srcAddr packet.Addr, dstAddr packet.Addr, id uint16, seq uint16) error {
+	if srcAddr.IP.To4() == nil || dstAddr.IP.To4() == nil {
+		return packet.ErrInvalidIP4
 	}
 	icmpMessage := icmp.Message{
 		Type: ipv4.ICMPTypeEcho,
@@ -58,26 +54,30 @@ func (h *Handler) SendEchoRequest(dstAddr packet.Addr, id uint16, seq uint16) er
 		return err
 	}
 
-	return h.sendPacket(packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostIP4.IP}, dstAddr, p)
+	return h.sendPacket(srcAddr, dstAddr, p)
 }
 
 // Ping send a ping request and wait for a reply
 func (h *Handler) Ping(dstAddr packet.Addr, timeout time.Duration) (err error) {
+	if timeout <= 0 || timeout > time.Second*10 {
+		timeout = time.Second * 2
+	}
 	icmpTable.cond.L.Lock()
 	msg := icmpEntry{expire: time.Now().Add(timeout)}
-	id := icmpTable.echoIdentifier
-	icmpTable.echoIdentifier++
+	id := uint16(time.Now().Nanosecond())
+	seq := uint16(1)
 	icmpTable.table[id] = &msg
 	icmpTable.cond.L.Unlock()
 
-	if err = h.SendEchoRequest(dstAddr, id, 0); err != nil {
-		log.Error("error sending ping packet", err)
+	if err = h.SendEchoRequest(packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostIP4.IP}, dstAddr, id, seq); err != nil {
+		// log.Error("error sending ping packet", err)
 		return err
 	}
-	return nil
 
+	// wait with mutex locked
 	icmpTable.cond.L.Lock()
 	for msg.msgRecv == nil && msg.expire.After(time.Now()) {
+		go func() { time.Sleep(timeout); icmpTable.cond.Broadcast() }() // wake up in timeout if not before
 		icmpTable.cond.Wait()
 	}
 	delete(icmpTable.table, id)

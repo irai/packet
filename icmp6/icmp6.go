@@ -110,8 +110,8 @@ type Config struct {
 	UniqueLocalAddress   net.IPNet
 }
 
-// New creates an ICMP6 handler and attach to the engine
-func New(engine *packet.Handler) (*Handler, error) {
+// Attach creates an ICMP6 handler and attach to the engine
+func Attach(engine *packet.Handler) (*Handler, error) {
 
 	h := &Handler{LANRouters: make(map[string]*Router)}
 	h.engine = engine
@@ -120,15 +120,15 @@ func New(engine *packet.Handler) (*Handler, error) {
 	return h, nil
 }
 
-// Close removes the plugin from the engine
-func (h *Handler) Close() error {
+// Detach removes the plugin from the engine
+func (h *Handler) Detach() error {
 	h.engine.HandlerICMP6 = packet.PacketNOOP{}
 	return nil
 }
 
 // Start prepares to accept packets
 func (h *Handler) Start() error {
-	if err := h.SendEchoRequest(packet.IP6AllNodesAddr, 0, 0); err != nil {
+	if err := h.SendEchoRequest(packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, packet.IP6AllNodesAddr, 0, 0); err != nil {
 		return err
 	}
 	return nil
@@ -334,13 +334,27 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 		}
 
 	case ipv6.ICMPTypeEchoReply:
-		msg := packet.ICMPEcho(icmp6Frame)
-		if !msg.IsValid() {
+		echo := packet.ICMPEcho(icmp6Frame)
+		if !echo.IsValid() {
 			return host, fmt.Errorf("invalid icmp echo msg len=%d", len(icmp6Frame))
 		}
 		if Debug {
-			fmt.Printf("icmp6: echo reply %s\n", msg)
+			fmt.Printf("icmp6: echo reply %s\n", echo)
 		}
+
+		icmpTable.cond.L.Lock()
+		if len(icmpTable.table) <= 0 {
+			icmpTable.cond.L.Unlock()
+			// log.Info("no waiting")
+			return host, nil
+		}
+
+		entry, ok := icmpTable.table[echo.EchoID()]
+		if ok {
+			entry.msgRecv = echo
+		}
+		icmpTable.cond.L.Unlock()
+		icmpTable.cond.Broadcast()
 
 	case ipv6.ICMPTypeEchoRequest:
 		msg := packet.ICMPEcho(icmp6Frame)

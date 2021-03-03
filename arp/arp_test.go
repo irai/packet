@@ -55,7 +55,7 @@ func setupTestHandler(t *testing.T) *testContext {
 		fmt.Println("nicinfo: ", tc.packet.NICInfo)
 	}
 
-	tc.arp, err = Open(tc.packet)
+	tc.arp, err = Attach(tc.packet)
 	tc.arp.virtual = newARPTable() // we want an empty table
 	tc.packet.HandlerARP = tc.arp
 

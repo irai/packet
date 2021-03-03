@@ -33,8 +33,8 @@ var (
 	Debug bool
 )
 
-// Open creates the ARP handler and attach to the engine
-func Open(engine *packet.Handler) (h *Handler, err error) {
+// Attach creates the ARP handler and attach to the engine
+func Attach(engine *packet.Handler) (h *Handler, err error) {
 	h = &Handler{engine: engine}
 	// h.table, _ = loadARPProcTable() // load linux proc table
 	h.virtual = newARPTable()
@@ -50,8 +50,8 @@ func Open(engine *packet.Handler) (h *Handler, err error) {
 	return h, nil
 }
 
-// Close removes the plugin from the engine
-func (h *Handler) Close() error {
+// Detach removes the plugin from the engine
+func (h *Handler) Detach() error {
 	h.engine.HandlerARP = packet.PacketNOOP{}
 	return nil
 }
