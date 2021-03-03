@@ -28,7 +28,7 @@ func main() {
 	icmp4.Debug = false
 	log.SetLevel(log.DebugLevel)
 
-	fmt.Printf("icmpListener: Listen and send icmp messages\n")
+	fmt.Printf("packetlistener: Listen and send lan packets\n")
 	fmt.Printf("Using nic %v \n", *nic)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -103,7 +103,9 @@ func cmd(pt *packet.Handler, a4 *arp.Handler, h *icmp4.Handler, h6 *icmp6.Handle
 	defer radvs.Stop()
 
 	for {
+		fmt.Println("\n----")
 		fmt.Println("Command: (q)uit            | (p)ing ip | (l)list | (g) loG <level>")
+		fmt.Println(" engine: (attach) engine   | (detach) engine     | engine=[arp|icmp4|icmp6]")
 		fmt.Println(" packet: (hunt) mac        | (release) mac")
 		fmt.Println("  icmp6: (icmp6hunt) mac   | (icmp6release) mac ")
 		fmt.Println("    ndp: (ra) ip6          | (ns) ip6")
@@ -116,8 +118,12 @@ func cmd(pt *packet.Handler, a4 *arp.Handler, h *icmp4.Handler, h6 *icmp6.Handle
 			return
 		case "l":
 			pt.PrintTable()
-			h6.PrintTable()
-			a4.PrintTable()
+			if h6 != nil {
+				h6.PrintTable()
+			}
+			if a4 != nil {
+				a4.PrintTable()
+			}
 
 		case "g":
 			p := getString(tokens, 1)
@@ -150,6 +156,10 @@ func cmd(pt *packet.Handler, a4 *arp.Handler, h *icmp4.Handler, h6 *icmp6.Handle
 			}
 			now := time.Now()
 			if ip.To4() != nil {
+				if h == nil {
+					fmt.Println("error icmp4 is detached")
+					continue
+				}
 				// if err := h.SendEchoRequest(packet.Addr{MAC: packet.Eth4AllNodesMulticast, IP: ip}, 2, 2); err != nil {
 				if err := h.Ping(packet.Addr{MAC: packet.Eth4AllNodesMulticast, IP: ip}, time.Second*2); err != nil {
 					if errors.Is(err, packet.ErrTimeout) {
@@ -162,6 +172,10 @@ func cmd(pt *packet.Handler, a4 *arp.Handler, h *icmp4.Handler, h6 *icmp6.Handle
 				fmt.Printf("ping %v time=%v\n", dstIP, time.Now().Sub(now))
 			}
 			if packet.IsIP6(ip) {
+				if h6 == nil {
+					fmt.Println("error icmp6 is detached")
+					continue
+				}
 				if err := h6.Ping(packet.Addr{MAC: packet.Eth6AllNodesMulticast, IP: ip}, time.Second*2); err != nil {
 					// if err := h6.Ping(h6.LLA().IP, ip, time.Second*2); err != nil {
 					fmt.Println("icmp6 echo error ", err)
@@ -170,6 +184,10 @@ func cmd(pt *packet.Handler, a4 *arp.Handler, h *icmp4.Handler, h6 *icmp6.Handle
 				fmt.Printf("ping %v time=%v\n", dstIP, time.Now().Sub(now))
 			}
 		case "ns":
+			if h6 == nil {
+				fmt.Println("error h6 is detached")
+				continue
+			}
 			ip := getIP(tokens, 1)
 			if ip == nil || !packet.IsIP6(ip) {
 				continue
@@ -178,32 +196,56 @@ func cmd(pt *packet.Handler, a4 *arp.Handler, h *icmp4.Handler, h6 *icmp6.Handle
 				fmt.Printf("error in neigbour solicitation: %s\n", err)
 			}
 		case "ra":
+			if h6 == nil {
+				fmt.Println("error h6 is detached")
+				continue
+			}
 			if err := radvs.SendRA(); err != nil {
 				fmt.Printf("error in router adversitement: %s\n", err)
 			}
 		case "arphunt":
+			if a4 == nil {
+				fmt.Println("error arp is detached")
+				continue
+			}
 			if mac := getMAC(tokens, 1); mac != nil {
 				if err := a4.StartHunt(mac); err != nil {
 					fmt.Println("error in start hunt ", err)
 				}
 			}
 		case "arprelease":
+			if a4 == nil {
+				fmt.Println("error arp is detached")
+				continue
+			}
 			if mac := getMAC(tokens, 1); mac != nil {
 				if err := a4.StopHunt(mac); err != nil {
 					fmt.Println("error in start hunt ", err)
 				}
 			}
 		case "arpscan":
+			if a4 == nil {
+				fmt.Println("error arp is detached")
+				continue
+			}
 			if err := a4.ScanNetwork(context.Background(), pt.NICInfo.HostIP4); err != nil {
 				fmt.Println("failed scan: ", err)
 			}
 		case "icmp6hunt":
+			if h6 == nil {
+				fmt.Println("error icmp6 is detached")
+				continue
+			}
 			if mac := getMAC(tokens, 1); mac != nil {
 				if err := h6.StartHunt(mac); err != nil {
 					fmt.Println("error in start hunt ", err)
 				}
 			}
 		case "icmp6release":
+			if h6 == nil {
+				fmt.Println("error icmp6 is detached")
+				continue
+			}
 			if mac := getMAC(tokens, 1); mac != nil {
 				if err := h6.StopHunt(mac); err != nil {
 					fmt.Println("error in start hunt ", err)
@@ -221,6 +263,53 @@ func cmd(pt *packet.Handler, a4 *arp.Handler, h *icmp4.Handler, h6 *icmp6.Handle
 					fmt.Println("error in start hunt ", err)
 				}
 			}
+		case "attach":
+			var err error
+			switch getString(tokens, 1) {
+			case "arp":
+				if a4 != nil {
+					fmt.Println("error arp is already attached")
+					continue
+				}
+				a4, err = arp.Attach(pt)
+			case "icmp4":
+				if h != nil {
+					fmt.Println("error icmp4 is already attached")
+					continue
+				}
+				h, err = icmp4.Attach(pt)
+			case "icmp6":
+				if h6 != nil {
+					fmt.Println("error icmp6 is already attached")
+					continue
+				}
+				h6, err = icmp6.Attach(pt)
+			default:
+				fmt.Println("invalid engine name")
+			}
+			if err != nil {
+				fmt.Println("error ", err)
+			}
+		case "detach":
+			var err error
+			switch getString(tokens, 1) {
+			case "arp":
+				err = a4.Detach()
+				a4 = nil
+			case "icmp4":
+				err = h.Detach()
+				h = nil
+			case "icmp6":
+				err = h6.Detach()
+				h6 = nil
+			default:
+				fmt.Println("invalid engine name")
+			}
+			if err != nil {
+				fmt.Println("error ", err)
+			}
+		default:
+			fmt.Println("invalid command")
 		}
 	}
 }
