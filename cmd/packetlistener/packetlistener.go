@@ -161,7 +161,7 @@ func cmd(pt *packet.Handler, a4 *arp.Handler, h *icmp4.Handler, h6 *icmp6.Handle
 					continue
 				}
 				// if err := h.SendEchoRequest(packet.Addr{MAC: packet.Eth4AllNodesMulticast, IP: ip}, 2, 2); err != nil {
-				if err := h.Ping(packet.Addr{MAC: packet.Eth4AllNodesMulticast, IP: ip}, time.Second*2); err != nil {
+				if err := h.Ping(packet.Addr{MAC: pt.NICInfo.HostMAC, IP: pt.NICInfo.HostIP4.IP}, packet.Addr{MAC: packet.Eth4AllNodesMulticast, IP: ip}, time.Second*2); err != nil {
 					if errors.Is(err, packet.ErrTimeout) {
 						fmt.Println("ping timeout ")
 					} else {
@@ -176,7 +176,7 @@ func cmd(pt *packet.Handler, a4 *arp.Handler, h *icmp4.Handler, h6 *icmp6.Handle
 					fmt.Println("error icmp6 is detached")
 					continue
 				}
-				if err := h6.Ping(packet.Addr{MAC: packet.Eth6AllNodesMulticast, IP: ip}, time.Second*2); err != nil {
+				if err := h6.Ping(packet.Addr{MAC: pt.NICInfo.HostMAC, IP: pt.NICInfo.HostLLA.IP}, packet.Addr{MAC: packet.Eth6AllNodesMulticast, IP: ip}, time.Second*2); err != nil {
 					// if err := h6.Ping(h6.LLA().IP, ip, time.Second*2); err != nil {
 					fmt.Println("icmp6 echo error ", err)
 					continue

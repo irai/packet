@@ -58,7 +58,7 @@ func (h *Handler) SendEchoRequest(srcAddr packet.Addr, dstAddr packet.Addr, id u
 }
 
 // Ping send a ping request and wait for a reply
-func (h *Handler) Ping(dstAddr packet.Addr, timeout time.Duration) (err error) {
+func (h *Handler) Ping(srcAddr packet.Addr, dstAddr packet.Addr, timeout time.Duration) (err error) {
 	if timeout <= 0 || timeout > time.Second*10 {
 		timeout = time.Second * 2
 	}
@@ -69,7 +69,7 @@ func (h *Handler) Ping(dstAddr packet.Addr, timeout time.Duration) (err error) {
 	icmpTable.table[id] = &msg
 	icmpTable.cond.L.Unlock()
 
-	if err = h.SendEchoRequest(packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostIP4.IP}, dstAddr, id, seq); err != nil {
+	if err = h.SendEchoRequest(srcAddr, dstAddr, id, seq); err != nil {
 		// log.Error("error sending ping packet", err)
 		return err
 	}
