@@ -35,6 +35,15 @@ var (
 	ip6LLA5      = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x05}
 )
 
+func TestIP4Checksum(t *testing.T) {
+	// wikipedia example
+	// https://en.wikipedia.org/wiki/IPv4_header_checksum
+	packet := []byte{0x45, 0x00, 0x00, 0x73, 0, 0, 0x40, 0x00, 0x40, 0x11, 0xb8, 0x61, 0xc0, 0xa8, 0, 0x01, 0xc0, 0xa8, 0, 0xc7}
+	if IP4(packet).CalculateChecksum() != 0x61b8 {
+		t.Errorf("check sum failed %x", IP4(packet).CalculateChecksum())
+	}
+}
+
 func TestIP6MarshalBinary(t *testing.T) {
 	const hopLimit = 1
 

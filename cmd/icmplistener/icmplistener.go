@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"net"
@@ -149,8 +150,13 @@ func cmd(pt *packet.Handler, a4 *arp.Handler, h *icmp4.Handler, h6 *icmp6.Handle
 			}
 			now := time.Now()
 			if ip.To4() != nil {
-				if err := h.SendEchoRequest(packet.Addr{MAC: packet.Eth4AllNodesMulticast, IP: ip}, 2, 2); err != nil {
-					fmt.Println("ping error ", err)
+				// if err := h.SendEchoRequest(packet.Addr{MAC: packet.Eth4AllNodesMulticast, IP: ip}, 2, 2); err != nil {
+				if err := h.Ping(packet.Addr{MAC: packet.Eth4AllNodesMulticast, IP: ip}, time.Second*2); err != nil {
+					if errors.Is(err, packet.ErrTimeout) {
+						fmt.Println("ping timeout ")
+					} else {
+						fmt.Println("ping error ", err)
+					}
 					continue
 				}
 				fmt.Printf("ping %v time=%v\n", dstIP, time.Now().Sub(now))

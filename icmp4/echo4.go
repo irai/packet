@@ -1,7 +1,6 @@
 package icmp4
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
@@ -19,7 +18,7 @@ const (
 )
 
 type icmpEntry struct {
-	msgRecv *icmp.Message
+	msgRecv packet.ICMPEcho
 	expire  time.Time
 }
 
@@ -64,7 +63,6 @@ func (h *Handler) SendEchoRequest(dstAddr packet.Addr, id uint16, seq uint16) er
 
 // Ping send a ping request and wait for a reply
 func (h *Handler) Ping(dstAddr packet.Addr, timeout time.Duration) (err error) {
-
 	icmpTable.cond.L.Lock()
 	msg := icmpEntry{expire: time.Now().Add(timeout)}
 	id := icmpTable.echoIdentifier
@@ -76,7 +74,6 @@ func (h *Handler) Ping(dstAddr packet.Addr, timeout time.Duration) (err error) {
 		log.Error("error sending ping packet", err)
 		return err
 	}
-
 	return nil
 
 	icmpTable.cond.L.Lock()
@@ -87,7 +84,7 @@ func (h *Handler) Ping(dstAddr packet.Addr, timeout time.Duration) (err error) {
 	icmpTable.cond.L.Unlock()
 
 	if msg.msgRecv == nil {
-		return fmt.Errorf("ping timeout ip= %v id=%v", dstAddr, id)
+		return packet.ErrTimeout
 	}
 
 	return nil

@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	"github.com/mdlayher/netx/rfc4193"
+	"golang.org/x/net/ipv4"
 )
 
 var ipv6LinkLocal = func(cidr string) *net.IPNet {
@@ -79,6 +80,7 @@ var (
 	ErrInvalidConn   = errors.New("invalid connection")
 	ErrInvalidIP4    = errors.New("invalid ip4")
 	ErrNotFound      = errors.New("not found")
+	ErrTimeout       = errors.New("timeout")
 )
 
 // CopyIP simply copies the IP to a new buffer
@@ -223,44 +225,69 @@ func (p IP4) String() string {
 	return fmt.Sprintf("version=%v src=%v dst=%v proto=%v ttl=%v tos=%v", p.Version(), p.Src(), p.Dst(), p.Protocol(), p.TTL(), p.TOS())
 }
 
-type ICMP4 []byte
+func IP4MarshalBinary(p []byte, ttl byte, src net.IP, dst net.IP) IP4 {
+	options := []byte{}
+	var hdrLen = ipv4.HeaderLen + len(options) // len includes options
+	const fragOffset = 0
+	const flags = 0
+	const totalLen = ipv4.HeaderLen + 0 // 0 payload
+	const id = 0
+	const protocol = 0 // invalid
 
-func (p ICMP4) IsValid() bool {
-	if len(p) > 8 {
-		return true
+	// TODO: calculate IPv4 checksum
+	checksum := 0
+
+	flagsAndFragOff := (fragOffset & 0x1fff) | int(flags<<13)
+	if src = src.To4(); src == nil {
+		src = net.IPv4zero
 	}
-	return false
-}
-
-func (p ICMP4) Type() uint8          { return uint8(p[0]) }
-func (p ICMP4) Code() uint8          { return p[1] }
-func (p ICMP4) Checksum() uint16     { return binary.BigEndian.Uint16(p[2:4]) }
-func (p ICMP4) RestOfHeader() []byte { return p[4:8] }
-func (p ICMP4) Payload() []byte      { return p[8:] }
-
-type ICMPEcho []byte
-
-func (p ICMPEcho) IsValid() bool   { return len(p) >= 8 }
-func (p ICMPEcho) Type() uint8     { return uint8(p[0]) }
-func (p ICMPEcho) Code() int       { return int(p[1]) }
-func (p ICMPEcho) Checksum() int   { return int(binary.BigEndian.Uint16(p[2:4])) }
-func (p ICMPEcho) EchoID() uint16  { return binary.BigEndian.Uint16(p[4:6]) }
-func (p ICMPEcho) EchoSeq() uint16 { return binary.BigEndian.Uint16(p[6:8]) }
-func (p ICMPEcho) EchoData() string {
-	if len(p) > 8 {
-		return string(p[8:])
+	if dst = dst.To4(); dst == nil {
+		dst = net.IPv4zero
 	}
-	return ""
-}
-func (p ICMPEcho) String() string {
-	return fmt.Sprintf("type=%v id=%v code=%v dlen=%v, data=0x% x", p.Type(), p.EchoID(), p.Code(), len(p.EchoData()), p.EchoData())
+
+	p[0] = byte(ipv4.Version<<4 | (hdrLen >> 2 & 0x0f))
+	p[1] = byte(0xc0) // DSCP CS6)
+	binary.BigEndian.PutUint16(p[2:4], uint16(totalLen))
+	binary.BigEndian.PutUint16(p[4:6], uint16(id))
+	binary.BigEndian.PutUint16(p[6:8], uint16(flagsAndFragOff))
+	p[8] = byte(ttl)
+	p[9] = byte(protocol)
+	binary.BigEndian.PutUint16(p[10:12], uint16(checksum))
+	copy(p[12:16], src[:net.IPv4len])
+	copy(p[16:20], dst[:net.IPv4len])
+	return p[:ipv4.HeaderLen]
 }
 
-func ICMPEchoBinary(b []byte, id uint16, seq uint16, data []byte) []byte {
-	binary.BigEndian.PutUint16(b[:2], id)
-	binary.BigEndian.PutUint16(b[2:4], seq)
-	copy(b[4:], data)
-	return b
+func (p IP4) SetPayload(b []byte, protocol byte) IP4 {
+	p[9] = protocol
+	totalLen := uint16(ipv4.HeaderLen + len(b))
+	binary.BigEndian.PutUint16(p[2:4], totalLen)
+	checksum := p.CalculateChecksum()
+	p[11] = byte(checksum >> 8)
+	p[10] = byte(checksum)
+	return b[:totalLen]
+}
+
+func (p IP4) AppendPayload(b []byte, protocol byte) (IP4, error) {
+	if b == nil || cap(p)-len(p) < len(b) {
+		return nil, ErrPayloadTooBig
+	}
+	p = p[:len(p)+len(b)] // change slice in case slice is less than required
+	copy(p.Payload(), b)
+	p[9] = protocol
+	totalLen := uint16(ipv4.HeaderLen + len(b))
+	binary.BigEndian.PutUint16(p[2:4], totalLen)
+	checksum := p.CalculateChecksum()
+	p[11] = byte(checksum >> 8)
+	p[10] = byte(checksum)
+	return p, nil
+}
+
+func (p IP4) CalculateChecksum() uint16 {
+	psh := make([]byte, 20)
+	copy(psh[0:10], p[0:10])           // first 10 bytes
+	copy(psh[10:10+8], p[10+2:10+2+8]) // skip checksum filed in pos 10
+	return Checksum(psh)
 }
 
 // Global variables
@@ -308,24 +335,24 @@ func (p IP6) String() string {
 	return fmt.Sprintf("version=%v src=%v dst=%v nextHeader=%v payloadLen=%v hoplimit=%v class=%v", p.Version(), p.Src(), p.Dst(), p.NextHeader(), p.PayloadLen(), p.HopLimit(), p.TrafficClass())
 }
 
-func IP6MarshalBinary(b []byte, hopLimit uint8, srcIP net.IP, dstIP net.IP) IP6 {
-	if b == nil || cap(b) < IP6HeaderLen {
-		b = make([]byte, IP6HeaderLen) // enough capacity for a max IP6 frame
+func IP6MarshalBinary(p []byte, hopLimit uint8, srcIP net.IP, dstIP net.IP) IP6 {
+	if p == nil || cap(p) < IP6HeaderLen {
+		p = make([]byte, IP6HeaderLen) // enough capacity for a max IP6 frame
 	}
-	b = b[:IP6HeaderLen] // change slice in case slice is less than 40
+	p = p[:IP6HeaderLen] // change slice in case slice is less than 40
 
 	var class int = 0
 	var flow int = 0
-	b[0] = 0x60 | uint8(class>>4) // first 4 bits: 6 indicates ipv6, 4 indicates ipv4
-	b[1] = uint8(class<<4) | uint8(flow>>16)
-	b[2] = uint8(flow >> 8)
-	b[3] = uint8(flow)
-	binary.BigEndian.PutUint16(b[4:6], 0)
-	b[6] = 59 // 59 indicates there is no payload
-	b[7] = hopLimit
-	copy(b[8:24], srcIP)
-	copy(b[24:40], dstIP)
-	return IP6(b)
+	p[0] = 0x60 | uint8(class>>4) // first 4 bits: 6 indicates ipv6, 4 indicates ipv4
+	p[1] = uint8(class<<4) | uint8(flow>>16)
+	p[2] = uint8(flow >> 8)
+	p[3] = uint8(flow)
+	binary.BigEndian.PutUint16(p[4:6], 0)
+	p[6] = 59 // 59 indicates there is no payload
+	p[7] = hopLimit
+	copy(p[8:24], srcIP)
+	copy(p[24:40], dstIP)
+	return IP6(p)
 }
 
 func (p IP6) SetPayload(b []byte, nextHeader uint8) IP6 {
@@ -344,8 +371,52 @@ func (p IP6) AppendPayload(b []byte, nextHeader uint8) (IP6, error) {
 	return p, nil
 }
 
-// Checksum calculate ICMP6 checksum - is this the same for TCP?
+type ICMP4 []byte
+
+func (p ICMP4) IsValid() bool {
+	if len(p) > 8 {
+		return true
+	}
+	return false
+}
+
+func (p ICMP4) Type() uint8          { return uint8(p[0]) }
+func (p ICMP4) Code() uint8          { return p[1] }
+func (p ICMP4) Checksum() uint16     { return binary.BigEndian.Uint16(p[2:4]) }
+func (p ICMP4) RestOfHeader() []byte { return p[4:8] }
+func (p ICMP4) Payload() []byte      { return p[8:] }
+func (p ICMP4) String() string {
+	return fmt.Sprintf("type=%v code=%v payloadLen=%d, data=0x% x", p.Type(), p.Code(), len(p.Payload()), p.Payload())
+}
+
+type ICMPEcho []byte
+
+func (p ICMPEcho) IsValid() bool   { return len(p) >= 8 }
+func (p ICMPEcho) Type() uint8     { return uint8(p[0]) }
+func (p ICMPEcho) Code() int       { return int(p[1]) }
+func (p ICMPEcho) Checksum() int   { return int(binary.BigEndian.Uint16(p[2:4])) }
+func (p ICMPEcho) EchoID() uint16  { return binary.BigEndian.Uint16(p[4:6]) }
+func (p ICMPEcho) EchoSeq() uint16 { return binary.BigEndian.Uint16(p[6:8]) }
+func (p ICMPEcho) EchoData() string {
+	if len(p) > 8 {
+		return string(p[8:])
+	}
+	return ""
+}
+func (p ICMPEcho) String() string {
+	return fmt.Sprintf("type=%v id=%v code=%v dlen=%v, data=0x% x", p.Type(), p.EchoID(), p.Code(), len(p.EchoData()), p.EchoData())
+}
+
+func ICMPEchoBinary(b []byte, id uint16, seq uint16, data []byte) []byte {
+	binary.BigEndian.PutUint16(b[:2], id)
+	binary.BigEndian.PutUint16(b[2:4], seq)
+	copy(b[4:], data)
+	return b
+}
+
+// Checksum calculate IP4, ICMP6 checksum - is this the same for TCP?
 // In network format already
+// TODO: fix this to work with big endian
 func Checksum(b []byte) uint16 {
 	csumcv := len(b) - 1 // checksum coverage
 	s := uint32(0)
