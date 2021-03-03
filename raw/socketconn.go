@@ -106,7 +106,7 @@ func Dial(ifi *net.Interface) (*packetConn, error) {
 
 // NewServerConn creates a net.PacketConn which can be used to send and receive
 // data at the device driver level.
-func NewServerConn(ifi *net.Interface, proto uint16, cfg Config) (*packetConn, error) {
+func NewServerConn(ifi *net.Interface, proto uint16, cfg SocketConfig) (*packetConn, error) {
 
 	filename := "eth-packet-socket"
 
@@ -404,7 +404,7 @@ func (s *sysSocket) SetSockoptPacketMreq(level, name int, mreq *unix.PacketMreq)
 }
 
 // A Config can be used to specify additional options for a Conn.
-type Config struct {
+type SocketConfig struct {
 	// Linux only: call socket(7) with SOCK_DGRAM instead of SOCK_RAW.
 	// Has no effect on other operating systems.
 	LinuxSockDGRAM bool

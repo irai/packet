@@ -7,7 +7,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/irai/packet"
 	"github.com/irai/packet/raw"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/bpf"
@@ -145,7 +144,7 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
 	return host, nil
 }
 
-func (h *Handler) ListenAndServe(ctxt context.Context, pt *packet.Handler) (err error) {
+func (h *Handler) ListenAndServe(ctxt context.Context, pt *raw.Handler) (err error) {
 
 	bpf, err := bpf.Assemble([]bpf.Instruction{
 		// Check EtherType
@@ -170,7 +169,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context, pt *packet.Handler) (err 
 		log.Fatal("bpf assemble error", err)
 	}
 
-	h.conn, err = raw.NewServerConn(h.NICInfo.IFI, syscall.ETH_P_IP, raw.Config{Filter: bpf})
+	h.conn, err = raw.NewServerConn(h.NICInfo.IFI, syscall.ETH_P_IP, raw.SocketConfig{Filter: bpf})
 	if err != nil {
 		h.conn = nil // on windows, not impleted returns a partially completed conn
 		return fmt.Errorf("raw.ListenPacket error: %w", err)

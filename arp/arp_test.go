@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/irai/packet"
 	"github.com/irai/packet/raw"
 )
 
@@ -23,7 +22,7 @@ type testContext struct {
 	inConn  net.PacketConn
 	outConn net.PacketConn
 	arp     *Handler
-	packet  *packet.Handler
+	packet  *raw.Handler
 	wg      sync.WaitGroup
 	ctx     context.Context
 	cancel  context.CancelFunc
@@ -47,7 +46,7 @@ func setupTestHandler(t *testing.T) *testContext {
 	}
 
 	// override handler with conn and nicInfo
-	config := &packet.Config{Conn: tc.inConn, NICInfo: &nicInfo, ProbeInterval: time.Millisecond * 500, OfflineDeadline: time.Millisecond * 500, PurgeDeadline: time.Second * 2}
+	config := raw.Config{Conn: tc.inConn, NICInfo: &nicInfo, ProbeInterval: time.Millisecond * 500, OfflineDeadline: time.Millisecond * 500, PurgeDeadline: time.Second * 2}
 	tc.packet, err = config.New("eth0")
 	if err != nil {
 		panic(err)
@@ -81,7 +80,7 @@ func (tc *testContext) Close() {
 
 func Test_Handler_CaptureEnterOffline(t *testing.T) {
 	Debug = true
-	packet.Debug = true
+	raw.Debug = true
 	tc := setupTestHandler(t)
 	defer tc.Close()
 
@@ -108,7 +107,7 @@ func Test_Handler_CaptureEnterOffline(t *testing.T) {
 
 	count := 0
 	tc.packet.AddCallback(
-		func(n packet.Notification) error {
+		func(n raw.Notification) error {
 			if n.Online {
 				count++
 			} else {

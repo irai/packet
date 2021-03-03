@@ -1,4 +1,4 @@
-package packet
+package raw
 
 import (
 	"bytes"
@@ -9,7 +9,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/irai/packet/raw"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/bpf"
 )
@@ -27,7 +26,7 @@ type Config struct {
 	// Conn enables the client to override the connection with a another packet conn
 	// usefule for testing
 	Conn                    net.PacketConn // listen connectinon
-	NICInfo                 *raw.NICInfo   // override nic information
+	NICInfo                 *NICInfo       // override nic information
 	FullNetworkScanInterval time.Duration  // Set it to zero if no scan required
 	ProbeInterval           time.Duration  // how often to probe if IP is online
 	OfflineDeadline         time.Duration  // mark offline if more than OfflineInte
@@ -37,16 +36,16 @@ type Config struct {
 // Handler implements ICMPv6 Neighbor Discovery Protocol
 // see: https://mdlayher.com/blog/network-protocol-breakdown-ndp-and-go/
 type Handler struct {
-	NICInfo                 *raw.NICInfo
+	NICInfo                 *NICInfo
 	conn                    net.PacketConn
-	LANHosts                *raw.HostTable
-	HandlerIP4              raw.PacketProcessor
-	HandlerIP6              raw.PacketProcessor
-	HandlerICMP4            raw.PacketProcessor
-	HandlerICMP6            raw.PacketProcessor
-	HandlerARP              raw.PacketProcessor
+	LANHosts                *HostTable
+	HandlerIP4              PacketProcessor
+	HandlerIP6              PacketProcessor
+	HandlerICMP4            PacketProcessor
+	HandlerICMP6            PacketProcessor
+	HandlerARP              PacketProcessor
 	callback                []func(Notification) error
-	captureList             *raw.SetHandler
+	captureList             *SetHandler
 	FullNetworkScanInterval time.Duration // Set it to -1 if no scan required
 	ProbeInterval           time.Duration // how often to probe if IP is online
 	OfflineDeadline         time.Duration // mark offline if no updates
@@ -57,16 +56,16 @@ type Handler struct {
 // ppNOOP is a no op packet processor
 type ppNOOP struct{}
 
-var _ raw.PacketProcessor = ppNOOP{}
+var _ PacketProcessor = ppNOOP{}
 
-func (p ppNOOP) Start() error                                       { return nil }
-func (p ppNOOP) Stop() error                                        { return nil }
-func (p ppNOOP) ProcessPacket(*raw.Host, []byte) (*raw.Host, error) { return nil, nil }
-func (p ppNOOP) StartHunt(net.HardwareAddr) error                   { return nil }
-func (p ppNOOP) StopHunt(net.HardwareAddr) error                    { return nil }
+func (p ppNOOP) Start() error                               { return nil }
+func (p ppNOOP) Stop() error                                { return nil }
+func (p ppNOOP) ProcessPacket(*Host, []byte) (*Host, error) { return nil, nil }
+func (p ppNOOP) StartHunt(net.HardwareAddr) error           { return nil }
+func (p ppNOOP) StopHunt(net.HardwareAddr) error            { return nil }
 
 // New creates an ICMPv6 handler with default values
-func New(nic string) (*Handler, error) {
+func NewHandler(nic string) (*Handler, error) {
 	return Config{}.New(nic)
 }
 
@@ -75,11 +74,11 @@ func (config Config) New(nic string) (*Handler, error) {
 
 	var err error
 
-	h := &Handler{LANHosts: raw.New(), captureList: &raw.SetHandler{}}
+	h := &Handler{LANHosts: New(), captureList: &SetHandler{}}
 
 	h.NICInfo = config.NICInfo
 	if h.NICInfo == nil {
-		h.NICInfo, err = raw.GetNICInfo(nic)
+		h.NICInfo, err = GetNICInfo(nic)
 		if err != nil {
 			return nil, fmt.Errorf("interface not found nic=%s: %w", nic, err)
 		}
@@ -156,13 +155,13 @@ func (h *Handler) setupConn() (conn net.PacketConn, err error) {
 		bpf.LoadAbsolute{Off: 14, Size: 2},
 		// IPv4?
 		bpf.JumpIf{Cond: bpf.JumpEqual, Val: syscall.ETH_P_IP, SkipFalse: 1},
-		bpf.RetConstant{Val: raw.EthMaxSize},
+		bpf.RetConstant{Val: EthMaxSize},
 		// IPv6?
 		bpf.JumpIf{Cond: bpf.JumpEqual, Val: syscall.ETH_P_IPV6, SkipFalse: 1},
-		bpf.RetConstant{Val: raw.EthMaxSize},
+		bpf.RetConstant{Val: EthMaxSize},
 		// ARP?
 		bpf.JumpIf{Cond: bpf.JumpEqual, Val: syscall.ETH_P_ARP, SkipFalse: 1},
-		bpf.RetConstant{Val: raw.EthMaxSize},
+		bpf.RetConstant{Val: EthMaxSize},
 		bpf.RetConstant{Val: 0},
 	})
 	if err != nil {
@@ -170,7 +169,7 @@ func (h *Handler) setupConn() (conn net.PacketConn, err error) {
 	}
 
 	// see: https://www.man7.org/linux/man-pages/man7/packet.7.html
-	conn, err = raw.NewServerConn(h.NICInfo.IFI, syscall.ETH_P_ALL, raw.Config{Filter: bpf})
+	conn, err = NewServerConn(h.NICInfo.IFI, syscall.ETH_P_ALL, SocketConfig{Filter: bpf})
 	if err != nil {
 		return nil, fmt.Errorf("raw.ListenPacket error: %w", err)
 	}
@@ -248,7 +247,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 	go h.purgeLoop(ctxt, h.OfflineDeadline, h.PurgeDeadline)
 
-	buf := make([]byte, raw.EthMaxSize)
+	buf := make([]byte, EthMaxSize)
 	for {
 		if err = h.conn.SetReadDeadline(time.Now().Add(time.Second * 2)); err != nil {
 			if ctxt.Err() != context.Canceled {
@@ -268,7 +267,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			return nil
 		}
 
-		ether := raw.Ether(buf[:n])
+		ether := Ether(buf[:n])
 		if !ether.IsValid() {
 			log.Error("icmp invalid ethernet packet ", ether.EtherType())
 			continue
@@ -289,10 +288,10 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 		var l4Proto int
 		var l4Payload []byte
-		var host *raw.Host
+		var host *Host
 		switch ether.EtherType() {
 		case syscall.ETH_P_IP:
-			frame := raw.IP4(ether.Payload())
+			frame := IP4(ether.Payload())
 			if !frame.IsValid() {
 				fmt.Println("packet: error invalid ip4 frame type=", ether.EtherType())
 				continue
@@ -312,7 +311,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			// h.handlerIP4.ProcessPacket(host, ether)
 
 		case syscall.ETH_P_IPV6:
-			frame := raw.IP6(ether.Payload())
+			frame := IP6(ether.Payload())
 			if !frame.IsValid() {
 				fmt.Println("packet: error invalid ip6 frame type=", ether.EtherType())
 				continue

@@ -9,7 +9,6 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/irai/packet"
 	"github.com/irai/packet/arp"
 	"github.com/irai/packet/icmp4"
 	"github.com/irai/packet/icmp6"
@@ -34,7 +33,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// setup packet handler
-	config := packet.Config{
+	config := raw.Config{
 		ProbeInterval:           time.Minute * 1,
 		FullNetworkScanInterval: time.Minute * 20,
 		PurgeDeadline:           time.Minute * 10}
@@ -56,7 +55,7 @@ func main() {
 	defer pkt.Close()
 	fmt.Println("nic info  :", pkt.NICInfo)
 
-	pkt.AddCallback(func(n packet.Notification) error {
+	pkt.AddCallback(func(n raw.Notification) error {
 		fmt.Println("Got notification : ", n)
 		return nil
 	})
@@ -67,7 +66,7 @@ func main() {
 	// ICMPv4
 	h4, err := icmp4.New(pkt.NICInfo, pkt.Conn(), pkt.LANHosts)
 	if err != nil {
-		log.Fatalf("Failed to create icmp nic=%s handler: ", *nic, err)
+		log.Fatalf("Failed to create icmp nic=%s handler: %s", *nic, err)
 	}
 	defer h4.Close()
 	pkt.HandlerICMP4 = h4
@@ -75,7 +74,7 @@ func main() {
 	// ICMPv6
 	h6, err := icmp6.New(pkt.NICInfo, pkt.Conn(), pkt.LANHosts)
 	if err != nil {
-		log.Fatalf("Failed to create icmp6 nic=%s handler: ", *nic, err)
+		log.Fatalf("Failed to create icmp6 nic=%s handler: %s", *nic, err)
 	}
 	defer h6.Close()
 	pkt.HandlerICMP6 = h6
@@ -96,7 +95,7 @@ func main() {
 	cancel()
 }
 
-func cmd(pt *packet.Handler, a4 *arp.Handler, h *icmp4.Handler, h6 *icmp6.Handler) {
+func cmd(pt *raw.Handler, a4 *arp.Handler, h *icmp4.Handler, h6 *icmp6.Handler) {
 
 	radvs, _ := h6.StartRADVS(false, false, icmp6.MyHomePrefix, icmp6.RDNSSCLoudflare)
 	defer radvs.Stop()
@@ -122,25 +121,25 @@ func cmd(pt *packet.Handler, a4 *arp.Handler, h *icmp4.Handler, h6 *icmp6.Handle
 			p := getString(tokens, 1)
 			switch p {
 			case "ip4":
-				packet.DebugIP4 = !packet.DebugIP4
+				raw.DebugIP4 = !raw.DebugIP4
 			case "icmp4":
 				icmp4.Debug = !icmp4.Debug
 			case "ip6":
-				packet.DebugIP6 = !packet.DebugIP6
+				raw.DebugIP6 = !raw.DebugIP6
 			case "icmp6":
 				icmp6.Debug = !icmp6.Debug
 			case "packet":
-				packet.Debug = !packet.Debug
+				raw.Debug = !raw.Debug
 			case "arp":
 				arp.Debug = !arp.Debug
 			default:
 				fmt.Println("invalid package - use 'g icmp4|icmp6|arp|packet'")
 			}
-			fmt.Println("ip4 debug  :", packet.DebugIP4)
+			fmt.Println("ip4 debug  :", raw.DebugIP4)
 			fmt.Println("icmp4 debug:", icmp4.Debug)
-			fmt.Println("ip6 debug  :", packet.DebugIP6)
+			fmt.Println("ip6 debug  :", raw.DebugIP6)
 			fmt.Println("icmp6 debug:", icmp6.Debug)
-			fmt.Println("packet debug:", packet.Debug)
+			fmt.Println("packet debug:", raw.Debug)
 			fmt.Println("arp debug:", arp.Debug)
 		case "p":
 			ip := getIP(tokens, 1)

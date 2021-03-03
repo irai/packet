@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/irai/packet"
 	"github.com/irai/packet/raw"
 )
 
@@ -17,7 +16,7 @@ func Test_Handler_ARPRequests(t *testing.T) {
 	tc := setupTestHandler(t)
 	defer tc.Close()
 
-	packet.Debug = true
+	raw.Debug = true
 
 	tests := []struct {
 		name    string
@@ -92,7 +91,7 @@ func Test_Handler_ServeReplies(t *testing.T) {
 	// log.SetLevel(log.DebugLevel)
 	tc := setupTestHandler(t)
 	defer tc.Close()
-	packet.Debug = true
+	raw.Debug = true
 
 	tests := []struct {
 		name    string
