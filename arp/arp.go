@@ -7,7 +7,7 @@ import (
 
 	"log"
 
-	"github.com/irai/packet/raw"
+	"github.com/irai/packet"
 )
 
 type Data struct {
@@ -17,17 +17,15 @@ type Data struct {
 }
 
 // must implement interface
-var _ raw.PacketProcessor = &Handler{}
+var _ packet.PacketProcessor = &Handler{}
 
 // Handler stores instance variables
 type Handler struct {
-	conn         net.PacketConn
-	LANHosts     *raw.HostTable
 	virtual      *arpTable
-	NICInfo      *raw.NICInfo
 	notification chan<- MACEntry // notification channel for state change
 	wg           sync.WaitGroup
 	arpMutex     sync.RWMutex
+	engine       *packet.Handler
 }
 
 var (
@@ -35,23 +33,27 @@ var (
 	Debug bool
 )
 
-// New creates an ARP handler for a given connection
-func New(info *raw.NICInfo, conn net.PacketConn, table *raw.HostTable) (h *Handler, err error) {
-	h = &Handler{}
+// Open creates the ARP handler and attach to the engine
+func Open(engine *packet.Handler) (h *Handler, err error) {
+	h = &Handler{engine: engine}
 	// h.table, _ = loadARPProcTable() // load linux proc table
-	h.LANHosts = table
 	h.virtual = newARPTable()
-	h.NICInfo = info
-	if h.NICInfo.HostIP4.IP = info.HostIP4.IP.To4(); h.NICInfo.HostIP4.IP == nil {
-		return nil, raw.ErrInvalidIP4
+	if h.engine.NICInfo.HostIP4.IP.To4() == nil {
+		return nil, packet.ErrInvalidIP4
 	}
-	h.conn = conn
 
-	if h.NICInfo.HomeLAN4.IP == nil && h.NICInfo.HomeLAN4.IP.IsUnspecified() {
-		return nil, raw.ErrInvalidIP4
+	if h.engine.NICInfo.HomeLAN4.IP.To4() == nil || h.engine.NICInfo.HomeLAN4.IP.IsUnspecified() {
+		return nil, packet.ErrInvalidIP4
 	}
+	h.engine.HandlerARP = h
 
 	return h, nil
+}
+
+// Close removes the plugin from the engine
+func (h *Handler) Close() error {
+	h.engine.HandlerARP = packet.PacketNOOP{}
+	return nil
 }
 
 // StartHunt implements PacketProcessor interface
@@ -81,32 +83,6 @@ func (h *Handler) End() {
 
 // Start start background processes
 func (h *Handler) Start() error {
-	/***
-	if h.config.FullNetworkScanInterval == 0 {
-		return nil
-	}
-	if h.NICInfo.HomeLAN4.IP.To4() == nil {
-		return raw.ErrInvalidIP4
-	}
-
-	// continuosly scan for network devices
-	ctx := context.Background()
-	go func() {
-		if Debug {
-			fmt.Println("arp goroutine scanLoop started")
-		}
-		h.wg.Add(1)
-		if err := h.scanLoop(ctx, h.config.FullNetworkScanInterval); err != nil {
-			fmt.Println("arp goroutine scanLoop terminated unexpectedly", err)
-			h.conn.Close() // force error in main loop
-		}
-		h.wg.Done()
-		if Debug {
-			fmt.Println("arp goroutine scanLoop ended")
-		}
-	}()
-	***/
-
 	return nil
 }
 
@@ -135,12 +111,12 @@ const (
 // | ACD probe  | 1 | broadcast | clientMAC | clientMAC  | 0x00       | 0x00              |  targetIP |
 // | ACD announ | 1 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  clientIP |
 // +============+===+===========+===========+============+============+===================+===========+
-func (h *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
+func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, error) {
 
-	ether := raw.Ether(b)
+	ether := packet.Ether(b)
 	frame := ARP(ether.Payload())
 	if !frame.IsValid() {
-		return host, raw.ErrParseMessage
+		return host, packet.ErrParseMessage
 	}
 
 	// skip link local packets
@@ -247,8 +223,8 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
 	}
 
 	// If new client, then create a MACEntry in table
-	if host == nil && h.NICInfo.HostIP4.Contains(frame.SrcIP()) {
-		host, _ = h.LANHosts.FindOrCreateHost(frame.SrcMAC(), frame.SrcIP())
+	if host == nil && h.engine.NICInfo.HostIP4.Contains(frame.SrcIP()) {
+		host, _ = h.engine.LANHosts.FindOrCreateHost(frame.SrcMAC(), frame.SrcIP())
 	}
 	return host, nil
 }

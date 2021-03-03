@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/irai/packet/raw"
+	"github.com/irai/packet"
 )
 
 type notificationCounter struct {
@@ -22,7 +22,7 @@ type testContext struct {
 	inConn  net.PacketConn
 	outConn net.PacketConn
 	arp     *Handler
-	packet  *raw.Handler
+	packet  *packet.Handler
 	wg      sync.WaitGroup
 	ctx     context.Context
 	cancel  context.CancelFunc
@@ -35,10 +35,10 @@ func setupTestHandler(t *testing.T) *testContext {
 	tc := testContext{}
 	tc.ctx, tc.cancel = context.WithCancel(context.Background())
 
-	tc.inConn, tc.outConn = raw.TestNewBufferedConn()
-	go raw.TestReadAndDiscardLoop(tc.ctx, tc.outConn) // MUST read the out conn to avoid blocking the sender
+	tc.inConn, tc.outConn = packet.TestNewBufferedConn()
+	go packet.TestReadAndDiscardLoop(tc.ctx, tc.outConn) // MUST read the out conn to avoid blocking the sender
 
-	nicInfo := raw.NICInfo{
+	nicInfo := packet.NICInfo{
 		HostMAC:   hostMAC,
 		HostIP4:   net.IPNet{IP: hostIP, Mask: net.IPv4Mask(255, 255, 255, 0)},
 		RouterIP4: net.IPNet{IP: routerIP, Mask: net.IPv4Mask(255, 255, 255, 0)},
@@ -46,7 +46,7 @@ func setupTestHandler(t *testing.T) *testContext {
 	}
 
 	// override handler with conn and nicInfo
-	config := raw.Config{Conn: tc.inConn, NICInfo: &nicInfo, ProbeInterval: time.Millisecond * 500, OfflineDeadline: time.Millisecond * 500, PurgeDeadline: time.Second * 2}
+	config := packet.Config{Conn: tc.inConn, NICInfo: &nicInfo, ProbeInterval: time.Millisecond * 500, OfflineDeadline: time.Millisecond * 500, PurgeDeadline: time.Second * 2}
 	tc.packet, err = config.New("eth0")
 	if err != nil {
 		panic(err)
@@ -55,7 +55,7 @@ func setupTestHandler(t *testing.T) *testContext {
 		fmt.Println("nicinfo: ", tc.packet.NICInfo)
 	}
 
-	tc.arp, err = New(tc.packet.NICInfo, tc.packet.Conn(), tc.packet.LANHosts)
+	tc.arp, err = Open(tc.packet)
 	tc.arp.virtual = newARPTable() // we want an empty table
 	tc.packet.HandlerARP = tc.arp
 
@@ -80,13 +80,13 @@ func (tc *testContext) Close() {
 
 func Test_Handler_CaptureEnterOffline(t *testing.T) {
 	Debug = true
-	raw.Debug = true
+	packet.Debug = true
 	tc := setupTestHandler(t)
 	defer tc.Close()
 
 	tests := []struct {
 		name    string
-		ether   raw.Ether
+		ether   packet.Ether
 		arp     ARP
 		wantErr error
 		wantLen int
@@ -107,7 +107,7 @@ func Test_Handler_CaptureEnterOffline(t *testing.T) {
 
 	count := 0
 	tc.packet.AddCallback(
-		func(n raw.Notification) error {
+		func(n packet.Notification) error {
 			if n.Online {
 				count++
 			} else {
@@ -127,11 +127,11 @@ func Test_Handler_CaptureEnterOffline(t *testing.T) {
 			}
 			time.Sleep(time.Millisecond * 10)
 
-			tc.arp.LANHosts.Lock()
-			defer tc.arp.LANHosts.Unlock()
+			tc.arp.engine.LANHosts.Lock()
+			defer tc.arp.engine.LANHosts.Unlock()
 
-			if len(tc.arp.LANHosts.Table) != tt.wantLen {
-				t.Errorf("Test_Requests:%s table len = %v, wantLen %v", tt.name, len(tc.arp.LANHosts.Table), tt.wantLen)
+			if len(tc.arp.engine.LANHosts.Table) != tt.wantLen {
+				t.Errorf("Test_Requests:%s table len = %v, wantLen %v", tt.name, len(tc.arp.engine.LANHosts.Table), tt.wantLen)
 			}
 		})
 	}

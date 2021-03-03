@@ -9,10 +9,10 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	"github.com/irai/packet"
 	"github.com/irai/packet/arp"
 	"github.com/irai/packet/icmp4"
 	"github.com/irai/packet/icmp6"
-	"github.com/irai/packet/raw"
 )
 
 var (
@@ -33,12 +33,12 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// setup packet handler
-	config := raw.Config{
+	config := packet.Config{
 		ProbeInterval:           time.Minute * 1,
 		FullNetworkScanInterval: time.Minute * 20,
 		PurgeDeadline:           time.Minute * 10}
 	// setup packet listener
-	pkt, err := config.New(*nic)
+	engine, err := config.New(*nic)
 	if err != nil {
 		fmt.Printf("error opening nic=%s: %s\n", *nic, err)
 		iif, _ := net.Interfaces()
@@ -52,36 +52,37 @@ func main() {
 		}
 		return
 	}
-	defer pkt.Close()
-	fmt.Println("nic info  :", pkt.NICInfo)
+	defer engine.Close()
+	fmt.Println("nic info  :", engine.NICInfo)
 
-	pkt.AddCallback(func(n raw.Notification) error {
-		fmt.Println("Got notification : ", n)
-		return nil
-	})
-
-	arpHandler, err := arp.New(pkt.NICInfo, pkt.Conn(), pkt.LANHosts)
-	pkt.HandlerARP = arpHandler
+	// ARP
+	arpHandler, err := arp.Open(engine)
+	if err != nil {
+		log.Fatalf("Failed to create arp handler nic=%s handler: %s", *nic, err)
+	}
 
 	// ICMPv4
-	h4, err := icmp4.New(pkt.NICInfo, pkt.Conn(), pkt.LANHosts)
+	h4, err := icmp4.Open(engine)
 	if err != nil {
 		log.Fatalf("Failed to create icmp nic=%s handler: %s", *nic, err)
 	}
 	defer h4.Close()
-	pkt.HandlerICMP4 = h4
 
 	// ICMPv6
-	h6, err := icmp6.New(pkt.NICInfo, pkt.Conn(), pkt.LANHosts)
+	h6, err := icmp6.New(engine)
 	if err != nil {
 		log.Fatalf("Failed to create icmp6 nic=%s handler: %s", *nic, err)
 	}
 	defer h6.Close()
-	pkt.HandlerICMP6 = h6
+
+	engine.AddCallback(func(n packet.Notification) error {
+		fmt.Println("Got notification : ", n)
+		return nil
+	})
 
 	// Start server listener
 	go func() {
-		if err := pkt.ListenAndServe(ctx); err != nil {
+		if err := engine.ListenAndServe(ctx); err != nil {
 			if ctx.Err() != context.Canceled {
 				panic(err)
 			}
@@ -90,12 +91,12 @@ func main() {
 
 	time.Sleep(time.Millisecond * 10) // time for all goroutine to start
 
-	cmd(pkt, arpHandler, h4, h6)
+	cmd(engine, arpHandler, h4, h6)
 
 	cancel()
 }
 
-func cmd(pt *raw.Handler, a4 *arp.Handler, h *icmp4.Handler, h6 *icmp6.Handler) {
+func cmd(pt *packet.Handler, a4 *arp.Handler, h *icmp4.Handler, h6 *icmp6.Handler) {
 
 	radvs, _ := h6.StartRADVS(false, false, icmp6.MyHomePrefix, icmp6.RDNSSCLoudflare)
 	defer radvs.Stop()
@@ -121,25 +122,25 @@ func cmd(pt *raw.Handler, a4 *arp.Handler, h *icmp4.Handler, h6 *icmp6.Handler) 
 			p := getString(tokens, 1)
 			switch p {
 			case "ip4":
-				raw.DebugIP4 = !raw.DebugIP4
+				packet.DebugIP4 = !packet.DebugIP4
 			case "icmp4":
 				icmp4.Debug = !icmp4.Debug
 			case "ip6":
-				raw.DebugIP6 = !raw.DebugIP6
+				packet.DebugIP6 = !packet.DebugIP6
 			case "icmp6":
 				icmp6.Debug = !icmp6.Debug
 			case "packet":
-				raw.Debug = !raw.Debug
+				packet.Debug = !packet.Debug
 			case "arp":
 				arp.Debug = !arp.Debug
 			default:
 				fmt.Println("invalid package - use 'g icmp4|icmp6|arp|packet'")
 			}
-			fmt.Println("ip4 debug  :", raw.DebugIP4)
+			fmt.Println("ip4 debug  :", packet.DebugIP4)
 			fmt.Println("icmp4 debug:", icmp4.Debug)
-			fmt.Println("ip6 debug  :", raw.DebugIP6)
+			fmt.Println("ip6 debug  :", packet.DebugIP6)
 			fmt.Println("icmp6 debug:", icmp6.Debug)
-			fmt.Println("packet debug:", raw.Debug)
+			fmt.Println("packet debug:", packet.Debug)
 			fmt.Println("arp debug:", arp.Debug)
 		case "p":
 			ip := getIP(tokens, 1)
@@ -148,14 +149,14 @@ func cmd(pt *raw.Handler, a4 *arp.Handler, h *icmp4.Handler, h6 *icmp6.Handler) 
 			}
 			now := time.Now()
 			if ip.To4() != nil {
-				if err := h.SendEchoRequest(raw.Addr{MAC: raw.Eth4AllNodesMulticast, IP: ip}, 2, 2); err != nil {
+				if err := h.SendEchoRequest(packet.Addr{MAC: packet.Eth4AllNodesMulticast, IP: ip}, 2, 2); err != nil {
 					fmt.Println("ping error ", err)
 					continue
 				}
 				fmt.Printf("ping %v time=%v\n", dstIP, time.Now().Sub(now))
 			}
-			if raw.IsIP6(ip) {
-				if err := h6.SendEchoRequest(raw.Addr{MAC: raw.Eth6AllNodesMulticast, IP: ip}, 1, 2); err != nil {
+			if packet.IsIP6(ip) {
+				if err := h6.SendEchoRequest(packet.Addr{MAC: packet.Eth6AllNodesMulticast, IP: ip}, 1, 2); err != nil {
 					// if err := h6.Ping(h6.LLA().IP, ip, time.Second*2); err != nil {
 					fmt.Println("icmp6 echo error ", err)
 					continue
@@ -164,7 +165,7 @@ func cmd(pt *raw.Handler, a4 *arp.Handler, h *icmp4.Handler, h6 *icmp6.Handler) 
 			}
 		case "ns":
 			ip := getIP(tokens, 1)
-			if ip == nil || !raw.IsIP6(ip) {
+			if ip == nil || !packet.IsIP6(ip) {
 				continue
 			}
 			if err := h6.SendNeighbourSolicitation(ip); err != nil {

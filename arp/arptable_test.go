@@ -4,7 +4,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/irai/packet/raw"
+	"github.com/irai/packet"
 )
 
 var (
@@ -34,7 +34,7 @@ func Test_AddSimple(t *testing.T) {
 	tc := setupTestHandler(t)
 	defer tc.Close()
 
-	raw.Debug = true
+	packet.Debug = true
 
 	MACEntry, _ := tc.arp.virtual.upsert(StateNormal, mac1, ip4)
 

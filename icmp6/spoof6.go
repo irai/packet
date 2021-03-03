@@ -7,7 +7,7 @@ import (
 
 	"log"
 
-	"github.com/irai/packet/raw"
+	"github.com/irai/packet"
 )
 
 // startHunt performs the following:
@@ -49,7 +49,7 @@ func (h *Handler) spoofLoop(mac net.HardwareAddr) {
 			log.Printf("icmp6 na attack end mac=%s time=%v", mac, time.Since(startTime))
 			return
 		}
-		list := h.LANHosts.FindMAC(mac)
+		list := h.engine.LANHosts.FindMAC(mac)
 		if len(list) == 0 {
 			log.Printf("icmp6 empty list in na attack mac=%s time=%v. goroutine terminated.", mac, time.Since(startTime))
 			return
@@ -57,8 +57,8 @@ func (h *Handler) spoofLoop(mac net.HardwareAddr) {
 
 		// Send NA to any IPv6 IP associated with mac
 		for _, v := range list {
-			if raw.IsIP6(v.IP) && v.IP.IsLinkLocalUnicast() {
-				if err := h.SendNeighborAdvertisement(raw.IP6DefaultRouter, raw.Addr{MAC: v.MAC, IP: v.IP}); err != nil {
+			if packet.IsIP6(v.IP) && v.IP.IsLinkLocalUnicast() {
+				if err := h.SendNeighborAdvertisement(packet.IP6DefaultRouter, packet.Addr{MAC: v.MAC, IP: v.IP}); err != nil {
 					fmt.Println("icmp6 error sending na ", err)
 				}
 			}

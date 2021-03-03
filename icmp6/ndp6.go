@@ -4,10 +4,10 @@ import (
 	"net"
 	"time"
 
-	"github.com/irai/packet/raw"
+	"github.com/irai/packet"
 )
 
-func (h *Handler) SendRouterAdvertisement(router *Router, dstAddr raw.Addr) error {
+func (h *Handler) SendRouterAdvertisement(router *Router, dstAddr packet.Addr) error {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 	if len(router.Prefixes) == 0 {
@@ -41,10 +41,10 @@ func (h *Handler) SendRouterAdvertisement(router *Router, dstAddr raw.Addr) erro
 			// TODO: single source of truth for search domain name
 			DomainNames: []string{"lan"},
 		},
-		NewMTU(uint32(h.NICInfo.IFI.MTU)),
+		NewMTU(uint32(h.engine.NICInfo.IFI.MTU)),
 		&LinkLayerAddress{
 			Direction: Source,
-			Addr:      h.NICInfo.HostMAC,
+			Addr:      h.engine.NICInfo.HostMAC,
 		},
 	)
 
@@ -59,7 +59,7 @@ func (h *Handler) SendRouterAdvertisement(router *Router, dstAddr raw.Addr) erro
 		return err
 	}
 
-	return h.sendPacket(raw.Addr{MAC: h.NICInfo.HostMAC, IP: h.NICInfo.HostLLA.IP}, dstAddr, mb)
+	return h.sendPacket(packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, dstAddr, mb)
 }
 
 func (h *Handler) SendRouterSolicitation() error {
@@ -67,7 +67,7 @@ func (h *Handler) SendRouterSolicitation() error {
 		Options: []Option{
 			&LinkLayerAddress{
 				Direction: Source,
-				Addr:      h.NICInfo.HostMAC,
+				Addr:      h.engine.NICInfo.HostMAC,
 			},
 		},
 	}
@@ -76,10 +76,10 @@ func (h *Handler) SendRouterSolicitation() error {
 		return err
 	}
 
-	return h.sendPacket(raw.Addr{MAC: h.NICInfo.HostMAC, IP: h.NICInfo.HostLLA.IP}, raw.IP6AllNodesAddr, mb)
+	return h.sendPacket(packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, packet.IP6AllNodesAddr, mb)
 }
 
-func (h *Handler) SendNeighborAdvertisement(ip net.IP, dstAddr raw.Addr) error {
+func (h *Handler) SendNeighborAdvertisement(ip net.IP, dstAddr packet.Addr) error {
 	m := &NeighborAdvertisement{
 		Router:        true,
 		Solicited:     true,
@@ -88,7 +88,7 @@ func (h *Handler) SendNeighborAdvertisement(ip net.IP, dstAddr raw.Addr) error {
 		Options: []Option{
 			&LinkLayerAddress{
 				Direction: Target,
-				Addr:      h.NICInfo.HostMAC,
+				Addr:      h.engine.NICInfo.HostMAC,
 			},
 		},
 	}
@@ -97,7 +97,7 @@ func (h *Handler) SendNeighborAdvertisement(ip net.IP, dstAddr raw.Addr) error {
 		return err
 	}
 
-	return h.sendPacket(raw.Addr{MAC: h.NICInfo.HostMAC, IP: h.NICInfo.HostLLA.IP}, dstAddr, mb)
+	return h.sendPacket(packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, dstAddr, mb)
 }
 
 // SendNeighbourSolicitation send an ICMP6 NS packet.
@@ -107,7 +107,7 @@ func (h *Handler) SendNeighbourSolicitation(ip net.IP) error {
 		Options: []Option{
 			&LinkLayerAddress{
 				Direction: Source,
-				Addr:      h.NICInfo.HostMAC,
+				Addr:      h.engine.NICInfo.HostMAC,
 			},
 		},
 	}
@@ -116,5 +116,5 @@ func (h *Handler) SendNeighbourSolicitation(ip net.IP) error {
 		return err
 	}
 
-	return h.sendPacket(raw.Addr{MAC: h.NICInfo.HostMAC, IP: h.NICInfo.HostLLA.IP}, raw.IP6AllNodesAddr, mb)
+	return h.sendPacket(packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, packet.IP6AllNodesAddr, mb)
 }

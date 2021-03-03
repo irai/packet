@@ -22,7 +22,7 @@ func (h *Handler) startSpoof(mac net.HardwareAddr) error {
 	defer h.arpMutex.Unlock()
 
 	entry, _ := h.virtual.upsert(StateHunt, mac, nil)
-	for _, v := range h.LANHosts.FindMAC(mac) {
+	for _, v := range h.engine.LANHosts.FindMAC(mac) {
 		if ip := v.IP.To4(); ip != nil {
 			go h.spoofLoop(context.Background(), entry, ip)
 		}
@@ -164,7 +164,7 @@ func (h *Handler) forceSpoof(mac net.HardwareAddr, ip net.IP) error {
 
 	// Announce to target that we own the router IP
 	// This will update the target arp table with our mac
-	err := h.announce(mac, h.NICInfo.HostMAC, h.NICInfo.RouterIP4.IP, EthernetBroadcast, 2)
+	err := h.announce(mac, h.engine.NICInfo.HostMAC, h.engine.NICInfo.RouterIP4.IP, EthernetBroadcast, 2)
 	if err != nil {
 		log.Printf("arp error send announcement packet mac=%s ip=%s: %s", mac, ip, err)
 		return err
@@ -172,7 +172,7 @@ func (h *Handler) forceSpoof(mac net.HardwareAddr, ip net.IP) error {
 
 	// Send 3 unsolicited ARP reply; clients may discard this
 	for i := 0; i < 2; i++ {
-		err = h.reply(mac, h.NICInfo.HostMAC, h.NICInfo.RouterIP4.IP, mac, ip)
+		err = h.reply(mac, h.engine.NICInfo.HostMAC, h.engine.NICInfo.RouterIP4.IP, mac, ip)
 		if err != nil {
 			log.Printf("arp error spoof client mac=%s ip=%s: %s", mac, ip, err)
 			return err

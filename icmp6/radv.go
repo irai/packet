@@ -5,7 +5,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/irai/packet/raw"
+	"github.com/irai/packet"
 )
 
 // Cloudflare DNS IP6: 2606:4700:4700::1111 or 2606:4700:4700::1001
@@ -49,11 +49,11 @@ func (h *Handler) StartRADVS(managed bool, other bool, prefixes []PrefixInformat
 
 func (h *Handler) startRADVS(managed bool, other bool, prefixes []PrefixInformation, rdnss *RecursiveDNSServer) (radvs *RADVS, err error) {
 	radvs = &RADVS{stopChannel: make(chan bool, 1)}
-	radvs.Router, _ = h.findOrCreateRouter(h.NICInfo.HostMAC, h.NICInfo.HostLLA.IP)
+	radvs.Router, _ = h.findOrCreateRouter(h.engine.NICInfo.HostMAC, h.engine.NICInfo.HostLLA.IP)
 	radvs.Router.enableRADVS = true
 	radvs.Router.ManagedFlag = managed
 	radvs.Router.OtherCondigFlag = other
-	radvs.Router.MTU = uint32(h.NICInfo.IFI.MTU)
+	radvs.Router.MTU = uint32(h.engine.NICInfo.IFI.MTU)
 	radvs.Router.ReacheableTime = int((time.Minute * 10).Milliseconds()) // Must be no greater than 3,600,000 milliseconds (1hour)
 	radvs.Router.RetransTimer = int((time.Minute * 2).Milliseconds())
 	radvs.Router.CurHopLimit = 1
@@ -72,11 +72,11 @@ func (r *RADVS) Stop() {
 }
 
 func (r *RADVS) SendRA() error {
-	return r.h.SendRouterAdvertisement(r.Router, raw.IP6AllNodesAddr)
+	return r.h.SendRouterAdvertisement(r.Router, packet.IP6AllNodesAddr)
 }
 
 func (r *RADVS) sendAdvertistementLoop() {
-	r.h.SendRouterAdvertisement(r.Router, raw.IP6AllNodesAddr)
+	r.h.SendRouterAdvertisement(r.Router, packet.IP6AllNodesAddr)
 	ticker := time.NewTicker(time.Duration(int64(time.Millisecond) * int64(r.Router.RetransTimer))).C
 	for {
 		select {
@@ -84,7 +84,7 @@ func (r *RADVS) sendAdvertistementLoop() {
 			return
 
 		case <-ticker:
-			if err := r.h.SendRouterAdvertisement(r.Router, raw.IP6AllNodesAddr); err != nil {
+			if err := r.h.SendRouterAdvertisement(r.Router, packet.IP6AllNodesAddr); err != nil {
 				fmt.Printf("icmp6: error in send ra: %s", err)
 			}
 		}

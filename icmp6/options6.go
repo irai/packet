@@ -251,7 +251,7 @@ func (pi *PrefixInformation) unmarshal(b []byte) error {
 		AutonomousAddressConfiguration: aFlag,
 		ValidLifetime:                  valid,
 		PreferredLifetime:              preferred,
-		// raw.Value is already a copy of b, so just point to the address.
+		// packet.Value is already a copy of b, so just point to the address.
 		Prefix: addr,
 	}
 

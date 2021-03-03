@@ -10,7 +10,7 @@ import (
 	"errors"
 	"log"
 
-	"github.com/irai/packet/raw"
+	"github.com/irai/packet"
 )
 
 var (
@@ -59,13 +59,13 @@ func (h *Handler) request(srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr ne
 }
 
 // buffer is a lockable buffer to avoid allocation
-var buffer = raw.EtherBuffer{}
+var buffer = packet.EtherBuffer{}
 
 func (h *Handler) requestWithDstEthernet(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
 	ether := buffer.Alloc()
 	defer buffer.Free()
 
-	ether = raw.EtherMarshalBinary(ether, syscall.ETH_P_ARP, srcHwAddr, dstEther)
+	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_ARP, srcHwAddr, dstEther)
 	arp, err := ARPMarshalBinary(ether.Payload(), OperationRequest, srcHwAddr, srcIP, dstHwAddr, dstIP)
 	if err != nil {
 		return err
@@ -76,7 +76,7 @@ func (h *Handler) requestWithDstEthernet(dstEther net.HardwareAddr, srcHwAddr ne
 	// return err
 	// }
 
-	if _, err := h.conn.WriteTo(ether[:n], &raw.Addr{MAC: dstEther}); err != nil {
+	if _, err := h.engine.Conn().WriteTo(ether[:n], &packet.Addr{MAC: dstEther}); err != nil {
 		return err
 	}
 	return nil
@@ -99,7 +99,7 @@ func (h *Handler) reply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, s
 	ether := buffer.Alloc()
 	defer buffer.Free()
 
-	ether = raw.EtherMarshalBinary(ether, syscall.ETH_P_ARP, srcHwAddr, dstEther)
+	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_ARP, srcHwAddr, dstEther)
 	arp, err := ARPMarshalBinary(ether.Payload(), OperationReply, srcHwAddr, srcIP, dstHwAddr, dstIP)
 	if err != nil {
 		return err
@@ -110,7 +110,7 @@ func (h *Handler) reply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, s
 	// return err
 	// }
 
-	_, err = h.conn.WriteTo(ether[:n], &raw.Addr{MAC: dstEther})
+	_, err = h.engine.Conn().WriteTo(ether[:n], &packet.Addr{MAC: dstEther})
 	return err
 }
 
@@ -124,12 +124,12 @@ func (h *Handler) reply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, s
 // An ARP Probe conveys both a question ("Is anyone using this address?") and an
 // implied statement ("This is the address I hope to use.").
 func (h *Handler) Probe(ip net.IP) error {
-	return h.Request(h.NICInfo.HostMAC, net.IPv4zero, EthernetBroadcast, ip)
+	return h.Request(h.engine.NICInfo.HostMAC, net.IPv4zero, EthernetBroadcast, ip)
 }
 
 // probeUnicast is used to validate the client is still online; same as ARP probe but unicast to target
 func (h *Handler) probeUnicast(mac net.HardwareAddr, ip net.IP) error {
-	return h.Request(h.NICInfo.HostMAC, net.IPv4zero, mac, ip)
+	return h.Request(h.engine.NICInfo.HostMAC, net.IPv4zero, mac, ip)
 }
 
 // announce sends arp announcement packet
@@ -168,21 +168,21 @@ func (h *Handler) announce(dstEther net.HardwareAddr, mac net.HardwareAddr, ip n
 
 // WhoIs will send a request packet to get the MAC address for the IP. Retry 3 times.
 //
-func (h *Handler) WhoIs(ip net.IP) (raw.Addr, error) {
+func (h *Handler) WhoIs(ip net.IP) (packet.Addr, error) {
 
 	for i := 0; i < 3; i++ {
-		if host := h.LANHosts.FindIP(ip); host != nil {
-			return raw.Addr{IP: host.IP, MAC: host.MAC}, nil
+		if host := h.engine.LANHosts.FindIP(ip); host != nil {
+			return packet.Addr{IP: host.IP, MAC: host.MAC}, nil
 		}
-		if err := h.Request(h.NICInfo.HostMAC, h.NICInfo.HostIP4.IP, EthernetBroadcast, ip); err != nil {
-			return raw.Addr{}, fmt.Errorf("arp WhoIs error: %w", err)
+		if err := h.Request(h.engine.NICInfo.HostMAC, h.engine.NICInfo.HostIP4.IP, EthernetBroadcast, ip); err != nil {
+			return packet.Addr{}, fmt.Errorf("arp WhoIs error: %w", err)
 		}
 		time.Sleep(time.Millisecond * 50)
 	}
 
 	if Debug {
 		log.Printf("arp ip=%s whois not found", ip)
-		h.LANHosts.PrintTable()
+		h.engine.LANHosts.PrintTable()
 	}
-	return raw.Addr{}, ErrNotFound
+	return packet.Addr{}, ErrNotFound
 }

@@ -1,4 +1,4 @@
-package raw
+package packet
 
 import (
 	"bytes"
@@ -53,16 +53,16 @@ type Handler struct {
 	sync.Mutex
 }
 
-// ppNOOP is a no op packet processor
-type ppNOOP struct{}
+// PacketNOOP is a no op packet processor
+type PacketNOOP struct{}
 
-var _ PacketProcessor = ppNOOP{}
+var _ PacketProcessor = PacketNOOP{}
 
-func (p ppNOOP) Start() error                               { return nil }
-func (p ppNOOP) Stop() error                                { return nil }
-func (p ppNOOP) ProcessPacket(*Host, []byte) (*Host, error) { return nil, nil }
-func (p ppNOOP) StartHunt(net.HardwareAddr) error           { return nil }
-func (p ppNOOP) StopHunt(net.HardwareAddr) error            { return nil }
+func (p PacketNOOP) Start() error                               { return nil }
+func (p PacketNOOP) Stop() error                                { return nil }
+func (p PacketNOOP) ProcessPacket(*Host, []byte) (*Host, error) { return nil, nil }
+func (p PacketNOOP) StartHunt(net.HardwareAddr) error           { return nil }
+func (p PacketNOOP) StopHunt(net.HardwareAddr) error            { return nil }
 
 // New creates an ICMPv6 handler with default values
 func NewHandler(nic string) (*Handler, error) {
@@ -111,12 +111,12 @@ func (config Config) New(nic string) (*Handler, error) {
 	}
 
 	// no plugins to start
-	h.HandlerARP = ppNOOP{}
-	h.HandlerIP4 = ppNOOP{}
-	h.HandlerIP6 = ppNOOP{}
-	h.HandlerARP = ppNOOP{}
-	h.HandlerICMP4 = ppNOOP{}
-	h.HandlerICMP6 = ppNOOP{}
+	h.HandlerARP = PacketNOOP{}
+	h.HandlerIP4 = PacketNOOP{}
+	h.HandlerIP6 = PacketNOOP{}
+	h.HandlerARP = PacketNOOP{}
+	h.HandlerICMP4 = PacketNOOP{}
+	h.HandlerICMP6 = PacketNOOP{}
 
 	return h, nil
 }
@@ -171,7 +171,7 @@ func (h *Handler) setupConn() (conn net.PacketConn, err error) {
 	// see: https://www.man7.org/linux/man-pages/man7/packet.7.html
 	conn, err = NewServerConn(h.NICInfo.IFI, syscall.ETH_P_ALL, SocketConfig{Filter: bpf})
 	if err != nil {
-		return nil, fmt.Errorf("raw.ListenPacket error: %w", err)
+		return nil, fmt.Errorf("packet.ListenPacket error: %w", err)
 	}
 
 	// don't timeout during write

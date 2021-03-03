@@ -9,9 +9,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/irai/packet"
 	log "github.com/sirupsen/logrus"
-
-	"github.com/irai/packet/raw"
 
 	"golang.org/x/net/ipv6"
 )
@@ -44,19 +43,19 @@ type Router struct {
 // Event represents and ICMP6 event from a host
 type Event struct {
 	Type ipv6.ICMPType
-	Host raw.Host
+	Host packet.Host
 }
 
 // PrintTable logs ICMP6 tables to standard out
 func (h *Handler) PrintTable() {
 	// Important: Lock the global table
-	h.LANHosts.Lock()
-	defer h.LANHosts.Unlock()
+	h.engine.LANHosts.Lock()
+	defer h.engine.LANHosts.Unlock()
 
-	if len(h.LANHosts.Table) > 0 {
-		fmt.Printf("icmp6 hosts table len=%v\n", len(h.LANHosts.Table))
-		for _, v := range h.LANHosts.Table {
-			if raw.IsIP6(v.IP) {
+	if len(h.engine.LANHosts.Table) > 0 {
+		fmt.Printf("icmp6 hosts table len=%v\n", len(h.engine.LANHosts.Table))
+		for _, v := range h.engine.LANHosts.Table {
+			if packet.IsIP6(v.IP) {
 				fmt.Printf("mac=%s ip=%v online=%v IP6router=%v\n", v.MAC, v.IP, v.Online, v.IPV6Router)
 			}
 		}
@@ -86,24 +85,22 @@ func (h *Handler) findOrCreateRouter(mac net.HardwareAddr, ip net.IP) (router *R
 	if found {
 		return r, true
 	}
-	router = &Router{MAC: raw.CopyMAC(mac), IP: raw.CopyIP(ip)}
+	router = &Router{MAC: packet.CopyMAC(mac), IP: packet.CopyIP(ip)}
 	h.LANRouters[string(ip)] = router
 	return router, false
 }
 
-var _ raw.PacketProcessor = &Handler{}
+var _ packet.PacketProcessor = &Handler{}
 
 // Handler implements ICMPv6 Neighbor Discovery Protocol
 // see: https://mdlayher.com/blog/network-protocol-breakdown-ndp-and-go/
 type Handler struct {
-	NICInfo      *raw.NICInfo
-	conn         net.PacketConn
 	mutex        sync.Mutex
 	notification chan<- Event
 	Router       Router
 	LANRouters   map[string]*Router
-	LANHosts     *raw.HostTable
-	setHandler   raw.SetHandler // set to manage captured macs
+	setHandler   packet.SetHandler // set to manage captured macs
+	engine       *packet.Handler
 }
 
 // Config define server configuration values
@@ -113,19 +110,25 @@ type Config struct {
 	UniqueLocalAddress   net.IPNet
 }
 
-// New creates a new instance of ICMP6 on a given interface
-func New(info *raw.NICInfo, conn net.PacketConn, table *raw.HostTable) (*Handler, error) {
+// New creates an ICMP6 handler and attach to the engine
+func New(engine *packet.Handler) (*Handler, error) {
 
-	h := &Handler{LANRouters: make(map[string]*Router), LANHosts: table}
-	h.NICInfo = info
-	h.conn = conn
+	h := &Handler{LANRouters: make(map[string]*Router)}
+	h.engine = engine
+	engine.HandlerICMP6 = h
 
 	return h, nil
 }
 
+// Close removes the plugin from the engine
+func (h *Handler) Close() error {
+	h.engine.HandlerICMP6 = packet.PacketNOOP{}
+	return nil
+}
+
 // Start prepares to accept packets
 func (h *Handler) Start() error {
-	if err := h.SendEchoRequest(raw.IP6AllNodesAddr, 0, 0); err != nil {
+	if err := h.SendEchoRequest(packet.IP6AllNodesAddr, 0, 0); err != nil {
 		return err
 	}
 	return nil
@@ -146,14 +149,6 @@ func (h *Handler) StopHunt(mac net.HardwareAddr) error {
 	return h.stopHunt(mac)
 }
 
-// Close closes the underlying sockets
-func (h *Handler) Close() error {
-	if h.conn != nil {
-		return h.conn.Close()
-	}
-	return nil
-}
-
 // AddNotificationChannel set the notification channel for ICMP6 messages
 func (h *Handler) AddNotificationChannel(notification chan<- Event) {
 	h.notification = notification
@@ -167,9 +162,9 @@ func (h *Handler) autoConfigureRouter(router Router) {
 }
 
 // buffer is a lockable buffer to avoid allocation
-var buffer = raw.EtherBuffer{}
+var buffer = packet.EtherBuffer{}
 
-func (h *Handler) sendPacket(srcAddr raw.Addr, dstAddr raw.Addr, b []byte) error {
+func (h *Handler) sendPacket(srcAddr packet.Addr, dstAddr packet.Addr, b []byte) error {
 
 	hopLimit := uint8(64)
 	if dstAddr.IP.IsLinkLocalUnicast() || dstAddr.IP.IsLinkLocalMulticast() {
@@ -179,8 +174,8 @@ func (h *Handler) sendPacket(srcAddr raw.Addr, dstAddr raw.Addr, b []byte) error
 	ether := buffer.Alloc()
 	defer buffer.Free()
 
-	ether = raw.EtherMarshalBinary(ether, syscall.ETH_P_IPV6, srcAddr.MAC, dstAddr.MAC)
-	ip6 := raw.IP6MarshalBinary(ether.Payload(), hopLimit, srcAddr.IP, dstAddr.IP)
+	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IPV6, srcAddr.MAC, dstAddr.MAC)
+	ip6 := packet.IP6MarshalBinary(ether.Payload(), hopLimit, srcAddr.IP, dstAddr.IP)
 	ip6, _ = ip6.AppendPayload(b, syscall.IPPROTO_ICMPV6)
 	ether, _ = ether.SetPayload(ip6)
 
@@ -198,12 +193,12 @@ func (h *Handler) sendPacket(srcAddr raw.Addr, dstAddr raw.Addr, b []byte) error
 	binary.BigEndian.PutUint32(psh[32:36], uint32(len(b)))
 	psh[39] = 58
 	copy(psh[40:], b)
-	ICMP6(ip6.Payload()).SetChecksum(raw.Checksum(psh))
+	ICMP6(ip6.Payload()).SetChecksum(packet.Checksum(psh))
 
-	// icmp6 := ICMP6(raw.IP6(ether.Payload()).Payload())
+	// icmp6 := ICMP6(packet.IP6(ether.Payload()).Payload())
 	// fmt.Println("DEBUG icmp :", icmp6, len(icmp6))
 	// fmt.Println("DEBUG ether:", ether, len(ether), len(b))
-	if _, err := h.conn.WriteTo(ether, &raw.Addr{MAC: dstAddr.MAC}); err != nil {
+	if _, err := h.engine.Conn().WriteTo(ether, &packet.Addr{MAC: dstAddr.MAC}); err != nil {
 		log.Error("icmp failed to write ", err)
 		return err
 	}
@@ -214,22 +209,22 @@ func (h *Handler) sendPacket(srcAddr raw.Addr, dstAddr raw.Addr, b []byte) error
 var repeat int
 
 // ProcessPacket handles icmp6 packets
-func (h *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
+func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, error) {
 
 	// retrieve or set store
 	var store *Data
 	if host != nil {
-		h.LANHosts.Lock()
+		h.engine.LANHosts.Lock()
 		store, _ = host.ICMP6.(*Data)
 		if store == nil {
 			store = &Data{}
 			host.ICMP6 = store
 		}
-		h.LANHosts.Unlock()
+		h.engine.LANHosts.Unlock()
 	}
 
-	ether := raw.Ether(b)
-	ip6Frame := raw.IP6(ether.Payload())
+	ether := packet.Ether(b)
+	ip6Frame := packet.IP6(ether.Payload())
 	icmp6Frame := ICMP6(ip6Frame.Payload())
 
 	if !icmp6Frame.IsValid() {
@@ -248,9 +243,9 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
 		}
 		// NS source IP is sometimes ff02::1 multicast, which means the host is nil
 		if host == nil {
-			if raw.IsIP6(msg.TargetAddress) {
+			if packet.IsIP6(msg.TargetAddress) {
 				// will lock mutex in LANHosts
-				host, _ = h.LANHosts.FindOrCreateHost(ether.Src(), msg.TargetAddress)
+				host, _ = h.engine.LANHosts.FindOrCreateHost(ether.Src(), msg.TargetAddress)
 			}
 		}
 
@@ -288,9 +283,9 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
 		router.Options = msg.Options
 
 		// update router details in host
-		h.LANHosts.Lock()
+		h.engine.LANHosts.Lock()
 		host.IPV6Router = true
-		h.LANHosts.Unlock()
+		h.engine.LANHosts.Unlock()
 
 		prefixes := []PrefixInformation{}
 		for _, v := range msg.Options {
@@ -334,12 +329,12 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
 				if bytes.Equal(ether.Src(), msg.SourceLLA) {
 					fmt.Printf("icmp6 error: source link address differ: ether=%s rs=%s\n", ether.Src(), ip6Frame.Src())
 				}
-				h.SendRouterAdvertisement(v, raw.Addr{MAC: ether.Src(), IP: ip6Frame.Src()})
+				h.SendRouterAdvertisement(v, packet.Addr{MAC: ether.Src(), IP: ip6Frame.Src()})
 			}
 		}
 
 	case ipv6.ICMPTypeEchoReply:
-		msg := raw.ICMPEcho(icmp6Frame)
+		msg := packet.ICMPEcho(icmp6Frame)
 		if !msg.IsValid() {
 			return host, fmt.Errorf("invalid icmp echo msg len=%d", len(icmp6Frame))
 		}
@@ -348,7 +343,7 @@ func (h *Handler) ProcessPacket(host *raw.Host, b []byte) (*raw.Host, error) {
 		}
 
 	case ipv6.ICMPTypeEchoRequest:
-		msg := raw.ICMPEcho(icmp6Frame)
+		msg := packet.ICMPEcho(icmp6Frame)
 		if Debug {
 			fmt.Printf("icmp6: echo request %s\n", msg)
 		}
