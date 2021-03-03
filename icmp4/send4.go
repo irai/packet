@@ -15,19 +15,14 @@ func (h *Handler) sendPacket(srcAddr packet.Addr, dstAddr packet.Addr, p packet.
 	defer buffer.Free()
 
 	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IP, srcAddr.MAC, dstAddr.MAC)
-	fmt.Println("DEBUG: ether ", ether, len(ether))
 	ip4 := packet.IP4MarshalBinary(ether.Payload(), 50, srcAddr.IP, dstAddr.IP)
-	fmt.Println("DEBUG: ip ", ip4, len(ip4))
 	if ip4, err = ip4.AppendPayload(p, syscall.IPPROTO_ICMP); err != nil {
 		return err
 	}
 
-	fmt.Println("DEBUG: ip ", ip4, len(ip4))
 	if ether, err = ether.SetPayload(ip4); err != nil {
 		return err
 	}
-	fmt.Println("DEBUG: ether ", ether, len(ether))
-	fmt.Println("DEBUG addr: ", srcAddr, dstAddr)
 	if dstAddr.MAC == nil {
 		dstAddr.MAC = packet.Eth4AllNodesMulticast
 	}
