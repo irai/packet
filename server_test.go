@@ -26,7 +26,7 @@ var (
 func makeTestHandler() (h *Handler) {
 	h = &Handler{}
 
-	h.conn, _ = raw.NewBufferedConn()
+	h.conn, _ = raw.TestNewBufferedConn()
 	return h
 }
 

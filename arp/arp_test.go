@@ -34,35 +34,10 @@ func setupTestHandler(t *testing.T) *testContext {
 	var err error
 
 	tc := testContext{}
-	tc.inConn, tc.outConn = raw.NewBufferedConn()
 	tc.ctx, tc.cancel = context.WithCancel(context.Background())
 
-	// MUST read the out conn to avoid blocking the sender
-	go func() {
-		buf := make([]byte, 2000)
-		for {
-			n, _, err := tc.outConn.ReadFrom(buf)
-			if err != nil {
-				if tc.ctx.Err() != context.Canceled {
-					panic(err)
-				}
-			}
-			if tc.ctx.Err() == context.Canceled {
-				return
-			}
-			buf = buf[:n]
-			ether := raw.Ether(buf)
-			arp := ARP(ether.Payload())
-			if !ether.IsValid() {
-				s := fmt.Sprintf("error ether client packet %s", ether)
-				panic(s)
-			}
-			if !arp.IsValid() {
-				s := fmt.Sprintf("error arp client packet %s %s", ether, arp)
-				panic(s)
-			}
-		}
-	}()
+	tc.inConn, tc.outConn = raw.TestNewBufferedConn()
+	go raw.TestReadAndDiscardLoop(tc.ctx, tc.outConn) // MUST read the out conn to avoid blocking the sender
 
 	nicInfo := raw.NICInfo{
 		HostMAC:   hostMAC,

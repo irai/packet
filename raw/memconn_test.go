@@ -7,7 +7,7 @@ import (
 )
 
 func Test_bufferedPacketConn_ReadFrom(t *testing.T) {
-	a, b := NewBufferedConn()
+	a, b := TestNewBufferedConn()
 
 	sent := []byte("test")
 	buffer := make([]byte, 32)
@@ -21,6 +21,7 @@ func Test_bufferedPacketConn_ReadFrom(t *testing.T) {
 			count++
 		}
 	}(t)
+	time.Sleep(time.Millisecond * 10) // time for read to start
 
 	fmt.Println("going to write")
 	a.WriteTo(sent, nil)
