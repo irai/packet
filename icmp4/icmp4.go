@@ -74,22 +74,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 			fmt.Println("icmp4: invalid echo reply", icmpFrame, len(icmpFrame))
 			return host, fmt.Errorf("icmp invalid icmp4 packet")
 		}
-
-		fmt.Println("DEBUGwill wait")
-		icmpTable.cond.L.Lock()
-		if len(icmpTable.table) <= 0 {
-			icmpTable.cond.L.Unlock()
-			log.Info("no waiting")
-			return host, nil
-		}
-		fmt.Println("DEBUGdone wait")
-
-		entry, ok := icmpTable.table[echo.EchoID()]
-		if ok {
-			entry.msgRecv = echo
-		}
-		icmpTable.cond.L.Unlock()
-		icmpTable.cond.Broadcast()
+		echoNotify(echo.EchoID()) // unblock ping if waiting
 
 	case packet.ICMPTypeEchoRequest:
 		if Debug {

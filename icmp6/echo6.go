@@ -1,8 +1,6 @@
 package icmp6
 
 import (
-	"fmt"
-	"net"
 	"sync"
 	"time"
 
@@ -12,20 +10,16 @@ import (
 )
 
 type icmpEntry struct {
-	msgRecv packet.ICMPEcho
+	msgRecv bool
 	expire  time.Time
+	wakeup  chan bool
 }
 
 var icmpTable = struct {
-	mutex sync.Mutex
-	cond  *sync.Cond
-	table map[uint16]*icmpEntry
+	sync.Mutex
+	table map[uint16]icmpEntry
 }{
-	table: make(map[uint16]*icmpEntry),
-}
-
-func init() {
-	icmpTable.cond = sync.NewCond(&icmpTable.mutex)
+	table: make(map[uint16]icmpEntry),
 }
 
 // SendEchoRequest transmit an icmp6 echo request and do not wait for response
@@ -51,48 +45,63 @@ func (h *Handler) SendEchoRequest(srcAddr packet.Addr, dstAddr packet.Addr, id u
 	return h.sendPacket(srcAddr, dstAddr, p)
 }
 
+func echoNotify(id uint16) {
+	icmpTable.Lock()
+	if len(icmpTable.table) <= 0 {
+		icmpTable.Unlock()
+		return
+	}
+
+	if entry, ok := icmpTable.table[id]; ok {
+		entry.msgRecv = true
+	}
+	icmpTable.Unlock()
+}
+
 // Ping send a ping request and wait for a reply
 func (h *Handler) Ping(srcAddr packet.Addr, dstAddr packet.Addr, timeout time.Duration) (err error) {
 	if timeout <= 0 || timeout > time.Second*10 {
 		timeout = time.Second * 2
 	}
-	icmpTable.cond.L.Lock()
-	msg := icmpEntry{expire: time.Now().Add(timeout)}
+	msg := icmpEntry{expire: time.Now().Add(timeout), wakeup: make(chan bool)}
 	id := uint16(time.Now().Nanosecond())
 	seq := uint16(1)
-	icmpTable.table[id] = &msg
-	icmpTable.cond.L.Unlock()
+
+	icmpTable.Lock()
+	icmpTable.table[id] = msg
+	icmpTable.Unlock()
 
 	if err = h.SendEchoRequest(srcAddr, dstAddr, id, seq); err != nil {
 		// fmt.Println("error sending ping packet", err)
 		return err
 	}
 
-	// wait with mutex locked
-	icmpTable.cond.L.Lock()
-	for msg.msgRecv == nil && msg.expire.After(time.Now()) {
-		go func() { time.Sleep(timeout); icmpTable.cond.Broadcast() }() // wake up in timeout if not before
-		icmpTable.cond.Wait()
+	for {
+		icmpTable.Lock()
+		if msg.msgRecv || msg.expire.Before(time.Now()) {
+			break
+		}
+		icmpTable.Unlock()
+		select {
+		case <-msg.wakeup:
+		case <-time.After(timeout):
+		}
 	}
-	delete(icmpTable.table, id)
-	icmpTable.cond.L.Unlock()
 
-	if msg.msgRecv == nil {
+	// loop finishes with lock
+	delete(icmpTable.table, id)
+	icmpTable.Unlock()
+
+	if !msg.msgRecv {
 		return packet.ErrTimeout
 	}
 
 	return nil
 }
 
+/***
 // Ping send a ping request and wait for a reply
 func (h *Handler) PING(src net.IP, dst net.IP, timeout time.Duration) (err error) {
-
-	icmpTable.cond.L.Lock()
-	msg := icmpEntry{expire: time.Now().Add(timeout)}
-	id := uint16(time.Now().Nanosecond())
-	seq := uint16(1)
-	icmpTable.table[id] = &msg
-	icmpTable.cond.L.Unlock()
 
 	c, err := icmp.ListenPacket("ip6:ipv6-icmp", src.String()+"%eth0")
 	if err != nil {
@@ -130,3 +139,4 @@ func (h *Handler) PING(src net.IP, dst net.IP, timeout time.Duration) (err error
 
 	return nil
 }
+***/

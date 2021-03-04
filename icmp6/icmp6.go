@@ -161,18 +161,13 @@ func (h *Handler) autoConfigureRouter(router Router) {
 	}
 }
 
-// buffer is a lockable buffer to avoid allocation
-var buffer = packet.EtherBuffer{}
-
 func (h *Handler) sendPacket(srcAddr packet.Addr, dstAddr packet.Addr, b []byte) error {
+	ether := packet.Ether(make([]byte, packet.EthMaxSize)) // Ping is called many times concurrently by client
 
 	hopLimit := uint8(64)
 	if dstAddr.IP.IsLinkLocalUnicast() || dstAddr.IP.IsLinkLocalMulticast() {
 		hopLimit = 1
 	}
-
-	ether := buffer.Alloc()
-	defer buffer.Free()
 
 	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IPV6, srcAddr.MAC, dstAddr.MAC)
 	ip6 := packet.IP6MarshalBinary(ether.Payload(), hopLimit, srcAddr.IP, dstAddr.IP)
@@ -341,20 +336,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 		if Debug {
 			fmt.Printf("icmp6: echo reply %s\n", echo)
 		}
-
-		icmpTable.cond.L.Lock()
-		if len(icmpTable.table) <= 0 {
-			icmpTable.cond.L.Unlock()
-			// log.Info("no waiting")
-			return host, nil
-		}
-
-		entry, ok := icmpTable.table[echo.EchoID()]
-		if ok {
-			entry.msgRecv = echo
-		}
-		icmpTable.cond.L.Unlock()
-		icmpTable.cond.Broadcast()
+		echoNotify(echo.EchoID()) // unblock ping if waiting
 
 	case ipv6.ICMPTypeEchoRequest:
 		msg := packet.ICMPEcho(icmp6Frame)

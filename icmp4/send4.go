@@ -5,14 +5,10 @@ import (
 	"syscall"
 
 	"github.com/irai/packet"
-	log "github.com/sirupsen/logrus"
 )
 
-var buffer = packet.EtherBuffer{}
-
 func (h *Handler) sendPacket(srcAddr packet.Addr, dstAddr packet.Addr, p packet.ICMP4) (err error) {
-	ether := buffer.Alloc()
-	defer buffer.Free()
+	ether := packet.Ether(make([]byte, packet.EthMaxSize)) // Ping is called many times concurrently by client
 
 	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IP, srcAddr.MAC, dstAddr.MAC)
 	ip4 := packet.IP4MarshalBinary(ether.Payload(), 50, srcAddr.IP, dstAddr.IP)
@@ -28,10 +24,10 @@ func (h *Handler) sendPacket(srcAddr packet.Addr, dstAddr packet.Addr, p packet.
 	}
 
 	if Debug {
-		fmt.Printf("icmp4: send %s", p)
+		fmt.Printf("icmp4: send %s\n", p)
 	}
 	if _, err := h.engine.Conn().WriteTo(ether, &dstAddr); err != nil {
-		log.Error("icmp failed to write ", err)
+		fmt.Println("icmp failed to write ", err)
 		return err
 	}
 
