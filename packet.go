@@ -12,6 +12,28 @@ import (
 	"golang.org/x/net/ipv4"
 )
 
+// Global variables
+var (
+	// An IP host group address is mapped to an Ethernet multicast address
+	// by placing the low-order 23-bits of the IP address into the low-order
+	// 23 bits of the Ethernet multicast address 01-00-5E-00-00-00 (hex).
+	EthBroadcast          = net.HardwareAddr{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
+	Eth4AllNodesMulticast = net.HardwareAddr{0x01, 0x00, 0x5e, 0, 0, 0x01}
+	IP4AllNodesMulticast  = net.IPv4(224, 0, 0, 1)
+
+	Eth4RoutersMulticast   = net.HardwareAddr{0x01, 0x00, 0x5e, 0, 0, 0x02}
+	IP4AllRoutersMulticast = net.IPv4(224, 0, 0, 2)
+	IP4AllNodesAddr        = Addr{MAC: Eth4AllNodesMulticast, IP: IP4AllNodesMulticast}
+
+	Eth6AllNodesMulticast = net.HardwareAddr{0x33, 0x33, 0, 0, 0, 0x01}
+	IP6AllNodesMulticast  = net.IP{0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}
+	Eth6RoutersMulticast  = net.HardwareAddr{0x33, 0x33, 0, 0, 0, 0x02}
+
+	IP6DefaultRouter = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}
+
+	IP6AllNodesAddr = Addr{MAC: Eth6AllNodesMulticast, IP: IP6AllNodesMulticast}
+)
+
 var ipv6LinkLocal = func(cidr string) *net.IPNet {
 	_, net, err := net.ParseCIDR(cidr)
 	if err != nil {
@@ -288,27 +310,6 @@ func (p IP4) CalculateChecksum() uint16 {
 	return Checksum(psh)
 }
 
-// Global variables
-var (
-	// An IP host group address is mapped to an Ethernet multicast address
-	// by placing the low-order 23-bits of the IP address into the low-order
-	// 23 bits of the Ethernet multicast address 01-00-5E-00-00-00 (hex).
-	Eth4AllNodesMulticast = net.HardwareAddr{0x01, 0x00, 0x5e, 0, 0, 0x01}
-	IP4AllNodesMulticast  = net.IPv4(224, 0, 0, 1)
-
-	Eth4RoutersMulticast   = net.HardwareAddr{0x01, 0x00, 0x5e, 0, 0, 0x02}
-	IP4AllRoutersMulticast = net.IPv4(224, 0, 0, 2)
-	IP4AllNodesAddr        = Addr{MAC: Eth4AllNodesMulticast, IP: IP4AllNodesMulticast}
-
-	Eth6AllNodesMulticast = net.HardwareAddr{0x33, 0x33, 0, 0, 0, 0x01}
-	IP6AllNodesMulticast  = net.IP{0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}
-	Eth6RoutersMulticast  = net.HardwareAddr{0x33, 0x33, 0, 0, 0, 0x02}
-
-	IP6DefaultRouter = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}
-
-	IP6AllNodesAddr = Addr{MAC: Eth6AllNodesMulticast, IP: IP6AllNodesMulticast}
-)
-
 // IP6 structure: see https://github.com/golang/net/blob/master/ipv6/header.go
 type IP6 []byte
 
@@ -428,3 +429,53 @@ func Checksum(b []byte) uint16 {
 	s = s + s>>16
 	return ^uint16(s)
 }
+
+const UDPHeaderLen = 8
+
+type UDP []byte
+
+func (p UDP) SrcPort() uint16  { return binary.BigEndian.Uint16(p[0:2]) }
+func (p UDP) DstPort() uint16  { return binary.BigEndian.Uint16(p[2:4]) }
+func (p UDP) Len() uint16      { return binary.BigEndian.Uint16(p[4:6]) }
+func (p UDP) Checksum() uint16 { return binary.BigEndian.Uint16(p[6:8]) }
+func (p UDP) Payload() []byte  { return p[8:] }
+
+func (p UDP) IsValid() bool {
+	if len(p) < 8 { // 8 bytes UDP header
+		return false
+	}
+	return true
+}
+
+func UDPMarshalBinary(p []byte, srcPort uint16, dstPort uint16) UDP {
+	if p == nil || cap(p) < UDPHeaderLen {
+		p = make([]byte, EthMaxSize) // enough capacity for a max ethernet
+	}
+	p = p[:UDPHeaderLen] // change slice in case slice is less than header
+
+	binary.BigEndian.PutUint16(p[0:2], srcPort)
+	binary.BigEndian.PutUint16(p[2:4], dstPort)
+	binary.BigEndian.PutUint16(p[4:6], 0) // no payload
+	return UDP(p)
+}
+
+func (p UDP) SetPayload(b []byte) UDP {
+	binary.BigEndian.PutUint16(p[4:6], uint16(len(b)))
+	// no checksum for IP4
+	return p[:len(p)+len(b)]
+}
+
+func (p UDP) AppendPayload(b []byte) (UDP, error) {
+	if b == nil || cap(p)-len(p) < len(b) {
+		return nil, ErrPayloadTooBig
+	}
+	p = p[:len(p)+len(b)] // change slice in case slice is less total
+	copy(p.Payload(), b)
+	binary.BigEndian.PutUint16(p[4:6], uint16(len(b)))
+	// no checksum for IP4
+	return p, nil
+}
+
+// For future usage: See tcp header
+// https://github.com/grahamking/latency
+type TCP []byte

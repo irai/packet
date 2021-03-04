@@ -43,6 +43,7 @@ type Handler struct {
 	HandlerIP6              PacketProcessor
 	HandlerICMP4            PacketProcessor
 	HandlerICMP6            PacketProcessor
+	HandlerDHCP4            PacketProcessor
 	HandlerARP              PacketProcessor
 	callback                []func(Notification) error
 	captureList             *SetHandler
@@ -117,6 +118,7 @@ func (config Config) New(nic string) (*Handler, error) {
 	h.HandlerARP = PacketNOOP{}
 	h.HandlerICMP4 = PacketNOOP{}
 	h.HandlerICMP6 = PacketNOOP{}
+	h.HandlerDHCP4 = PacketNOOP{}
 
 	return h, nil
 }
@@ -216,6 +218,9 @@ func (h *Handler) start() error {
 	if err := h.HandlerARP.Start(); err != nil {
 		fmt.Println("error: in ARP start:", err)
 	}
+	if err := h.HandlerDHCP4.Start(); err != nil {
+		fmt.Println("error: in DHCP4 start:", err)
+	}
 	return nil
 }
 
@@ -234,6 +239,9 @@ func (h *Handler) end() error {
 	}
 	if err := h.HandlerARP.Stop(); err != nil {
 		fmt.Println("error: in ARP stop:", err)
+	}
+	if err := h.HandlerDHCP4.Stop(); err != nil {
+		fmt.Println("error: in DHCP4 stop:", err)
 	}
 	return nil
 }
@@ -286,47 +294,49 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			continue
 		}
 
+		var ip4Frame IP4
+		var ip6Frame IP6
 		var l4Proto int
 		var l4Payload []byte
 		var host *Host
 		switch ether.EtherType() {
 		case syscall.ETH_P_IP:
-			frame := IP4(ether.Payload())
-			if !frame.IsValid() {
+			ip4Frame = IP4(ether.Payload())
+			if !ip4Frame.IsValid() {
 				fmt.Println("packet: error invalid ip4 frame type=", ether.EtherType())
 				continue
 			}
 			if DebugIP4 {
 				fmt.Println("ether:", ether)
-				fmt.Println("ip4  :", frame)
+				fmt.Println("ip4  :", ip4Frame)
 			}
-			if !h.NICInfo.HostIP4.Contains(frame.Src()) { // must be on the same net
+			if !h.NICInfo.HostIP4.Contains(ip4Frame.Src()) { // must be on the same net
 				// if !frame.Src().IsLinkLocalUnicast() && !frame.Src().IsGlobalUnicast() {
 				// fmt.Println("ignore IP4 ", frame)
 				continue
 			}
-			host, _ = h.LANHosts.FindOrCreateHost(ether.Src(), frame.Src())
-			l4Proto = frame.Protocol()
-			l4Payload = frame.Payload()
+			host, _ = h.LANHosts.FindOrCreateHost(ether.Src(), ip4Frame.Src())
+			l4Proto = ip4Frame.Protocol()
+			l4Payload = ip4Frame.Payload()
 			// h.handlerIP4.ProcessPacket(host, ether)
 
 		case syscall.ETH_P_IPV6:
-			frame := IP6(ether.Payload())
-			if !frame.IsValid() {
+			ip6Frame = IP6(ether.Payload())
+			if !ip6Frame.IsValid() {
 				fmt.Println("packet: error invalid ip6 frame type=", ether.EtherType())
 				continue
 			}
 			if DebugIP6 {
 				fmt.Println("ether:", ether)
-				fmt.Printf("ip6  : %s\n", frame)
+				fmt.Printf("ip6  : %s\n", ip6Frame)
 			}
 
-			l4Proto = frame.NextHeader()
-			l4Payload = frame.Payload()
+			l4Proto = ip6Frame.NextHeader()
+			l4Payload = ip6Frame.Payload()
 
 			// lookup host only if unicast
-			if frame.Src().IsLinkLocalUnicast() || frame.Src().IsGlobalUnicast() {
-				host, _ = h.LANHosts.FindOrCreateHost(ether.Src(), frame.Src())
+			if ip6Frame.Src().IsLinkLocalUnicast() || ip6Frame.Src().IsGlobalUnicast() {
+				host, _ = h.LANHosts.FindOrCreateHost(ether.Src(), ip6Frame.Src())
 			}
 			// h.handlerIP6.ProcessPacket(host, ether)
 
@@ -354,7 +364,14 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			// Internet Group Management Protocol - Ipv4 multicast groups
 			// do nothing
 		case syscall.IPPROTO_TCP, syscall.IPPROTO_UDP:
-			// do nothing
+			if ip4Frame != nil {
+				port := UDP(ip4Frame.Payload()).DstPort()
+				if port == 67 || port == 68 {
+					if host, err = h.HandlerDHCP4.ProcessPacket(host, ether); err != nil {
+						fmt.Printf("packet: error processing dhcp4: %s\n", err)
+					}
+				}
+			}
 
 		case 0: // skip ARP
 

@@ -21,8 +21,9 @@ var _ net.Addr = &Addr{}
 // Addr is a network address which can be used to contact other machines, using
 // their hardware addresses.
 type Addr struct {
-	MAC net.HardwareAddr
-	IP  net.IP
+	MAC  net.HardwareAddr
+	IP   net.IP
+	Port uint16
 }
 
 // Network returns the address's network name, "raw".
