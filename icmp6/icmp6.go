@@ -334,14 +334,14 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 			return host, fmt.Errorf("invalid icmp echo msg len=%d", len(icmp6Frame))
 		}
 		if Debug {
-			fmt.Printf("icmp6: echo reply %s\n", echo)
+			fmt.Printf("icmp6: echo reply rcvd %s\n", echo)
 		}
 		echoNotify(echo.EchoID()) // unblock ping if waiting
 
 	case ipv6.ICMPTypeEchoRequest:
-		msg := packet.ICMPEcho(icmp6Frame)
+		echo := packet.ICMPEcho(icmp6Frame)
 		if Debug {
-			fmt.Printf("icmp6: echo request %s\n", msg)
+			fmt.Printf("icmp6: echo request rcvd%s\n", echo)
 		}
 
 	default:

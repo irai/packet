@@ -1,6 +1,7 @@
 package icmp6
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -53,7 +54,11 @@ func echoNotify(id uint16) {
 	}
 
 	if entry, ok := icmpTable.table[id]; ok {
+		if Debug {
+			fmt.Printf("icmp6: matched waiting echo request id=%d", id)
+		}
 		entry.msgRecv = true
+		entry.wakeup <- true
 	}
 	icmpTable.Unlock()
 }

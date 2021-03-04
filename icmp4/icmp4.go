@@ -5,7 +5,6 @@ import (
 	"net"
 
 	"github.com/irai/packet"
-	log "github.com/sirupsen/logrus"
 )
 
 // Debug packets turn on logging if desirable
@@ -64,9 +63,6 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 
 	switch icmpFrame.Type() {
 	case packet.ICMPTypeEchoReply:
-		if Debug {
-			fmt.Printf("icmp4 rcvd: %s", icmpFrame)
-		}
 
 		// ICMPEcho start from icmp frame
 		echo := packet.ICMPEcho(icmpFrame)
@@ -74,11 +70,15 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 			fmt.Println("icmp4: invalid echo reply", icmpFrame, len(icmpFrame))
 			return host, fmt.Errorf("icmp invalid icmp4 packet")
 		}
+		if Debug {
+			fmt.Printf("icmp4: echo reply rcvd %s\n", echo)
+		}
 		echoNotify(echo.EchoID()) // unblock ping if waiting
 
 	case packet.ICMPTypeEchoRequest:
+		echo := packet.ICMPEcho(icmpFrame)
 		if Debug {
-			log.WithFields(log.Fields{"group": "icmp", "type": icmpFrame.Type(), "code": icmpFrame.Code()}).Debugf("rcvd unimplemented icmp packet % X ", icmpFrame.Payload())
+			fmt.Printf("icmp4: echo request rcvd%s\n", echo)
 		}
 
 	default:
