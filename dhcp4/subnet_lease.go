@@ -449,7 +449,7 @@ func (h *leaseTable) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
-func (h *DHCPHandler) migrate() {
+func (h *Handler) migrate() {
 
 }
 
@@ -537,7 +537,7 @@ func loadConfig(fname string) (net1 *dhcpSubnet, net2 *dhcpSubnet, err error) {
 	return net1, net2, nil
 }
 
-func (h *DHCPHandler) saveConfig(fname string) (err error) {
+func (h *Handler) saveConfig(fname string) (err error) {
 
 	if fname == "" {
 		return

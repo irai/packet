@@ -24,7 +24,7 @@ type MessageType byte // Option 53
 type DHCP4 []byte
 
 func (p DHCP4) IsValid() bool {
-	if p.HLen() > 16 { // Invalid size
+	if len(p) < 240 || p.HLen() > 16 { // Invalid size
 		return false
 	}
 	return true

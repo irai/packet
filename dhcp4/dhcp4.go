@@ -1,7 +1,6 @@
 package dhcp4
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"sync"
@@ -20,17 +19,15 @@ const (
 )
 
 var (
-	mutex sync.Mutex
-
 	// Debug module variable to enable/disable debug & trace messages
 	Debug bool
 )
 
-// leaseTable is a type to store lease array
-type leaseTable [256]Lease
-
-// Mode defines the operational mode: Primary or Secondary server
-type Mode int32
+type (
+	leaseTable [256]Lease // leaseTable type to store lease array
+	// Mode type for operational mode: Primary or Secondary server
+	Mode int32
+)
 
 const (
 	// ModePrimaryServer sets the server to operate as the single DHCP on the LAN
@@ -41,34 +38,49 @@ const (
 	ModeSecondaryServerNice
 )
 
-var _ packet.PacketProcessor = &DHCPHandler{}
+// CLoudFlare family
+// https://developers.cloudflare.com/1.1.1.1/1.1.1.1-for-families
+var (
+	CloudFlareDNS1       = net.IPv4(1, 1, 1, 2) // malware
+	CloudFlareDNS2       = net.IPv4(1, 0, 0, 2) // malware
+	CloudFlareFamilyDNS1 = net.IPv4(1, 1, 1, 3) // malware and adult sites
+	CloudFlareFamilyDNS2 = net.IPv4(1, 0, 0, 3) // malware and adult sites
 
-// DHCPHandler track ongoing leases.
+	// OpenDNS
+	OpenDNS1 = net.IPv4(208, 67, 222, 123)
+	OpenDNS2 = net.IPv4(208, 67, 220, 123)
+)
+
+var _ packet.PacketProcessor = &Handler{}
+
+// Handler track ongoing leases.
 //
-type DHCPHandler struct {
+type Handler struct {
 	net1         *dhcpSubnet     // home LAN
 	net2         *dhcpSubnet     // netfilter LAN
 	mode         Mode            // if true, force decline and release packets to homeDHCPServer
 	captureTable map[string]bool // Store the subnet for captured mac
-	conn         net.PacketConn  // Listen DHCP server port
-	conn2        net.PacketConn  // Listen DHCP client port
-	notification chan<- Lease
-	filename     string
-	engine       *packet.Handler
+	clientConn   net.PacketConn  // Listen DHCP client port
+	notification chan<- Lease    // channel to send notifications
+	filename     string          // leases filename
+	engine       *packet.Handler // pointer to engine
+	closed       bool            // indicates that detach function was called
+	closeChan    chan bool       // channel to close underlying goroutines
+	mutex        sync.Mutex
 }
 
-func (h *DHCPHandler) Start() error {
+func (h *Handler) Start() error {
 	go func() {
-		if err := h.clientLoop(context.Background()); err != nil {
+		if err := h.clientLoop(); err != nil {
 			fmt.Println("dhcp4: client loop exited with error=", err)
 		}
 	}()
 	return nil
 }
 
-func (h *DHCPHandler) Stop() error                      { return nil }
-func (h *DHCPHandler) StartHunt(net.HardwareAddr) error { return nil }
-func (h *DHCPHandler) StopHunt(net.HardwareAddr) error  { return nil }
+func (h *Handler) Stop() error                      { return nil }
+func (h *Handler) StartHunt(net.HardwareAddr) error { return nil }
+func (h *Handler) StopHunt(net.HardwareAddr) error  { return nil }
 
 func configChanged(config SubnetConfig, current SubnetConfig) bool {
 	if !config.LAN.IP.Equal(current.LAN.IP) ||
@@ -85,27 +97,15 @@ func configChanged(config SubnetConfig, current SubnetConfig) bool {
 	return false
 }
 
-// CLoudFlare family
-// https://developers.cloudflare.com/1.1.1.1/1.1.1.1-for-families
-var (
-	CloudFlareDNS1       = net.IPv4(1, 1, 1, 2) // malware
-	CloudFlareDNS2       = net.IPv4(1, 0, 0, 2) // malware
-	CloudFlareFamilyDNS1 = net.IPv4(1, 1, 1, 3) // malware and adult sites
-	CloudFlareFamilyDNS2 = net.IPv4(1, 0, 0, 3) // malware and adult sites
-
-	// OpenDNS
-	OpenDNS1 = net.IPv4(208, 67, 222, 123)
-	OpenDNS2 = net.IPv4(208, 67, 220, 123)
-)
-
 // Attach return a dhcp handler with two internal subnets.
 // func New(home SubnetConfig, netfilter SubnetConfig, filename string) (handler *DHCPHandler, err error) {
-func Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsServer net.IP, filename string) (handler *DHCPHandler, err error) {
+func Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsServer net.IP, filename string) (handler *Handler, err error) {
 
-	handler = &DHCPHandler{}
+	handler = &Handler{}
 	handler.captureTable = make(map[string]bool)
 	handler.filename = filename
 	handler.mode = ModeSecondaryServerNice
+	handler.closeChan = make(chan bool) // go routines listen on this for closure
 
 	if dnsServer == nil {
 		dnsServer = engine.NICInfo.RouterIP4.IP
@@ -175,48 +175,51 @@ func Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsServer net.IP, fil
 	return handler, nil
 }
 
-func (h *DHCPHandler) Detach() error {
+func (h *Handler) Detach() error {
 	h.engine.Lock()
-	defer h.engine.Unlock()
 	h.engine.HandlerDHCP4 = packet.PacketNOOP{}
+	h.engine.Unlock()
+	h.closed = true
+	close(h.closeChan)
+	h.clientConn.Close() // kill client goroutine
 	return nil
 }
 
 // Mode return the disrupt flag
 // if true we are sending fake decline, release and discover packets
-func (h *DHCPHandler) Mode() Mode {
+func (h *Handler) Mode() Mode {
 	return h.mode
 }
 
 // SetMode set to true to disrupt the home lan server
 // with fake decline, release and discover packets
-func (h *DHCPHandler) SetMode(mode Mode) {
+func (h *Handler) SetMode(mode Mode) {
 	h.mode = mode
 }
 
 // PrintTable is a helper function to print the table to stdout
-func (h *DHCPHandler) PrintTable() {
+func (h *Handler) PrintTable() {
 	h.net1.printSubnet()
 	h.net2.printSubnet()
 }
 
 // Leases return all DHCP leases
-func (h *DHCPHandler) Leases() []Lease {
+func (h *Handler) Leases() []Lease {
 	l := h.net1.getLeases()
 	l = append(l, h.net2.getLeases()...)
 	return l
 }
 
 // AddNotificationChannel set the notification channel
-func (h *DHCPHandler) AddNotificationChannel(channel chan<- Lease) {
+func (h *Handler) AddNotificationChannel(channel chan<- Lease) {
 	h.notification = channel
 }
 
 // Capture will start the process to capture the client MAC
-func (h *DHCPHandler) Capture(mac net.HardwareAddr) {
+func (h *Handler) Capture(mac net.HardwareAddr) {
 
-	mutex.Lock()
-	defer mutex.Unlock()
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
 
 	// do nothing if already captured
 	if h.isCapturedLocked(mac) != nil {
@@ -243,11 +246,11 @@ func (h *DHCPHandler) Capture(mac net.HardwareAddr) {
 }
 
 // Release will end the capture process
-func (h *DHCPHandler) Release(mac net.HardwareAddr) {
+func (h *Handler) Release(mac net.HardwareAddr) {
 	log.WithFields(log.Fields{"mac": mac}).Info("dhcp4: end capture")
 
-	mutex.Lock()
-	defer mutex.Unlock()
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
 
 	// delete from list of macs being captured
 	delete(h.captureTable, string(mac))
@@ -258,14 +261,14 @@ func (h *DHCPHandler) Release(mac net.HardwareAddr) {
 
 // IsCaptured returns true if mac and ip are valid DHCP entry in the capture state.
 // Otherwise returns false.
-func (h *DHCPHandler) IsCaptured(mac net.HardwareAddr) net.IP {
-	mutex.Lock()
-	defer mutex.Unlock()
+func (h *Handler) IsCaptured(mac net.HardwareAddr) net.IP {
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
 
 	return h.isCapturedLocked(mac)
 }
 
-func (h *DHCPHandler) isCapturedLocked(mac net.HardwareAddr) net.IP {
+func (h *Handler) isCapturedLocked(mac net.HardwareAddr) net.IP {
 
 	if _, ok := h.captureTable[string(mac)]; !ok {
 		return nil
@@ -288,7 +291,7 @@ func (h *DHCPHandler) isCapturedLocked(mac net.HardwareAddr) net.IP {
 }
 
 // ProcessPacket implements PacketProcessor interface
-func (h *DHCPHandler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, error) {
+func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, error) {
 	ether := packet.Ether(b)
 	ip4 := packet.IP4(ether.Payload())
 	if !ip4.IsValid() {
@@ -376,7 +379,7 @@ func (h *DHCPHandler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, 
 	return host, nil
 }
 
-func (h *DHCPHandler) findSubnet(mac net.HardwareAddr) (captured bool, subnet *dhcpSubnet) {
+func (h *Handler) findSubnet(mac net.HardwareAddr) (captured bool, subnet *dhcpSubnet) {
 	if _, ok := h.captureTable[string(mac)]; ok {
 		if tracing() {
 			log.Tracef("dhcp4: use subnet2 lan=%v defaultGW=%v", h.net2.LAN, h.net2.DefaultGW)

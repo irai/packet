@@ -288,7 +288,7 @@ func Test_Subnet_Save(t *testing.T) {
 
 	os.Remove(testDHCPFilename)
 
-	h := DHCPHandler{}
+	h := Handler{}
 
 	h.net1, _ = newSubnet(nets[0].home)
 	h.net1.Duration = 2 * time.Hour
@@ -349,7 +349,7 @@ func Test_Subnet_Load(t *testing.T) {
 }
 func Test_Migration(t *testing.T) {
 
-	h := DHCPHandler{}
+	h := Handler{}
 	h.net1, _ = newSubnet(nets[0].home)
 
 	err := yaml.Unmarshal(testMigrationFile, &h.net1.leases)

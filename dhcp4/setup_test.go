@@ -47,7 +47,7 @@ var (
 type testContext struct {
 	inConn        net.PacketConn
 	outConn       net.PacketConn
-	h             *DHCPHandler
+	h             *Handler
 	packet        *packet.Handler
 	wg            sync.WaitGroup
 	ctx           context.Context

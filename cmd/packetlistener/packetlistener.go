@@ -123,7 +123,7 @@ func main() {
 	cancel()
 }
 
-func cmd(pt *packet.Handler, a4 *arp.Handler, h *icmp4.Handler, h6 *icmp6.Handler, dhcp *dhcp4.DHCPHandler) {
+func cmd(pt *packet.Handler, a4 *arp.Handler, h *icmp4.Handler, h6 *icmp6.Handler, dhcp *dhcp4.Handler) {
 
 	radvs, _ := h6.StartRADVS(false, false, icmp6.MyHomePrefix, icmp6.RDNSSCLoudflare)
 	defer radvs.Stop()

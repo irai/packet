@@ -88,15 +88,12 @@ func Test_DHCP_Config(t *testing.T) {
 
 	// Reloading should fix the invalid config
 	tc.h.Detach()
-	tc = setupTestHandler()
+	tc2 := setupTestHandler()
 	// tc.h, err = Attach(tc.packet, nets[0].home, nets[0].netfilter, testDHCPFilename)
-	if err != nil {
-		log.Fatal("cannot reload", err)
-	}
 
-	entry = tc.h.net1.findIP(savedIP)
+	entry = tc2.h.net1.findIP(savedIP)
 	if entry == nil {
-		tc.h.net1.printSubnet()
+		tc2.h.net1.printSubnet()
 		log.Fatal("invalid nil entry ", entry)
 	}
 

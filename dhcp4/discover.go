@@ -18,7 +18,7 @@ import (
 // | Allocated        |  Offer same IP         |
 // |------------------|------------------------|
 //
-func (h *DHCPHandler) handleDiscover(p DHCP4, options Options) (d DHCP4) {
+func (h *Handler) handleDiscover(p DHCP4, options Options) (d DHCP4) {
 
 	clientID := getClientID(p, options)
 	reqIP := net.IP(options[OptionRequestedIPAddress]).To4()
@@ -35,8 +35,8 @@ func (h *DHCPHandler) handleDiscover(p DHCP4, options Options) (d DHCP4) {
 		log.WithFields(t).Debug("dhcp4: discover parameters")
 	}
 
-	mutex.Lock()
-	defer mutex.Unlock()
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
 
 	captured, subnet := h.findSubnet(p.CHAddr())
 	lease := subnet.findCliendID(clientID)

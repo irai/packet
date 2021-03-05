@@ -21,14 +21,14 @@ import (
 // |requested-ip  |MUST         |MUST NOT     |
 // |ciaddr        |zero         |IP address   |
 // -------------------------------------------+
-func (h *DHCPHandler) handleDecline(p DHCP4, options Options) (d DHCP4) {
+func (h *Handler) handleDecline(p DHCP4, options Options) (d DHCP4) {
 
 	reqIP := net.IP(options[OptionRequestedIPAddress]).To4()
 	serverIP := net.IP(options[OptionServerIdentifier]).To4()
 	clientID := getClientID(p, options)
 
-	mutex.Lock()
-	defer mutex.Unlock()
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
 
 	_, subnet := h.findSubnet(p.CHAddr())
 	lease := subnet.findCliendID(clientID)
@@ -64,14 +64,14 @@ func (h *DHCPHandler) handleDecline(p DHCP4, options Options) (d DHCP4) {
 // of DHCP does not depend on the transmission of DHCPRELEASE messages.
 //
 // The client unicasts DHCPRELEASE messages to the server.
-func (h *DHCPHandler) handleRelease(p DHCP4, options Options) (d DHCP4) {
+func (h *Handler) handleRelease(p DHCP4, options Options) (d DHCP4) {
 
 	reqIP := p.CIAddr()
 	serverIP := net.IP(options[OptionServerIdentifier]).To4()
 	clientID := getClientID(p, options)
 
-	mutex.Lock()
-	defer mutex.Unlock()
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
 
 	_, subnet := h.findSubnet(p.CHAddr())
 	lease := subnet.findCliendID(clientID)

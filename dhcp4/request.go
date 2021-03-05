@@ -44,7 +44,7 @@ import (
 //  indicating clearly that it presently owns that address. It then broadcasts the request on the local network.
 //
 
-func (h *DHCPHandler) handleRequest(p DHCP4, options Options, senderIP net.IP) (d DHCP4) {
+func (h *Handler) handleRequest(p DHCP4, options Options, senderIP net.IP) (d DHCP4) {
 
 	reqIP, serverIP := net.IPv4zero, net.IPv4zero
 
@@ -103,8 +103,8 @@ func (h *DHCPHandler) handleRequest(p DHCP4, options Options, senderIP net.IP) (
 	fields["ip"] = reqIP
 	log.WithFields(fields).Info("dhcp4: request rcvd")
 
-	mutex.Lock()
-	defer mutex.Unlock()
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
 
 	captured, subnet := h.findSubnet(p.CHAddr())
 	lease := subnet.findCliendID(clientID)
@@ -237,7 +237,7 @@ func (h *DHCPHandler) handleRequest(p DHCP4, options Options, senderIP net.IP) (
 	}
 }
 
-func (h *DHCPHandler) ackPacket(subnet *dhcpSubnet, p DHCP4, options Options, lease *Lease) (packet DHCP4) {
+func (h *Handler) ackPacket(subnet *dhcpSubnet, p DHCP4, options Options, lease *Lease) (packet DHCP4) {
 
 	lease.DHCPExpiry = time.Now().Add(subnet.Duration)
 	lease.State = StateAllocated

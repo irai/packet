@@ -4,10 +4,8 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
-	"errors"
 	"fmt"
 	"net"
-	"sync"
 	"time"
 
 	"github.com/irai/packet"
@@ -19,7 +17,7 @@ var (
 	fakeMAC    = net.HardwareAddr{0xff, 0xee, 0xdd, 0xcc, 0xbb, 0x0}
 )
 
-func (h *DHCPHandler) attackDHCPServer(options Options) {
+func (h *Handler) attackDHCPServer(options Options) {
 	if nextAttack.After(time.Now()) {
 		return
 	}
@@ -43,7 +41,7 @@ func (h *DHCPHandler) attackDHCPServer(options Options) {
 //
 // In most cases the home dhcp will mark the entry but keep the entry in the table
 // This is an error state and the DHCP server should tell the administrator
-func (h *DHCPHandler) forceDecline(clientID []byte, serverIP net.IP, chAddr net.HardwareAddr, clientIP net.IP, xid []byte) {
+func (h *Handler) forceDecline(clientID []byte, serverIP net.IP, chAddr net.HardwareAddr, clientIP net.IP, xid []byte) {
 	fields := log.Fields{"clientID": clientID, "ip": clientIP, "xid": xid, "serverIP": serverIP}
 	if debugging() {
 		fields["mac"] = chAddr
@@ -75,7 +73,7 @@ func (h *DHCPHandler) forceDecline(clientID []byte, serverIP net.IP, chAddr net.
 // In most cases the home dhcp will drop the entry and will have an empty dhcp table
 //
 // Jan 21 - NOT working; the test router does not drop the entry. WHY?
-func (h *DHCPHandler) forceRelease(clientID []byte, serverIP net.IP, chAddr net.HardwareAddr, clientIP net.IP, xid []byte) {
+func (h *Handler) forceRelease(clientID []byte, serverIP net.IP, chAddr net.HardwareAddr, clientIP net.IP, xid []byte) {
 	fields := log.Fields{"clientID": clientID, "ip": clientIP, "xid": xid, "serverIP": serverIP}
 	if debugging() {
 		fields["mac"] = chAddr
@@ -99,7 +97,7 @@ func (h *DHCPHandler) forceRelease(clientID []byte, serverIP net.IP, chAddr net.
 }
 
 // SendDiscoverPacket send a DHCP discover packet to target
-func (h *DHCPHandler) SendDiscoverPacket(chAddr net.HardwareAddr, cIAddr net.IP, xID []byte, options Options) (err error) {
+func (h *Handler) SendDiscoverPacket(chAddr net.HardwareAddr, cIAddr net.IP, xID []byte, options Options) (err error) {
 
 	if tracing() {
 		log.Tracef("dhcp4: send discover packet from %s ciAddr=%v xID=%v", chAddr, cIAddr, xID)
@@ -129,7 +127,7 @@ func dupReleasePacket(request *DHCP4) DHCP4 {
 	return packet
 }
 
-func (h *DHCPHandler) sendDeclineReleasePacket(msgType MessageType, clientID []byte, serverIP net.IP, chAddr net.HardwareAddr, ciAddr net.IP, xid []byte, options Options) (err error) {
+func (h *Handler) sendDeclineReleasePacket(msgType MessageType, clientID []byte, serverIP net.IP, chAddr net.HardwareAddr, ciAddr net.IP, xid []byte, options Options) (err error) {
 	if xid == nil {
 		xid = make([]byte, 4)
 		if _, err := rand.Read(xid); err != nil {
@@ -153,51 +151,35 @@ func (h *DHCPHandler) sendDeclineReleasePacket(msgType MessageType, clientID []b
 	return err
 }
 
-var dhcpClientMutex sync.Mutex // ensure only one writer at a time
-
-func (h *DHCPHandler) sendDHCPPacket(serverAddr net.IP, packet DHCP4) (err error) {
-
-	dhcpClientMutex.Lock()
-	defer dhcpClientMutex.Unlock()
-
-	// laddr := net.UDPAddr{IP: net.IPv4(0, 0, 0, 0), Port: 68}
-	// raddr := net.UDPAddr{IP: net.IPv4bcast, Port: 67}
-	raddr := net.UDPAddr{IP: serverAddr, Port: 67}
-
-	_, err = h.conn2.WriteTo(packet, &raddr)
+func (h *Handler) sendDHCPPacket(serverAddr net.IP, packet DHCP4) (err error) {
+	dstAddr := net.UDPAddr{IP: serverAddr, Port: 67}
+	_, err = h.clientConn.WriteTo(packet, &dstAddr)
 	if err != nil {
 		log.Debug("DHCPClient failed to dial UDP ", err)
 		return err
 	}
-
 	return nil
-
 }
 
-func (h *DHCPHandler) processClientPacket(host *packet.Host, b []byte) (*packet.Host, error) {
-	fmt.Println("Client NOT IMPLEMENTED")
-	return host, nil
-}
-
-func (h *DHCPHandler) clientLoop(ctx context.Context) error {
-	buffer := make([]byte, 1500)
+func (h *Handler) clientLoop() error {
+	buffer := make([]byte, packet.EthMaxSize)
 	for {
-		n, _, err := h.conn2.ReadFrom(buffer)
+		n, _, err := h.clientConn.ReadFrom(buffer)
 
 		if err != nil {
-			if errors.Is(ctx.Err(), context.Canceled) {
+			if nerr, ok := err.(net.Error); ok && nerr.Temporary() {
+				time.Sleep(time.Millisecond * 2)
+				continue
+			}
+			if h.closed { // detach called?
 				return nil
 			}
-			log.Warn("dhcp4: clientLoop ReadFrom error ", err)
 			return err
 		}
-		if n < 240 { // Packet too small to be DHCP
-			log.Warn("dhcp4: clientLoop invalid packet len", n, err)
-			continue
-		}
+
 		req := DHCP4(buffer[:n])
-		if req.HLen() > 16 { // Invalid size
-			log.Warn("dhcp4: clientLoop invalid header len ", req.HLen())
+		if !req.IsValid() {
+			fmt.Println("dhcp4: clientLoop invalid packet len", n)
 			continue
 		}
 
@@ -247,9 +229,9 @@ func (h *DHCPHandler) clientLoop(ctx context.Context) error {
 		log.WithFields(fields).Info("dhcp4: client offer from another dhcp server")
 
 		// Force dhcp server to release the IP
-		mutex.Lock()
+		h.mutex.Lock()
 		_, captured := h.captureTable[string(req.CHAddr())]
-		mutex.Unlock()
+		h.mutex.Unlock()
 		if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && captured) {
 			h.forceDecline(clientID, serverIP, req.CHAddr(), req.YIAddr(), req.XId())
 		}
