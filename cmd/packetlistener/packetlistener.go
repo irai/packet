@@ -18,9 +18,10 @@ import (
 )
 
 var (
-	srcIP = flag.String("src", "192.168.0.5", "source IP for originating packet")
-	dstIP = flag.String("dst", "192.168.0.1", "destination IP for target packet")
-	nic   = flag.String("nic", "eth0", "nic interface to listent to")
+	srcIP  = flag.String("src", "192.168.0.5", "source IP for originating packet")
+	dstIP  = flag.String("dst", "192.168.0.1", "destination IP for target packet")
+	nic    = flag.String("nic", "eth0", "nic interface to listent to")
+	dhcpip = flag.Bool("nodhcpip", false, "don't change ip to support dhcp")
 )
 
 func main() {
@@ -30,7 +31,7 @@ func main() {
 	log.SetLevel(log.DebugLevel)
 
 	fmt.Printf("packetlistener: Listen and send lan packets\n")
-	fmt.Printf("Using nic %v \n", *nic)
+	fmt.Printf("Using interface %v \n", *nic)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -39,15 +40,19 @@ func main() {
 		fmt.Println("failed to get nic info ", err)
 		return
 	}
+	fmt.Printf("nicinfo: %+v\n", info)
 
 	netfilterIP, err := packet.SegmentLAN(*nic, info.HostIP4)
 	if err != nil {
 		fmt.Println("failed to segment lan ", err)
 		return
 	}
+	fmt.Printf("netfilter: %+v\n", netfilterIP)
 
 	// change host IP
 	if !netfilterIP.IP.Equal(info.HostIP4.IP) {
+		fmt.Printf("Changing host IP to %s - disable with -nodhcpip \n", netfilterIP)
+
 		if err := packet.LinuxConfigureInterface(*nic, &net.IPNet{IP: netfilterIP.IP, Mask: info.RouterIP4.Mask}, nil); err != nil {
 			fmt.Println("failed to change host IP ", err)
 		}

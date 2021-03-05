@@ -125,7 +125,7 @@ func GetLinuxDefaultGateway() (gw net.IP, err error) {
 		// make net.IP address from uint32
 		ipd32 = make(net.IP, 4)
 		binary.LittleEndian.PutUint32(ipd32, d32)
-		fmt.Printf("NIC default gateway is %T --> %[1]v\n", ipd32)
+		// fmt.Printf("NIC default gateway is %T --> %[1]v\n", ipd32)
 
 		// format net.IP to dotted ipV4 string
 		//ip := net.IP(ipd32).String()
@@ -235,7 +235,6 @@ func SegmentLAN(nic string, routerIP net.IPNet) (netfilterIP net.IPNet, err erro
 	// Ignore large networks: we only need 128 hosts for our DHCP -
 	// 128 hosts should be enought for all homes
 	n, _ := routerIP.Mask.Size()
-	fmt.Println("DEBUG ", n)
 	if n < 24 {
 		n = 24
 	}
@@ -295,13 +294,19 @@ func locateFreeIP(nic string, ip net.IP, start uint8, end uint8) (newIP net.IP, 
 // Ping execute /usr/bin/ping
 // This is usefuel when engine is not yet running
 func Ping(ip net.IP) error {
-	cmd := exec.Command("/usr/bin/ping", ip.String())
+	fmt.Println("DEBUG ping", ip)
+	// -w deadline - wait 1 second
+	// -i frequency - one request each 0,2 seconds
+	// -c count - how many replies to receive before returning (in conjuction with -w)
+	cmd := exec.Command("/usr/bin/ping", ip.String(), "-w", "1", "-i", "0.2", "-c", "1")
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
+	fmt.Println("DEBUG ping", ip)
 	if err := cmd.Run(); err != nil {
 		fmt.Printf("icmp4: failed to ping ip=%s error=%s", ip, err)
 	}
+	fmt.Println("DEBUG ping", ip)
 	if true { // set to true to check the output
 		fmt.Printf("out: %q\n", stdout.String())
 		fmt.Printf("errs: %q\n", stderr.String())

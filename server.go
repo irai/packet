@@ -277,13 +277,11 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		}
 
 		ether := Ether(buf[:n])
-		fmt.Println("DEBUG ether ", ether)
 		if !ether.IsValid() {
 			log.Error("icmp invalid ethernet packet ", ether.EtherType())
 			continue
 		}
 
-		fmt.Println("DEBUG ether ", ether)
 		// Ignore packets sent via our interface
 		// If we don't have this, then we received all forward packets with client IPs but our mac
 		//
