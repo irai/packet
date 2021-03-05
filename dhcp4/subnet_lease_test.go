@@ -324,20 +324,22 @@ func Test_Subnet_Load(t *testing.T) {
 	defer tc.Close()
 	// h, _ := New(nets[0].home, nets[0].netfilter, testDHCPFilename)
 
-	if tc.h.net1.Duration != 2*time.Hour {
+	if tc.h.net1.Duration != 4*time.Hour {
 		t.Error("invalid duration ", tc.h.net1.Duration)
 	}
+	clientID1 := []byte{0x01, 0x01}
+	clientID2 := []byte{0x02, 0x02}
 
-	l := tc.h.net2.newLease(StateDiscovery, mac0, mac0, nil, nil)
+	l := tc.h.net2.newLease(StateDiscovery, clientID1, mac1, ip1, nil)
 	l.State = StateAllocated
-	l = tc.h.net2.newLease(StateDiscovery, mac0, mac0, nil, nil)
+	l = tc.h.net2.newLease(StateDiscovery, clientID1, mac1, ip1, nil)
 	l.State = StateAllocated
-	l = tc.h.net2.newLease(StateDiscovery, mac0, mac0, nil, nil)
+	l = tc.h.net2.newLease(StateDiscovery, clientID2, mac2, ip2, nil)
 	l.State = StateAllocated
 
 	count1, _ := tc.h.net1.countLeases()
 	count2, _ := tc.h.net2.countLeases()
-	if count1 != 0 || count2 != 5 {
+	if count1 != 0 || count2 != 3 {
 		tc.h.net1.printSubnet()
 		t.Error("invalid count ", count1, count2)
 		return

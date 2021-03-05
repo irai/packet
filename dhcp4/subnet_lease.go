@@ -293,7 +293,7 @@ func freeLease(lease *Lease) {
 }
 
 // newLease allocates a new IP from the dhcpSubnet.
-//                it works on relative index
+// works on relative index from 0 - 255 - IPv4 only
 func (h *dhcpSubnet) newLease(state string, clientID []byte, reqMAC net.HardwareAddr, reqIP net.IP, xID []byte) (lease *Lease) {
 
 	// Attempt to reuse IP if given and IP in correct LAN

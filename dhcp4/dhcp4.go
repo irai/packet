@@ -51,6 +51,11 @@ var (
 	OpenDNS2 = net.IPv4(208, 67, 220, 123)
 )
 
+// Config contains configuration overrides
+type Config struct {
+	ClientConn net.PacketConn
+}
+
 var _ packet.PacketProcessor = &Handler{}
 
 // Handler track ongoing leases.
@@ -100,6 +105,10 @@ func configChanged(config SubnetConfig, current SubnetConfig) bool {
 // Attach return a dhcp handler with two internal subnets.
 // func New(home SubnetConfig, netfilter SubnetConfig, filename string) (handler *DHCPHandler, err error) {
 func Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsServer net.IP, filename string) (handler *Handler, err error) {
+	return Config{}.Attach(engine, netfilterIP, dnsServer, filename)
+}
+
+func (config Config) Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsServer net.IP, filename string) (handler *Handler, err error) {
 
 	handler = &Handler{}
 	handler.captureTable = make(map[string]bool)
@@ -165,6 +174,16 @@ func Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsServer net.IP, fil
 	handler.net1.freeEntries()
 	handler.net2.freeEntries()
 
+	// Client port 68: used by dhcp client to listen for dhcp packets
+	// Accept incoming both broadcast and localaddr packets
+	handler.clientConn = config.ClientConn
+	if handler.clientConn == nil {
+		handler.clientConn, err = net.ListenPacket("udp4", ":68")
+		if err != nil {
+			return nil, fmt.Errorf("port 68 listen error: %w ", err)
+		}
+	}
+
 	if debugging() {
 		log.WithFields(log.Fields{"netfilterLAN": handler.net2.LAN.String(), "netfilterGW": handler.net2.DefaultGW, "firstIP": handler.net2.FirstIP,
 			"lastIP": handler.net2.LastIP}).Debug("dhcp4: Server Config")
@@ -181,7 +200,9 @@ func (h *Handler) Detach() error {
 	h.engine.Unlock()
 	h.closed = true
 	close(h.closeChan)
-	h.clientConn.Close() // kill client goroutine
+	if h.clientConn != nil {
+		h.clientConn.Close() // kill client goroutine
+	}
 	return nil
 }
 

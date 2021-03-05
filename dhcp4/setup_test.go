@@ -47,6 +47,8 @@ var (
 type testContext struct {
 	inConn        net.PacketConn
 	outConn       net.PacketConn
+	clientInConn  net.PacketConn
+	clientOutConn net.PacketConn
 	h             *Handler
 	packet        *packet.Handler
 	wg            sync.WaitGroup
@@ -95,6 +97,9 @@ func setupTestHandler() *testContext {
 	tc.inConn, tc.outConn = packet.TestNewBufferedConn()
 	go readResponse(tc.ctx, &tc) // MUST read the out conn to avoid blocking the sender
 
+	tc.clientInConn, tc.clientOutConn = packet.TestNewBufferedConn()
+	go packet.TestReadAndDiscardLoop(context.Background(), tc.clientOutConn) // MUST read the out conn to avoid blocking the sender
+
 	nicInfo := packet.NICInfo{
 		HostMAC:   hostMAC,
 		HostIP4:   net.IPNet{IP: hostIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
@@ -117,7 +122,7 @@ func setupTestHandler() *testContext {
 	if err != nil {
 		panic(err)
 	}
-	tc.h, err = Attach(tc.packet, net.IPNet{IP: netfilterIP.IP, Mask: net.IPv4Mask(255, 255, 255, 0)}, dnsIP4, testDHCPFilename)
+	tc.h, err = Config{ClientConn: tc.clientInConn}.Attach(tc.packet, net.IPNet{IP: netfilterIP.IP, Mask: net.IPv4Mask(255, 255, 255, 0)}, dnsIP4, testDHCPFilename)
 	if err != nil {
 		panic("cannot create handler" + err.Error())
 	}

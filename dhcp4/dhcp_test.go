@@ -87,6 +87,7 @@ func Test_DHCP_Config(t *testing.T) {
 	}
 
 	// Reloading should fix the invalid config
+	tc.h.clientConn = nil // don't close membuf - segfaul otherwise
 	tc.h.Detach()
 	tc2 := setupTestHandler()
 	// tc.h, err = Attach(tc.packet, nets[0].home, nets[0].netfilter, testDHCPFilename)
