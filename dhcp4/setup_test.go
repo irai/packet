@@ -118,7 +118,9 @@ func setupTestHandler() *testContext {
 	}
 
 	// Default dhcp engine
-	netfilterIP, err := packet.SegmentLAN("eth0", net.IPNet{IP: routerIP4, Mask: net.IPv4Mask(255, 255, 255, 0)})
+	netfilterIP, err := packet.SegmentLAN("eth0",
+		net.IPNet{IP: hostIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
+		net.IPNet{IP: routerIP4, Mask: net.IPv4Mask(255, 255, 255, 0)})
 	if err != nil {
 		panic(err)
 	}

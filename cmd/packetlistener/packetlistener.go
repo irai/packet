@@ -42,7 +42,7 @@ func main() {
 	}
 	fmt.Printf("nicinfo: %+v\n", info)
 
-	netfilterIP, err := packet.SegmentLAN(*nic, info.HostIP4)
+	netfilterIP, err := packet.SegmentLAN(*nic, info.HostIP4, info.RouterIP4)
 	if err != nil {
 		fmt.Println("failed to segment lan ", err)
 		return

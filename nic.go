@@ -210,7 +210,7 @@ func GetIP4DefaultGatewayAddr(nic string) (addr Addr, err error) {
 
 // SegmentLAN will identify a free IP on the opposite half segment from the routerIP.
 // This function will also test if the chosen IP is available before returning.
-func SegmentLAN(nic string, routerIP net.IPNet) (netfilterIP net.IPNet, err error) {
+func SegmentLAN(nic string, hostIP net.IPNet, routerIP net.IPNet) (netfilterIP net.IPNet, err error) {
 
 	// Special IPv4 addresses
 	// 169.254.0.0/16 - Link local addresses - typically assigned when there is no DHCP server
@@ -229,7 +229,7 @@ func SegmentLAN(nic string, routerIP net.IPNet) (netfilterIP net.IPNet, err erro
 	case net10.Contains(routerIP.IP):
 
 	default:
-		fmt.Printf("packet: error unexpected IP network %+v", routerIP)
+		fmt.Printf("packet: error unexpected IP network %+v\n", routerIP)
 	}
 
 	// Ignore large networks: we only need 128 hosts for our DHCP -
@@ -249,10 +249,10 @@ func SegmentLAN(nic string, routerIP net.IPNet) (netfilterIP net.IPNet, err erro
 	homeRouterIP := routerIP.IP.To4() // make sure we are dealing with 4 bytes
 	if homeRouterIP[3] < 128 {
 		// 128 to 255 - but don't use network address 0 and broadcast 254
-		netfilterIP.IP, err = locateFreeIP(nic, homeRouterIP, 129, 254)
+		netfilterIP.IP, err = locateFreeIP(nic, hostIP.IP, homeRouterIP, 129, 254)
 	} else {
 		// 0 to 127 - but don't use network address 0 and broadcast 127
-		netfilterIP.IP, err = locateFreeIP(nic, homeRouterIP, 1, 126)
+		netfilterIP.IP, err = locateFreeIP(nic, hostIP.IP, homeRouterIP, 1, 126)
 	}
 
 	if err != nil {
@@ -265,10 +265,15 @@ func SegmentLAN(nic string, routerIP net.IPNet) (netfilterIP net.IPNet, err erro
 	return netfilterIP, nil
 }
 
-func locateFreeIP(nic string, ip net.IP, start uint8, end uint8) (newIP net.IP, err error) {
+func locateFreeIP(nic string, hostIP net.IP, ip net.IP, start uint8, end uint8) (newIP net.IP, err error) {
 	newIP = CopyIP(ip).To4()
 	for i := start; i <= end; i++ {
 		newIP[3] = i // save to variable
+
+		// if host already set for this IP
+		if hostIP.Equal(newIP) {
+			return newIP, nil
+		}
 
 		// ping to populate arp table
 		if nic != "" {
@@ -282,7 +287,7 @@ func locateFreeIP(nic string, ip net.IP, start uint8, end uint8) (newIP net.IP, 
 		}
 		for _, v := range arpTable {
 			if v.IP.Equal(newIP) {
-				fmt.Printf("packet: NIC netfilter target IP %s in use. Trying again...", newIP)
+				fmt.Printf("packet: NIC netfilter target IP %s in use. Trying again...\n", newIP)
 				continue
 			}
 		}
