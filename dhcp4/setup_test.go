@@ -40,6 +40,8 @@ var (
 
 	hostAddr   = packet.Addr{MAC: hostMAC, IP: hostIP4}
 	routerAddr = packet.Addr{MAC: routerMAC, IP: routerIP4}
+
+	dnsIP4 = net.IPv4(8, 8, 8, 8)
 )
 
 type testContext struct {
@@ -111,7 +113,11 @@ func setupTestHandler() *testContext {
 	}
 
 	// Default dhcp engine
-	tc.h, err = Attach(tc.packet, nets[0].home, nets[0].netfilter, testDHCPFilename)
+	netfilterIP, err := packet.SegmentLAN("eth0", net.IPNet{IP: routerIP4, Mask: net.IPv4Mask(255, 255, 255, 0)})
+	if err != nil {
+		panic(err)
+	}
+	tc.h, err = Attach(tc.packet, net.IPNet{IP: netfilterIP.IP, Mask: net.IPv4Mask(255, 255, 255, 0)}, dnsIP4, testDHCPFilename)
 	if err != nil {
 		panic("cannot create handler" + err.Error())
 	}

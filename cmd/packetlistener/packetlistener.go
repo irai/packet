@@ -12,6 +12,7 @@ import (
 
 	"github.com/irai/packet"
 	"github.com/irai/packet/arp"
+	"github.com/irai/packet/dhcp4"
 	"github.com/irai/packet/icmp4"
 	"github.com/irai/packet/icmp6"
 )
@@ -32,6 +33,25 @@ func main() {
 	fmt.Printf("Using nic %v \n", *nic)
 
 	ctx, cancel := context.WithCancel(context.Background())
+
+	info, err := packet.GetNICInfo(*nic)
+	if err != nil {
+		fmt.Println("failed to get nic info ", err)
+		return
+	}
+
+	netfilterIP, err := packet.SegmentLAN(*nic, info.HostIP4)
+	if err != nil {
+		fmt.Println("failed to segment lan ", err)
+		return
+	}
+
+	// change host IP
+	if !netfilterIP.IP.Equal(info.HostIP4.IP) {
+		if err := packet.LinuxConfigureInterface(*nic, &net.IPNet{IP: netfilterIP.IP, Mask: info.RouterIP4.Mask}, nil); err != nil {
+			fmt.Println("failed to change host IP ", err)
+		}
+	}
 
 	// setup packet handler
 	config := packet.Config{
@@ -76,6 +96,12 @@ func main() {
 	}
 	defer h6.Detach()
 
+	// DHCP4
+	dhcp, err := dhcp4.Attach(engine, netfilterIP, dhcp4.CloudFlareDNS1, "")
+	if err != nil {
+		log.Fatalf("Failed to create dhcp4 handler: netfilterIP=%s error=%s", netfilterIP, err)
+	}
+
 	engine.AddCallback(func(n packet.Notification) error {
 		fmt.Println("Got notification : ", n)
 		return nil
@@ -92,12 +118,12 @@ func main() {
 
 	time.Sleep(time.Millisecond * 10) // time for all goroutine to start
 
-	cmd(engine, arpHandler, h4, h6)
+	cmd(engine, arpHandler, h4, h6, dhcp)
 
 	cancel()
 }
 
-func cmd(pt *packet.Handler, a4 *arp.Handler, h *icmp4.Handler, h6 *icmp6.Handler) {
+func cmd(pt *packet.Handler, a4 *arp.Handler, h *icmp4.Handler, h6 *icmp6.Handler, dhcp *dhcp4.DHCPHandler) {
 
 	radvs, _ := h6.StartRADVS(false, false, icmp6.MyHomePrefix, icmp6.RDNSSCLoudflare)
 	defer radvs.Stop()

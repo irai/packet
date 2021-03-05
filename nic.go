@@ -8,8 +8,11 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
+
+	"github.com/vishvananda/netlink"
 )
 
 // NICInfo stores the network interface info
@@ -203,4 +206,140 @@ func GetIP4DefaultGatewayAddr(nic string) (addr Addr, err error) {
 	}
 
 	return addr, nil
+}
+
+// SegmentLAN will identify a free IP on the opposite half segment from the routerIP.
+// This function will also test if the chosen IP is available before returning.
+func SegmentLAN(nic string, routerIP net.IPNet) (netfilterIP net.IPNet, err error) {
+
+	// Special IPv4 addresses
+	// 169.254.0.0/16 - Link local addresses - typically assigned when there is no DHCP server
+	// 172.16.0.0/12 - Private network
+	// 192.168.0.0/16 - Private network
+	// 10.0.0.0/8 - Private network
+	_, net169, _ := net.ParseCIDR("169.254.0.0/16")
+	_, net172, _ := net.ParseCIDR("172.16.0.0/12")
+	_, net192, _ := net.ParseCIDR("192.168.0.0/16")
+	_, net10, _ := net.ParseCIDR("10.0.0.0/8")
+
+	switch {
+	case net169.Contains(routerIP.IP):
+	case net172.Contains(routerIP.IP):
+	case net192.Contains(routerIP.IP):
+	case net10.Contains(routerIP.IP):
+
+	default:
+		fmt.Printf("packet: error unexpected IP network %+v", routerIP)
+	}
+
+	// Ignore large networks: we only need 128 hosts for our DHCP -
+	// 128 hosts should be enought for all homes
+	n, _ := routerIP.Mask.Size()
+	fmt.Println("DEBUG ", n)
+	if n < 24 {
+		n = 24
+	}
+
+	if n > 24 {
+		err = fmt.Errorf("network mask too small (less than 8 bits) router %+v", routerIP)
+		return netfilterIP, err
+	}
+
+	// Set router address for netfilter
+	// Router segment will be at the opposite end of the Home segment
+	homeRouterIP := routerIP.IP.To4() // make sure we are dealing with 4 bytes
+	if homeRouterIP[3] < 128 {
+		// 128 to 255 - but don't use network address 0 and broadcast 254
+		netfilterIP.IP, err = locateFreeIP(nic, homeRouterIP, 129, 254)
+	} else {
+		// 0 to 127 - but don't use network address 0 and broadcast 127
+		netfilterIP.IP, err = locateFreeIP(nic, homeRouterIP, 1, 126)
+	}
+
+	if err != nil {
+		err = fmt.Errorf("cannot find free IP for router ")
+		return netfilterIP, err
+	}
+
+	// Use the first bit to segment
+	netfilterIP.Mask = net.IPv4Mask(255, 255, 255, 128)
+	return netfilterIP, nil
+}
+
+func locateFreeIP(nic string, ip net.IP, start uint8, end uint8) (newIP net.IP, err error) {
+	newIP = CopyIP(ip).To4()
+	for i := start; i <= end; i++ {
+		newIP[3] = i // save to variable
+
+		// ping to populate arp table
+		if nic != "" {
+			Ping(ip) // populate arp table
+		}
+
+		// check if arp table has the IP
+		arpTable, err := LoadLinuxARPTable(nic)
+		if err != nil {
+			return nil, err
+		}
+		for _, v := range arpTable {
+			if v.IP.Equal(newIP) {
+				fmt.Printf("packet: NIC netfilter target IP %s in use. Trying again...", newIP)
+				continue
+			}
+		}
+		return newIP, nil
+	}
+	return net.IPv4zero, fmt.Errorf("locatefreeip no ips available")
+}
+
+// Ping execute /usr/bin/ping
+// This is usefuel when engine is not yet running
+func Ping(ip net.IP) error {
+	cmd := exec.Command("/usr/bin/ping", ip.String())
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("icmp4: failed to ping ip=%s error=%s", ip, err)
+	}
+	if true { // set to true to check the output
+		fmt.Printf("out: %q\n", stdout.String())
+		fmt.Printf("errs: %q\n", stderr.String())
+	}
+	return nil
+}
+
+func LinuxConfigureInterface(nic string, ip *net.IPNet, gw *net.IPNet) error {
+
+	// Get a structure describing the network interface.
+	localInterface, err := netlink.LinkByName(nic)
+	if err != nil {
+		return err
+	}
+
+	// Give the interface an address of 192.168.1.1, on a
+	// network with a 255.255.255.0 mask.
+	ipConfig := &netlink.Addr{IPNet: ip}
+	if err = netlink.AddrAdd(localInterface, ipConfig); err != nil {
+		// handle error
+	}
+
+	if gw != nil {
+		// Setup the default route, so traffic that doesn't hit
+		// 192.168.1.(1-255) can be routed.
+		if err = netlink.RouteAdd(&netlink.Route{
+			Scope:     netlink.SCOPE_UNIVERSE,
+			LinkIndex: localInterface.Attrs().Index,
+			// Dst:       &net.IPNet{IP: gatewayIP, Mask: net.CIDRMask(32, 32)},
+			Dst: gw,
+		}); err != nil {
+			return err
+		}
+	}
+
+	// Lastly, bring up the interface.
+	if err = netlink.LinkSetUp(localInterface); err != nil {
+		return err
+	}
+	return nil
 }

@@ -28,23 +28,23 @@ func TestDHCPHandler_handleDiscover(t *testing.T) {
 		dstAddr       packet.Addr
 	}{
 		{name: "discover-mac1", wantResponse: true, responseCount: 1,
-			packet: RequestPacket(Discover, mac1, ip1, []byte{0x01}, false, append(options, oDNS)), tableLen: 3,
+			packet: RequestPacket(Discover, mac1, ip1, []byte{0x01}, false, append(options, oDNS)), tableLen: 5,
 			srcAddr: packet.Addr{MAC: routerMAC, IP: routerIP4, Port: packet.DHCP4ClientPort},
 			dstAddr: packet.Addr{MAC: mac1, IP: ip1, Port: packet.DHCP4ServerPort}},
 		{name: "discover-mac1", wantResponse: true, responseCount: 2,
-			packet: RequestPacket(Discover, mac1, ip1, []byte{0x01}, false, append(options, oDNS)), tableLen: 3,
+			packet: RequestPacket(Discover, mac1, ip1, []byte{0x01}, false, append(options, oDNS)), tableLen: 5,
 			srcAddr: packet.Addr{MAC: routerMAC, IP: routerIP4, Port: packet.DHCP4ClientPort},
 			dstAddr: packet.Addr{MAC: mac1, IP: ip1, Port: packet.DHCP4ServerPort}},
 		{name: "discover-mac1", wantResponse: true, responseCount: 3,
-			packet: RequestPacket(Discover, mac1, ip1, []byte{0x01}, false, append(options, oDNS)), tableLen: 3,
+			packet: RequestPacket(Discover, mac1, ip1, []byte{0x01}, false, append(options, oDNS)), tableLen: 5,
 			srcAddr: packet.Addr{MAC: routerMAC, IP: routerIP4, Port: packet.DHCP4ClientPort},
 			dstAddr: packet.Addr{MAC: mac1, IP: ip1, Port: packet.DHCP4ServerPort}},
 		{name: "discover-mac1", wantResponse: true, responseCount: 4,
-			packet: RequestPacket(Discover, mac1, ip1, []byte{0x01}, false, append(options, oDNS)), tableLen: 3,
+			packet: RequestPacket(Discover, mac1, ip1, []byte{0x01}, false, append(options, oDNS)), tableLen: 5,
 			srcAddr: packet.Addr{MAC: routerMAC, IP: routerIP4, Port: packet.DHCP4ClientPort},
 			dstAddr: packet.Addr{MAC: mac1, IP: ip1, Port: packet.DHCP4ServerPort}},
 		{name: "discover-mac2", wantResponse: true, responseCount: 5,
-			packet: RequestPacket(Discover, mac2, ip2, []byte{0x01}, false, append(options, oDNS)), tableLen: 4,
+			packet: RequestPacket(Discover, mac2, ip2, []byte{0x01}, false, append(options, oDNS)), tableLen: 6,
 			srcAddr: packet.Addr{MAC: routerMAC, IP: routerIP4, Port: packet.DHCP4ClientPort},
 			dstAddr: packet.Addr{MAC: mac2, IP: ip2, Port: packet.DHCP4ServerPort}},
 	}
@@ -57,6 +57,7 @@ func TestDHCPHandler_handleDiscover(t *testing.T) {
 			time.Sleep(time.Millisecond * 10)
 
 			if tt.tableLen != len(tc.h.net1.getLeases()) {
+				tc.h.net1.printSubnet()
 				t.Errorf("DHCPHandler.handleDiscover() invalid table len=%d want=%d", len(tc.h.net1.getLeases()), tt.tableLen)
 			}
 			if tt.responseCount != len(tc.responseTable) {

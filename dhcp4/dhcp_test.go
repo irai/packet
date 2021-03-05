@@ -17,13 +17,6 @@ func Test_DHCP_SaveAndLoad(t *testing.T) {
 	defer tc.Close()
 	var err error
 
-	/**
-	h, err := Attach(tc.packet, nets[0].home, nets[0].netfilter, testDHCPFilename)
-	if err != nil {
-		t.Fatal("cannot create handler", err)
-	}
-	***/
-
 	entry := tc.h.net1.newLease(StateDiscovery, mac0, mac0, nil, nil)
 	entry.State = StateAllocated
 
@@ -50,18 +43,14 @@ func Test_DHCP_SaveAndLoad(t *testing.T) {
 	}
 
 	// Reloading will remove discovery state
-	tc.h.Detach()
-	tc.h, err = Attach(tc.packet, nets[0].home, nets[0].netfilter, testDHCPFilename)
-	if err != nil {
-		log.Fatal("cannot reload", err)
-	}
+	tc2 := setupTestHandler()
 
-	entry = tc.h.net1.findIP(savedIP)
-	count1, _ := tc.h.net1.countLeases()
-	count2, _ := tc.h.net2.countLeases()
+	entry = tc2.h.net1.findIP(savedIP)
+	count1, _ := tc2.h.net1.countLeases()
+	count2, _ := tc2.h.net2.countLeases()
 	if entry == nil || count1 != 2 || count2 != 3 {
-		tc.h.net1.printSubnet()
-		tc.h.net2.printSubnet()
+		tc2.h.net1.printSubnet()
+		tc2.h.net2.printSubnet()
 		log.Fatal("invalid load ", count1, count2)
 	}
 }
@@ -99,7 +88,8 @@ func Test_DHCP_Config(t *testing.T) {
 
 	// Reloading should fix the invalid config
 	tc.h.Detach()
-	tc.h, err = Attach(tc.packet, nets[0].home, nets[0].netfilter, testDHCPFilename)
+	tc = setupTestHandler()
+	// tc.h, err = Attach(tc.packet, nets[0].home, nets[0].netfilter, testDHCPFilename)
 	if err != nil {
 		log.Fatal("cannot reload", err)
 	}

@@ -85,29 +85,70 @@ func configChanged(config SubnetConfig, current SubnetConfig) bool {
 	return false
 }
 
+// CLoudFlare family
+// https://developers.cloudflare.com/1.1.1.1/1.1.1.1-for-families
+var (
+	CloudFlareDNS1       = net.IPv4(1, 1, 1, 2) // malware
+	CloudFlareDNS2       = net.IPv4(1, 0, 0, 2) // malware
+	CloudFlareFamilyDNS1 = net.IPv4(1, 1, 1, 3) // malware and adult sites
+	CloudFlareFamilyDNS2 = net.IPv4(1, 0, 0, 3) // malware and adult sites
+
+	// OpenDNS
+	OpenDNS1 = net.IPv4(208, 67, 222, 123)
+	OpenDNS2 = net.IPv4(208, 67, 220, 123)
+)
+
 // Attach return a dhcp handler with two internal subnets.
 // func New(home SubnetConfig, netfilter SubnetConfig, filename string) (handler *DHCPHandler, err error) {
-func Attach(engine *packet.Handler, home SubnetConfig, netfilter SubnetConfig, filename string) (handler *DHCPHandler, err error) {
+func Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsServer net.IP, filename string) (handler *DHCPHandler, err error) {
 
 	handler = &DHCPHandler{}
 	handler.captureTable = make(map[string]bool)
 	handler.filename = filename
-	handler.mode = ModeSecondaryServer
+	handler.mode = ModeSecondaryServerNice
+
+	if dnsServer == nil {
+		dnsServer = engine.NICInfo.RouterIP4.IP
+	}
+	// Segment network
+	homeSubnet := SubnetConfig{
+		LAN:        engine.NICInfo.HomeLAN4,
+		DefaultGW:  engine.NICInfo.RouterIP4.IP.To4(),
+		DHCPServer: engine.NICInfo.HostIP4.IP.To4(),
+		DNSServer:  dnsServer.To4(),
+		// FirstIP:    net.ParseIP("192.168.0.10"),
+		// LastIP:     net.ParseIP("192.168.0.127"),
+	}
+	netfilterSubnet := SubnetConfig{
+		LAN:        net.IPNet{IP: netfilterIP.IP.Mask(netfilterIP.Mask), Mask: netfilterIP.Mask},
+		DefaultGW:  netfilterIP.IP.To4(),
+		DHCPServer: engine.NICInfo.HostIP4.IP,
+		DNSServer:  CloudFlareFamilyDNS1,
+		// FirstIP:    net.ParseIP("192.168.0.10"),
+		// LastIP:     net.ParseIP("192.168.0.127"),
+	}
+	// tmp, err := dhcpghost.New(homeSubnet, netfilterSubnet, dhcpConfigFilename)
+	// if err != nil {
+	// return fmt.Errorf("Cannot create DHCP server: %w", err)
+	// }
+	// Only attack when client is in capture mode
+	// tmp.SetMode(ModeSecondaryServerNice)
+	// config.C.DHCPHandler = tmp
 
 	// Reset leases if error or config has changed
 	handler.net1, handler.net2, err = loadConfig(handler.filename)
 	if err != nil || handler.net1 == nil || handler.net2 == nil ||
-		configChanged(home, handler.net1.SubnetConfig) || configChanged(netfilter, handler.net2.SubnetConfig) {
+		configChanged(homeSubnet, handler.net1.SubnetConfig) || configChanged(netfilterSubnet, handler.net2.SubnetConfig) {
 		log.Error("dhcp4: config file reset ", err)
 
 		// net1 is home LAN
-		handler.net1, err = newSubnet(home)
+		handler.net1, err = newSubnet(homeSubnet)
 		if err != nil {
 			return nil, fmt.Errorf("home config : %w", err)
 		}
 
 		// net2 is netfilter LAN
-		handler.net2, err = newSubnet(netfilter)
+		handler.net2, err = newSubnet(netfilterSubnet)
 		if err != nil {
 			return nil, fmt.Errorf("netfilter config : %w", err)
 		}
@@ -244,4 +285,114 @@ func (h *DHCPHandler) isCapturedLocked(mac net.HardwareAddr) net.IP {
 		return nil
 	}
 	return lease.IP
+}
+
+// ProcessPacket implements PacketProcessor interface
+func (h *DHCPHandler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, error) {
+	ether := packet.Ether(b)
+	ip4 := packet.IP4(ether.Payload())
+	if !ip4.IsValid() {
+		return host, packet.ErrInvalidIP4
+	}
+	udp := packet.UDP(ip4.Payload())
+	if !udp.IsValid() || len(udp.Payload()) < 240 {
+		return host, packet.ErrInvalidIP4
+	}
+
+	dhcpFrame := DHCP4(udp.Payload())
+	if !dhcpFrame.IsValid() {
+		return host, packet.ErrParseMessage
+	}
+	if Debug {
+		// fmt.Printf("ether: %s\n", ether)
+		// fmt.Printf("ip4  : %s\n", ip4)
+		// fmt.Printf("udp  : %s\n", udp)
+		fmt.Printf("dhcp4: %s\n", dhcpFrame)
+	}
+
+	options := dhcpFrame.ParseOptions()
+	var reqType MessageType
+	if t := options[OptionDHCPMessageType]; len(t) != 1 {
+		log.Warn("dhcp4: skiping dhcp packet with len not 1")
+		return host, packet.ErrParseMessage
+	} else {
+		reqType = MessageType(t[0])
+		if reqType < Discover || reqType > Inform {
+			log.Warn("dhcp4: skiping dhcp packet invalid type ", reqType)
+			return host, packet.ErrParseMessage
+		}
+	}
+
+	// retrieve the sender IP address
+	// ipStr , portStr, err := net.SplitHostPort(addr.String())
+
+	// if res := h.processDHCP(req, reqType, options, ip4.Src()); res != nil {
+	var response DHCP4
+	switch reqType {
+
+	case Discover:
+		response = h.handleDiscover(dhcpFrame, options)
+
+	case Request:
+		// var senderIP net.IP
+		// if tmp, ok := options[OptionDefaultFingerServer]; ok {
+		// senderIP = net.IP(tmp)
+		// }
+		response = h.handleRequest(dhcpFrame, options, ip4.Src())
+
+	case Decline:
+		response = h.handleDecline(dhcpFrame, options)
+
+	case Release:
+		response = h.handleRelease(dhcpFrame, options)
+
+	case Offer:
+		log.Error("dhcp4: got dhcp offer")
+
+	default:
+		log.Warnf("dhcp4: message type not supported %v", reqType)
+	}
+
+	if response != nil {
+		// If IP not available, broadcast
+
+		var dstAddr packet.Addr
+		if ip4.Src().Equal(net.IPv4zero) || dhcpFrame.Broadcast() {
+			dstAddr = packet.Addr{MAC: packet.EthBroadcast, IP: net.IPv4bcast, Port: packet.DHCP4ClientPort}
+		} else {
+			dstAddr = packet.Addr{MAC: ether.Src(), IP: ip4.Src(), Port: packet.DHCP4ClientPort}
+		}
+
+		if debugging() {
+			log.Trace("dhcp4: send reply to ", dstAddr)
+		}
+
+		srcAddr := packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostIP4.IP, Port: packet.DHCP4ServerPort}
+		if err := sendPacket(h.engine.Conn(), srcAddr, dstAddr, response); err != nil {
+			fmt.Printf("dhcp4: failed sending packet error=%s", err)
+			return host, err
+		}
+	}
+	return host, nil
+}
+
+func (h *DHCPHandler) findSubnet(mac net.HardwareAddr) (captured bool, subnet *dhcpSubnet) {
+	if _, ok := h.captureTable[string(mac)]; ok {
+		if tracing() {
+			log.Tracef("dhcp4: use subnet2 lan=%v defaultGW=%v", h.net2.LAN, h.net2.DefaultGW)
+		}
+		return true, h.net2
+	}
+	if tracing() {
+		log.Tracef("dhcp4: use subnet1 lan=%v defaultGW=%v", h.net1.LAN, h.net1.DefaultGW)
+	}
+	return false, h.net1
+}
+
+func getClientID(p DHCP4, options Options) []byte {
+	clientID, ok := options[OptionClientIdentifier]
+	if !ok {
+		clientID = p.CHAddr()
+	}
+	return clientID
 }
