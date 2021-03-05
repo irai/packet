@@ -34,6 +34,12 @@ var (
 	IP6AllNodesAddr = Addr{MAC: Eth6AllNodesMulticast, IP: IP6AllNodesMulticast}
 )
 
+// DHCP4 port numbers
+const (
+	DHCP4ServerPort = 67
+	DHCP4ClientPort = 68
+)
+
 var ipv6LinkLocal = func(cidr string) *net.IPNet {
 	_, net, err := net.ParseCIDR(cidr)
 	if err != nil {
@@ -434,6 +440,10 @@ const UDPHeaderLen = 8
 
 type UDP []byte
 
+func (p UDP) String() string {
+	return fmt.Sprintf("srcport=%d dstport=%d len=%d payloadlen=%d", p.SrcPort(), p.DstPort(), p.Len(), len(p.Payload()))
+}
+
 func (p UDP) SrcPort() uint16  { return binary.BigEndian.Uint16(p[0:2]) }
 func (p UDP) DstPort() uint16  { return binary.BigEndian.Uint16(p[2:4]) }
 func (p UDP) Len() uint16      { return binary.BigEndian.Uint16(p[4:6]) }
@@ -455,12 +465,12 @@ func UDPMarshalBinary(p []byte, srcPort uint16, dstPort uint16) UDP {
 
 	binary.BigEndian.PutUint16(p[0:2], srcPort)
 	binary.BigEndian.PutUint16(p[2:4], dstPort)
-	binary.BigEndian.PutUint16(p[4:6], 0) // no payload
+	binary.BigEndian.PutUint16(p[4:6], 0) // len zero - no payload
 	return UDP(p)
 }
 
 func (p UDP) SetPayload(b []byte) UDP {
-	binary.BigEndian.PutUint16(p[4:6], uint16(len(b)))
+	binary.BigEndian.PutUint16(p[4:6], UDPHeaderLen+uint16(len(b)))
 	// no checksum for IP4
 	return p[:len(p)+len(b)]
 }
@@ -471,7 +481,7 @@ func (p UDP) AppendPayload(b []byte) (UDP, error) {
 	}
 	p = p[:len(p)+len(b)] // change slice in case slice is less total
 	copy(p.Payload(), b)
-	binary.BigEndian.PutUint16(p[4:6], uint16(len(b)))
+	binary.BigEndian.PutUint16(p[4:6], UDPHeaderLen+uint16(len(b)))
 	// no checksum for IP4
 	return p, nil
 }

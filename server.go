@@ -18,6 +18,7 @@ var (
 	Debug    bool
 	DebugIP6 bool
 	DebugIP4 bool
+	DebugUDP bool
 )
 
 // Config has a list of configurable parameters that overide package defaults
@@ -276,11 +277,13 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		}
 
 		ether := Ether(buf[:n])
+		fmt.Println("DEBUG ether ", ether)
 		if !ether.IsValid() {
 			log.Error("icmp invalid ethernet packet ", ether.EtherType())
 			continue
 		}
 
+		fmt.Println("DEBUG ether ", ether)
 		// Ignore packets sent via our interface
 		// If we don't have this, then we received all forward packets with client IPs but our mac
 		//
@@ -288,6 +291,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		if bytes.Equal(ether.Src(), h.NICInfo.HostMAC) {
 			continue
 		}
+		fmt.Println("DEBUG ether ", ether)
 
 		// Only interested in unicast ethernet
 		if !isUnicastMAC(ether.Src()) {
@@ -327,7 +331,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				continue
 			}
 			if DebugIP6 {
-				fmt.Println("ether:", ether)
+				fmt.Printf("ether: %s\n", ether)
 				fmt.Printf("ip6  : %s\n", ip6Frame)
 			}
 
@@ -363,10 +367,19 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		case syscall.IPPROTO_IGMP:
 			// Internet Group Management Protocol - Ipv4 multicast groups
 			// do nothing
-		case syscall.IPPROTO_TCP, syscall.IPPROTO_UDP:
+		case syscall.IPPROTO_TCP:
+			// skip tcp
+		case syscall.IPPROTO_UDP:
 			if ip4Frame != nil {
-				port := UDP(ip4Frame.Payload()).DstPort()
-				if port == 67 || port == 68 {
+				udp := UDP(ip4Frame.Payload())
+				if !udp.IsValid() {
+					fmt.Println("packet: error invalid udp frame ", ip4Frame)
+					continue
+				}
+				if DebugUDP {
+					fmt.Printf("udp  : %s\n", udp)
+				}
+				if udp.DstPort() == DHCP4ServerPort {
 					if host, err = h.HandlerDHCP4.ProcessPacket(host, ether); err != nil {
 						fmt.Printf("packet: error processing dhcp4: %s\n", err)
 					}

@@ -7,6 +7,7 @@ package dhcp4
 
 import (
 	"encoding/binary"
+	"fmt"
 	"net"
 	"time"
 )
@@ -27,6 +28,10 @@ func (p DHCP4) IsValid() bool {
 		return false
 	}
 	return true
+}
+
+func (p DHCP4) String() string {
+	return fmt.Sprintf("dhcp4 opcode=%v chaddr=%s ciaddr=%s yiaddr=%s", p.OpCode(), p.CHAddr(), p.CIAddr(), p.YIAddr())
 }
 
 func (p DHCP4) OpCode() OpCode { return OpCode(p[0]) }

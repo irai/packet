@@ -1,6 +1,7 @@
 package dhcp4
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"sync"
@@ -23,12 +24,6 @@ var (
 
 	// Debug module variable to enable/disable debug & trace messages
 	Debug bool
-)
-
-// DHCP4 port numbers
-const (
-	DHCP4ServerPort = 67
-	DHCP4ClientPort = 68
 )
 
 // leaseTable is a type to store lease array
@@ -62,7 +57,15 @@ type DHCPHandler struct {
 	engine       *packet.Handler
 }
 
-func (h *DHCPHandler) Start() error                     { return nil }
+func (h *DHCPHandler) Start() error {
+	go func() {
+		if err := h.clientLoop(context.Background()); err != nil {
+			fmt.Println("dhcp4: client loop exited with error=", err)
+		}
+	}()
+	return nil
+}
+
 func (h *DHCPHandler) Stop() error                      { return nil }
 func (h *DHCPHandler) StartHunt(net.HardwareAddr) error { return nil }
 func (h *DHCPHandler) StopHunt(net.HardwareAddr) error  { return nil }
@@ -82,8 +85,9 @@ func configChanged(config SubnetConfig, current SubnetConfig) bool {
 	return false
 }
 
-// New return a dhcp handler with two internal subnets.
-func New(home SubnetConfig, netfilter SubnetConfig, filename string) (handler *DHCPHandler, err error) {
+// Attach return a dhcp handler with two internal subnets.
+// func New(home SubnetConfig, netfilter SubnetConfig, filename string) (handler *DHCPHandler, err error) {
+func Attach(engine *packet.Handler, home SubnetConfig, netfilter SubnetConfig, filename string) (handler *DHCPHandler, err error) {
 
 	handler = &DHCPHandler{}
 	handler.captureTable = make(map[string]bool)
@@ -125,7 +129,16 @@ func New(home SubnetConfig, netfilter SubnetConfig, filename string) (handler *D
 			"lastIP": handler.net2.LastIP}).Debug("dhcp4: Server Config")
 	}
 
+	handler.engine = engine
+	engine.HandlerDHCP4 = handler
 	return handler, nil
+}
+
+func (h *DHCPHandler) Detach() error {
+	h.engine.Lock()
+	defer h.engine.Unlock()
+	h.engine.HandlerDHCP4 = packet.PacketNOOP{}
+	return nil
 }
 
 // Mode return the disrupt flag

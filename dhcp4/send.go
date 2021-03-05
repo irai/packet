@@ -2,31 +2,35 @@ package dhcp4
 
 import (
 	"fmt"
+	"net"
 	"syscall"
 
 	"github.com/irai/packet"
 )
 
-func (h *DHCPHandler) sendPacket(srcAddr packet.Addr, dstAddr packet.Addr, p DHCP4) (err error) {
+func sendPacket(conn net.PacketConn, srcAddr packet.Addr, dstAddr packet.Addr, p DHCP4) (err error) {
 	ether := packet.Ether(make([]byte, packet.EthMaxSize)) // Ping is called many times concurrently by client
 
 	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IP, srcAddr.MAC, dstAddr.MAC)
 	ip4 := packet.IP4MarshalBinary(ether.Payload(), 50, srcAddr.IP, dstAddr.IP)
-	if ip4, err = ip4.AppendPayload(p, syscall.IPPROTO_ICMP); err != nil {
+	udp := packet.UDPMarshalBinary(ip4.Payload(), srcAddr.Port, dstAddr.Port)
+	udp, err = udp.AppendPayload(p)
+	if err != nil {
 		return err
 	}
+	ip4 = ip4.SetPayload(udp, syscall.IPPROTO_UDP)
 
 	if ether, err = ether.SetPayload(ip4); err != nil {
 		return err
 	}
-	if dstAddr.MAC == nil {
-		dstAddr.MAC = packet.Eth4AllNodesMulticast
-	}
+	// if dstAddr.MAC == nil {
+	// dstAddr.MAC = packet.Eth4AllNodesMulticast
+	// }
 
 	if Debug {
 		fmt.Printf("icmp4: send %s\n", p)
 	}
-	if _, err := h.engine.Conn().WriteTo(ether, &dstAddr); err != nil {
+	if _, err := conn.WriteTo(ether, &dstAddr); err != nil {
 		fmt.Println("icmp failed to write ", err)
 		return err
 	}

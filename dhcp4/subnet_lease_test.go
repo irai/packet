@@ -90,8 +90,6 @@ var (
 	dns2 = net.ParseIP("8.8.8.9")
 
 	mac0 = net.HardwareAddr{0xff, 0xff, 0xff, 0xff, 0xff, 0x0}
-	mac1 = net.HardwareAddr{0xff, 0xff, 0xff, 0xff, 0xff, 0x1}
-	mac2 = net.HardwareAddr{0xff, 0xff, 0xff, 0xff, 0xff, 0x2}
 )
 
 func setupSubnets() (net1 *dhcpSubnet, net2 *dhcpSubnet) {
@@ -322,27 +320,30 @@ func Test_Subnet_Save(t *testing.T) {
 
 func Test_Subnet_Load(t *testing.T) {
 
-	h, _ := New(nets[0].home, nets[0].netfilter, testDHCPFilename)
-	if h.net1.Duration != 2*time.Hour {
-		t.Error("invalid duration ", h.net1.Duration)
+	tc := setupTestHandler()
+	defer tc.Close()
+	// h, _ := New(nets[0].home, nets[0].netfilter, testDHCPFilename)
+
+	if tc.h.net1.Duration != 2*time.Hour {
+		t.Error("invalid duration ", tc.h.net1.Duration)
 	}
 
-	l := h.net2.newLease(StateDiscovery, mac0, mac0, nil, nil)
+	l := tc.h.net2.newLease(StateDiscovery, mac0, mac0, nil, nil)
 	l.State = StateAllocated
-	l = h.net2.newLease(StateDiscovery, mac0, mac0, nil, nil)
+	l = tc.h.net2.newLease(StateDiscovery, mac0, mac0, nil, nil)
 	l.State = StateAllocated
-	l = h.net2.newLease(StateDiscovery, mac0, mac0, nil, nil)
+	l = tc.h.net2.newLease(StateDiscovery, mac0, mac0, nil, nil)
 	l.State = StateAllocated
 
-	count1, _ := h.net1.countLeases()
-	count2, _ := h.net2.countLeases()
+	count1, _ := tc.h.net1.countLeases()
+	count2, _ := tc.h.net2.countLeases()
 	if count1 != 0 || count2 != 5 {
-		h.net1.printSubnet()
+		tc.h.net1.printSubnet()
 		t.Error("invalid count ", count1, count2)
 		return
 	}
 	if debugging() {
-		h.net1.printSubnet()
+		tc.h.net1.printSubnet()
 	}
 
 }

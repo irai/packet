@@ -70,7 +70,6 @@ func (h *DHCPHandler) ListenAndServe(ctx context.Context) (err error) {
 
 // ProcessPacket implements PacketProcessor interface
 func (h *DHCPHandler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, error) {
-
 	ether := packet.Ether(b)
 	ip4 := packet.IP4(ether.Payload())
 	if !ip4.IsValid() {
@@ -81,14 +80,15 @@ func (h *DHCPHandler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, 
 		return host, packet.ErrInvalidIP4
 	}
 
-	// Handle client packets
-	if udp.DstPort() == DHCP4ClientPort {
-		return h.processClientPacket(host, b)
-	}
-
 	dhcpFrame := DHCP4(udp.Payload())
 	if !dhcpFrame.IsValid() {
 		return host, packet.ErrParseMessage
+	}
+	if Debug {
+		// fmt.Printf("ether: %s\n", ether)
+		// fmt.Printf("ip4  : %s\n", ip4)
+		// fmt.Printf("udp  : %s\n", udp)
+		fmt.Printf("dhcp4: %s\n", dhcpFrame)
 	}
 
 	options := dhcpFrame.ParseOptions()
@@ -131,7 +131,7 @@ func (h *DHCPHandler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, 
 		log.Error("dhcp4: got dhcp offer")
 
 	default:
-		log.Warnf("dhcp4: message type not supported %s", reqType)
+		log.Warnf("dhcp4: message type not supported %v", reqType)
 	}
 
 	if response != nil {
@@ -139,17 +139,17 @@ func (h *DHCPHandler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, 
 
 		var dstAddr packet.Addr
 		if ip4.Src().Equal(net.IPv4zero) || dhcpFrame.Broadcast() {
-			dstAddr = packet.Addr{MAC: packet.EthBroadcast, IP: net.IPv4bcast, Port: DHCP4ClientPort}
+			dstAddr = packet.Addr{MAC: packet.EthBroadcast, IP: net.IPv4bcast, Port: packet.DHCP4ClientPort}
 		} else {
-			dstAddr = packet.Addr{MAC: ether.Src(), IP: ip4.Src(), Port: DHCP4ClientPort}
+			dstAddr = packet.Addr{MAC: ether.Src(), IP: ip4.Src(), Port: packet.DHCP4ClientPort}
 		}
 
 		if debugging() {
 			log.Trace("dhcp4: send reply to ", dstAddr)
 		}
 
-		srcAddr := packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostIP4.IP, Port: DHCP4ServerPort}
-		if err := h.sendPacket(srcAddr, dstAddr, response); err != nil {
+		srcAddr := packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostIP4.IP, Port: packet.DHCP4ServerPort}
+		if err := sendPacket(h.engine.Conn(), srcAddr, dstAddr, response); err != nil {
 			fmt.Printf("dhcp4: failed sending packet error=%s", err)
 			return host, err
 		}
