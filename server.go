@@ -289,7 +289,9 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		if bytes.Equal(ether.Src(), h.NICInfo.HostMAC) {
 			continue
 		}
-		fmt.Println("DEBUG ether ", ether)
+		if Debug {
+			fmt.Println("DEBUG ether ", ether)
+		}
 
 		// Only interested in unicast ethernet
 		if !isUnicastMAC(ether.Src()) {
