@@ -377,15 +377,24 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				fmt.Println("packet: error invalid udp frame ", ip4Frame)
 				continue
 			}
-			if DebugUDP {
-				fmt.Printf("udp  : %s\n", udp)
-			}
 			if ip4Frame != nil {
+				if DebugUDP {
+					fmt.Println("ether:", ether)
+					fmt.Println("ip4  :", ip4Frame)
+					fmt.Printf("udp  : %s\n", udp)
+				}
 				if udp.DstPort() == DHCP4ServerPort {
 					if host, err = h.HandlerDHCP4.ProcessPacket(host, ether); err != nil {
 						fmt.Printf("packet: error processing dhcp4: %s\n", err)
 					}
 				}
+			} else {
+				if DebugUDP {
+					fmt.Println("ether:", ether)
+					fmt.Println("ip6  :", ip6Frame)
+					fmt.Printf("udp  : %s\n", udp)
+				}
+
 			}
 
 		case 0: // skip ARP
