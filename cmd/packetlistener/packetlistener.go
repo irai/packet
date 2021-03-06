@@ -415,22 +415,22 @@ func cmd(h *handlers) {
 				packet.DebugIP6 = !packet.DebugIP6
 			case "icmp6":
 				icmp6.Debug = !icmp6.Debug
-			case "packet":
+			case "engine":
 				packet.Debug = !packet.Debug
 			case "arp":
 				arp.Debug = !arp.Debug
 			case "dhcp4":
 				dhcp4.Debug = !dhcp4.Debug
 			default:
-				fmt.Println("invalid package - use 'g icmp4|icmp6|arp|packet|ip4|ip6|dhcp4'")
+				fmt.Println("invalid package - use 'g icmp4|icmp6|arp|engine|ip4|ip6|dhcp4'")
 			}
 			fmt.Println("ip4 debug  :", packet.DebugIP4)
 			fmt.Println("icmp4 debug:", icmp4.Debug)
 			fmt.Println("ip6 debug  :", packet.DebugIP6)
 			fmt.Println("icmp6 debug:", icmp6.Debug)
-			fmt.Println("packet debug:", packet.Debug)
+			fmt.Println("engine debug:", packet.Debug)
 			fmt.Println("arp debug:", arp.Debug)
-			fmt.Println("dhcp4 debug:", arp.Debug)
+			fmt.Println("dhcp4 debug:", dhcp4.Debug)
 		case "ping":
 			if ip = getIP(tokens, 1); ip == nil {
 				continue
