@@ -372,15 +372,15 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		case syscall.IPPROTO_TCP:
 			// skip tcp
 		case syscall.IPPROTO_UDP:
+			udp := UDP(ip4Frame.Payload())
+			if !udp.IsValid() {
+				fmt.Println("packet: error invalid udp frame ", ip4Frame)
+				continue
+			}
+			if DebugUDP {
+				fmt.Printf("udp  : %s\n", udp)
+			}
 			if ip4Frame != nil {
-				udp := UDP(ip4Frame.Payload())
-				if !udp.IsValid() {
-					fmt.Println("packet: error invalid udp frame ", ip4Frame)
-					continue
-				}
-				if DebugUDP {
-					fmt.Printf("udp  : %s\n", udp)
-				}
 				if udp.DstPort() == DHCP4ServerPort {
 					if host, err = h.HandlerDHCP4.ProcessPacket(host, ether); err != nil {
 						fmt.Printf("packet: error processing dhcp4: %s\n", err)

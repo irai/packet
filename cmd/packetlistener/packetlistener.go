@@ -407,16 +407,18 @@ func cmd(h *handlers) {
 		case "log":
 			p := getString(tokens, 1)
 			switch p {
-			case "ip4":
-				packet.DebugIP4 = !packet.DebugIP4
-			case "icmp4":
-				icmp4.Debug = !icmp4.Debug
-			case "ip6":
-				packet.DebugIP6 = !packet.DebugIP6
-			case "icmp6":
-				icmp6.Debug = !icmp6.Debug
 			case "engine":
 				packet.Debug = !packet.Debug
+			case "ip4":
+				packet.DebugIP4 = !packet.DebugIP4
+			case "ip6":
+				packet.DebugIP6 = !packet.DebugIP6
+			case "udp":
+				packet.DebugUDP = !packet.DebugUDP
+			case "icmp4":
+				icmp4.Debug = !icmp4.Debug
+			case "icmp6":
+				icmp6.Debug = !icmp6.Debug
 			case "arp":
 				arp.Debug = !arp.Debug
 			case "dhcp4":
