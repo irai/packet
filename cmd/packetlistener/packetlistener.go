@@ -305,7 +305,7 @@ func doDHCP4(h *handlers, tokens []string) {
 		if mac = getMAC(tokens, 2); mac == nil {
 			return
 		}
-		if err := h.dhcp4.Capture(mac); err != nil {
+		if err := h.dhcp4.StartHunt(mac); err != nil {
 			fmt.Println("error in capture ", err)
 			return
 		}
@@ -314,7 +314,7 @@ func doDHCP4(h *handlers, tokens []string) {
 		if mac = getMAC(tokens, 2); mac == nil {
 			return
 		}
-		if err := h.dhcp4.Release(mac); err != nil {
+		if err := h.dhcp4.StopHunt(mac); err != nil {
 			fmt.Println("error in release ", err)
 			return
 		}

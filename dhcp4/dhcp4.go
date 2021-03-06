@@ -83,9 +83,7 @@ func (h *Handler) Start() error {
 	return nil
 }
 
-func (h *Handler) Stop() error                      { return nil }
-func (h *Handler) StartHunt(net.HardwareAddr) error { return nil }
-func (h *Handler) StopHunt(net.HardwareAddr) error  { return nil }
+func (h *Handler) Stop() error { return nil }
 
 func configChanged(config SubnetConfig, current SubnetConfig) bool {
 	if !config.LAN.IP.Equal(current.LAN.IP) ||
@@ -237,7 +235,8 @@ func (h *Handler) AddNotificationChannel(channel chan<- Lease) {
 }
 
 // Capture will start the process to capture the client MAC
-func (h *Handler) Capture(mac net.HardwareAddr) error {
+func (h *Handler) StartHunt(mac net.HardwareAddr) error {
+	// func (h *Handler) Capture(mac net.HardwareAddr) error {
 
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
@@ -268,7 +267,8 @@ func (h *Handler) Capture(mac net.HardwareAddr) error {
 }
 
 // Release will end the capture process
-func (h *Handler) Release(mac net.HardwareAddr) error {
+func (h *Handler) StopHunt(mac net.HardwareAddr) error {
+	// func (h *Handler) Release(mac net.HardwareAddr) error {
 	log.WithFields(log.Fields{"mac": mac}).Info("dhcp4: end capture")
 
 	h.mutex.Lock()
