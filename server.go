@@ -316,12 +316,11 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				fmt.Println("ether:", ether)
 				fmt.Println("ip4  :", ip4Frame)
 			}
-			if !h.NICInfo.HostIP4.Contains(ip4Frame.Src()) { // must be on the same net
-				// if !frame.Src().IsLinkLocalUnicast() && !frame.Src().IsGlobalUnicast() {
-				// fmt.Println("ignore IP4 ", frame)
-				continue
+
+			// Only lookup host on same subnet
+			if h.NICInfo.HostIP4.Contains(ip4Frame.Src()) {
+				host, _ = h.LANHosts.FindOrCreateHost(ether.Src(), ip4Frame.Src())
 			}
-			host, _ = h.LANHosts.FindOrCreateHost(ether.Src(), ip4Frame.Src())
 			l4Proto = ip4Frame.Protocol()
 			l4Payload = ip4Frame.Payload()
 			// h.handlerIP4.ProcessPacket(host, ether)
