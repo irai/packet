@@ -235,7 +235,7 @@ func doARP(h *handlers, tokens []string) {
 			fmt.Println("error arp is detached")
 			return
 		}
-		if mac := getMAC(tokens, 1); mac != nil {
+		if mac := getMAC(tokens, 2); mac != nil {
 			if err := h.arp.StartHunt(mac); err != nil {
 				fmt.Println("error in start hunt ", err)
 			}
@@ -245,7 +245,7 @@ func doARP(h *handlers, tokens []string) {
 			fmt.Println("error arp is detached")
 			return
 		}
-		if mac := getMAC(tokens, 1); mac != nil {
+		if mac := getMAC(tokens, 2); mac != nil {
 			if err := h.arp.StopHunt(mac); err != nil {
 				fmt.Println("error in start hunt ", err)
 			}
@@ -288,7 +288,7 @@ func doICMP6(h *handlers, tokens []string) {
 			}
 		}
 	case "release":
-		if mac := getMAC(tokens, 1); mac != nil {
+		if mac := getMAC(tokens, 2); mac != nil {
 			if err := h.icmp6.StopHunt(mac); err != nil {
 				fmt.Println("error in start hunt ", err)
 			}
