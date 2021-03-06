@@ -237,14 +237,14 @@ func (h *Handler) AddNotificationChannel(channel chan<- Lease) {
 }
 
 // Capture will start the process to capture the client MAC
-func (h *Handler) Capture(mac net.HardwareAddr) {
+func (h *Handler) Capture(mac net.HardwareAddr) error {
 
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 
 	// do nothing if already captured
 	if h.isCapturedLocked(mac) != nil {
-		return
+		return nil
 	}
 
 	log.WithFields(log.Fields{"mac": mac}).Info("dhcp4: start capture")
@@ -264,10 +264,11 @@ func (h *Handler) Capture(mac net.HardwareAddr) {
 			h.forceRelease(lease.ClientID, h.net1.DefaultGW, mac, lease.IP, nil)
 		}
 	}
+	return nil
 }
 
 // Release will end the capture process
-func (h *Handler) Release(mac net.HardwareAddr) {
+func (h *Handler) Release(mac net.HardwareAddr) error {
 	log.WithFields(log.Fields{"mac": mac}).Info("dhcp4: end capture")
 
 	h.mutex.Lock()
@@ -278,6 +279,7 @@ func (h *Handler) Release(mac net.HardwareAddr) {
 	if e := h.net2.findMAC(mac); e != nil {
 		freeLease(e)
 	}
+	return nil
 }
 
 // IsCaptured returns true if mac and ip are valid DHCP entry in the capture state.

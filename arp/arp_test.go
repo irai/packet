@@ -47,7 +47,7 @@ func setupTestHandler(t *testing.T) *testContext {
 
 	// override handler with conn and nicInfo
 	config := packet.Config{Conn: tc.inConn, NICInfo: &nicInfo, ProbeInterval: time.Millisecond * 500, OfflineDeadline: time.Millisecond * 500, PurgeDeadline: time.Second * 2}
-	tc.packet, err = config.New("eth0")
+	tc.packet, err = config.NewEngine("eth0")
 	if err != nil {
 		panic(err)
 	}

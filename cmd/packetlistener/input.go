@@ -6,6 +6,8 @@ import (
 	"net"
 	"os"
 	"strings"
+
+	"github.com/irai/packet"
 )
 
 func readInput() []string {
@@ -38,6 +40,19 @@ func getIP(tokens []string, pos int) net.IP {
 	ip := net.ParseIP(tokens[pos])
 	if ip == nil || ip.IsUnspecified() {
 		fmt.Println("invalid ip=", tokens[pos])
+		return nil
+	}
+	return ip
+}
+
+func getIP6(tokens []string, pos int) net.IP {
+	if len(tokens) < pos+1 {
+		fmt.Println("missing ip", tokens)
+		return nil
+	}
+	ip := net.ParseIP(tokens[pos])
+	if ip == nil || ip.IsUnspecified() || !packet.IsIP6(ip) {
+		fmt.Println("invalid ip6=", tokens[pos])
 		return nil
 	}
 	return ip

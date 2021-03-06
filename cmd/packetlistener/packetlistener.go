@@ -24,6 +24,16 @@ var (
 	dhcpip = flag.Bool("nodhcpip", false, "don't change ip to support dhcp")
 )
 
+type handlers struct {
+	engine      *packet.Handler
+	icmp4       *icmp4.Handler
+	arp         *arp.Handler
+	icmp6       *icmp6.Handler
+	dhcp4       *dhcp4.Handler
+	radvs       *icmp6.RADVS
+	netfilterIP net.IPNet
+}
+
 func main() {
 	flag.Parse()
 
@@ -42,18 +52,19 @@ func main() {
 	}
 	fmt.Printf("nicinfo: %+v\n", info)
 
-	netfilterIP, err := packet.SegmentLAN(*nic, info.HostIP4, info.RouterIP4)
+	handlers := handlers{}
+	handlers.netfilterIP, err = packet.SegmentLAN(*nic, info.HostIP4, info.RouterIP4)
 	if err != nil {
 		fmt.Println("failed to segment lan ", err)
 		return
 	}
-	fmt.Printf("netfilter: %+v\n", netfilterIP)
+	fmt.Printf("netfilter: %+v\n", handlers.netfilterIP)
 
 	// change host IP
-	if !netfilterIP.IP.Equal(info.HostIP4.IP) {
-		fmt.Printf("Changing host IP to %s - disable with -nodhcpip \n", netfilterIP)
+	if !handlers.netfilterIP.IP.Equal(info.HostIP4.IP) {
+		fmt.Printf("Changing host IP to %s - disable with -nodhcpip \n", handlers.netfilterIP)
 
-		if err := packet.LinuxConfigureInterface(*nic, &net.IPNet{IP: netfilterIP.IP, Mask: info.RouterIP4.Mask}, nil); err != nil {
+		if err := packet.LinuxConfigureInterface(*nic, &net.IPNet{IP: handlers.netfilterIP.IP, Mask: info.RouterIP4.Mask}, nil); err != nil {
 			fmt.Println("failed to change host IP ", err)
 		}
 	}
@@ -64,7 +75,7 @@ func main() {
 		FullNetworkScanInterval: time.Minute * 20,
 		PurgeDeadline:           time.Minute * 10}
 	// setup packet listener
-	engine, err := config.New(*nic)
+	handlers.engine, err = config.NewEngine(*nic)
 	if err != nil {
 		fmt.Printf("error opening nic=%s: %s\n", *nic, err)
 		iif, _ := net.Interfaces()
@@ -78,85 +89,322 @@ func main() {
 		}
 		return
 	}
-	defer engine.Close()
-	fmt.Println("nic info  :", engine.NICInfo)
+	fmt.Println("nic info  :", handlers.engine.NICInfo)
 
 	// ARP
-	arpHandler, err := arp.Attach(engine)
+	handlers.arp, err = arp.Attach(handlers.engine)
 	if err != nil {
 		log.Fatalf("Failed to create arp handler nic=%s handler: %s", *nic, err)
 	}
 
 	// ICMPv4
-	h4, err := icmp4.Attach(engine)
+	handlers.icmp4, err = icmp4.Attach(handlers.engine)
 	if err != nil {
 		log.Fatalf("Failed to create icmp nic=%s handler: %s", *nic, err)
 	}
-	defer h4.Detach()
 
 	// ICMPv6
-	h6, err := icmp6.Attach(engine)
+	handlers.icmp6, err = icmp6.Attach(handlers.engine)
 	if err != nil {
 		log.Fatalf("Failed to create icmp6 nic=%s handler: %s", *nic, err)
 	}
-	defer h6.Detach()
 
 	// DHCP4
-	dhcp, err := dhcp4.Attach(engine, netfilterIP, dhcp4.CloudFlareDNS1, "")
+	handlers.dhcp4, err = dhcp4.Attach(handlers.engine, handlers.netfilterIP, dhcp4.CloudFlareDNS1, "")
 	if err != nil {
-		log.Fatalf("Failed to create dhcp4 handler: netfilterIP=%s error=%s", netfilterIP, err)
+		log.Fatalf("Failed to create dhcp4 handler: netfilterIP=%s error=%s", handlers.netfilterIP, err)
 	}
 
-	engine.AddCallback(func(n packet.Notification) error {
+	handlers.engine.AddCallback(func(n packet.Notification) error {
 		fmt.Println("Got notification : ", n)
 		return nil
 	})
 
 	// Start server listener
 	go func() {
-		if err := engine.ListenAndServe(ctx); err != nil {
+		if err := handlers.engine.ListenAndServe(ctx); err != nil {
 			if ctx.Err() != context.Canceled {
 				panic(err)
 			}
 		}
 	}()
 
+	handlers.radvs, _ = handlers.icmp6.StartRADVS(false, false, icmp6.MyHomePrefix, icmp6.RDNSSCLoudflare)
+	defer handlers.radvs.Stop()
+
 	time.Sleep(time.Millisecond * 10) // time for all goroutine to start
 
-	cmd(engine, arpHandler, h4, h6, dhcp)
+	cmd(&handlers)
+
+	// Cannot defer this at the moment because we could have changed the pointers
+	if handlers.arp != nil {
+		handlers.arp.Detach()
+	}
+	if handlers.icmp4 != nil {
+		handlers.icmp4.Detach()
+	}
+	if handlers.icmp6 != nil {
+		handlers.icmp6.Detach()
+	}
+	if handlers.dhcp4 != nil {
+		handlers.dhcp4.Detach()
+	}
+	handlers.engine.Close()
 
 	cancel()
 }
 
-func cmd(pt *packet.Handler, a4 *arp.Handler, h *icmp4.Handler, h6 *icmp6.Handler, dhcp *dhcp4.Handler) {
+func doEngine(h *handlers, tokens []string) {
+	var err error
+	switch getString(tokens, 1) {
+	case "attach":
+		switch getString(tokens, 2) {
+		case "arp":
+			if h.arp != nil {
+				fmt.Println("error arp is already attached")
+				return
+			}
+			h.arp, err = arp.Attach(h.engine)
+		case "icmp4":
+			if h.icmp4 != nil {
+				fmt.Println("error icmp4 is already attached")
+				return
+			}
+			h.icmp4, err = icmp4.Attach(h.engine)
+		case "icmp6":
+			if h.icmp6 != nil {
+				fmt.Println("error icmp6 is already attached")
+				return
+			}
+			h.icmp6, err = icmp6.Attach(h.engine)
+		case "dhcp4":
+			if h.dhcp4 != nil {
+				fmt.Println("error icmp6 is already attached")
+				return
+			}
+			h.dhcp4, err = dhcp4.Attach(h.engine, h.netfilterIP, icmp6.DNS6Cloudflare1, "")
+		default:
+			fmt.Println("invalid engine name")
+			return
+		}
+		if err != nil {
+			fmt.Println("error ", err)
+			return
+		}
+	case "detach":
+		switch getString(tokens, 2) {
+		case "arp":
+			err = h.arp.Detach()
+			h.arp = nil
+		case "icmp4":
+			err = h.icmp4.Detach()
+			h.icmp4 = nil
+		case "icmp6":
+			err = h.icmp6.Detach()
+			h.icmp6 = nil
+		case "dhcp4":
+			err = h.dhcp4.Detach()
+			h.dhcp4 = nil
+		default:
+			fmt.Println("invalid engine name")
+		}
+		if err != nil {
+			fmt.Println("error ", err)
+		}
+	case "hunt":
+		if mac := getMAC(tokens, 2); mac != nil {
+			if err := h.engine.StartHunt(mac); err != nil {
+				fmt.Println("error in start hunt ", err)
+			}
+		}
+	case "release":
+		if mac := getMAC(tokens, 2); mac != nil {
+			if err := h.engine.StopHunt(mac); err != nil {
+				fmt.Println("error in start hunt ", err)
+			}
+		}
+	default:
+		printHelp("invalid engine syntax", engineSyntax)
+	}
+}
 
-	radvs, _ := h6.StartRADVS(false, false, icmp6.MyHomePrefix, icmp6.RDNSSCLoudflare)
-	defer radvs.Stop()
+func doARP(h *handlers, tokens []string) {
+	switch getString(tokens, 1) {
+	case "hunt":
+		if h.arp == nil {
+			fmt.Println("error arp is detached")
+			return
+		}
+		if mac := getMAC(tokens, 1); mac != nil {
+			if err := h.arp.StartHunt(mac); err != nil {
+				fmt.Println("error in start hunt ", err)
+			}
+		}
+	case "release":
+		if h.arp == nil {
+			fmt.Println("error arp is detached")
+			return
+		}
+		if mac := getMAC(tokens, 1); mac != nil {
+			if err := h.arp.StopHunt(mac); err != nil {
+				fmt.Println("error in start hunt ", err)
+			}
+		}
+	case "scan":
+		if h.arp == nil {
+			fmt.Println("error arp is detached")
+			return
+		}
+		if err := h.arp.ScanNetwork(context.Background(), h.engine.NICInfo.HostIP4); err != nil {
+			fmt.Println("failed scan: ", err)
+		}
+	default:
+		printHelp("invalid arp syntax", arpSyntax)
+	}
+}
 
+func doICMP6(h *handlers, tokens []string) {
+	if h.icmp6 == nil {
+		fmt.Println("error h6 is detached")
+		return
+	}
+	var ip net.IP
+	switch getString(tokens, 1) {
+	case "ns":
+		if ip = getIP6(tokens, 2); ip == nil {
+			return
+		}
+		if err := h.icmp6.SendNeighbourSolicitation(ip); err != nil {
+			fmt.Printf("error in neigbour solicitation: %s\n", err)
+		}
+	case "ra":
+		if err := h.radvs.SendRA(); err != nil {
+			fmt.Printf("error in router adversitement: %s\n", err)
+		}
+	case "hunt":
+		if mac := getMAC(tokens, 2); mac != nil {
+			if err := h.icmp6.StartHunt(mac); err != nil {
+				fmt.Println("error in start hunt ", err)
+			}
+		}
+	case "release":
+		if mac := getMAC(tokens, 1); mac != nil {
+			if err := h.icmp6.StopHunt(mac); err != nil {
+				fmt.Println("error in start hunt ", err)
+			}
+		}
+	default:
+		printHelp("invalid icmp6 syntax", icmp6Syntax)
+	}
+}
+
+func doDHCP4(h *handlers, tokens []string) {
+	var mac net.HardwareAddr
+	switch getString(tokens, 1) {
+	case "hunt":
+		if mac = getMAC(tokens, 2); mac == nil {
+			return
+		}
+		if err := h.dhcp4.Capture(mac); err != nil {
+			fmt.Println("error in capture ", err)
+			return
+		}
+
+	case "release":
+		if mac = getMAC(tokens, 2); mac == nil {
+			return
+		}
+		if err := h.dhcp4.Release(mac); err != nil {
+			fmt.Println("error in release ", err)
+			return
+		}
+	case "mode":
+		switch getString(tokens, 2) {
+		case "primary":
+			h.dhcp4.SetMode(dhcp4.ModePrimaryServer)
+		case "secondary":
+			h.dhcp4.SetMode(dhcp4.ModeSecondaryServer)
+		case "nice":
+			h.dhcp4.SetMode(dhcp4.ModeSecondaryServerNice)
+		default:
+			fmt.Println("invalid mode syntax: dhcp4 mode [primary|secondary|nice]")
+			return
+		}
+	default:
+		printHelp("invalid dhcp4 syntax", dhcp4Syntax)
+	}
+}
+
+var cmdSyntax = []string{
+	"<command>                              : valid commands arp, icmp4, icmp6, dhcp4, engine",
+	"log <plugin>                           : arp, icmp4, icmp6, dhcp4, engine, ip4, ip6, udp",
+	"ping <ip> ",
+	"[quit | list]",
+}
+var arpSyntax = []string{
+	"arp     scan",
+	"        [hunt | release] <mac>",
+}
+var engineSyntax = []string{
+	"engine  [attach | detach] <plugin>     : valid plugin=[arp|icmp4|icmp6|ip4|ip6|udp|dhcp4]",
+	"        [hunt | release] <mac>",
+}
+var dhcp4Syntax = []string{
+	"dhcp4   mode [primary|secondary|nice]  : set operation mode",
+	"        [hunt | release] <mac>",
+}
+var icmp6Syntax = []string{
+	"icmp6   [hunt | release] <mac>",
+	"        ra                              : router advertisement           ",
+	"        ns <ip6>                        : neighbour solicitation",
+}
+
+func printHelp(msg string, h []string) {
+	if msg != "" {
+		fmt.Println(msg)
+	}
+	for _, v := range h {
+		fmt.Println(v)
+	}
+}
+
+func help() {
+	all := append(cmdSyntax, engineSyntax...)
+	all = append(all, dhcp4Syntax...)
+	all = append(all, engineSyntax...)
+	all = append(all, icmp6Syntax...)
+	all = append(all, arpSyntax...)
+	fmt.Println("\n----")
+	for _, v := range all {
+		fmt.Println(v)
+	}
+}
+
+func cmd(h *handlers) {
+
+	help()
+	var ip net.IP
 	for {
 		fmt.Println("\n----")
-		fmt.Println("Command: (q)uit            | (p)ing ip | (l)list | (g) loG <level>")
-		fmt.Println(" engine: (attach) engine   | (detach) engine     | engine=[arp|icmp4|icmp6]")
-		fmt.Println(" packet: (hunt) mac        | (release) mac")
-		fmt.Println("  icmp6: (icmp6hunt) mac   | (icmp6release) mac ")
-		fmt.Println("    ndp: (ra) ip6          | (ns) ip6")
-		fmt.Println("    arp: (arphunt) mac     | (arprelease) mac        | (arpscan) ")
 		fmt.Print("Enter command: ")
 		tokens := readInput()
 
 		switch tokens[0] {
-		case "q":
+		case "q", "quit":
 			return
-		case "l":
-			pt.PrintTable()
-			if h6 != nil {
-				h6.PrintTable()
+		case "l", "list":
+			fmt.Println("hosts table ---")
+			h.engine.PrintTable()
+			if h.arp != nil {
+				fmt.Println("arp   table ---")
+				h.arp.PrintTable()
 			}
-			if a4 != nil {
-				a4.PrintTable()
+			if h.dhcp4 != nil {
+				fmt.Println("dhcp4 table ----")
+				h.dhcp4.PrintTable()
 			}
 
-		case "g":
+		case "log":
 			p := getString(tokens, 1)
 			switch p {
 			case "ip4":
@@ -171,8 +419,10 @@ func cmd(pt *packet.Handler, a4 *arp.Handler, h *icmp4.Handler, h6 *icmp6.Handle
 				packet.Debug = !packet.Debug
 			case "arp":
 				arp.Debug = !arp.Debug
+			case "dhcp4":
+				dhcp4.Debug = !dhcp4.Debug
 			default:
-				fmt.Println("invalid package - use 'g icmp4|icmp6|arp|packet'")
+				fmt.Println("invalid package - use 'g icmp4|icmp6|arp|packet|ip4|ip6|dhcp4'")
 			}
 			fmt.Println("ip4 debug  :", packet.DebugIP4)
 			fmt.Println("icmp4 debug:", icmp4.Debug)
@@ -180,19 +430,21 @@ func cmd(pt *packet.Handler, a4 *arp.Handler, h *icmp4.Handler, h6 *icmp6.Handle
 			fmt.Println("icmp6 debug:", icmp6.Debug)
 			fmt.Println("packet debug:", packet.Debug)
 			fmt.Println("arp debug:", arp.Debug)
-		case "p":
-			ip := getIP(tokens, 1)
-			if ip == nil {
+			fmt.Println("dhcp4 debug:", arp.Debug)
+		case "ping":
+			if ip = getIP(tokens, 1); ip == nil {
 				continue
 			}
 			now := time.Now()
 			if ip.To4() != nil {
-				if h == nil {
+				if h.icmp4 == nil {
 					fmt.Println("error icmp4 is detached")
 					continue
 				}
 				// if err := h.SendEchoRequest(packet.Addr{MAC: packet.Eth4AllNodesMulticast, IP: ip}, 2, 2); err != nil {
-				if err := h.Ping(packet.Addr{MAC: pt.NICInfo.HostMAC, IP: pt.NICInfo.HostIP4.IP}, packet.Addr{MAC: packet.Eth4AllNodesMulticast, IP: ip}, time.Second*2); err != nil {
+				if err := h.icmp4.Ping(
+					packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostIP4.IP},
+					packet.Addr{MAC: packet.Eth4AllNodesMulticast, IP: ip}, time.Second*2); err != nil {
 					if errors.Is(err, packet.ErrTimeout) {
 						fmt.Println("ping timeout ")
 					} else {
@@ -203,144 +455,31 @@ func cmd(pt *packet.Handler, a4 *arp.Handler, h *icmp4.Handler, h6 *icmp6.Handle
 				fmt.Printf("ping %v time=%v\n", dstIP, time.Now().Sub(now))
 			}
 			if packet.IsIP6(ip) {
-				if h6 == nil {
+				if h.icmp6 == nil {
 					fmt.Println("error icmp6 is detached")
 					continue
 				}
-				if err := h6.Ping(packet.Addr{MAC: pt.NICInfo.HostMAC, IP: pt.NICInfo.HostLLA.IP}, packet.Addr{MAC: packet.Eth6AllNodesMulticast, IP: ip}, time.Second*2); err != nil {
+				if err := h.icmp6.Ping(
+					packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP},
+					packet.Addr{MAC: packet.Eth6AllNodesMulticast, IP: ip}, time.Second*2); err != nil {
 					// if err := h6.Ping(h6.LLA().IP, ip, time.Second*2); err != nil {
 					fmt.Println("icmp6 echo error ", err)
 					continue
 				}
 				fmt.Printf("ping %v time=%v\n", dstIP, time.Now().Sub(now))
 			}
-		case "ns":
-			if h6 == nil {
-				fmt.Println("error h6 is detached")
-				continue
-			}
-			ip := getIP(tokens, 1)
-			if ip == nil || !packet.IsIP6(ip) {
-				continue
-			}
-			if err := h6.SendNeighbourSolicitation(ip); err != nil {
-				fmt.Printf("error in neigbour solicitation: %s\n", err)
-			}
-		case "ra":
-			if h6 == nil {
-				fmt.Println("error h6 is detached")
-				continue
-			}
-			if err := radvs.SendRA(); err != nil {
-				fmt.Printf("error in router adversitement: %s\n", err)
-			}
-		case "arphunt":
-			if a4 == nil {
-				fmt.Println("error arp is detached")
-				continue
-			}
-			if mac := getMAC(tokens, 1); mac != nil {
-				if err := a4.StartHunt(mac); err != nil {
-					fmt.Println("error in start hunt ", err)
-				}
-			}
-		case "arprelease":
-			if a4 == nil {
-				fmt.Println("error arp is detached")
-				continue
-			}
-			if mac := getMAC(tokens, 1); mac != nil {
-				if err := a4.StopHunt(mac); err != nil {
-					fmt.Println("error in start hunt ", err)
-				}
-			}
-		case "arpscan":
-			if a4 == nil {
-				fmt.Println("error arp is detached")
-				continue
-			}
-			if err := a4.ScanNetwork(context.Background(), pt.NICInfo.HostIP4); err != nil {
-				fmt.Println("failed scan: ", err)
-			}
-		case "icmp6hunt":
-			if h6 == nil {
-				fmt.Println("error icmp6 is detached")
-				continue
-			}
-			if mac := getMAC(tokens, 1); mac != nil {
-				if err := h6.StartHunt(mac); err != nil {
-					fmt.Println("error in start hunt ", err)
-				}
-			}
-		case "icmp6release":
-			if h6 == nil {
-				fmt.Println("error icmp6 is detached")
-				continue
-			}
-			if mac := getMAC(tokens, 1); mac != nil {
-				if err := h6.StopHunt(mac); err != nil {
-					fmt.Println("error in start hunt ", err)
-				}
-			}
-		case "hunt":
-			if mac := getMAC(tokens, 1); mac != nil {
-				if err := pt.StartHunt(mac); err != nil {
-					fmt.Println("error in start hunt ", err)
-				}
-			}
-		case "release":
-			if mac := getMAC(tokens, 1); mac != nil {
-				if err := pt.StopHunt(mac); err != nil {
-					fmt.Println("error in start hunt ", err)
-				}
-			}
-		case "attach":
-			var err error
-			switch getString(tokens, 1) {
-			case "arp":
-				if a4 != nil {
-					fmt.Println("error arp is already attached")
-					continue
-				}
-				a4, err = arp.Attach(pt)
-			case "icmp4":
-				if h != nil {
-					fmt.Println("error icmp4 is already attached")
-					continue
-				}
-				h, err = icmp4.Attach(pt)
-			case "icmp6":
-				if h6 != nil {
-					fmt.Println("error icmp6 is already attached")
-					continue
-				}
-				h6, err = icmp6.Attach(pt)
-			default:
-				fmt.Println("invalid engine name")
-			}
-			if err != nil {
-				fmt.Println("error ", err)
-			}
-		case "detach":
-			var err error
-			switch getString(tokens, 1) {
-			case "arp":
-				err = a4.Detach()
-				a4 = nil
-			case "icmp4":
-				err = h.Detach()
-				h = nil
-			case "icmp6":
-				err = h6.Detach()
-				h6 = nil
-			default:
-				fmt.Println("invalid engine name")
-			}
-			if err != nil {
-				fmt.Println("error ", err)
-			}
+		case "engine":
+			doEngine(h, tokens)
+		case "icmp6":
+			doICMP6(h, tokens)
+		case "arp":
+			doARP(h, tokens)
+		case "dhcp4":
+			doDHCP4(h, tokens)
+		case "h", "help":
+			help()
 		default:
-			fmt.Println("invalid command")
+			// do nothing
 		}
 	}
 }

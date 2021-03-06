@@ -29,6 +29,9 @@ func (h *Handler) startHuntHandlers(mac net.HardwareAddr) error {
 	if err := h.HandlerICMP6.StartHunt(mac); err != nil {
 		return err
 	}
+	if err := h.HandlerDHCP4.StartHunt(mac); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -49,6 +52,9 @@ func (h *Handler) StopHunt(mac net.HardwareAddr) error {
 }
 
 func (h *Handler) stopHuntHandlers(mac net.HardwareAddr) error {
+	if err := h.HandlerDHCP4.StopHunt(mac); err != nil {
+		return err
+	}
 	if err := h.HandlerICMP4.StopHunt(mac); err != nil {
 		return err
 	}

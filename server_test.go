@@ -31,7 +31,7 @@ func TestHandler_ListenAndServe(t *testing.T) {
 	inConn, outConn := TestNewBufferedConn()
 	go TestReadAndDiscardLoop(ctx, outConn) // MUST read the out conn to avoid blocking the sender
 	config := Config{Conn: inConn}
-	h, err := config.New("eth0")
+	h, err := config.NewEngine("eth0")
 	if err != nil {
 		panic(err)
 	}

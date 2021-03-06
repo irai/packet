@@ -52,6 +52,7 @@ type Handler struct {
 	ProbeInterval           time.Duration // how often to probe if IP is online
 	OfflineDeadline         time.Duration // mark offline if no updates
 	PurgeDeadline           time.Duration // purge entry if no updates
+	closed                  bool          // set to true when handler is closed
 	sync.Mutex
 }
 
@@ -67,12 +68,12 @@ func (p PacketNOOP) StartHunt(net.HardwareAddr) error           { return nil }
 func (p PacketNOOP) StopHunt(net.HardwareAddr) error            { return nil }
 
 // New creates an ICMPv6 handler with default values
-func NewHandler(nic string) (*Handler, error) {
-	return Config{}.New(nic)
+func NewEngine(nic string) (*Handler, error) {
+	return Config{}.NewEngine(nic)
 }
 
-// New creates an packet handler with config values
-func (config Config) New(nic string) (*Handler, error) {
+// NewEngine creates an packet handler with config values
+func (config Config) NewEngine(nic string) (*Handler, error) {
 
 	var err error
 
@@ -127,6 +128,7 @@ func (config Config) New(nic string) (*Handler, error) {
 // Close closes the underlying sockets
 func (h *Handler) Close() error {
 	fmt.Println("DEBUG closing server")
+	h.closed = true
 	h.conn.Close()
 	return nil
 }
@@ -259,10 +261,10 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 	buf := make([]byte, EthMaxSize)
 	for {
 		if err = h.conn.SetReadDeadline(time.Now().Add(time.Second * 2)); err != nil {
-			if ctxt.Err() != context.Canceled {
-				return fmt.Errorf("setReadDeadline error: %w", err)
+			if h.closed { // closed by call to h.Close()?
+				return nil
 			}
-			return
+			return fmt.Errorf("setReadDeadline error: %w", err)
 		}
 
 		n, _, err := h.conn.ReadFrom(buf)
@@ -270,10 +272,10 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			if err, ok := err.(net.Error); ok && err.Temporary() {
 				continue
 			}
-			if ctxt.Err() != context.Canceled {
-				return fmt.Errorf("read error: %w", err)
+			if h.closed { // closed by call to h.Close()?
+				return nil
 			}
-			return nil
+			return fmt.Errorf("read error: %w", err)
 		}
 
 		ether := Ether(buf[:n])
