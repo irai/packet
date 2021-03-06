@@ -127,7 +127,9 @@ func (config Config) NewEngine(nic string) (*Handler, error) {
 
 // Close closes the underlying sockets
 func (h *Handler) Close() error {
-	fmt.Println("DEBUG closing server")
+	if Debug {
+		fmt.Println("packet: close() called. closing....")
+	}
 	h.closed = true
 	h.conn.Close()
 	return nil
@@ -203,7 +205,7 @@ func isUnicastMAC(mac net.HardwareAddr) bool {
 	return false
 }
 
-func (h *Handler) start() error {
+func (h *Handler) startPlugins() error {
 	time.Sleep(time.Millisecond * 200) // wait for read to start
 
 	if err := h.HandlerIP4.Start(); err != nil {
@@ -227,7 +229,7 @@ func (h *Handler) start() error {
 	return nil
 }
 
-func (h *Handler) end() error {
+func (h *Handler) stopPlugins() error {
 	if err := h.HandlerIP4.Stop(); err != nil {
 		fmt.Println("error: in IP4 stop:", err)
 	}
@@ -253,8 +255,8 @@ func (h *Handler) end() error {
 func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 	// start all plugins
-	go h.start()
-	defer h.end()
+	go h.startPlugins()
+	defer h.stopPlugins()
 
 	go h.purgeLoop(ctxt, h.OfflineDeadline, h.PurgeDeadline)
 
@@ -291,9 +293,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		if bytes.Equal(ether.Src(), h.NICInfo.HostMAC) {
 			continue
 		}
-		if Debug {
-			fmt.Println("DEBUG ether ", ether)
-		}
+		// fmt.Println("DEBUG ether ", ether)
 
 		// Only interested in unicast ethernet
 		if !isUnicastMAC(ether.Src()) {
@@ -417,7 +417,9 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 }
 
 func (h *Handler) makeOnline(mac net.HardwareAddr, ip net.IP) {
-	fmt.Printf("packet: IP is online ip=%s mac=%s\n", ip, mac)
+	if Debug {
+		fmt.Printf("packet: IP is online ip=%s mac=%s\n", ip, mac)
+	}
 	if h.captureList.Index(mac) != -1 {
 		h.startHuntHandlers(mac)
 	}
@@ -426,7 +428,9 @@ func (h *Handler) makeOnline(mac net.HardwareAddr, ip net.IP) {
 }
 
 func (h *Handler) makeOffline(mac net.HardwareAddr, ip net.IP) {
-	fmt.Printf("packet: IP is offline ip=%s mac=%s\n", ip, mac)
+	if Debug {
+		fmt.Printf("packet: IP is offline ip=%s mac=%s\n", ip, mac)
+	}
 	if h.captureList.Index(mac) != -1 {
 		h.stopHuntHandlers(mac)
 	}

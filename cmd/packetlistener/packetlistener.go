@@ -37,7 +37,7 @@ type handlers struct {
 func main() {
 	flag.Parse()
 
-	icmp4.Debug = false
+	packet.Debug = true
 	log.SetLevel(log.DebugLevel)
 
 	fmt.Printf("packetlistener: Listen and send lan packets\n")
@@ -116,7 +116,7 @@ func main() {
 	}
 
 	handlers.engine.AddCallback(func(n packet.Notification) error {
-		fmt.Println("Got notification : ", n)
+		// fmt.Println("Got notification : ", n)
 		return nil
 	})
 
