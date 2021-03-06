@@ -372,7 +372,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		case syscall.IPPROTO_TCP:
 			// skip tcp
 		case syscall.IPPROTO_UDP:
-			udp := UDP(ip4Frame.Payload())
+			udp := UDP(l4Payload)
 			if !udp.IsValid() {
 				fmt.Println("packet: error invalid udp frame ", ip4Frame)
 				continue
