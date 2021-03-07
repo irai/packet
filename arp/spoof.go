@@ -13,7 +13,6 @@ import (
 // StartHunt implements PacketProcessor interface
 // Engine must set host.HuntStageIP4 to StageHunt prior to calling this
 func (h *Handler) StartHunt(ip net.IP) error {
-	fmt.Println("DEBUG called arp star hunt", ip)
 	host := h.engine.FindIP(ip)
 	if host == nil || host.HuntStageIP4 != packet.StageHunt || host.IP.To4() == nil {
 		fmt.Println("arp: invalid call to startHuntIP", host)
