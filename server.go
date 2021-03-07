@@ -349,10 +349,11 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			// h.handlerIP6.ProcessPacket(host, ether)
 
 		case syscall.ETH_P_ARP:
-			hostkeep := host
+			// hostkeep := host
 			if host, err = h.HandlerARP.ProcessPacket(host, ether); err != nil {
 				fmt.Printf("packet: error processing arp: %s\n", err)
 			}
+			/***
 			// found new ip/mac host?
 			if hostkeep == nil && host != nil {
 				h.Lock()
@@ -363,6 +364,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				h.Unlock()
 				h.startIP4HuntHandlers(host.IP)
 			}
+			***/
 			l4Proto = 0 // skip next check
 
 		default:

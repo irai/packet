@@ -31,11 +31,11 @@ func Attach(engine *packet.Handler) (h *Handler, err error) {
 	h = &Handler{engine: engine, closeChan: make(chan bool)}
 	// h.table, _ = loadARPProcTable() // load linux proc table
 	if h.engine.NICInfo.HostIP4.IP.To4() == nil {
-		return nil, packet.ErrInvalidIP4
+		return nil, packet.ErrInvalidIP
 	}
 
 	if h.engine.NICInfo.HomeLAN4.IP.To4() == nil || h.engine.NICInfo.HomeLAN4.IP.IsUnspecified() {
-		return nil, packet.ErrInvalidIP4
+		return nil, packet.ErrInvalidIP
 	}
 	h.engine.HandlerARP = h
 

@@ -324,11 +324,11 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 	ether := packet.Ether(b)
 	ip4 := packet.IP4(ether.Payload())
 	if !ip4.IsValid() {
-		return host, packet.ErrInvalidIP4
+		return host, packet.ErrInvalidIP
 	}
 	udp := packet.UDP(ip4.Payload())
 	if !udp.IsValid() || len(udp.Payload()) < 240 {
-		return host, packet.ErrInvalidIP4
+		return host, packet.ErrInvalidIP
 	}
 
 	dhcpFrame := DHCP4(udp.Payload())

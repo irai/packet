@@ -18,7 +18,7 @@ func (h *Handler) startHunt(ip net.IP) error {
 	host := h.engine.FindIP(ip)
 	if host == nil || host.HuntStageIP6 != packet.StageHunt || !packet.IsIP6(host.IP) {
 		fmt.Println("icmp6: invalid call to startHuntIP", host)
-		return packet.ErrInvalidIP4
+		return packet.ErrInvalidIP
 	}
 
 	go h.spoofLoop(ip)

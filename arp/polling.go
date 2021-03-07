@@ -77,7 +77,7 @@ func (h *Handler) ScanNetwork(ctx context.Context, lan net.IPNet) error {
 	ip := packet.CopyIP(lan.IP)
 	ip = ip.To4()
 	if ip == nil {
-		return packet.ErrInvalidIP4
+		return packet.ErrInvalidIP
 	}
 
 	if Debug {

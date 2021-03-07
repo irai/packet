@@ -106,7 +106,7 @@ var (
 	ErrPayloadTooBig = errors.New("payload too big")
 	ErrParseMessage  = errors.New("failed to parse message")
 	ErrInvalidConn   = errors.New("invalid connection")
-	ErrInvalidIP4    = errors.New("invalid ip4")
+	ErrInvalidIP     = errors.New("invalid ip")
 	ErrNotFound      = errors.New("not found")
 	ErrTimeout       = errors.New("timeout")
 )

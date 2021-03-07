@@ -123,7 +123,8 @@ func (h *Handler) FindIPNoLock(ip net.IP) *Host {
 	return h.LANHosts.Table[string(ip.To16())]
 }
 
-func (h *Handler) FindMAC(mac net.HardwareAddr) (list []Addr) {
+// FindByMAC return a list of IP addresses for mac
+func (h *Handler) FindByMAC(mac net.HardwareAddr) (list []Addr) {
 	h.Lock()
 	defer h.Unlock()
 	for _, v := range h.LANHosts.Table {

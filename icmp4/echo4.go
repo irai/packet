@@ -34,7 +34,7 @@ var icmpTable = struct {
 // Do not wait for response
 func (h *Handler) SendEchoRequest(srcAddr packet.Addr, dstAddr packet.Addr, id uint16, seq uint16) error {
 	if srcAddr.IP.To4() == nil || dstAddr.IP.To4() == nil {
-		return packet.ErrInvalidIP4
+		return packet.ErrInvalidIP
 	}
 	icmpMessage := icmp.Message{
 		Type: ipv4.ICMPTypeEcho,
