@@ -7,9 +7,14 @@ import (
 	"sync"
 )
 
+type macDetails struct {
+	MAC net.HardwareAddr
+	IP4 net.IP
+}
+
 // SetHandler manages a goroutine safe set for adding and removing mac addresses
 type SetHandler struct {
-	list []net.HardwareAddr
+	list []macDetails
 	sync.Mutex
 }
 
@@ -28,7 +33,7 @@ func (s *SetHandler) Add(mac net.HardwareAddr) error {
 	if s.index(mac) != -1 {
 		return nil
 	}
-	s.list = append(s.list, mac)
+	s.list = append(s.list, macDetails{MAC: mac})
 	return nil
 }
 
@@ -60,9 +65,26 @@ func (s *SetHandler) Index(mac net.HardwareAddr) int {
 
 func (s *SetHandler) index(mac net.HardwareAddr) int {
 	for i := range s.list {
-		if bytes.Equal(s.list[i], mac) {
+		if bytes.Equal(s.list[i].MAC, mac) {
 			return i
 		}
 	}
 	return -1
+}
+
+func (s *SetHandler) UpdateIP4(mac net.HardwareAddr, ip net.IP) {
+	s.Lock()
+	defer s.Unlock()
+	if index := s.index(mac); index != -1 {
+		s.list[index].IP4 = ip
+	}
+}
+
+func (s *SetHandler) GetIP4(mac net.HardwareAddr) net.IP {
+	s.Lock()
+	defer s.Unlock()
+	if index := s.index(mac); index != -1 {
+		return s.list[index].IP4
+	}
+	return nil
 }

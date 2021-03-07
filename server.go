@@ -47,7 +47,7 @@ type Handler struct {
 	HandlerDHCP4            PacketProcessor
 	HandlerARP              PacketProcessor
 	callback                []func(Notification) error
-	captureList             *SetHandler
+	CaptureList             *SetHandler   // store list of captured macs
 	FullNetworkScanInterval time.Duration // Set it to -1 if no scan required
 	ProbeInterval           time.Duration // how often to probe if IP is online
 	OfflineDeadline         time.Duration // mark offline if no updates
@@ -77,7 +77,7 @@ func (config Config) NewEngine(nic string) (*Handler, error) {
 
 	var err error
 
-	h := &Handler{LANHosts: newHostTable(), captureList: &SetHandler{}}
+	h := &Handler{LANHosts: newHostTable(), CaptureList: &SetHandler{}}
 
 	h.NICInfo = config.NICInfo
 	if h.NICInfo == nil {
@@ -192,7 +192,7 @@ func (h *Handler) setupConn() (conn net.PacketConn, err error) {
 // PrintTable logs the table to standard out
 func (h *Handler) PrintTable() {
 	fmt.Println("capture table")
-	h.captureList.PrintTable()
+	h.CaptureList.PrintTable()
 
 	h.Lock()
 	defer h.Unlock()
@@ -440,7 +440,7 @@ func (h *Handler) setOnline(host *Host) {
 	mac := host.MAC
 	ip := host.IP
 	// if captured, then start hunting process
-	index := h.captureList.Index(mac)
+	index := h.CaptureList.Index(mac)
 	if index != -1 {
 		host.HuntStageIP4 = StageHunt
 		host.HuntStageIP6 = StageHunt

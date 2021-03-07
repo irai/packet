@@ -152,8 +152,8 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 		}
 
 	case probe:
-		// We are not interested in probe ACD (Address Conflict Detection) packets
-		// if this is a probe, the sender IP will be zeros; do nothing as the sender IP is not valid yet.
+		// We are interested in probe ACD (Address Conflict Detection) packets for IPs that we have an open DHCP offer
+		// if this is a probe, the sender IP will be zeros; send ARP reply to stop sender from acquiring the IP
 		//
 		// +============+===+===========+===========+============+============+===================+===========+
 		// | Type       | op| dstMAC    | srcMAC    | SenderMAC  | SenderIP   | TargetMAC         |  TargetIP |
@@ -163,6 +163,14 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 		if Debug {
 			fmt.Println("ether:", ether)
 			fmt.Printf("arp  : probe recvd: %s\n", frame)
+		}
+		// if there is an open DHCP offer, then reject any other ip
+		if ip := h.engine.CaptureList.GetIP4(frame.SrcMAC()); ip != nil && !ip.Equal(frame.DstIP()) {
+			if Debug {
+				fmt.Printf("arp: reject ACD probe for ip=%s from mac=%s\n", frame.DstIP(), frame.SrcMAC())
+			}
+			// Unicast reply
+			h.reply(frame.SrcMAC(), h.engine.NICInfo.HostMAC, frame.DstIP(), frame.SrcMAC(), net.IP(EthernetBroadcast))
 		}
 
 		// don't continue
