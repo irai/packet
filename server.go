@@ -191,8 +191,12 @@ func (h *Handler) setupConn() (conn net.PacketConn, err error) {
 
 // PrintTable logs the table to standard out
 func (h *Handler) PrintTable() {
+	fmt.Println("capture table")
+	h.captureList.PrintTable()
+
 	h.Lock()
 	defer h.Unlock()
+	fmt.Printf("hosts table len=%v\n", len(h.LANHosts.Table))
 	h.LANHosts.printTable()
 }
 
@@ -448,10 +452,8 @@ func (h *Handler) setOnline(host *Host) {
 	}
 
 	if index != -1 {
-		if ip.To4() != nil {
-			h.startIP4HuntHandlers(ip)
-		} else {
-			h.startIP6HuntHandlers(host.IP)
+		if err := h.startHunt(ip); err != nil {
+			fmt.Println("packet: failed to start hunt error", err)
 		}
 	}
 	notification := Notification{IP: ip, MAC: mac, Online: true}

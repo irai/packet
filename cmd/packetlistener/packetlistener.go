@@ -323,27 +323,7 @@ func doICMP6(h *handlers, tokens []string) {
 }
 
 func doDHCP4(h *handlers, tokens []string) {
-	// var mac net.HardwareAddr
 	switch getString(tokens, 1) {
-	/***
-	case "hunt":
-		if mac = getMAC(tokens, 2); mac == nil {
-			return
-		}
-		if err := h.dhcp4.StartHunt(mac); err != nil {
-			fmt.Println("error in capture ", err)
-			return
-		}
-
-	case "release":
-		if mac = getMAC(tokens, 2); mac == nil {
-			return
-		}
-		if err := h.dhcp4.StopHunt(mac); err != nil {
-			fmt.Println("error in release ", err)
-			return
-		}
-		***/
 	case "mode":
 		switch getString(tokens, 2) {
 		case "primary":
@@ -369,7 +349,6 @@ var cmdSyntax = []string{
 }
 var arpSyntax = []string{
 	"arp     scan",
-	"        [hunt | release] <mac>",
 }
 var engineSyntax = []string{
 	"engine  [attach | detach] <plugin>     : valid plugin=[arp|icmp4|icmp6|ip4|ip6|udp|dhcp4]",
@@ -377,11 +356,9 @@ var engineSyntax = []string{
 }
 var dhcp4Syntax = []string{
 	"dhcp4   mode [primary|secondary|nice]  : set operation mode",
-	"        [hunt | release] <mac>",
 }
 var icmp6Syntax = []string{
-	"icmp6   [hunt | release] <ip>",
-	"        ra                              : router advertisement           ",
+	"icmp6   ra                              : router advertisement           ",
 	"        ns <ip6>                        : neighbour solicitation",
 }
 
@@ -421,10 +398,6 @@ func cmd(h *handlers) {
 		case "l", "list":
 			fmt.Println("hosts table ---")
 			h.engine.PrintTable()
-			if h.arp != nil {
-				fmt.Println("arp   table ---")
-				h.arp.PrintTable()
-			}
 			if h.dhcp4 != nil {
 				fmt.Println("dhcp4 table ----")
 				h.dhcp4.PrintTable()

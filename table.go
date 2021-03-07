@@ -63,7 +63,6 @@ func newHostTable() HostTable {
 func (h *HostTable) printTable() {
 
 	if len(h.Table) > 0 {
-		fmt.Printf("hosts table len=%v\n", len(h.Table))
 		for _, v := range h.Table {
 			fmt.Println(v)
 		}

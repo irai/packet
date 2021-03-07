@@ -2,6 +2,7 @@ package packet
 
 import (
 	"bytes"
+	"fmt"
 	"net"
 	"sync"
 )
@@ -10,6 +11,13 @@ import (
 type SetHandler struct {
 	list []net.HardwareAddr
 	sync.Mutex
+}
+
+// PrintTable prints the table to stdout
+func (s *SetHandler) PrintTable() {
+	s.Lock()
+	defer s.Unlock()
+	fmt.Println(s.list)
 }
 
 // Add adds a mac to set

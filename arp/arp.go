@@ -57,7 +57,8 @@ func (h *Handler) Stop() error {
 
 // PrintTable print the ARP table to stdout.
 func (h *Handler) PrintTable() {
-	h.engine.PrintTable()
+	return // nothing to do
+	// h.engine.PrintTable()
 }
 
 // End will terminate the ListenAndServer goroutine as well as all other pending goroutines.

@@ -229,10 +229,10 @@ func (h *Handler) clientLoop() error {
 		log.WithFields(fields).Info("dhcp4: client offer from another dhcp server")
 
 		// Force dhcp server to release the IP
-		h.mutex.Lock()
-		_, captured := h.captureTable[string(req.CHAddr())]
-		h.mutex.Unlock()
-		if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && captured) {
+		// h.mutex.Lock()
+		// _, captured := h.captureTable[string(req.CHAddr())]
+		// h.mutex.Unlock()
+		if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && h.engine.IsCaptured(req.CHAddr())) {
 			h.forceDecline(clientID, serverIP, req.CHAddr(), req.YIAddr(), req.XId())
 		}
 	}

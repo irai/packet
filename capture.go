@@ -25,33 +25,30 @@ func (h *Handler) Capture(mac net.HardwareAddr) error {
 	}
 	h.Unlock()
 
-	for _, v := range list {
-		if v.To4() != nil {
-			if err := h.startIP4HuntHandlers(v); err != nil {
-				return err
-			}
-		} else {
-			if err := h.startIP6HuntHandlers(v); err != nil {
-				return err
-			}
+	for _, ip := range list {
+		if err := h.startHunt(ip); err != nil {
+			return err
 		}
 	}
 	return nil
 }
 
-func (h *Handler) startIP4HuntHandlers(ip net.IP) error {
-	if err := h.HandlerARP.StartHunt(ip); err != nil {
-		return err
+func (h *Handler) startHunt(ip net.IP) error {
+	// IP4 handlers
+	if ip.To4() != nil {
+		if err := h.HandlerARP.StartHunt(ip); err != nil {
+			return err
+		}
+		if err := h.HandlerICMP4.StartHunt(ip); err != nil {
+			return err
+		}
+		if err := h.HandlerDHCP4.StartHunt(ip); err != nil {
+			return err
+		}
+		return nil
 	}
-	if err := h.HandlerICMP4.StartHunt(ip); err != nil {
-		return err
-	}
-	if err := h.HandlerDHCP4.StartHunt(ip); err != nil {
-		return err
-	}
-	return nil
-}
-func (h *Handler) startIP6HuntHandlers(ip net.IP) error {
+
+	// IP6 handlers
 	if err := h.HandlerICMP6.StartHunt(ip); err != nil {
 		return err
 	}
@@ -79,36 +76,40 @@ func (h *Handler) Release(mac net.HardwareAddr) error {
 	h.Unlock()
 
 	for _, ip := range list {
-		if ip.To4() != nil {
-			if err := h.stopIP4HuntHandlers(ip); err != nil {
-				return err
-			}
-		} else {
-			if err := h.stopIP6HuntHandlers(ip); err != nil {
-				return err
-			}
+		if err := h.stopHunt(ip); err != nil {
+			return err
 		}
 	}
 	h.captureList.Del(mac)
 	return nil
 }
 
-func (h *Handler) stopIP4HuntHandlers(ip net.IP) error {
-	if err := h.HandlerDHCP4.StopHunt(ip); err != nil {
-		return err
+func (h *Handler) stopHunt(ip net.IP) error {
+	// IP4 handlers
+	if ip.To4() != nil {
+		if err := h.HandlerDHCP4.StopHunt(ip); err != nil {
+			return err
+		}
+		if err := h.HandlerICMP4.StopHunt(ip); err != nil {
+			return err
+		}
+		if err := h.HandlerARP.StopHunt(ip); err != nil {
+			return err
+		}
+		return nil
 	}
-	if err := h.HandlerICMP4.StopHunt(ip); err != nil {
-		return err
-	}
-	if err := h.HandlerARP.StopHunt(ip); err != nil {
+
+	// IP6 handlers
+	if err := h.HandlerICMP6.StopHunt(ip); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (h *Handler) stopIP6HuntHandlers(ip net.IP) error {
-	if err := h.HandlerICMP6.StopHunt(ip); err != nil {
-		return err
+// IsCaptured return true is mac is in capture mode
+func (h *Handler) IsCaptured(mac net.HardwareAddr) bool {
+	if h.captureList.Index(mac) != -1 {
+		return true
 	}
-	return nil
+	return false
 }

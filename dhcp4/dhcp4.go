@@ -61,10 +61,10 @@ var _ packet.PacketProcessor = &Handler{}
 // Handler track ongoing leases.
 //
 type Handler struct {
-	net1         *dhcpSubnet     // home LAN
-	net2         *dhcpSubnet     // netfilter LAN
-	mode         Mode            // if true, force decline and release packets to homeDHCPServer
-	captureTable map[string]bool // Store the subnet for captured mac
+	net1 *dhcpSubnet // home LAN
+	net2 *dhcpSubnet // netfilter LAN
+	mode Mode        // if true, force decline and release packets to homeDHCPServer
+	// captureTable map[string]bool // Store the subnet for captured mac
 	clientConn   net.PacketConn  // Listen DHCP client port
 	notification chan<- Lease    // channel to send notifications
 	filename     string          // leases filename
@@ -109,7 +109,7 @@ func Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsServer net.IP, fil
 func (config Config) Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsServer net.IP, filename string) (handler *Handler, err error) {
 
 	handler = &Handler{}
-	handler.captureTable = make(map[string]bool)
+	// handler.captureTable = make(map[string]bool)
 	handler.filename = filename
 	handler.mode = ModeSecondaryServerNice
 	handler.closeChan = make(chan bool) // go routines listen on this for closure
@@ -234,57 +234,51 @@ func (h *Handler) AddNotificationChannel(channel chan<- Lease) {
 	h.notification = channel
 }
 
-func (h *Handler) StartHunt(net.IP) error {
-	return nil
-}
-
-func (h *Handler) StopHunt(ip net.IP) error {
-	return nil
-}
-
-// Capture will start the process to capture the client MAC
-func (h *Handler) Capture(mac net.HardwareAddr) error {
+// StartHunt will start the process to capture the client MAC
+func (h *Handler) StartHunt(ip net.IP) error {
+	// func (h *Handler) Capture(mac net.HardwareAddr) error {
 
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 
 	// do nothing if already captured
-	if h.isCapturedLocked(mac) != nil {
-		return nil
+	// if h.isCapturedLocked(mac) != nil {
+	// return nil
+	// }
+	if Debug {
+		fmt.Printf("dhcp4: start hunt ip=%s\n", ip)
 	}
-
-	log.WithFields(log.Fields{"mac": mac}).Info("dhcp4: start capture")
 
 	// Add to list of macs being captured
-	h.captureTable[string(mac)] = true
+	// h.captureTable[string(mac)] = true
 
 	// Delete lease in net1 if it exist
-	if e := h.net1.findMAC(mac); e != nil {
-		freeLease(e)
-	}
+	if lease := h.net1.findIP(ip); lease != nil {
+		freeLease(lease)
 
-	if h.mode == ModeSecondaryServer || h.mode == ModeSecondaryServerNice {
 		// Fake a dhcp release so router will force the client to discover when it attempts to reconnect
-		if lease := h.net1.findMAC(mac); lease != nil {
-			log.WithFields(log.Fields{"clientID": lease.ClientID, "mac": mac, "ip": lease.IP}).Info("dhcp4: client - send release to server")
-			h.forceRelease(lease.ClientID, h.net1.DefaultGW, mac, lease.IP, nil)
+		if h.mode == ModeSecondaryServer || h.mode == ModeSecondaryServerNice {
+			if Debug {
+				fmt.Printf("dhcp4: send dhcp release to server clientID=%s ip=%s\n", lease.ClientID, ip)
+			}
+			h.forceRelease(lease.ClientID, h.net1.DefaultGW, lease.MAC, lease.IP, nil)
 		}
 	}
 	return nil
 }
 
-// Release will end the capture process
-func (h *Handler) Release(mac net.HardwareAddr) error {
-	log.WithFields(log.Fields{"mac": mac}).Info("dhcp4: end capture")
-
-	h.mutex.Lock()
-	defer h.mutex.Unlock()
-
-	// delete from list of macs being captured
-	delete(h.captureTable, string(mac))
-	if e := h.net2.findMAC(mac); e != nil {
-		freeLease(e)
+// StopHunt will end the capture process
+func (h *Handler) StopHunt(ip net.IP) error {
+	// func (h *Handler) Release(mac net.HardwareAddr) error {
+	if Debug {
+		fmt.Printf("dhcp4: stop hunt ip%s\n", ip)
 	}
+
+	// h.mutex.Lock()
+	// defer h.mutex.Unlock()
+	// if e := h.net2.findMAC(mac); e != nil {
+	// freeLease(e)
+	// }
 	return nil
 }
 
@@ -299,7 +293,8 @@ func (h *Handler) IsCaptured(mac net.HardwareAddr) net.IP {
 
 func (h *Handler) isCapturedLocked(mac net.HardwareAddr) net.IP {
 
-	if _, ok := h.captureTable[string(mac)]; !ok {
+	if !h.engine.IsCaptured(mac) {
+		// if _, ok := h.captureTable[string(mac)]; !ok {
 		return nil
 	}
 
@@ -409,7 +404,8 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 }
 
 func (h *Handler) findSubnet(mac net.HardwareAddr) (captured bool, subnet *dhcpSubnet) {
-	if _, ok := h.captureTable[string(mac)]; ok {
+	if h.engine.IsCaptured(mac) {
+		// if _, ok := h.captureTable[string(mac)]; ok {
 		if tracing() {
 			log.Tracef("dhcp4: use subnet2 lan=%v defaultGW=%v", h.net2.LAN, h.net2.DefaultGW)
 		}
