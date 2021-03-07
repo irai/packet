@@ -48,6 +48,7 @@ type Handler struct {
 	HandlerARP              PacketProcessor
 	callback                []func(Notification) error
 	CaptureList             *SetHandler   // store list of captured macs
+	DHCP4List               *SetHandler   // store list of dhcp4 offers
 	FullNetworkScanInterval time.Duration // Set it to -1 if no scan required
 	ProbeInterval           time.Duration // how often to probe if IP is online
 	OfflineDeadline         time.Duration // mark offline if no updates
@@ -77,7 +78,7 @@ func (config Config) NewEngine(nic string) (*Handler, error) {
 
 	var err error
 
-	h := &Handler{LANHosts: newHostTable(), CaptureList: &SetHandler{}}
+	h := &Handler{LANHosts: newHostTable(), CaptureList: &SetHandler{}, DHCP4List: &SetHandler{}}
 
 	h.NICInfo = config.NICInfo
 	if h.NICInfo == nil {

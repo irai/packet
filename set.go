@@ -72,12 +72,14 @@ func (s *SetHandler) index(mac net.HardwareAddr) int {
 	return -1
 }
 
-func (s *SetHandler) UpdateIP4(mac net.HardwareAddr, ip net.IP) {
+func (s *SetHandler) UpsertIP4(mac net.HardwareAddr, ip net.IP) {
 	s.Lock()
 	defer s.Unlock()
 	if index := s.index(mac); index != -1 {
 		s.list[index].IP4 = ip
+		return
 	}
+	s.list = append(s.list, macDetails{MAC: mac, IP4: ip})
 }
 
 func (s *SetHandler) GetIP4(mac net.HardwareAddr) net.IP {

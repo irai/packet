@@ -165,7 +165,8 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 			fmt.Printf("arp  : probe recvd: %s\n", frame)
 		}
 		// if there is an open DHCP offer, then reject any other ip
-		if ip := h.engine.CaptureList.GetIP4(frame.SrcMAC()); ip != nil && !ip.Equal(frame.DstIP()) {
+		// if ip := h.engine.CaptureList.GetIP4(frame.SrcMAC()); ip != nil && !ip.Equal(frame.DstIP()) {
+		if ip := h.engine.DHCP4List.GetIP4(frame.SrcMAC()); ip != nil && !ip.Equal(frame.DstIP()) {
 			if Debug {
 				fmt.Printf("arp: reject ACD probe for ip=%s from mac=%s\n", frame.DstIP(), frame.SrcMAC())
 			}
