@@ -6,6 +6,9 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"net/http"
+	_ "net/http/pprof"
+	"runtime"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -34,8 +37,29 @@ type handlers struct {
 	netfilterIP net.IPNet
 }
 
+// pprof helper function to profile app
+//
+// add the import
+//  import _ "net/http/pprof"
+//
+// Heap profile
+//      go tool pprof -alloc_objects http://localhost:6060/debug/pprof/heap
+//          inuse_space — amount of memory allocated and not released yet
+//          inuse_objects— amount of objects allocated and not released yet
+//          alloc_space — total amount of memory allocated (regardless of released)
+//          alloc_objects — total amount of objects allocated (regardless of released
+//
+// Mutex profile:
+// 		go tool pprof http://localhost:6060/debug/pprof/mutex
+func pprof() {
+	runtime.SetMutexProfileFraction(5)
+	log.Error("profile http server terminated: ", http.ListenAndServe("localhost:6060", nil))
+}
+
 func main() {
 	flag.Parse()
+
+	go pprof()
 
 	packet.Debug = true
 	log.SetLevel(log.DebugLevel)
