@@ -13,6 +13,28 @@ import (
 	"github.com/irai/packet"
 )
 
+var (
+	zeroMAC = net.HardwareAddr{0, 0, 0, 0, 0, 0}
+
+	hostMAC   = net.HardwareAddr{0x00, 0xff, 0x03, 0x04, 0x05, 0x01} // key first byte zero for unicast mac
+	hostIP    = net.ParseIP("192.168.0.129").To4()
+	homeLAN   = net.IPNet{IP: net.IPv4(192, 168, 0, 0), Mask: net.IPv4Mask(255, 255, 255, 0)}
+	routerMAC = net.HardwareAddr{0x00, 0xff, 0x03, 0x04, 0x05, 0x11} // key first byte zero for unicast mac
+	routerIP  = net.ParseIP("192.168.0.11").To4()
+	ip1       = net.ParseIP("192.168.0.1").To4()
+	ip2       = net.ParseIP("192.168.0.2").To4()
+	ip3       = net.ParseIP("192.168.0.3").To4()
+	ip4       = net.ParseIP("192.168.0.4").To4()
+	ip5       = net.ParseIP("192.168.0.5").To4()
+	mac1      = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x01}
+	mac2      = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x02}
+	mac3      = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x03}
+	mac4      = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x04}
+	mac5      = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x05}
+	localIP   = net.IPv4(169, 254, 0, 10).To4()
+	localIP2  = net.IPv4(169, 254, 0, 11).To4()
+)
+
 type notificationCounter struct {
 	onlineCounter  int
 	offlineCounter int
@@ -56,7 +78,6 @@ func setupTestHandler(t *testing.T) *testContext {
 	}
 
 	tc.arp, err = Attach(tc.packet)
-	tc.arp.virtual = newARPTable() // we want an empty table
 	tc.packet.HandlerARP = tc.arp
 
 	go func() {
@@ -127,8 +148,8 @@ func Test_Handler_CaptureEnterOffline(t *testing.T) {
 			}
 			time.Sleep(time.Millisecond * 10)
 
-			tc.arp.engine.LANHosts.Lock()
-			defer tc.arp.engine.LANHosts.Unlock()
+			tc.arp.engine.Lock()
+			defer tc.arp.engine.Unlock()
 
 			if len(tc.arp.engine.LANHosts.Table) != tt.wantLen {
 				t.Errorf("Test_Requests:%s table len = %v, wantLen %v", tt.name, len(tc.arp.engine.LANHosts.Table), tt.wantLen)
@@ -137,32 +158,15 @@ func Test_Handler_CaptureEnterOffline(t *testing.T) {
 	}
 
 	t.Run("cleanup", func(t *testing.T) {
-		tc.packet.StartHunt(mac2)
-		tc.arp.arpMutex.Lock()
-		if e := tc.arp.virtual.findByMAC(mac2); e == nil || e.State != StateHunt {
-			t.Fatalf("Test_CaptureEnterOffline entry2 state=%s", e.State)
-		}
-		tc.arp.arpMutex.Unlock()
+		tc.packet.Capture(mac2)
 
 		// wait until offline
 		time.Sleep(tc.packet.OfflineDeadline * 2)
-
-		tc.arp.arpMutex.Lock()
-		if e := tc.arp.virtual.findByMAC(mac2); e != nil {
-			t.Fatalf("Test_CaptureEnterOffline is not empty entry=%+v", e)
-		}
-		tc.arp.arpMutex.Unlock()
 
 		// arp request mac2
 		ether, _ := tests[0].ether.AppendPayload(tests[0].arp)
 		tc.outConn.WriteTo(ether, nil)
 		time.Sleep(time.Millisecond * 50)
-
-		tc.arp.arpMutex.Lock()
-		if e := tc.arp.virtual.findByMAC(mac2); e == nil {
-			t.Fatalf("Test_CaptureEnterOffline is empty")
-		}
-		tc.arp.arpMutex.Unlock()
 
 		log.Printf("notification count=%+v", count)
 	})

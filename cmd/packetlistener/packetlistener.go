@@ -211,15 +211,15 @@ func doEngine(h *handlers, tokens []string) {
 		if err != nil {
 			fmt.Println("error ", err)
 		}
-	case "hunt":
+	case "capture":
 		if mac := getMAC(tokens, 2); mac != nil {
-			if err := h.engine.StartHunt(mac); err != nil {
+			if err := h.engine.Capture(mac); err != nil {
 				fmt.Println("error in start hunt ", err)
 			}
 		}
 	case "release":
 		if mac := getMAC(tokens, 2); mac != nil {
-			if err := h.engine.StopHunt(mac); err != nil {
+			if err := h.engine.Release(mac); err != nil {
 				fmt.Println("error in start hunt ", err)
 			}
 		}
@@ -235,8 +235,8 @@ func doARP(h *handlers, tokens []string) {
 			fmt.Println("error arp is detached")
 			return
 		}
-		if mac := getMAC(tokens, 2); mac != nil {
-			if err := h.arp.StartHunt(mac); err != nil {
+		if ip := getIP4(tokens, 2); ip != nil {
+			if err := h.arp.StartHunt(ip); err != nil {
 				fmt.Println("error in start hunt ", err)
 			}
 		}
@@ -245,8 +245,8 @@ func doARP(h *handlers, tokens []string) {
 			fmt.Println("error arp is detached")
 			return
 		}
-		if mac := getMAC(tokens, 2); mac != nil {
-			if err := h.arp.StopHunt(mac); err != nil {
+		if ip := getIP4(tokens, 2); ip != nil {
+			if err := h.arp.StopHunt(ip); err != nil {
 				fmt.Println("error in start hunt ", err)
 			}
 		}
@@ -282,14 +282,14 @@ func doICMP6(h *handlers, tokens []string) {
 			fmt.Printf("error in router adversitement: %s\n", err)
 		}
 	case "hunt":
-		if mac := getMAC(tokens, 2); mac != nil {
-			if err := h.icmp6.StartHunt(mac); err != nil {
+		if ip := getIP6(tokens, 2); ip != nil {
+			if err := h.icmp6.StartHunt(ip); err != nil {
 				fmt.Println("error in start hunt ", err)
 			}
 		}
 	case "release":
-		if mac := getMAC(tokens, 2); mac != nil {
-			if err := h.icmp6.StopHunt(mac); err != nil {
+		if ip := getIP6(tokens, 2); ip != nil {
+			if err := h.icmp6.StopHunt(ip); err != nil {
 				fmt.Println("error in start hunt ", err)
 			}
 		}
@@ -299,8 +299,9 @@ func doICMP6(h *handlers, tokens []string) {
 }
 
 func doDHCP4(h *handlers, tokens []string) {
-	var mac net.HardwareAddr
+	// var mac net.HardwareAddr
 	switch getString(tokens, 1) {
+	/***
 	case "hunt":
 		if mac = getMAC(tokens, 2); mac == nil {
 			return
@@ -318,6 +319,7 @@ func doDHCP4(h *handlers, tokens []string) {
 			fmt.Println("error in release ", err)
 			return
 		}
+		***/
 	case "mode":
 		switch getString(tokens, 2) {
 		case "primary":
@@ -347,14 +349,14 @@ var arpSyntax = []string{
 }
 var engineSyntax = []string{
 	"engine  [attach | detach] <plugin>     : valid plugin=[arp|icmp4|icmp6|ip4|ip6|udp|dhcp4]",
-	"        [hunt | release] <mac>",
+	"        [capture | release] <mac>",
 }
 var dhcp4Syntax = []string{
 	"dhcp4   mode [primary|secondary|nice]  : set operation mode",
 	"        [hunt | release] <mac>",
 }
 var icmp6Syntax = []string{
-	"icmp6   [hunt | release] <mac>",
+	"icmp6   [hunt | release] <ip>",
 	"        ra                              : router advertisement           ",
 	"        ns <ip6>                        : neighbour solicitation",
 }

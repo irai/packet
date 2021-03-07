@@ -53,8 +53,8 @@ func TestHandler_ListenAndServe(t *testing.T) {
 				t.Errorf("%s: Handler.ListenAndServe() writeTo error: %s", tt.name, err)
 			}
 			time.Sleep(time.Millisecond * 20)
-			if h.LANHosts.Len() != tt.wantLen {
-				t.Errorf("%s: invalid LANHost table length want=%d got=%d", tt.name, tt.wantLen, h.LANHosts.Len())
+			if len(h.LANHosts.Table) != tt.wantLen {
+				t.Errorf("%s: invalid LANHost table length want=%d got=%d", tt.name, tt.wantLen, len(h.LANHosts.Table))
 
 			}
 		})

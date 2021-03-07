@@ -79,7 +79,7 @@ func Test_Handler_ARPRequests(t *testing.T) {
 			defer tc.arp.arpMutex.Unlock()
 
 			if len(tc.packet.LANHosts.Table) != tt.wantLen {
-				tc.packet.LANHosts.PrintTable()
+				tc.packet.PrintTable()
 				t.Errorf("Test_Requests:%s table len = %v, wantLen %v", tt.name, len(tc.packet.LANHosts.Table), tt.wantLen)
 			}
 		})

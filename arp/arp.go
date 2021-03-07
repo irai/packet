@@ -10,22 +10,15 @@ import (
 	"github.com/irai/packet"
 )
 
-type Data struct {
-	IPArray [nIPs]IPEntry
-	State   arpState
-	ClaimIP bool // if true, will claim the target IP; likely to force the target IP to stop working
-}
-
 // must implement interface
 var _ packet.PacketProcessor = &Handler{}
 
 // Handler stores instance variables
 type Handler struct {
-	virtual      *arpTable
-	notification chan<- MACEntry // notification channel for state change
-	wg           sync.WaitGroup
-	arpMutex     sync.RWMutex
-	engine       *packet.Handler
+	arpMutex  sync.RWMutex
+	engine    *packet.Handler
+	closed    bool
+	closeChan chan bool
 }
 
 var (
@@ -35,9 +28,8 @@ var (
 
 // Attach creates the ARP handler and attach to the engine
 func Attach(engine *packet.Handler) (h *Handler, err error) {
-	h = &Handler{engine: engine}
+	h = &Handler{engine: engine, closeChan: make(chan bool)}
 	// h.table, _ = loadARPProcTable() // load linux proc table
-	h.virtual = newARPTable()
 	if h.engine.NICInfo.HostIP4.IP.To4() == nil {
 		return nil, packet.ErrInvalidIP4
 	}
@@ -52,18 +44,10 @@ func Attach(engine *packet.Handler) (h *Handler, err error) {
 
 // Detach removes the plugin from the engine
 func (h *Handler) Detach() error {
+	h.closed = true
+	close(h.closeChan) // this will exit all background goroutines
 	h.engine.HandlerARP = packet.PacketNOOP{}
 	return nil
-}
-
-// StartHunt implements PacketProcessor interface
-func (h *Handler) StartHunt(mac net.HardwareAddr) error {
-	return h.startSpoof(mac)
-}
-
-// StopHunt implements PacketProcessor interface
-func (h *Handler) StopHunt(mac net.HardwareAddr) error {
-	return h.stopSpoof(mac)
 }
 
 // Stop implements PacketProcessor interface
@@ -73,10 +57,10 @@ func (h *Handler) Stop() error {
 
 // PrintTable print the ARP table to stdout.
 func (h *Handler) PrintTable() {
-	h.virtual.printTable()
+	h.engine.PrintTable()
 }
 
-// Close will terminate the ListenAndServer goroutine as well as all other pending goroutines.
+// End will terminate the ListenAndServer goroutine as well as all other pending goroutines.
 func (h *Handler) End() {
 	// Don't close the socket - it is shared with packet
 }
@@ -157,18 +141,14 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 			fmt.Println("ether:", ether)
 			fmt.Printf("arp  : who is %s: %s\n", frame.DstIP(), frame)
 		}
-		// if targetIP is a virtual host, we are claiming the ip; reply and return
-		h.arpMutex.RLock()
-		if target := h.virtual.findVirtualIP(frame.DstIP()); target != nil {
-			mac := target.MAC
-			h.arpMutex.RUnlock()
+		// if we are spoofing the IP, reply on behals of host
+		if host != nil && host.HuntStageIP4 == packet.StageHunt && frame.DstIP().Equal(h.engine.NICInfo.RouterIP4.IP) {
 			if Debug {
-				log.Printf("arp ip=%s is virtual - send reply smac=%v", frame.DstIP(), mac)
+				log.Printf("arp: router spoofing - send reply i am ip=%s", frame.DstIP())
 			}
-			h.reply(frame.SrcMAC(), mac, frame.DstIP(), EthernetBroadcast, frame.DstIP())
+			h.reply(frame.SrcMAC(), h.engine.NICInfo.HostMAC, frame.DstIP(), frame.SrcMAC(), frame.SrcIP())
 			return host, nil
 		}
-		h.arpMutex.RUnlock()
 
 	case probe:
 		// We are not interested in probe ACD (Address Conflict Detection) packets
@@ -197,6 +177,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 			fmt.Println("ether:", ether)
 			fmt.Printf("arp  : announcement recvd: %s\n", frame)
 		}
+		/***
 		// if targetIP is a virtual host, we are claiming the ip; reply and return
 		h.arpMutex.RLock()
 		if target := h.virtual.findVirtualIP(frame.DstIP()); target != nil {
@@ -209,6 +190,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 			return host, nil
 		}
 		h.arpMutex.RUnlock()
+		***/
 
 	default:
 		// +============+===+===========+===========+============+============+===================+===========+
@@ -225,7 +207,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 
 	// If new client, then create a MACEntry in table
 	if host == nil && h.engine.NICInfo.HostIP4.Contains(frame.SrcIP()) {
-		host, _ = h.engine.LANHosts.FindOrCreateHost(frame.SrcMAC(), frame.SrcIP())
+		host, _ = h.engine.FindOrCreateHost(frame.SrcMAC(), frame.SrcIP())
 	}
 	return host, nil
 }

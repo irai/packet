@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
-	"sync"
 	"syscall"
 	"time"
 
@@ -49,8 +48,8 @@ type Event struct {
 // PrintTable logs ICMP6 tables to standard out
 func (h *Handler) PrintTable() {
 	// Important: Lock the global table
-	h.engine.LANHosts.Lock()
-	defer h.engine.LANHosts.Unlock()
+	h.engine.Lock()
+	defer h.engine.Unlock()
 
 	if len(h.engine.LANHosts.Table) > 0 {
 		fmt.Printf("icmp6 hosts table len=%v\n", len(h.engine.LANHosts.Table))
@@ -60,10 +59,6 @@ func (h *Handler) PrintTable() {
 			}
 		}
 	}
-
-	// lock this handler
-	h.mutex.Lock()
-	defer h.mutex.Unlock()
 
 	if len(h.LANRouters) > 0 {
 		fmt.Printf("icmp6 routers table len=%v\n", len(h.LANRouters))
@@ -95,12 +90,12 @@ var _ packet.PacketProcessor = &Handler{}
 // Handler implements ICMPv6 Neighbor Discovery Protocol
 // see: https://mdlayher.com/blog/network-protocol-breakdown-ndp-and-go/
 type Handler struct {
-	mutex        sync.Mutex
 	notification chan<- Event
 	Router       Router
 	LANRouters   map[string]*Router
-	setHandler   packet.SetHandler // set to manage captured macs
 	engine       *packet.Handler
+	closed       bool
+	closeChan    chan bool
 }
 
 // Config define server configuration values
@@ -113,7 +108,7 @@ type Config struct {
 // Attach creates an ICMP6 handler and attach to the engine
 func Attach(engine *packet.Handler) (*Handler, error) {
 
-	h := &Handler{LANRouters: make(map[string]*Router)}
+	h := &Handler{LANRouters: make(map[string]*Router), closeChan: make(chan bool)}
 	h.engine = engine
 	engine.HandlerICMP6 = h
 
@@ -122,6 +117,8 @@ func Attach(engine *packet.Handler) (*Handler, error) {
 
 // Detach removes the plugin from the engine
 func (h *Handler) Detach() error {
+	h.closed = true
+	close(h.closeChan)
 	h.engine.HandlerICMP6 = packet.PacketNOOP{}
 	return nil
 }
@@ -140,13 +137,13 @@ func (h *Handler) Stop() error {
 }
 
 // StartHunt implements PacketProcessor interface
-func (h *Handler) StartHunt(mac net.HardwareAddr) error {
-	return h.startHunt(mac)
+func (h *Handler) StartHunt(ip net.IP) error {
+	return h.startHunt(ip)
 }
 
 // StopHunt implements PacketProcessor interface
-func (h *Handler) StopHunt(mac net.HardwareAddr) error {
-	return h.stopHunt(mac)
+func (h *Handler) StopHunt(ip net.IP) error {
+	return h.stopHunt(ip)
 }
 
 // AddNotificationChannel set the notification channel for ICMP6 messages
@@ -209,13 +206,13 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 	// retrieve or set store
 	var store *Data
 	if host != nil {
-		h.engine.LANHosts.Lock()
+		h.engine.Lock()
 		store, _ = host.ICMP6.(*Data)
 		if store == nil {
 			store = &Data{}
 			host.ICMP6 = store
 		}
-		h.engine.LANHosts.Unlock()
+		h.engine.Unlock()
 	}
 
 	ether := packet.Ether(b)
@@ -239,8 +236,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 		// NS source IP is sometimes ff02::1 multicast, which means the host is nil
 		if host == nil {
 			if packet.IsIP6(msg.TargetAddress) {
-				// will lock mutex in LANHosts
-				host, _ = h.engine.LANHosts.FindOrCreateHost(ether.Src(), msg.TargetAddress)
+				host, _ = h.engine.FindOrCreateHost(ether.Src(), msg.TargetAddress) // will lock/unlock mutex
 			}
 		}
 
@@ -278,9 +274,9 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 		router.Options = msg.Options
 
 		// update router details in host
-		h.engine.LANHosts.Lock()
+		h.engine.Lock()
 		host.IPV6Router = true
-		h.engine.LANHosts.Unlock()
+		h.engine.Unlock()
 
 		prefixes := []PrefixInformation{}
 		for _, v := range msg.Options {

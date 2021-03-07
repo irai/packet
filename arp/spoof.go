@@ -1,12 +1,36 @@
 package arp
 
 import (
-	"context"
+	"fmt"
 	"net"
 	"time"
 
 	"log"
+
+	"github.com/irai/packet"
 )
+
+// StartHunt implements PacketProcessor interface
+// Engine must set host.HuntStageIP4 to StageHunt prior to calling this
+func (h *Handler) StartHunt(ip net.IP) error {
+	host := h.engine.FindIP(ip)
+	if host == nil || host.HuntStageIP4 != packet.StageHunt || host.IP.To4() == nil {
+		fmt.Println("arp: invalid call to startHuntIP", host)
+		return packet.ErrInvalidIP4
+	}
+	h.spoofLoop(ip)
+	return nil
+}
+
+// StopHunt implements PacketProcessor interface
+// Engine must set host.HuntStageIP4 != StageHunt prior to calling this
+func (h *Handler) StopHunt(ip net.IP) error {
+	host := h.engine.FindIP(ip)
+	if host != nil && host.HuntStageIP4 == packet.StageHunt {
+		fmt.Println("invalid call to stopHuntIP", host)
+	}
+	return nil
+}
 
 // startSpoof performs the following:
 //  1. set client state to "hunt" which will continuously spoof the client ARP table
@@ -18,13 +42,9 @@ func (h *Handler) startSpoof(mac net.HardwareAddr) error {
 		log.Printf("arp start spoof mac=%s", mac)
 	}
 
-	h.arpMutex.Lock()
-	defer h.arpMutex.Unlock()
-
-	entry, _ := h.virtual.upsert(StateHunt, mac, nil)
-	for _, v := range h.engine.LANHosts.FindMAC(mac) {
+	for _, v := range h.engine.FindMAC(mac) {
 		if ip := v.IP.To4(); ip != nil {
-			go h.spoofLoop(context.Background(), entry, ip)
+			go h.spoofLoop(v.IP)
 		}
 	}
 	return nil
@@ -36,73 +56,8 @@ func (h *Handler) stopSpoof(mac net.HardwareAddr) error {
 		log.Printf("arp stop spoof mac=%s", mac)
 	}
 
-	h.arpMutex.Lock()
-	defer h.arpMutex.Unlock()
-	h.virtual.delete(mac)
 	return nil
 }
-
-/****
-// ClaimIP creates a virtual host to claim the ip
-// When a virtual host exist, the handler will respond to ACD and request packets for the ip
-func (h *Handler) ClaimIP(ip net.IP) {
-	h.Lock()
-	if virtual := h.virtual.findVirtualIP(ip); virtual == nil {
-		virtual, _ = h.virtual.upsert(StateVirtualHost, newVirtualHardwareAddr(), ip)
-		virtual.Online = false // indicates spoof goroutine is not running
-	}
-	h.Unlock()
-}
-
-// IPChanged is used to notify that the IP has changed.
-//
-// The package will detect IP changes automatically however some clients do not
-// send ARP Collision Detection packets and hence do not appear as an immediate change.
-// This method is used to accelerate the change for example when a
-// new DHCP MACEntry has been allocated.
-//
-func (h *Handler) IPChanged(mac net.HardwareAddr, clientIP net.IP) {
-	// Do nothing if we already have this mac and ip
-	c.RLock()
-	if client := c.table.findByMAC(mac); client != nil && client.Online && client.IP().Equal(clientIP) {
-		c.RUnlock()
-		return
-	}
-	c.RUnlock()
-
-	if Debug {
-		log.Printf("arp ip%s validating for mac=%s", clientIP, mac)
-	}
-	if err := c.Request(c.NICInfo.HostMAC, c.config.HostIP, EthernetBroadcast, clientIP); err != nil {
-		log.Printf("arp request failed mac=%s: %s", mac, err)
-	}
-
-	go func() {
-		for i := 0; i < 5; i++ {
-			time.Sleep(time.Second * 1)
-			c.RLock()
-			if entry := c.table.findByMAC(mac); entry != nil && entry.IP().Equal(clientIP) {
-				c.RUnlock()
-				if Debug {
-					log.Printf("arp ip=%s found for mac=%s ips=%s", entry.IP(), entry.MAC, entry.IPs())
-				}
-				return
-			}
-			c.RUnlock()
-
-			// Silent request
-			if err := c.request(c.NICInfo.HostMAC, c.config.HostIP, EthernetBroadcast, clientIP); err != nil {
-				log.Printf("arp request 2 failed mac=%s ip=%s: %s", mac, clientIP, err)
-			}
-		}
-		log.Printf("arp ip=%s not detect for mac=%s", clientIP, mac)
-
-		// c.RLock()
-		// c.table.printTable()
-		// c.RUnlock()
-	}()
-}
-	****/
 
 // spoofLoop attacks the client with ARP attacks
 //
@@ -110,29 +65,24 @@ func (h *Handler) IPChanged(mac net.HardwareAddr, clientIP net.IP) {
 //   1. spoof the client arp table to send router packets to us
 //   2. optionally, claim the ownership of the IP to force client to change IP or go offline
 //
-func (h *Handler) spoofLoop(ctx context.Context, client *MACEntry, ip net.IP) {
-
-	h.arpMutex.Lock()
-	mac := client.MAC
-	h.arpMutex.Unlock()
+func (h *Handler) spoofLoop(ip net.IP) {
 
 	// 4 second re-arp seem to be adequate;
 	// Experimented with 300ms but no noticeable improvement other the chatty net.
 	ticker := time.NewTicker(time.Second * 4).C
 	startTime := time.Now()
 	nTimes := 0
-	log.Printf("arp attack ip=%s client=%s time=%v", ip, mac, startTime)
+	log.Printf("arp attack start ip=%s time=%v", ip, startTime)
 	for {
-		h.arpMutex.Lock()
-		// Always search for MAC in case it has been deleted.
-		client := h.virtual.findByMAC(mac)
-		if client == nil || client.State != StateHunt {
-			log.Printf("arp attack end client=%s repeat=%v duration=%v", mac, nTimes, time.Now().Sub(startTime))
-			h.arpMutex.Unlock()
+		h.engine.Lock()
+		host := h.engine.FindIPNoLock(ip) // will lock/unlock engine
+		if host == nil || host.HuntStageIP4 != packet.StageHunt || h.closed {
+			h.engine.Unlock()
+			log.Printf("arp attack end ip=%s repeat=%v duration=%v", ip, nTimes, time.Now().Sub(startTime))
 			return
 		}
-
-		h.arpMutex.Unlock()
+		mac := host.MAC
+		h.engine.Unlock()
 
 		// Re-arp target to change router to host so all traffic comes to us
 		// i.e. tell target I am 192.168.0.1
@@ -141,12 +91,12 @@ func (h *Handler) spoofLoop(ctx context.Context, client *MACEntry, ip net.IP) {
 		h.forceSpoof(mac, ip)
 
 		if nTimes%16 == 0 {
-			log.Printf("arp attack client=%s repeat=%v duration=%v", mac, nTimes, time.Now().Sub(startTime))
+			log.Printf("arp attack ip=%s mac=%s repeat=%v duration=%v", ip, mac, nTimes, time.Now().Sub(startTime))
 		}
 		nTimes++
 
 		select {
-		case <-ctx.Done():
+		case <-h.closeChan:
 			return
 		case <-ticker:
 		}
@@ -183,9 +133,9 @@ func (h *Handler) forceSpoof(mac net.HardwareAddr, ip net.IP) error {
 	return nil
 }
 
-// forceAnnounce send a ARP packets to tell the network we are using the IP.
+// DONUSEforceAnnouncement send a ARP packets to tell the network we are using the IP.
 // NOT used anymore
-func (h *Handler) forceAnnouncement(dstEther net.HardwareAddr, mac net.HardwareAddr, ip net.IP) error {
+func (h *Handler) DONUSEforceAnnouncement(dstEther net.HardwareAddr, mac net.HardwareAddr, ip net.IP) error {
 	err := h.announce(dstEther, mac, ip, EthernetBroadcast, 4) // many repeats to force client to reaquire IP
 	if err != nil {
 		log.Printf("arp error send announcement packet mac=%s ip=%s: %s", mac, ip, err)

@@ -63,8 +63,8 @@ type PacketProcessor interface {
 	Start() error
 	Stop() error
 	ProcessPacket(*Host, []byte) (*Host, error)
-	StartHunt(net.HardwareAddr) error
-	StopHunt(net.HardwareAddr) error
+	StartHunt(net.IP) error
+	StopHunt(net.IP) error
 }
 
 // Ethernet packet types - ETHER_TYPE

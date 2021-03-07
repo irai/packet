@@ -234,9 +234,16 @@ func (h *Handler) AddNotificationChannel(channel chan<- Lease) {
 	h.notification = channel
 }
 
+func (h *Handler) StartHunt(net.IP) error {
+	return nil
+}
+
+func (h *Handler) StopHunt(ip net.IP) error {
+	return nil
+}
+
 // Capture will start the process to capture the client MAC
-func (h *Handler) StartHunt(mac net.HardwareAddr) error {
-	// func (h *Handler) Capture(mac net.HardwareAddr) error {
+func (h *Handler) Capture(mac net.HardwareAddr) error {
 
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
@@ -267,8 +274,7 @@ func (h *Handler) StartHunt(mac net.HardwareAddr) error {
 }
 
 // Release will end the capture process
-func (h *Handler) StopHunt(mac net.HardwareAddr) error {
-	// func (h *Handler) Release(mac net.HardwareAddr) error {
+func (h *Handler) Release(mac net.HardwareAddr) error {
 	log.WithFields(log.Fields{"mac": mac}).Info("dhcp4: end capture")
 
 	h.mutex.Lock()

@@ -171,7 +171,7 @@ func (h *Handler) announce(dstEther net.HardwareAddr, mac net.HardwareAddr, ip n
 func (h *Handler) WhoIs(ip net.IP) (packet.Addr, error) {
 
 	for i := 0; i < 3; i++ {
-		if host := h.engine.LANHosts.FindIP(ip); host != nil {
+		if host := h.engine.FindIP(ip); host != nil {
 			return packet.Addr{IP: host.IP, MAC: host.MAC}, nil
 		}
 		if err := h.Request(h.engine.NICInfo.HostMAC, h.engine.NICInfo.HostIP4.IP, EthernetBroadcast, ip); err != nil {
@@ -182,7 +182,7 @@ func (h *Handler) WhoIs(ip net.IP) (packet.Addr, error) {
 
 	if Debug {
 		log.Printf("arp ip=%s whois not found", ip)
-		h.engine.LANHosts.PrintTable()
+		h.engine.PrintTable()
 	}
 	return packet.Addr{}, ErrNotFound
 }

@@ -54,8 +54,9 @@ func (h *Handler) purgeLoop(ctx context.Context, offline time.Duration, purge ti
 			deleteCutoff := now.Add(purge * -1)    // Delete entries that have not responded in last hour
 
 			purge := make([]net.IP, 0, 16)
+			offline := make([]net.IP, 0, 16)
 
-			h.LANHosts.Lock()
+			h.Lock()
 			for _, e := range h.LANHosts.Table {
 
 				// Delete from table if the device is offline and was not seen for the last hour
@@ -66,16 +67,19 @@ func (h *Handler) purgeLoop(ctx context.Context, offline time.Duration, purge ti
 
 				// Set offline if no updates since the offline deadline
 				if e.Online && e.LastSeen.Before(offlineCutoff) {
-					e.Online = false // set value here while we have the lock
-					h.makeOffline(e.MAC, e.IP)
+					offline = append(offline, e.IP)
 				}
 			}
-			h.LANHosts.Unlock()
+			h.Unlock()
+
+			for _, ip := range offline {
+				h.setOffline(ip)
+			}
 
 			// delete after loop because this will change the table
 			if len(purge) > 0 {
 				for _, v := range purge {
-					h.LANHosts.Delete(v)
+					h.LANHosts.delete(v)
 				}
 			}
 		}

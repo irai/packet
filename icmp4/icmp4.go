@@ -48,12 +48,12 @@ func (h *Handler) Stop() error {
 }
 
 // StartHunt implements PacketProcessor interface
-func (h *Handler) StartHunt(mac net.HardwareAddr) error {
+func (h *Handler) StartHunt(ip net.IP) error {
 	return nil
 }
 
 // StopHunt implements PacketProcessor interface
-func (h *Handler) StopHunt(mac net.HardwareAddr) error {
+func (h *Handler) StopHunt(ip net.IP) error {
 	return nil
 }
 

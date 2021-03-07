@@ -39,7 +39,7 @@ type Config struct {
 type Handler struct {
 	NICInfo                 *NICInfo
 	conn                    net.PacketConn
-	LANHosts                *HostTable
+	LANHosts                HostTable
 	HandlerIP4              PacketProcessor
 	HandlerIP6              PacketProcessor
 	HandlerICMP4            PacketProcessor
@@ -64,8 +64,8 @@ var _ PacketProcessor = PacketNOOP{}
 func (p PacketNOOP) Start() error                               { return nil }
 func (p PacketNOOP) Stop() error                                { return nil }
 func (p PacketNOOP) ProcessPacket(*Host, []byte) (*Host, error) { return nil, nil }
-func (p PacketNOOP) StartHunt(net.HardwareAddr) error           { return nil }
-func (p PacketNOOP) StopHunt(net.HardwareAddr) error            { return nil }
+func (p PacketNOOP) StartHunt(ip net.IP) error                  { return nil }
+func (p PacketNOOP) StopHunt(ip net.IP) error                   { return nil }
 
 // New creates an ICMPv6 handler with default values
 func NewEngine(nic string) (*Handler, error) {
@@ -77,7 +77,7 @@ func (config Config) NewEngine(nic string) (*Handler, error) {
 
 	var err error
 
-	h := &Handler{LANHosts: New(), captureList: &SetHandler{}}
+	h := &Handler{LANHosts: newHostTable(), captureList: &SetHandler{}}
 
 	h.NICInfo = config.NICInfo
 	if h.NICInfo == nil {
@@ -189,8 +189,11 @@ func (h *Handler) setupConn() (conn net.PacketConn, err error) {
 	return conn, nil
 }
 
+// PrintTable logs the table to standard out
 func (h *Handler) PrintTable() {
-	h.LANHosts.PrintTable()
+	h.Lock()
+	defer h.Unlock()
+	h.LANHosts.printTable()
 }
 
 // isUnicastMAC return true if the mac address is unicast
@@ -319,7 +322,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 			// Only lookup host on same subnet
 			if h.NICInfo.HostIP4.Contains(ip4Frame.Src()) {
-				host, _ = h.LANHosts.FindOrCreateHost(ether.Src(), ip4Frame.Src())
+				host, _ = h.FindOrCreateHost(ether.Src(), ip4Frame.Src()) // will lock/unlock
 			}
 			l4Proto = ip4Frame.Protocol()
 			l4Payload = ip4Frame.Payload()
@@ -341,13 +344,24 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 			// lookup host only if unicast
 			if ip6Frame.Src().IsLinkLocalUnicast() || ip6Frame.Src().IsGlobalUnicast() {
-				host, _ = h.LANHosts.FindOrCreateHost(ether.Src(), ip6Frame.Src())
+				host, _ = h.FindOrCreateHost(ether.Src(), ip6Frame.Src()) // will lock/unlock
 			}
 			// h.handlerIP6.ProcessPacket(host, ether)
 
 		case syscall.ETH_P_ARP:
+			hostkeep := host
 			if host, err = h.HandlerARP.ProcessPacket(host, ether); err != nil {
 				fmt.Printf("packet: error processing arp: %s\n", err)
+			}
+			// found new ip/mac host?
+			if hostkeep == nil && host != nil {
+				h.Lock()
+				if h.captureList.Index(host.MAC) != -1 {
+					host.HuntStageIP4 = StageHunt
+					host.HuntStageIP6 = StageHunt
+				}
+				h.Unlock()
+				h.startIP4HuntHandlers(host.IP)
 			}
 			l4Proto = 0 // skip next check
 
@@ -402,38 +416,64 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			fmt.Println("packet: unsupported level 4 header", l4Proto)
 		}
 
-		// Lock and sset to online
-		h.LANHosts.Lock()
-		if host != nil && !host.Online {
-			host.Online = true // make sure we don't have a lock
-			mac := host.MAC
-			ip := host.IP
-			h.LANHosts.Unlock()
-			h.makeOnline(mac, ip)
-		} else {
-			h.LANHosts.Unlock()
-		}
+		h.setOnline(host)
 	}
 }
 
-func (h *Handler) makeOnline(mac net.HardwareAddr, ip net.IP) {
+func (h *Handler) setOnline(host *Host) {
+	if host == nil {
+		return
+	}
+
+	h.Lock()
+	if host.Online {
+		h.Unlock()
+		return
+	}
+	host.Online = true
+	mac := host.MAC
+	ip := host.IP
+	// if captured, then start hunting process
+	index := h.captureList.Index(mac)
+	if index != -1 {
+		host.HuntStageIP4 = StageHunt
+		host.HuntStageIP6 = StageHunt
+	}
+	h.Unlock()
+
 	if Debug {
 		fmt.Printf("packet: IP is online ip=%s mac=%s\n", ip, mac)
 	}
-	if h.captureList.Index(mac) != -1 {
-		h.startHuntHandlers(mac)
+
+	if index != -1 {
+		if ip.To4() != nil {
+			h.startIP4HuntHandlers(ip)
+		} else {
+			h.startIP6HuntHandlers(host.IP)
+		}
 	}
 	notification := Notification{IP: ip, MAC: mac, Online: true}
 	go h.notifyCallback(notification)
 }
 
-func (h *Handler) makeOffline(mac net.HardwareAddr, ip net.IP) {
+func (h *Handler) setOffline(ip net.IP) {
+	h.Lock()
+	host := h.FindIPNoLock(ip)
+	if !host.Online {
+		h.Unlock()
+		return
+	}
+
+	host.Online = false
+	host.HuntStageIP4 = StageNormal // end hunting if in progress
+	host.HuntStageIP6 = StageNormal // end hunting if in progress
+	mac := host.MAC
+	h.Unlock()
+
 	if Debug {
 		fmt.Printf("packet: IP is offline ip=%s mac=%s\n", ip, mac)
 	}
-	if h.captureList.Index(mac) != -1 {
-		h.stopHuntHandlers(mac)
-	}
+
 	notification := Notification{IP: ip, MAC: mac, Online: false}
 	go h.notifyCallback(notification)
 }
