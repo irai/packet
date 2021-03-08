@@ -195,7 +195,7 @@ func (h *Handler) handleRequest(p DHCP4, options Options, senderIP net.IP) (d DH
 				// Attempt to force other dhcp server to release the IP
 				// Send a DECLINE packet to home router in case server responded with ACK
 				// Do not use RELEASE as the server can still reuse the parameters and does not issue a NAK later
-				go h.forceDecline(clientID, h.net1.DefaultGW, p.CHAddr(), reqIP, p.XId())
+				go h.forceDecline(dupBytes(clientID), h.net1.DefaultGW, dupMAC(p.CHAddr()), dupIP(reqIP), dupBytes(p.XId()))
 
 				// always NACK so next attempt may trigger discover
 				// also, it must return nack if moving form net2 to net1
@@ -215,7 +215,7 @@ func (h *Handler) handleRequest(p DHCP4, options Options, senderIP net.IP) (d DH
 				// Attempt to force other dhcp server to release the IP
 				// Send a DECLINE packet to home router in case server responded with ACK
 				// Do not use RELEASE as the server can still reuse the parameters and does not issue a NAK later
-				go h.forceDecline(clientID, h.net1.DefaultGW, p.CHAddr(), reqIP, p.XId())
+				go h.forceDecline(dupBytes(clientID), h.net1.DefaultGW, dupMAC(p.CHAddr()), dupIP(reqIP), dupBytes(p.XId()))
 			}
 
 			// We have the lease but the IP or MAC don't match

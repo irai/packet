@@ -23,12 +23,11 @@ func (e MACEntry) String() string {
 
 // MACTable manages a goroutine safe set for adding and removing mac addresses
 type MACTable struct {
-	list   []*MACEntry
-	engine *Handler
+	list []*MACEntry
 }
 
 func newMACTable(engine *Handler) MACTable {
-	return MACTable{list: []*MACEntry{}, engine: engine}
+	return MACTable{list: []*MACEntry{}}
 }
 
 // PrintTable prints the table to stdout
@@ -48,11 +47,9 @@ func (s *MACTable) add(mac net.HardwareAddr) *MACEntry {
 	return e
 }
 
-// Del deletes the mac from set
-func (s *MACTable) NotIMplementedDel(mac net.HardwareAddr) error {
-	s.engine.Lock()
-	defer s.engine.Unlock()
-
+// del deletes the mac from set
+func (s *MACTable) delete(mac net.HardwareAddr) error {
+	panic("not implemented")
 	var pos int
 	if pos = s.index(mac); pos == -1 {
 		return nil

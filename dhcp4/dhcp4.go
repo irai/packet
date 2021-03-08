@@ -331,9 +331,9 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 		return host, packet.ErrParseMessage
 	}
 	if Debug {
-		// fmt.Printf("ether: %s\n", ether)
-		// fmt.Printf("ip4  : %s\n", ip4)
-		// fmt.Printf("udp  : %s\n", udp)
+		fmt.Printf("ether: %s\n", ether)
+		fmt.Printf("ip4  : %s\n", ip4)
+		fmt.Printf("udp  : %s\n", udp)
 		fmt.Printf("dhcp4: %s\n", dhcpFrame)
 	}
 
