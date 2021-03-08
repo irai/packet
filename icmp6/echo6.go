@@ -19,8 +19,10 @@ type icmpEntry struct {
 var icmpTable = struct {
 	sync.Mutex
 	table map[uint16]*icmpEntry // must use pointer because of channel in struct
+	id    uint16
 }{
 	table: make(map[uint16]*icmpEntry),
+	id:    1,
 }
 
 // SendEchoRequest transmit an icmp6 echo request and do not wait for response
@@ -69,10 +71,11 @@ func (h *Handler) Ping(srcAddr packet.Addr, dstAddr packet.Addr, timeout time.Du
 		timeout = time.Second * 2
 	}
 	msg := icmpEntry{expire: time.Now().Add(timeout), wakeup: make(chan bool)}
-	id := uint16(time.Now().Nanosecond())
 	seq := uint16(1)
 
 	icmpTable.Lock()
+	id := icmpTable.id
+	icmpTable.id++
 	icmpTable.table[id] = &msg
 	icmpTable.Unlock()
 
