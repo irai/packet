@@ -191,19 +191,21 @@ func (h *Handler) handleRequest(p DHCP4, options Options, senderIP net.IP) (d DH
 				}()
 			}
 
-			if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && captured) {
-				// Attempt to force other dhcp server to release the IP
-				// Send a DECLINE packet to home router in case server responded with ACK
-				// Do not use RELEASE as the server can still reuse the parameters and does not issue a NAK later
-				go h.forceDecline(dupBytes(clientID), h.net1.DefaultGW, dupMAC(p.CHAddr()), dupIP(reqIP), dupBytes(p.XId()))
+			// if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && captured) {
 
-				// always NACK so next attempt may trigger discover
-				// also, it must return nack if moving form net2 to net1
-				// in the iPhone case, this causes the iPhone to retry discover
-				return ReplyPacket(p, NAK, h.net1.DefaultGW, net.IPv4zero, 0, nil)
-			}
+			// Attempt to force other dhcp server to release the IP
+			// Send a DECLINE packet to home router in case server responded with ACK
+			// Do not use RELEASE as the server can still reuse the parameters and does not issue a NAK later
+			go h.forceDecline(dupBytes(clientID), h.net1.DefaultGW, dupMAC(p.CHAddr()), dupIP(reqIP), dupBytes(p.XId()))
 
-			return nil
+			// always NACK so next attempt may trigger discover
+			// also, it must return nack if moving form net2 to net1
+			// in the iPhone case, this causes the iPhone to retry discover
+			return ReplyPacket(p, NAK, h.net1.DefaultGW, net.IPv4zero, 0, nil)
+
+			// }
+
+			// return nil
 		}
 
 		if !lease.IP.Equal(reqIP) || !bytes.Equal(lease.MAC, p.CHAddr()) ||
