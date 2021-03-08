@@ -105,7 +105,7 @@ func (h *Handler) findOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host,
 		return host, true
 	}
 	mac = CopyMAC(mac) // copy from frame
-	macEntry := h.CaptureList.add(mac)
+	macEntry := h.MACTable.add(mac)
 	host = &Host{MAC: CopyMAC(mac), IP: CopyIP(ip), MACEntry: macEntry, LastSeen: time.Now(), Online: false}
 	h.LANHosts.Table[string(host.IP)] = host
 	return host, false

@@ -8,7 +8,7 @@ import (
 // Capture places the mac in capture mode
 func (h *Handler) Capture(mac net.HardwareAddr) error {
 	h.Lock()
-	macEntry := h.CaptureList.findMAC(mac)
+	macEntry := h.MACTable.findMAC(mac)
 	if macEntry == nil {
 		h.Unlock()
 		return nil
@@ -60,7 +60,7 @@ func (h *Handler) startHunt(ip net.IP) error {
 func (h *Handler) Release(mac net.HardwareAddr) error {
 	h.Lock()
 
-	macEntry := h.CaptureList.findMAC(mac)
+	macEntry := h.MACTable.findMAC(mac)
 	if macEntry == nil {
 		h.Unlock()
 		return nil
@@ -111,7 +111,7 @@ func (h *Handler) stopHunt(ip net.IP) error {
 
 // IsCaptured return true is mac is in capture mode
 func (h *Handler) IsCaptured(mac net.HardwareAddr) bool {
-	if e := h.CaptureList.FindMAC(mac); e != nil && e.Captured {
+	if e := h.FindMACEntry(mac); e != nil && e.Captured {
 		return true
 	}
 	return false

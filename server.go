@@ -39,7 +39,8 @@ type Config struct {
 type Handler struct {
 	NICInfo                 *NICInfo
 	conn                    net.PacketConn
-	LANHosts                HostTable
+	LANHosts                HostTable // store IP list - one for each host
+	MACTable                MACTable  // store mac list
 	HandlerIP4              PacketProcessor
 	HandlerIP6              PacketProcessor
 	HandlerICMP4            PacketProcessor
@@ -47,7 +48,6 @@ type Handler struct {
 	HandlerDHCP4            PacketProcessor
 	HandlerARP              PacketProcessor
 	callback                []func(Notification) error
-	CaptureList             *MACTable     // store list of captured macs
 	FullNetworkScanInterval time.Duration // Set it to -1 if no scan required
 	ProbeInterval           time.Duration // how often to probe if IP is online
 	OfflineDeadline         time.Duration // mark offline if no updates
@@ -77,7 +77,8 @@ func (config Config) NewEngine(nic string) (*Handler, error) {
 
 	var err error
 
-	h := &Handler{LANHosts: newHostTable(), CaptureList: &MACTable{}}
+	h := &Handler{LANHosts: newHostTable()}
+	h.MACTable = newMACTable(h)
 
 	h.NICInfo = config.NICInfo
 	if h.NICInfo == nil {
@@ -194,7 +195,7 @@ func (h *Handler) PrintTable() {
 	h.Lock()
 	defer h.Unlock()
 	fmt.Println("mac table")
-	h.CaptureList.printTable()
+	h.MACTable.printTable()
 	fmt.Printf("hosts table len=%v\n", len(h.LANHosts.Table))
 	h.LANHosts.printTable()
 }

@@ -27,8 +27,8 @@ type MACTable struct {
 	engine *Handler
 }
 
-func newMACTable(engine *Handler) *MACTable {
-	return &MACTable{list: []*MACEntry{}, engine: engine}
+func newMACTable(engine *Handler) MACTable {
+	return MACTable{list: []*MACEntry{}, engine: engine}
 }
 
 // PrintTable prints the table to stdout
@@ -67,11 +67,11 @@ func (s *MACTable) NotIMplementedDel(mac net.HardwareAddr) error {
 	return nil
 }
 
-// FindMAC returns -1 if mac is not found; otherwise returns the position in set
-func (s *MACTable) FindMAC(mac net.HardwareAddr) *MACEntry {
-	s.engine.Lock()
-	defer s.engine.Unlock()
-	return s.findMAC(mac)
+// FindMACEntry returns pointer to macEntry or nil if not found
+func (h *Handler) FindMACEntry(mac net.HardwareAddr) *MACEntry {
+	h.Lock()
+	defer h.Unlock()
+	return h.MACTable.findMAC(mac)
 }
 
 func (s *MACTable) findMAC(mac net.HardwareAddr) *MACEntry {
@@ -92,21 +92,21 @@ func (s *MACTable) index(mac net.HardwareAddr) int {
 	return -1
 }
 
-func (s *MACTable) UpsertIP4(mac net.HardwareAddr, ip net.IP) {
-	s.engine.Lock()
-	defer s.engine.Unlock()
-	if index := s.index(mac); index != -1 {
-		s.list[index].DHCPIP4 = ip
+func (h *Handler) MACTableUpsertIP4(mac net.HardwareAddr, ip net.IP) {
+	h.Lock()
+	defer h.Unlock()
+	if index := h.MACTable.index(mac); index != -1 {
+		h.MACTable.list[index].DHCPIP4 = ip
 		return
 	}
-	s.list = append(s.list, &MACEntry{MAC: mac, DHCPIP4: ip})
+	h.MACTable.list = append(h.MACTable.list, &MACEntry{MAC: mac, DHCPIP4: ip})
 }
 
-func (s *MACTable) GetIP4(mac net.HardwareAddr) net.IP {
-	s.engine.Lock()
-	defer s.engine.Unlock()
-	if index := s.index(mac); index != -1 {
-		return s.list[index].DHCPIP4
+func (h *Handler) MACTableGetIP4(mac net.HardwareAddr) net.IP {
+	h.Lock()
+	defer h.Unlock()
+	if index := h.MACTable.index(mac); index != -1 {
+		return h.MACTable.list[index].DHCPIP4
 	}
 	return nil
 }
