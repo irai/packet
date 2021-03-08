@@ -58,7 +58,7 @@ func echoNotify(id uint16) {
 
 	if entry, ok := icmpTable.table[id]; ok {
 		entry.msgRecv = true
-		entry.wakeup <- true
+		close(entry.wakeup)
 	}
 	icmpTable.Unlock()
 }
@@ -81,19 +81,14 @@ func (h *Handler) Ping(srcAddr packet.Addr, dstAddr packet.Addr, timeout time.Du
 		return err
 	}
 
-	for {
-		icmpTable.Lock()
-		if msg.msgRecv || msg.expire.Before(time.Now()) {
-			break
-		}
-		icmpTable.Unlock()
-		select {
-		case <-msg.wakeup:
-		case <-time.After(timeout):
-		}
+	// wait until chan closed or timeout
+	select {
+	case <-msg.wakeup:
+	case <-time.After(timeout):
 	}
 
 	// loop finishes with lock
+	icmpTable.Lock()
 	delete(icmpTable.table, id)
 	icmpTable.Unlock()
 

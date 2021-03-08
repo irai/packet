@@ -47,9 +47,9 @@ func (s *MACTable) add(mac net.HardwareAddr) *MACEntry {
 	return e
 }
 
+/**
 // del deletes the mac from set
 func (s *MACTable) delete(mac net.HardwareAddr) error {
-	panic("not implemented")
 	var pos int
 	if pos = s.index(mac); pos == -1 {
 		return nil
@@ -63,6 +63,7 @@ func (s *MACTable) delete(mac net.HardwareAddr) error {
 	s.list = s.list[:len(s.list)-1]
 	return nil
 }
+**/
 
 // FindMACEntry returns pointer to macEntry or nil if not found
 func (h *Handler) FindMACEntry(mac net.HardwareAddr) *MACEntry {
@@ -89,6 +90,7 @@ func (s *MACTable) index(mac net.HardwareAddr) int {
 	return -1
 }
 
+// MACTableUpsertIP4 insert of update mac IP4. Set by dhcp discovery.
 func (h *Handler) MACTableUpsertIP4(mac net.HardwareAddr, ip net.IP) {
 	h.Lock()
 	defer h.Unlock()
@@ -99,6 +101,8 @@ func (h *Handler) MACTableUpsertIP4(mac net.HardwareAddr, ip net.IP) {
 	h.MACTable.list = append(h.MACTable.list, &MACEntry{MAC: mac, DHCPIP4: ip})
 }
 
+// MACTableGetIP4 returns the IP4 associated with this mac.
+// Checked by arp ACP
 func (h *Handler) MACTableGetIP4(mac net.HardwareAddr) net.IP {
 	h.Lock()
 	defer h.Unlock()
