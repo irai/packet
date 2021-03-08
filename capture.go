@@ -8,11 +8,12 @@ import (
 // Capture places the mac in capture mode
 func (h *Handler) Capture(mac net.HardwareAddr) error {
 	h.Lock()
-	if h.CaptureList.Index(mac) != -1 {
+	macEntry := h.CaptureList.findMAC(mac)
+	if macEntry == nil {
 		h.Unlock()
 		return nil
 	}
-	h.CaptureList.Add(mac)
+	macEntry.Captured = true
 
 	list := []net.IP{}
 	// Mark all known entries as StageHunt
@@ -59,7 +60,8 @@ func (h *Handler) startHunt(ip net.IP) error {
 func (h *Handler) Release(mac net.HardwareAddr) error {
 	h.Lock()
 
-	if pos := h.CaptureList.Index(mac); pos == -1 {
+	macEntry := h.CaptureList.findMAC(mac)
+	if macEntry == nil {
 		h.Unlock()
 		return nil
 	}
@@ -73,6 +75,8 @@ func (h *Handler) Release(mac net.HardwareAddr) error {
 			list = append(list, v.IP)
 		}
 	}
+
+	macEntry.Captured = false
 	h.Unlock()
 
 	for _, ip := range list {
@@ -80,7 +84,6 @@ func (h *Handler) Release(mac net.HardwareAddr) error {
 			return err
 		}
 	}
-	h.CaptureList.Del(mac)
 	return nil
 }
 
@@ -108,7 +111,7 @@ func (h *Handler) stopHunt(ip net.IP) error {
 
 // IsCaptured return true is mac is in capture mode
 func (h *Handler) IsCaptured(mac net.HardwareAddr) bool {
-	if h.CaptureList.Index(mac) != -1 {
+	if e := h.CaptureList.FindMAC(mac); e != nil && e.Captured {
 		return true
 	}
 	return false

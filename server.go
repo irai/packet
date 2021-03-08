@@ -47,8 +47,7 @@ type Handler struct {
 	HandlerDHCP4            PacketProcessor
 	HandlerARP              PacketProcessor
 	callback                []func(Notification) error
-	CaptureList             *SetHandler   // store list of captured macs
-	DHCP4List               *SetHandler   // store list of dhcp4 offers
+	CaptureList             *MACTable     // store list of captured macs
 	FullNetworkScanInterval time.Duration // Set it to -1 if no scan required
 	ProbeInterval           time.Duration // how often to probe if IP is online
 	OfflineDeadline         time.Duration // mark offline if no updates
@@ -78,7 +77,7 @@ func (config Config) NewEngine(nic string) (*Handler, error) {
 
 	var err error
 
-	h := &Handler{LANHosts: newHostTable(), CaptureList: &SetHandler{}, DHCP4List: &SetHandler{}}
+	h := &Handler{LANHosts: newHostTable(), CaptureList: &MACTable{}}
 
 	h.NICInfo = config.NICInfo
 	if h.NICInfo == nil {
@@ -192,11 +191,10 @@ func (h *Handler) setupConn() (conn net.PacketConn, err error) {
 
 // PrintTable logs the table to standard out
 func (h *Handler) PrintTable() {
-	fmt.Println("capture table")
-	h.CaptureList.PrintTable()
-
 	h.Lock()
 	defer h.Unlock()
+	fmt.Println("mac table")
+	h.CaptureList.printTable()
 	fmt.Printf("hosts table len=%v\n", len(h.LANHosts.Table))
 	h.LANHosts.printTable()
 }
@@ -432,17 +430,23 @@ func (h *Handler) setOnline(host *Host) {
 		return
 	}
 
+	now := time.Now()
 	h.Lock()
+
+	// set macEntry to online and last seen too
+	host.MACEntry.LastSeen = now
+	host.LastSeen = now
 	if host.Online {
 		h.Unlock()
 		return
 	}
+	host.MACEntry.Online = true
 	host.Online = true
 	mac := host.MAC
 	ip := host.IP
+	captured := host.MACEntry.Captured
 	// if captured, then start hunting process
-	index := h.CaptureList.Index(mac)
-	if index != -1 {
+	if captured {
 		host.HuntStageIP4 = StageHunt
 		host.HuntStageIP6 = StageHunt
 	}
@@ -452,7 +456,7 @@ func (h *Handler) setOnline(host *Host) {
 		fmt.Printf("packet: IP is online ip=%s mac=%s\n", ip, mac)
 	}
 
-	if index != -1 {
+	if captured {
 		if err := h.startHunt(ip); err != nil {
 			fmt.Println("packet: failed to start hunt error", err)
 		}

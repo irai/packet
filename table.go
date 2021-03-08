@@ -36,6 +36,7 @@ func (s HuntStage) String() string {
 type Host struct {
 	MAC          net.HardwareAddr
 	IP           net.IP
+	MACEntry     *MACEntry
 	Online       bool
 	IPV6Router   bool
 	HuntStageIP4 HuntStage
@@ -76,10 +77,10 @@ func (h *Handler) FindOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host,
 	h.Lock()
 	defer h.Unlock()
 
-	return h.LANHosts.findOrCreateHost(mac, ip)
+	return h.findOrCreateHost(mac, ip)
 }
 
-func (h *HostTable) findOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host, found bool) {
+func (h *Handler) findOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host, found bool) {
 
 	// trick to avoid buffer allocation in lookup
 	// see: net.IPv4() function
@@ -95,7 +96,7 @@ func (h *HostTable) findOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Hos
 		v4InV6Prefix = ip
 	}
 
-	if host, ok := h.Table[string(v4InV6Prefix)]; ok {
+	if host, ok := h.LANHosts.Table[string(v4InV6Prefix)]; ok {
 		if !bytes.Equal(host.MAC, mac) {
 			fmt.Println("packet: error mac address differ", host.MAC, mac, v4InV6Prefix)
 			host.MAC = CopyMAC(mac)
@@ -103,8 +104,10 @@ func (h *HostTable) findOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Hos
 		host.LastSeen = time.Now()
 		return host, true
 	}
-	host = &Host{MAC: CopyMAC(mac), IP: CopyIP(ip), LastSeen: time.Now(), Online: false}
-	h.Table[string(host.IP)] = host
+	mac = CopyMAC(mac) // copy from frame
+	macEntry := h.CaptureList.add(mac)
+	host = &Host{MAC: CopyMAC(mac), IP: CopyIP(ip), MACEntry: macEntry, LastSeen: time.Now(), Online: false}
+	h.LANHosts.Table[string(host.IP)] = host
 	return host, false
 }
 

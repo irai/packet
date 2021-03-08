@@ -4,43 +4,54 @@ import (
 	"bytes"
 	"fmt"
 	"net"
-	"sync"
+	"time"
 )
 
-type macDetails struct {
-	MAC net.HardwareAddr
-	IP4 net.IP
+// MACEntry stores mac details
+// Each host has one MACEntry
+type MACEntry struct {
+	MAC      net.HardwareAddr
+	Captured bool
+	DHCPIP4  net.IP
+	Online   bool
+	LastSeen time.Time
 }
 
-// SetHandler manages a goroutine safe set for adding and removing mac addresses
-type SetHandler struct {
-	list []macDetails
-	sync.Mutex
+func (e MACEntry) String() string {
+	return fmt.Sprintf("mac=%s captured=%v dhcpIP4=%s Online=%v lastSeen=%v", e.MAC, e.Captured, e.DHCPIP4, e.Online, time.Since(e.LastSeen))
+}
+
+// MACTable manages a goroutine safe set for adding and removing mac addresses
+type MACTable struct {
+	list   []*MACEntry
+	engine *Handler
+}
+
+func newMACTable(engine *Handler) *MACTable {
+	return &MACTable{list: []*MACEntry{}, engine: engine}
 }
 
 // PrintTable prints the table to stdout
-func (s *SetHandler) PrintTable() {
-	s.Lock()
-	defer s.Unlock()
-	fmt.Println(s.list)
+func (s *MACTable) printTable() {
+	for _, v := range s.list {
+		fmt.Println(v)
+	}
 }
 
 // Add adds a mac to set
-func (s *SetHandler) Add(mac net.HardwareAddr) error {
-	s.Lock()
-	defer s.Unlock()
-
-	if s.index(mac) != -1 {
-		return nil
+func (s *MACTable) add(mac net.HardwareAddr) *MACEntry {
+	if e := s.findMAC(mac); e != nil {
+		return e
 	}
-	s.list = append(s.list, macDetails{MAC: mac})
-	return nil
+	e := &MACEntry{MAC: mac}
+	s.list = append(s.list, e)
+	return e
 }
 
 // Del deletes the mac from set
-func (s *SetHandler) Del(mac net.HardwareAddr) error {
-	s.Lock()
-	defer s.Unlock()
+func (s *MACTable) NotIMplementedDel(mac net.HardwareAddr) error {
+	s.engine.Lock()
+	defer s.engine.Unlock()
 
 	var pos int
 	if pos = s.index(mac); pos == -1 {
@@ -56,14 +67,23 @@ func (s *SetHandler) Del(mac net.HardwareAddr) error {
 	return nil
 }
 
-// Index returns -1 if mac is not found; otherwise returns the position in set
-func (s *SetHandler) Index(mac net.HardwareAddr) int {
-	s.Lock()
-	defer s.Unlock()
-	return s.index(mac)
+// FindMAC returns -1 if mac is not found; otherwise returns the position in set
+func (s *MACTable) FindMAC(mac net.HardwareAddr) *MACEntry {
+	s.engine.Lock()
+	defer s.engine.Unlock()
+	return s.findMAC(mac)
 }
 
-func (s *SetHandler) index(mac net.HardwareAddr) int {
+func (s *MACTable) findMAC(mac net.HardwareAddr) *MACEntry {
+	for _, v := range s.list {
+		if bytes.Equal(v.MAC, mac) {
+			return v
+		}
+	}
+	return nil
+}
+
+func (s *MACTable) index(mac net.HardwareAddr) int {
 	for i := range s.list {
 		if bytes.Equal(s.list[i].MAC, mac) {
 			return i
@@ -72,21 +92,21 @@ func (s *SetHandler) index(mac net.HardwareAddr) int {
 	return -1
 }
 
-func (s *SetHandler) UpsertIP4(mac net.HardwareAddr, ip net.IP) {
-	s.Lock()
-	defer s.Unlock()
+func (s *MACTable) UpsertIP4(mac net.HardwareAddr, ip net.IP) {
+	s.engine.Lock()
+	defer s.engine.Unlock()
 	if index := s.index(mac); index != -1 {
-		s.list[index].IP4 = ip
+		s.list[index].DHCPIP4 = ip
 		return
 	}
-	s.list = append(s.list, macDetails{MAC: mac, IP4: ip})
+	s.list = append(s.list, &MACEntry{MAC: mac, DHCPIP4: ip})
 }
 
-func (s *SetHandler) GetIP4(mac net.HardwareAddr) net.IP {
-	s.Lock()
-	defer s.Unlock()
+func (s *MACTable) GetIP4(mac net.HardwareAddr) net.IP {
+	s.engine.Lock()
+	defer s.engine.Unlock()
 	if index := s.index(mac); index != -1 {
-		return s.list[index].IP4
+		return s.list[index].DHCPIP4
 	}
 	return nil
 }
