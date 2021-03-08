@@ -61,6 +61,7 @@ func echoNotify(id uint16) {
 	if entry, ok := icmpTable.table[id]; ok {
 		entry.msgRecv = true
 		close(entry.wakeup)
+		delete(icmpTable.table, id)
 	}
 	icmpTable.Unlock()
 }
@@ -90,9 +91,11 @@ func (h *Handler) Ping(srcAddr packet.Addr, dstAddr packet.Addr, timeout time.Du
 	case <-time.After(timeout):
 	}
 
-	// loop finishes with lock
+	// in case of timeout, the entry still exist
 	icmpTable.Lock()
-	delete(icmpTable.table, id)
+	if _, ok := icmpTable.table[id]; ok {
+		delete(icmpTable.table, id)
+	}
 	icmpTable.Unlock()
 
 	if !msg.msgRecv {
