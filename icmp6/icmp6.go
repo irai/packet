@@ -198,7 +198,7 @@ func (h *Handler) sendPacket(srcAddr packet.Addr, dstAddr packet.Addr, b []byte)
 	return nil
 }
 
-var repeat int
+var repeat int = -1
 
 // ProcessPacket handles icmp6 packets
 func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, error) {
@@ -221,6 +221,10 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 
 	if !icmp6Frame.IsValid() {
 		return host, fmt.Errorf("invalid icmp msg=%v: %w", icmp6Frame, errParseMessage)
+	}
+	if Debug {
+		fmt.Println("ether:", ether)
+		fmt.Println("ip6  :", ip6Frame)
 	}
 
 	t := ipv6.ICMPType(icmp6Frame.Type())
@@ -246,7 +250,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 			return host, fmt.Errorf("ndp: failed to unmarshal %s: %w", t, errParseMessage)
 		}
 		if Debug {
-			fmt.Printf("icmp6: neighbor solicitation: %+v\n", msg)
+			fmt.Printf("icmp6: na target=%s options=%+v\n", msg.TargetAddress, msg.Options)
 		}
 
 	case ipv6.ICMPTypeRouterAdvertisement:
@@ -254,16 +258,20 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 		if err := msg.unmarshal(icmp6Frame[4:]); err != nil {
 			return host, fmt.Errorf("ndp: failed to unmarshal %s: %w", t, errParseMessage)
 		}
-		if Debug {
-			if repeat%4 != 0 {
-				fmt.Printf("icmp6 repeated router advertisement : \n")
-				repeat++
-				break
-			}
-			repeat++
+
+		repeat++
+		if repeat%4 != 0 { // skip if too often - home router send RA every 4 sec
+			break
 		}
+
+		if Debug {
+			fmt.Printf("icmp6: RA managed=%v rpreference=%v other=%v repeated=%d\n",
+				msg.ManagedConfiguration, msg.RouterSelectionPreference, msg.OtherConfiguration, repeat)
+			fmt.Printf("DEBUG RA %+v\n", msg)
+		}
+
 		// Protect agains nil host
-		// NS source IP is sometimes ff02::1 multicast, which means the host is nil
+		// NS source IP is sometimes ff02::1 (multicast), which means that host is not in the table (nil)
 		if host == nil {
 			return host, fmt.Errorf("ra host cannot be nil")
 		}
@@ -272,11 +280,6 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 		router.CurHopLimit = msg.CurrentHopLimit
 		router.DefaultLifetime = msg.RouterLifetime
 		router.Options = msg.Options
-
-		// update router details in host
-		h.engine.Lock()
-		host.IPV6Router = true
-		h.engine.Unlock()
 
 		prefixes := []PrefixInformation{}
 		for _, v := range msg.Options {
@@ -306,6 +309,11 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 
 			h.autoConfigureRouter(*router)
 		}
+
+		// update router details in host
+		h.engine.Lock()
+		host.IPV6Router = true
+		h.engine.Unlock()
 
 	case ipv6.ICMPTypeRouterSolicitation:
 		msg := new(RouterSolicitation)
