@@ -55,7 +55,7 @@ func (h *Handler) PrintTable() {
 		fmt.Printf("icmp6 hosts table len=%v\n", len(h.engine.LANHosts.Table))
 		for _, v := range h.engine.LANHosts.Table {
 			if packet.IsIP6(v.IP) {
-				fmt.Printf("mac=%s ip=%v online=%v IP6router=%v\n", v.MAC, v.IP, v.Online, v.IPV6Router)
+				fmt.Printf("mac=%s ip=%v online=%v IP6router=%v\n", v.MACEntry.MAC, v.IP, v.Online, v.IPV6Router)
 			}
 		}
 	}
@@ -284,7 +284,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 		if host == nil {
 			return host, fmt.Errorf("ra host cannot be nil")
 		}
-		router, _ := h.findOrCreateRouter(host.MAC, host.IP)
+		router, _ := h.findOrCreateRouter(host.MACEntry.MAC, host.IP)
 		router.ManagedFlag = msg.ManagedConfiguration
 		router.CurHopLimit = msg.CurrentHopLimit
 		router.DefaultLifetime = msg.RouterLifetime
@@ -304,8 +304,8 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 				router.RDNSS = o
 			case optSourceLLA:
 				o := v.(*LinkLayerAddress)
-				if !bytes.Equal(o.Addr, host.MAC) {
-					log.Printf("error: icmp6 unexpected sourceLLA=%s etherFrame=%s", o.Addr, host.MAC)
+				if !bytes.Equal(o.Addr, host.MACEntry.MAC) {
+					log.Printf("error: icmp6 unexpected sourceLLA=%s etherFrame=%s", o.Addr, host.MACEntry.MAC)
 				}
 			}
 		}

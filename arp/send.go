@@ -172,7 +172,7 @@ func (h *Handler) WhoIs(ip net.IP) (packet.Addr, error) {
 
 	for i := 0; i < 3; i++ {
 		if host := h.engine.FindIP(ip); host != nil {
-			return packet.Addr{IP: host.IP, MAC: host.MAC}, nil
+			return packet.Addr{IP: host.IP, MAC: host.MACEntry.MAC}, nil
 		}
 		if err := h.Request(h.engine.NICInfo.HostMAC, h.engine.NICInfo.HostIP4.IP, EthernetBroadcast, ip); err != nil {
 			return packet.Addr{}, fmt.Errorf("arp WhoIs error: %w", err)

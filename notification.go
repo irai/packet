@@ -20,7 +20,7 @@ func (h *Handler) AddCallback(f func(Notification) error) {
 	h.callback = append(h.callback, f)
 	list := []Notification{}
 	for _, v := range h.LANHosts.Table {
-		list = append(list, Notification{MAC: v.MAC, IP: v.IP, Online: v.Online})
+		list = append(list, Notification{MAC: v.MACEntry.MAC, IP: v.IP, Online: v.Online})
 	}
 	h.Unlock()
 	// notify without lock

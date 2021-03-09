@@ -195,9 +195,9 @@ func (h *Handler) PrintTable() {
 	h.Lock()
 	defer h.Unlock()
 	fmt.Println("mac table")
-	h.MACTable.printTable()
-	fmt.Printf("hosts table len=%v\n", len(h.LANHosts.Table))
-	h.LANHosts.printTable()
+	h.printMACTable()
+	// fmt.Printf("hosts table len=%v\n", len(h.LANHosts.Table))
+	// h.LANHosts.printTable()
 }
 
 // isUnicastMAC return true if the mac address is unicast
@@ -441,9 +441,24 @@ func (h *Handler) setOnline(host *Host) {
 		h.Unlock()
 		return
 	}
+
+	// set macEntry current IP
+	if host.IP.To4() != nil {
+		if host.HuntStageIP4 == StageHunt && !host.MACEntry.IP4.Equal(host.IP) { // changed IP
+			h.stopHunt(host.IP)
+		}
+		host.MACEntry.IP4 = host.IP
+	} else {
+		if host.HuntStageIP6 == StageHunt && !host.MACEntry.IP6.Equal(host.IP) { // changed IP
+			h.stopHunt(host.IP)
+		}
+		if host.IP.IsGlobalUnicast() { // only interested in GUA
+			host.MACEntry.IP6 = host.IP
+		}
+	}
 	host.MACEntry.Online = true
 	host.Online = true
-	mac := host.MAC
+	mac := host.MACEntry.MAC
 	ip := host.IP
 	captured := host.MACEntry.Captured
 	// if captured, then start hunting process
@@ -477,7 +492,7 @@ func (h *Handler) setOffline(ip net.IP) {
 	host.Online = false
 	host.HuntStageIP4 = StageNormal // end hunting if in progress
 	host.HuntStageIP6 = StageNormal // end hunting if in progress
-	mac := host.MAC
+	mac := host.MACEntry.MAC
 	h.Unlock()
 
 	if Debug {

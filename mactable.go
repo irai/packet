@@ -10,40 +10,72 @@ import (
 // MACEntry stores mac details
 // Each host has one MACEntry
 type MACEntry struct {
-	MAC      net.HardwareAddr
-	Captured bool
-	DHCPIP4  net.IP
-	Online   bool
+	MAC      net.HardwareAddr // unique mac address
+	Captured bool             // true if mac is in capture mode
+	IP4      net.IP           // keep current IP4 to detect ip changes
+	IP4Offer net.IP           // keep dhcp4 IP offer
+	IP6      net.IP           // keep current ip6 GUA
+	IP6Offer net.IP           // keep ip6 GUA offer
+	Online   bool             // true is mac is online
+	HostList []*Host          // IPs associated with this mac
 	LastSeen time.Time
 }
 
 func (e MACEntry) String() string {
-	return fmt.Sprintf("mac=%s captured=%v dhcpIP4=%s Online=%v lastSeen=%v", e.MAC, e.Captured, e.DHCPIP4, e.Online, time.Since(e.LastSeen))
+	return fmt.Sprintf("mac=%s captured=%v dhcpIP4=%s Online=%v lastSeen=%v", e.MAC, e.Captured, e.IP4Offer, e.Online, time.Since(e.LastSeen))
+}
+
+// link appends the host to the macEntry host list
+func (e *MACEntry) link(host *Host) {
+	e.HostList = append(e.HostList, host)
+}
+
+// unlink removes the Host from the macEntry
+func (e *MACEntry) unlink(host *Host) {
+	for i := range e.HostList {
+		if e.HostList[i].IP.Equal(host.IP) {
+			if i+1 == len(e.HostList) { // last element?
+				e.HostList = e.HostList[:i]
+				return
+			}
+			copy(e.HostList[i:], e.HostList[i+1:])
+			e.HostList = e.HostList[:len(e.HostList)-1]
+			return
+		}
+	}
 }
 
 // MACTable manages a goroutine safe set for adding and removing mac addresses
 type MACTable struct {
-	list []*MACEntry
+	table []*MACEntry
 }
 
 func newMACTable(engine *Handler) MACTable {
-	return MACTable{list: []*MACEntry{}}
+	return MACTable{table: []*MACEntry{}}
 }
 
 // PrintTable prints the table to stdout
-func (s *MACTable) printTable() {
-	for _, v := range s.list {
+func (h *Handler) printMACTable() {
+	count := 0
+	for _, v := range h.MACTable.table {
 		fmt.Println(v)
+		count = count + len(v.HostList)
+		for _, host := range v.HostList {
+			fmt.Println(host)
+		}
+	}
+	if count != len(h.LANHosts.Table) { // validate our logic - DELETE and replace with test in future
+		panic(fmt.Sprintf("host table differ in lenght hosts=%d machosts=%d  ", len(h.LANHosts.Table), count))
 	}
 }
 
 // Add adds a mac to set
-func (s *MACTable) add(mac net.HardwareAddr) *MACEntry {
+func (s *MACTable) findOrCreate(mac net.HardwareAddr) *MACEntry {
 	if e := s.findMAC(mac); e != nil {
 		return e
 	}
 	e := &MACEntry{MAC: mac}
-	s.list = append(s.list, e)
+	s.table = append(s.table, e)
 	return e
 }
 
@@ -73,7 +105,7 @@ func (h *Handler) FindMACEntry(mac net.HardwareAddr) *MACEntry {
 }
 
 func (s *MACTable) findMAC(mac net.HardwareAddr) *MACEntry {
-	for _, v := range s.list {
+	for _, v := range s.table {
 		if bytes.Equal(v.MAC, mac) {
 			return v
 		}
@@ -82,8 +114,8 @@ func (s *MACTable) findMAC(mac net.HardwareAddr) *MACEntry {
 }
 
 func (s *MACTable) index(mac net.HardwareAddr) int {
-	for i := range s.list {
-		if bytes.Equal(s.list[i].MAC, mac) {
+	for i := range s.table {
+		if bytes.Equal(s.table[i].MAC, mac) {
 			return i
 		}
 	}
@@ -95,10 +127,10 @@ func (h *Handler) MACTableUpsertIP4(mac net.HardwareAddr, ip net.IP) {
 	h.Lock()
 	defer h.Unlock()
 	if index := h.MACTable.index(mac); index != -1 {
-		h.MACTable.list[index].DHCPIP4 = ip
+		h.MACTable.table[index].IP4Offer = ip
 		return
 	}
-	h.MACTable.list = append(h.MACTable.list, &MACEntry{MAC: mac, DHCPIP4: ip})
+	h.MACTable.table = append(h.MACTable.table, &MACEntry{MAC: mac, IP4Offer: ip})
 }
 
 // MACTableGetIP4 returns the IP4 associated with this mac.
@@ -107,7 +139,7 @@ func (h *Handler) MACTableGetIP4(mac net.HardwareAddr) net.IP {
 	h.Lock()
 	defer h.Unlock()
 	if index := h.MACTable.index(mac); index != -1 {
-		return h.MACTable.list[index].DHCPIP4
+		return h.MACTable.table[index].IP4Offer
 	}
 	return nil
 }

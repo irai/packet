@@ -81,7 +81,7 @@ func (h *Handler) spoofLoop(ip net.IP) {
 			log.Printf("arp attack end ip=%s repeat=%v duration=%v", ip, nTimes, time.Now().Sub(startTime))
 			return
 		}
-		mac := host.MAC
+		mac := host.MACEntry.MAC
 		h.engine.Unlock()
 
 		// Re-arp target to change router to host so all traffic comes to us

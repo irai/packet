@@ -18,7 +18,7 @@ func (h *Handler) Capture(mac net.HardwareAddr) error {
 	list := []net.IP{}
 	// Mark all known entries as StageHunt
 	for _, v := range h.LANHosts.Table {
-		if bytes.Equal(v.MAC, mac) {
+		if bytes.Equal(v.MACEntry.MAC, mac) {
 			v.HuntStageIP4 = StageHunt
 			v.HuntStageIP6 = StageHunt
 			list = append(list, v.IP)
@@ -69,7 +69,7 @@ func (h *Handler) Release(mac net.HardwareAddr) error {
 	list := []net.IP{}
 	// Mark all known entries as StageNormal
 	for _, v := range h.LANHosts.Table {
-		if bytes.Equal(v.MAC, mac) {
+		if bytes.Equal(v.MACEntry.MAC, mac) {
 			v.HuntStageIP4 = StageNormal
 			v.HuntStageIP6 = StageNormal
 			list = append(list, v.IP)
