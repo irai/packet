@@ -222,7 +222,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 	if !icmp6Frame.IsValid() {
 		return host, fmt.Errorf("invalid icmp msg=%v: %w", icmp6Frame, errParseMessage)
 	}
-	if Debug {
+	if Debug && ipv6.ICMPType(icmp6Frame.Type()) != ipv6.ICMPTypeRouterAdvertisement {
 		fmt.Println("ether:", ether)
 		fmt.Println("ip6  :", ip6Frame)
 	}
@@ -265,6 +265,8 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 		}
 
 		if Debug {
+			fmt.Println("ether:", ether)
+			fmt.Println("ip6  :", ip6Frame)
 			fmt.Printf("icmp6: RA managed=%v rpreference=%v other=%v repeated=%d\n",
 				msg.ManagedConfiguration, msg.RouterSelectionPreference, msg.OtherConfiguration, repeat)
 			fmt.Printf("DEBUG RA %+v\n", msg)
