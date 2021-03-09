@@ -253,6 +253,13 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 			fmt.Printf("icmp6: na target=%s options=%+v\n", msg.TargetAddress, msg.Options)
 		}
 
+		// IPv6 Duplicate Address Detection
+		// IP6 src=0x00 dst=solicited-node address (multicast)
+		//
+		if ip6Frame.Src().IsUnspecified() {
+			fmt.Printf("icmp6: dad probe for target=%s srcip=%s srcmac=%s dstip=%s dstmac=%s\n", msg.TargetAddress, ip6Frame.Src(), ether.Src(), ip6Frame.Dst(), ether.Dst())
+		}
+
 	case ipv6.ICMPTypeRouterAdvertisement:
 		msg := new(RouterAdvertisement)
 		if err := msg.unmarshal(icmp6Frame[4:]); err != nil {
