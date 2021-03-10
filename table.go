@@ -126,7 +126,7 @@ func (h *Handler) findOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host,
 	host = &Host{IP: CopyIP(ip), MACEntry: macEntry, Online: false} // set Online to false to trigger Online transition
 	host.LastSeen = now
 	host.MACEntry.LastSeen = now
-	host.MACEntry.updateIP(ip)
+	host.MACEntry.updateIP(host.IP)
 	h.LANHosts.Table[string(host.IP)] = host
 
 	// link host to macEntry
