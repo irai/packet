@@ -36,7 +36,7 @@ func TestHandler_findOrCreateHostTestCopyIPMAC(t *testing.T) {
 	host, _ = tc.packet.findOrCreateHost(net.HardwareAddr(bufMAC), net.IP(bufIP6))
 	bufIP6[8] = 0xff
 	bufMAC[0] = 0x00
-	if !host.IP.Equal(ip6) || !host.MACEntry.IP6.Equal(ip6) {
+	if !host.IP.Equal(ip6) || !host.MACEntry.IP6GUA.Equal(ip6) {
 		t.Error("findOrCreateHost wrong IP", host, host.MACEntry)
 	}
 	if !bytes.Equal(mac, host.MACEntry.MAC) {

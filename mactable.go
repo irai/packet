@@ -14,7 +14,8 @@ type MACEntry struct {
 	Captured bool             // true if mac is in capture mode
 	IP4      net.IP           // keep current IP4 to detect ip changes
 	IP4Offer net.IP           // keep dhcp4 IP offer
-	IP6      net.IP           // keep current ip6 GUA
+	IP6GUA   net.IP           // keep current ip6 global unique address
+	IP6LLA   net.IP           // keep current ip6 local link address
 	IP6Offer net.IP           // keep ip6 GUA offer
 	Online   bool             // true is mac is online
 	HostList []*Host          // IPs associated with this mac
@@ -22,8 +23,8 @@ type MACEntry struct {
 }
 
 func (e MACEntry) String() string {
-	return fmt.Sprintf("mac=%s captured=%v online=%v ip4=%s ip6=%s ip4offer=%s hosts=%d lastSeen=%v",
-		e.MAC, e.Captured, e.Online, e.IP4, e.IP6, e.IP4Offer, len(e.HostList), time.Since(e.LastSeen))
+	return fmt.Sprintf("mac=%s captured=%v online=%v ip4=%s ip6=%s lla=%s ip4offer=%s hosts=%d lastSeen=%v",
+		e.MAC, e.Captured, e.Online, e.IP4, e.IP6GUA, e.IP6LLA, e.IP4Offer, len(e.HostList), time.Since(e.LastSeen))
 }
 
 // link appends the host to the macEntry host list
@@ -52,7 +53,10 @@ func (e *MACEntry) updateIP(ip net.IP) {
 	} else {
 		// TODO: do we need to capture LLA as well?
 		if ip.IsGlobalUnicast() {
-			e.IP6 = ip
+			e.IP6GUA = ip
+		}
+		if ip.IsLinkLocalUnicast() {
+			e.IP6LLA = ip
 		}
 	}
 }

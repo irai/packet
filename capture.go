@@ -129,9 +129,14 @@ func (h *Handler) checkIPChanged(host *Host) {
 		}
 	} else {
 		// Only interested in GUA changes
-		if host.IP.IsGlobalUnicast() && !host.MACEntry.IP6.Equal(host.IP) { // changed IP
-			fmt.Printf("packet: host changed ip6 from=%s to=%s\n", host.MACEntry.IP6, host.IP)
-			go h.lockAndSetOffline(host.MACEntry.IP6) // set previous host offline in goroutine as it will lock
+		if host.IP.IsGlobalUnicast() && !host.MACEntry.IP6GUA.Equal(host.IP) { // changed IP
+			fmt.Printf("packet: host changed ip6 from=%s to=%s\n", host.MACEntry.IP6GUA, host.IP)
+			go h.lockAndSetOffline(host.MACEntry.IP6GUA) // set previous host offline in goroutine as it will lock
+			host.MACEntry.updateIP(host.IP)
+		}
+		if host.IP.To16().IsLinkLocalUnicast() && !host.MACEntry.IP6LLA.Equal(host.IP) { // changed IP
+			fmt.Printf("packet: host changed ip6 from=%s to=%s\n", host.MACEntry.IP6LLA, host.IP)
+			// go h.lockAndSetOffline(host.MACEntry.IP6LLA) // set previous host offline in goroutine as it will lock
 			host.MACEntry.updateIP(host.IP)
 		}
 	}
