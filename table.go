@@ -105,6 +105,7 @@ func (h *Handler) findOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host,
 			host.MACEntry.unlink(host) // remove IP from existing mac
 			macEntry := h.MACTable.findOrCreate(mac)
 			macEntry.link(host)
+			host.MACEntry = macEntry
 		}
 		host.LastSeen = now
 		host.MACEntry.LastSeen = now
