@@ -89,10 +89,8 @@ func (s *MACTable) delete(mac net.HardwareAddr) error {
 }
 **/
 
-// FindMACEntry returns pointer to macEntry or nil if not found
-func (h *Handler) FindMACEntry(mac net.HardwareAddr) *MACEntry {
-	h.Lock()
-	defer h.Unlock()
+// FindMACEntryNoLock returns pointer to macEntry or nil if not found
+func (h *Handler) FindMACEntryNoLock(mac net.HardwareAddr) *MACEntry {
 	return h.MACTable.findMAC(mac)
 }
 

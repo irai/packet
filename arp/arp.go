@@ -164,20 +164,26 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 			fmt.Println("ether:", ether)
 			fmt.Printf("arp  : probe recvd: %s\n", frame)
 		}
-		// if there is an open DHCP offer, then reject any other ip
-		// if ip := h.engine.CaptureList.GetIP4(frame.SrcMAC()); ip != nil && !ip.Equal(frame.DstIP()) {
-		if ip := h.engine.MACTableGetIP4Offer(frame.SrcMAC()); ip != nil && !ip.Equal(frame.DstIP()) {
-			fmt.Printf("DEBUG arp  : probe reject for ip=%s from mac=%s\n", frame.DstIP(), frame.SrcMAC())
+		// if captured and there is an open DHCP offer, then reject any other ip
+		h.engine.Lock()
+		macEntry := h.engine.FindMACEntryNoLock(frame.SrcMAC())
+		if macEntry != nil && macEntry.Captured {
+			if !macEntry.IP4Offer.Equal(frame.DstIP()) {
+				h.engine.Unlock()
+				fmt.Printf("DEBUG arp  : probe reject for ip=%s from mac=%s\n", frame.DstIP(), frame.SrcMAC())
 
-			// If probing for lan IP, then unicast reply to srcMAC
-			//
-			// Note: detected one situation where android probed external DNS IP. Not sure if this occur in other clients.
-			//     arp  : probe reject for ip=8.8.8.8 from mac=84:11:9e:03:89:c0 (android phone) - 10 March 2021
-			if h.engine.NICInfo.HomeLAN4.Contains(frame.DstIP()) {
-				fmt.Printf("arp  : probe reject for ip=%s from mac=%s\n", frame.DstIP(), frame.SrcMAC())
-				h.reply(frame.SrcMAC(), h.engine.NICInfo.HostMAC, frame.DstIP(), frame.SrcMAC(), net.IP(EthernetBroadcast))
+				// If probing for lan IP, then unicast reply to srcMAC
+				//
+				// Note: detected one situation where android probed external DNS IP. Not sure if this occur in other clients.
+				//     arp  : probe reject for ip=8.8.8.8 from mac=84:11:9e:03:89:c0 (android phone) - 10 March 2021
+				if h.engine.NICInfo.HomeLAN4.Contains(frame.DstIP()) {
+					fmt.Printf("arp  : probe reject for ip=%s from mac=%s\n", frame.DstIP(), frame.SrcMAC())
+					h.reply(frame.SrcMAC(), h.engine.NICInfo.HostMAC, frame.DstIP(), frame.SrcMAC(), net.IP(EthernetBroadcast))
+				}
+				return host, nil
 			}
 		}
+		h.engine.Unlock()
 
 		// don't continue
 		return host, nil

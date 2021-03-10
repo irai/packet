@@ -111,7 +111,9 @@ func (h *Handler) stopHunt(ip net.IP) error {
 
 // IsCaptured return true is mac is in capture mode
 func (h *Handler) IsCaptured(mac net.HardwareAddr) bool {
-	if e := h.FindMACEntry(mac); e != nil && e.Captured {
+	h.Lock()
+	defer h.Unlock()
+	if e := h.FindMACEntryNoLock(mac); e != nil && e.Captured {
 		return true
 	}
 	return false
