@@ -22,7 +22,7 @@ type MACEntry struct {
 }
 
 func (e MACEntry) String() string {
-	return fmt.Sprintf("mac=%s captured=%v online=%v dhcpIP4=%s lastSeen=%v", e.MAC, e.Captured, e.Online, e.IP4Offer, time.Since(e.LastSeen))
+	return fmt.Sprintf("mac=%s captured=%v online=%v dhcpIP4=%s hosts=%dlastSeen=%v", e.MAC, e.Captured, e.Online, e.IP4Offer, len(e.HostList), time.Since(e.LastSeen))
 }
 
 // link appends the host to the macEntry host list
@@ -124,20 +124,17 @@ func (s *MACTable) index(mac net.HardwareAddr) int {
 	return -1
 }
 
-// MACTableUpsertIP4 insert of update mac IP4. Set by dhcp discovery.
-func (h *Handler) MACTableUpsertIP4(mac net.HardwareAddr, ip net.IP) {
+// MACTableUpsertIP4Offer insert of update mac IP4. Set by dhcp discovery.
+func (h *Handler) MACTableUpsertIP4Offer(mac net.HardwareAddr, ip net.IP) {
 	h.Lock()
 	defer h.Unlock()
-	if index := h.MACTable.index(mac); index != -1 {
-		h.MACTable.table[index].IP4Offer = ip
-		return
-	}
-	h.MACTable.table = append(h.MACTable.table, &MACEntry{MAC: mac, IP4Offer: ip})
+	host, _ := h.findOrCreateHost(mac, ip)
+	host.MACEntry.IP4Offer = ip
 }
 
-// MACTableGetIP4 returns the IP4 associated with this mac.
+// MACTableGetIP4Offer returns the IP4 associated with this mac.
 // Checked by arp ACP
-func (h *Handler) MACTableGetIP4(mac net.HardwareAddr) net.IP {
+func (h *Handler) MACTableGetIP4Offer(mac net.HardwareAddr) net.IP {
 	h.Lock()
 	defer h.Unlock()
 	if index := h.MACTable.index(mac); index != -1 {

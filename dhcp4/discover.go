@@ -111,7 +111,7 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (d DHCP4) {
 	fields["ip"] = lease.IP
 
 	// set the IP4 to be later checked in ARP ACD
-	h.engine.MACTableUpsertIP4(lease.MAC, lease.IP)
+	h.engine.MACTableUpsertIP4Offer(lease.MAC, lease.IP)
 
 	log.WithFields(fields).Info("dhcp4: offer OK")
 	return ret

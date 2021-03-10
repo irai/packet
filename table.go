@@ -79,7 +79,7 @@ func (h *Handler) FindOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host,
 	return h.findOrCreateHost(mac, ip)
 }
 
-// findOrCreateHost find the host associated to the frame IP.
+// findOrCreateHost find the host using the frame IP (avoid copy if not needed)
 func (h *Handler) findOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host, found bool) {
 
 	// trick to avoid buffer allocation in lookup
@@ -123,6 +123,16 @@ func (h *Handler) findOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host,
 	return host, false
 }
 
+func (h *Handler) deleteHostWithLock(ip net.IP) {
+	h.Lock()
+	defer h.Unlock()
+
+	if host := h.FindIPNoLock(ip); host != nil {
+		host.MACEntry.unlink(host)
+		delete(h.LANHosts.Table, string(host.IP))
+	}
+}
+
 // FindIP returns the host entry for IP or nil othewise
 func (h *Handler) FindIP(ip net.IP) *Host {
 	h.Lock()
@@ -158,8 +168,4 @@ func (h *Handler) GetTable() (list []Host) {
 		list = append(list, *v)
 	}
 	return list
-}
-
-func (h *HostTable) delete(ip net.IP) {
-	delete(h.Table, string(ip))
 }

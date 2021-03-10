@@ -73,13 +73,13 @@ func (h *Handler) purgeLoop(ctx context.Context, offline time.Duration, purge ti
 			h.Unlock()
 
 			for _, ip := range offline {
-				h.setOffline(ip)
+				h.setOffline(ip) // will lock/unlock
 			}
 
 			// delete after loop because this will change the table
 			if len(purge) > 0 {
 				for _, v := range purge {
-					h.LANHosts.delete(v)
+					h.deleteHostWithLock(v)
 				}
 			}
 		}

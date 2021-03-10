@@ -166,7 +166,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 		}
 		// if there is an open DHCP offer, then reject any other ip
 		// if ip := h.engine.CaptureList.GetIP4(frame.SrcMAC()); ip != nil && !ip.Equal(frame.DstIP()) {
-		if ip := h.engine.MACTableGetIP4(frame.SrcMAC()); ip != nil && !ip.Equal(frame.DstIP()) {
+		if ip := h.engine.MACTableGetIP4Offer(frame.SrcMAC()); ip != nil && !ip.Equal(frame.DstIP()) {
 			fmt.Printf("DEBUG arp  : probe reject for ip=%s from mac=%s\n", frame.DstIP(), frame.SrcMAC())
 
 			// If probing for lan IP, then unicast reply to srcMAC
