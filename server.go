@@ -423,20 +423,20 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		}
 
 		if host != nil {
-			h.lockAndSetOnline(host)
+			h.Lock()
+			h.setOnline(host)
+			h.Unlock()
 		}
 	}
 }
 
-func (h *Handler) lockAndSetOnline(host *Host) {
+func (h *Handler) setOnline(host *Host) {
 	now := time.Now()
-	h.Lock()
 
 	// set macEntry to online
 	host.MACEntry.LastSeen = now
 	host.LastSeen = now
 	if host.Online {
-		h.Unlock()
 		return
 	}
 
@@ -453,19 +453,21 @@ func (h *Handler) lockAndSetOnline(host *Host) {
 	host.Online = true
 	mac := host.MACEntry.MAC
 	ip := host.IP
-	h.Unlock()
 
 	if Debug {
 		fmt.Printf("packet: IP is online ip=%s mac=%s\n", ip, mac)
 	}
 
-	if captured {
-		if err := h.lockAndStartHunt(ip); err != nil {
-			fmt.Println("packet: failed to start hunt error", err)
+	// start hunt and notify in goroutine
+	go func() {
+		if captured {
+			if err := h.lockAndStartHunt(ip); err != nil {
+				fmt.Println("packet: failed to start hunt error", err)
+			}
 		}
-	}
-	notification := Notification{IP: ip, MAC: mac, Online: true}
-	go h.notifyCallback(notification)
+		notification := Notification{IP: ip, MAC: mac, Online: true}
+		h.notifyCallback(notification)
+	}()
 }
 
 func (h *Handler) lockAndSetOffline(ip net.IP) {

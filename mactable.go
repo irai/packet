@@ -22,7 +22,8 @@ type MACEntry struct {
 }
 
 func (e MACEntry) String() string {
-	return fmt.Sprintf("mac=%s captured=%v online=%v dhcpIP4=%s hosts=%d lastSeen=%v", e.MAC, e.Captured, e.Online, e.IP4Offer, len(e.HostList), time.Since(e.LastSeen))
+	return fmt.Sprintf("mac=%s captured=%v online=%v ip4=%s ip6=%s ip4offer=%s hosts=%d lastSeen=%v",
+		e.MAC, e.Captured, e.Online, e.IP4, e.IP6, e.IP4Offer, len(e.HostList), time.Since(e.LastSeen))
 }
 
 // link appends the host to the macEntry host list
@@ -127,8 +128,10 @@ func (s *MACTable) index(mac net.HardwareAddr) int {
 func (h *Handler) MACTableUpsertIP4Offer(mac net.HardwareAddr, ip net.IP) {
 	h.Lock()
 	defer h.Unlock()
-	host, _ := h.findOrCreateHost(mac, ip)
-	host.MACEntry.IP4Offer = ip
+	if h.NICInfo.HostIP4.Contains(ip) {
+		host, _ := h.findOrCreateHost(mac, ip)
+		host.MACEntry.IP4Offer = ip
+	}
 }
 
 // MACTableGetIP4Offer returns the IP4 associated with this mac.

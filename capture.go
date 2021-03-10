@@ -119,6 +119,7 @@ func (h *Handler) IsCaptured(mac net.HardwareAddr) bool {
 }
 
 func (h *Handler) checkIPChanged(host *Host) {
+	fmt.Println("DEBUG: check ip changed ", host, host.MACEntry)
 	// set macEntry current IP
 	if host.IP.To4() != nil {
 		if !host.MACEntry.IP4.Equal(host.IP) { // changed IP

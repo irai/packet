@@ -143,13 +143,16 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 			fmt.Printf("arp  : who is %s: %s\n", frame.DstIP(), frame)
 		}
 		// if we are spoofing the IP, reply on behals of host
+		h.engine.Lock()
 		if host != nil && host.HuntStage == packet.StageHunt && frame.DstIP().Equal(h.engine.NICInfo.RouterIP4.IP) {
+			h.engine.Unlock()
 			if Debug {
 				log.Printf("arp: router spoofing - send reply i am ip=%s", frame.DstIP())
 			}
 			h.reply(frame.SrcMAC(), h.engine.NICInfo.HostMAC, frame.DstIP(), frame.SrcMAC(), frame.SrcIP())
 			return host, nil
 		}
+		h.engine.Unlock()
 
 	case probe:
 		// We are interested in probe ACD (Address Conflict Detection) packets for IPs that we have an open DHCP offer
@@ -198,20 +201,6 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 			fmt.Println("ether:", ether)
 			fmt.Printf("arp  : announcement recvd: %s\n", frame)
 		}
-		/***
-		// if targetIP is a virtual host, we are claiming the ip; reply and return
-		h.arpMutex.RLock()
-		if target := h.virtual.findVirtualIP(frame.DstIP()); target != nil {
-			mac := target.MAC
-			h.arpMutex.RUnlock()
-			if Debug {
-				log.Printf("arp ip=%s is virtual - send reply smac=%v", frame.DstIP(), mac)
-			}
-			h.reply(frame.SrcMAC(), mac, frame.DstIP(), EthernetBroadcast, frame.DstIP())
-			return host, nil
-		}
-		h.arpMutex.RUnlock()
-		***/
 
 	default:
 		// +============+===+===========+===========+============+============+===================+===========+

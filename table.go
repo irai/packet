@@ -33,6 +33,8 @@ func (s HuntStage) String() string {
 }
 
 // Host holds a host identification
+// Must lock before accessing any data
+// Host pointers are shared with all plugins.
 type Host struct {
 	IP         net.IP    // either IP6 or ip4
 	MACEntry   *MACEntry // pointer to mac entry
@@ -84,6 +86,8 @@ func (h *Handler) FindOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host,
 }
 
 // findOrCreateHost find the host using the frame IP (avoid copy if not needed)
+//
+// Must have lock before calling
 func (h *Handler) findOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host, found bool) {
 
 	// trick to avoid buffer allocation in lookup
@@ -122,14 +126,7 @@ func (h *Handler) findOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host,
 	host = &Host{IP: CopyIP(ip), MACEntry: macEntry, Online: false} // set Online to false to trigger Online transition
 	host.LastSeen = now
 	host.MACEntry.LastSeen = now
-	if ip.To4() != nil {
-		host.MACEntry.IP4 = ip
-	} else {
-		// TODO: do we need to capture LLA as well?
-		if ip.IsGlobalUnicast() {
-			host.MACEntry.IP6 = ip
-		}
-	}
+	host.MACEntry.updateIP(ip)
 	h.LANHosts.Table[string(host.IP)] = host
 
 	// link host to macEntry
