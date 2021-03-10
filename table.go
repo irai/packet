@@ -60,13 +60,18 @@ func newHostTable() HostTable {
 }
 
 // PrintTable logs ICMP6 tables to standard out
-func (h *HostTable) printTable() {
-
-	if len(h.Table) > 0 {
-		for _, v := range h.Table {
-			fmt.Println(v)
+func (h *Handler) printHostTable() {
+	count := 0
+	for _, v := range h.MACTable.table {
+		for _, host := range v.HostList {
+			fmt.Println("host :", host)
+			count++
 		}
 	}
+	if count != len(h.LANHosts.Table) { // validate our logic - DELETE and replace with test in future
+		panic(fmt.Sprintf("host table differ in lenght hosts=%d machosts=%d  ", len(h.LANHosts.Table), count))
+	}
+
 }
 
 // FindOrCreateHost will create a new host entry or return existing

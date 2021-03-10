@@ -194,10 +194,10 @@ func (h *Handler) setupConn() (conn net.PacketConn, err error) {
 func (h *Handler) PrintTable() {
 	h.Lock()
 	defer h.Unlock()
-	fmt.Println("mac table")
+	fmt.Printf("mac table len=%d\n", len(h.MACTable.table))
 	h.printMACTable()
-	// fmt.Printf("hosts table len=%v\n", len(h.LANHosts.Table))
-	// h.LANHosts.printTable()
+	fmt.Printf("hosts table len=%v\n", len(h.LANHosts.Table))
+	h.printHostTable()
 }
 
 // isUnicastMAC return true if the mac address is unicast

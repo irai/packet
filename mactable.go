@@ -22,7 +22,7 @@ type MACEntry struct {
 }
 
 func (e MACEntry) String() string {
-	return fmt.Sprintf("mac=%s captured=%v online=%v dhcpIP4=%s hosts=%dlastSeen=%v", e.MAC, e.Captured, e.Online, e.IP4Offer, len(e.HostList), time.Since(e.LastSeen))
+	return fmt.Sprintf("mac=%s captured=%v online=%v dhcpIP4=%s hosts=%d lastSeen=%v", e.MAC, e.Captured, e.Online, e.IP4Offer, len(e.HostList), time.Since(e.LastSeen))
 }
 
 // link appends the host to the macEntry host list
@@ -56,18 +56,8 @@ func newMACTable(engine *Handler) MACTable {
 
 // PrintTable prints the table to stdout
 func (h *Handler) printMACTable() {
-	count := 0
 	for _, v := range h.MACTable.table {
 		fmt.Println("mac  :", v)
-		count = count + len(v.HostList)
-	}
-	for _, v := range h.MACTable.table {
-		for _, host := range v.HostList {
-			fmt.Println("host :", host)
-		}
-	}
-	if count != len(h.LANHosts.Table) { // validate our logic - DELETE and replace with test in future
-		panic(fmt.Sprintf("host table differ in lenght hosts=%d machosts=%d  ", len(h.LANHosts.Table), count))
 	}
 }
 
