@@ -471,14 +471,13 @@ func (h *Handler) setOnline(host *Host) {
 }
 
 func (h *Handler) lockAndSetOffline(ip net.IP) {
-	if ip == nil {
-		return
-	}
 	h.Lock()
 	host := h.FindIPNoLock(ip)
 	if host == nil {
 		h.Unlock()
-		fmt.Printf("packet: error in setOffline - host not found ip=%v\n", ip)
+		if !ip.Equal(net.IPv4zero) && !ip.Equal(net.IPv6zero) {
+			fmt.Printf("packet: error in setOffline - host not found ip=%v\n", ip)
+		}
 		return
 	}
 	if !host.Online {

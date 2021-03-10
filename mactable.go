@@ -82,7 +82,7 @@ func (s *MACTable) findOrCreate(mac net.HardwareAddr) *MACEntry {
 	if e := s.findMAC(mac); e != nil {
 		return e
 	}
-	e := &MACEntry{MAC: mac}
+	e := &MACEntry{MAC: mac, IP4: net.IPv4zero, IP6GUA: net.IPv6zero, IP6LLA: net.IPv6zero, IP4Offer: net.IPv4zero}
 	s.table = append(s.table, e)
 	return e
 }
