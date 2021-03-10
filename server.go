@@ -471,6 +471,9 @@ func (h *Handler) setOnline(host *Host) {
 }
 
 func (h *Handler) lockAndSetOffline(ip net.IP) {
+	if ip == nil {
+		return
+	}
 	h.Lock()
 	host := h.FindIPNoLock(ip)
 	if host == nil {
