@@ -104,10 +104,12 @@ func (h *Handler) findOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host,
 	if host, ok := h.LANHosts.Table[string(v4InV6Prefix)]; ok {
 		if !bytes.Equal(host.MACEntry.MAC, mac) {
 			fmt.Println("packet: error mac address differ - duplicated IP???", host.MACEntry.MAC, mac, v4InV6Prefix)
+			h.printHostTable()
 			// link host to new macEntry
 			mac := CopyMAC(mac)
 			host.MACEntry.unlink(host) // remove IP from existing mac
 			macEntry := h.MACTable.findOrCreate(mac)
+			macEntry.updateIP(host.IP)
 			macEntry.link(host)
 			host.MACEntry = macEntry
 		}
