@@ -143,7 +143,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 			fmt.Printf("arp  : who is %s: %s\n", frame.DstIP(), frame)
 		}
 		// if we are spoofing the IP, reply on behals of host
-		if host != nil && host.HuntStageIP4 == packet.StageHunt && frame.DstIP().Equal(h.engine.NICInfo.RouterIP4.IP) {
+		if host != nil && host.HuntStage == packet.StageHunt && frame.DstIP().Equal(h.engine.NICInfo.RouterIP4.IP) {
 			if Debug {
 				log.Printf("arp: router spoofing - send reply i am ip=%s", frame.DstIP())
 			}

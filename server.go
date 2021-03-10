@@ -422,19 +422,17 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			fmt.Println("packet: unsupported level 4 header", l4Proto)
 		}
 
-		h.setOnline(host)
+		if host != nil {
+			h.lockAndSetOnline(host)
+		}
 	}
 }
 
-func (h *Handler) setOnline(host *Host) {
-	if host == nil {
-		return
-	}
-
+func (h *Handler) lockAndSetOnline(host *Host) {
 	now := time.Now()
 	h.Lock()
 
-	// set macEntry to online and last seen too
+	// set macEntry to online
 	host.MACEntry.LastSeen = now
 	host.LastSeen = now
 	if host.Online {
@@ -442,30 +440,19 @@ func (h *Handler) setOnline(host *Host) {
 		return
 	}
 
-	// set macEntry current IP
-	if host.IP.To4() != nil {
-		if host.HuntStageIP4 == StageHunt && !host.MACEntry.IP4.Equal(host.IP) { // changed IP
-			h.stopHunt(host.IP)
-		}
-		host.MACEntry.IP4 = host.IP
-	} else {
-		if host.HuntStageIP6 == StageHunt && !host.MACEntry.IP6.Equal(host.IP) { // changed IP
-			h.stopHunt(host.IP)
-		}
-		if host.IP.IsGlobalUnicast() { // only interested in GUA
-			host.MACEntry.IP6 = host.IP
-		}
+	// if mac is captured, then start hunting process when IP is online
+	captured := host.MACEntry.Captured
+	if captured {
+		host.HuntStage = StageHunt
 	}
+
+	// will make previous IP offline
+	h.checkIPChanged(host)
+
 	host.MACEntry.Online = true
 	host.Online = true
 	mac := host.MACEntry.MAC
 	ip := host.IP
-	captured := host.MACEntry.Captured
-	// if captured, then start hunting process
-	if captured {
-		host.HuntStageIP4 = StageHunt
-		host.HuntStageIP6 = StageHunt
-	}
 	h.Unlock()
 
 	if Debug {
@@ -473,7 +460,7 @@ func (h *Handler) setOnline(host *Host) {
 	}
 
 	if captured {
-		if err := h.startHunt(ip); err != nil {
+		if err := h.lockAndStartHunt(ip); err != nil {
 			fmt.Println("packet: failed to start hunt error", err)
 		}
 	}
@@ -481,17 +468,21 @@ func (h *Handler) setOnline(host *Host) {
 	go h.notifyCallback(notification)
 }
 
-func (h *Handler) setOffline(ip net.IP) {
+func (h *Handler) lockAndSetOffline(ip net.IP) {
 	h.Lock()
 	host := h.FindIPNoLock(ip)
+	if host == nil {
+		h.Unlock()
+		fmt.Printf("packet: error in setOffline - host not found ip=%v\n", ip)
+		return
+	}
 	if !host.Online {
 		h.Unlock()
 		return
 	}
 
 	host.Online = false
-	host.HuntStageIP4 = StageNormal // end hunting if in progress
-	host.HuntStageIP6 = StageNormal // end hunting if in progress
+	host.HuntStage = StageNormal // end hunting if in progress
 	mac := host.MACEntry.MAC
 	h.Unlock()
 

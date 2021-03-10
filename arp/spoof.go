@@ -14,7 +14,7 @@ import (
 // Engine must set host.HuntStageIP4 to StageHunt prior to calling this
 func (h *Handler) StartHunt(ip net.IP) error {
 	host := h.engine.FindIP(ip)
-	if host == nil || host.HuntStageIP4 != packet.StageHunt || host.IP.To4() == nil {
+	if host == nil || host.HuntStage != packet.StageHunt || host.IP.To4() == nil {
 		fmt.Println("arp: invalid call to startHuntIP", host)
 		return packet.ErrInvalidIP
 	}
@@ -26,7 +26,7 @@ func (h *Handler) StartHunt(ip net.IP) error {
 // Engine must set host.HuntStageIP4 != StageHunt prior to calling this
 func (h *Handler) StopHunt(ip net.IP) error {
 	host := h.engine.FindIP(ip)
-	if host != nil && host.HuntStageIP4 == packet.StageHunt {
+	if host != nil && host.HuntStage == packet.StageHunt {
 		fmt.Println("invalid call to stopHuntIP", host)
 	}
 	return nil
@@ -76,7 +76,7 @@ func (h *Handler) spoofLoop(ip net.IP) {
 	for {
 		h.engine.Lock()
 		host := h.engine.FindIPNoLock(ip) // will lock/unlock engine
-		if host == nil || host.HuntStageIP4 != packet.StageHunt || h.closed {
+		if host == nil || host.HuntStage != packet.StageHunt || h.closed {
 			h.engine.Unlock()
 			log.Printf("arp attack end ip=%s repeat=%v duration=%v", ip, nTimes, time.Now().Sub(startTime))
 			return

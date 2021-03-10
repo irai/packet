@@ -2,6 +2,7 @@ package packet
 
 import (
 	"bytes"
+	"fmt"
 	"net"
 )
 
@@ -19,22 +20,21 @@ func (h *Handler) Capture(mac net.HardwareAddr) error {
 	// Mark all known entries as StageHunt
 	for _, v := range h.LANHosts.Table {
 		if bytes.Equal(v.MACEntry.MAC, mac) {
-			v.HuntStageIP4 = StageHunt
-			v.HuntStageIP6 = StageHunt
+			v.HuntStage = StageHunt
 			list = append(list, v.IP)
 		}
 	}
 	h.Unlock()
 
 	for _, ip := range list {
-		if err := h.startHunt(ip); err != nil {
+		if err := h.lockAndStartHunt(ip); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (h *Handler) startHunt(ip net.IP) error {
+func (h *Handler) lockAndStartHunt(ip net.IP) error {
 	// IP4 handlers
 	if ip.To4() != nil {
 		if err := h.HandlerARP.StartHunt(ip); err != nil {
@@ -70,8 +70,7 @@ func (h *Handler) Release(mac net.HardwareAddr) error {
 	// Mark all known entries as StageNormal
 	for _, v := range h.LANHosts.Table {
 		if bytes.Equal(v.MACEntry.MAC, mac) {
-			v.HuntStageIP4 = StageNormal
-			v.HuntStageIP6 = StageNormal
+			v.HuntStage = StageNormal
 			list = append(list, v.IP)
 		}
 	}
@@ -80,14 +79,14 @@ func (h *Handler) Release(mac net.HardwareAddr) error {
 	h.Unlock()
 
 	for _, ip := range list {
-		if err := h.stopHunt(ip); err != nil {
+		if err := h.lockAndStopHunt(ip); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (h *Handler) stopHunt(ip net.IP) error {
+func (h *Handler) lockAndStopHunt(ip net.IP) error {
 	// IP4 handlers
 	if ip.To4() != nil {
 		if err := h.HandlerDHCP4.StopHunt(ip); err != nil {
@@ -117,4 +116,22 @@ func (h *Handler) IsCaptured(mac net.HardwareAddr) bool {
 		return true
 	}
 	return false
+}
+
+func (h *Handler) checkIPChanged(host *Host) {
+	// set macEntry current IP
+	if host.IP.To4() != nil {
+		if host.HuntStage == StageHunt && !host.MACEntry.IP4.Equal(host.IP) { // changed IP
+			fmt.Printf("packet: host changed ip from=%s to=%s", host.MACEntry.IP4, host.IP)
+			go h.lockAndSetOffline(host.MACEntry.IP4) // set previous host offline in goroutine as it will lock
+			host.MACEntry.IP4 = host.IP
+		}
+	} else {
+		// Only interested in GUA changes
+		if host.HuntStage == StageHunt && host.IP.IsGlobalUnicast() && !host.MACEntry.IP6.Equal(host.IP) { // changed IP
+			fmt.Printf("packet: host changed ip from=%s to=%s", host.MACEntry.IP6, host.IP)
+			go h.lockAndSetOffline(host.MACEntry.IP6) // set previous host offline in goroutine as it will lock
+			host.MACEntry.IP6 = host.IP
+		}
+	}
 }

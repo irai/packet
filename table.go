@@ -34,24 +34,23 @@ func (s HuntStage) String() string {
 
 // Host holds a host identification
 type Host struct {
-	IP           net.IP    // either IP6 or ip4
-	MACEntry     *MACEntry // pointer to mac entry
-	Online       bool
-	IPV6Router   bool
-	HuntStageIP4 HuntStage
-	HuntStageIP6 HuntStage
-	LastSeen     time.Time
-	ICMP4        interface{}
-	DHCP4        interface{}
-	ICMP6        interface{}
-	DHCP6        interface{}
-	MDNS         interface{}
-	NBNS         interface{}
-	ARP          interface{}
+	IP         net.IP    // either IP6 or ip4
+	MACEntry   *MACEntry // pointer to mac entry
+	Online     bool
+	IPV6Router bool
+	HuntStage  HuntStage
+	LastSeen   time.Time
+	ICMP4      interface{}
+	DHCP4      interface{}
+	ICMP6      interface{}
+	DHCP6      interface{}
+	MDNS       interface{}
+	NBNS       interface{}
+	ARP        interface{}
 }
 
 func (e *Host) String() string {
-	return fmt.Sprintf("mac=%s ip=%v online=%v stage4=%s stage6=%s lastSeen=%s", e.MACEntry.MAC, e.IP, e.Online, e.HuntStageIP4, e.HuntStageIP6, time.Since(e.LastSeen))
+	return fmt.Sprintf("mac=%s ip=%v online=%v stage4=%s lastSeen=%s", e.MACEntry.MAC, e.IP, e.Online, e.HuntStage, time.Since(e.LastSeen))
 }
 
 // newHostTable returns a HostTable handler
@@ -118,7 +117,7 @@ func (h *Handler) findOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host,
 	}
 	mac = CopyMAC(mac) // copy from frame
 	macEntry := h.MACTable.findOrCreate(mac)
-	host = &Host{IP: CopyIP(ip), MACEntry: macEntry, Online: false}
+	host = &Host{IP: CopyIP(ip), MACEntry: macEntry, Online: false} // set Online to false to trigger Online transition
 	host.LastSeen = now
 	host.MACEntry.LastSeen = now
 	h.LANHosts.Table[string(host.IP)] = host
