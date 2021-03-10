@@ -121,14 +121,14 @@ func (h *Handler) IsCaptured(mac net.HardwareAddr) bool {
 func (h *Handler) checkIPChanged(host *Host) {
 	// set macEntry current IP
 	if host.IP.To4() != nil {
-		if host.HuntStage == StageHunt && !host.MACEntry.IP4.Equal(host.IP) { // changed IP
+		if !host.MACEntry.IP4.Equal(host.IP) { // changed IP
 			fmt.Printf("packet: host changed ip from=%s to=%s", host.MACEntry.IP4, host.IP)
 			go h.lockAndSetOffline(host.MACEntry.IP4) // set previous host offline in goroutine as it will lock
 			host.MACEntry.IP4 = host.IP
 		}
 	} else {
 		// Only interested in GUA changes
-		if host.HuntStage == StageHunt && host.IP.IsGlobalUnicast() && !host.MACEntry.IP6.Equal(host.IP) { // changed IP
+		if host.IP.IsGlobalUnicast() && !host.MACEntry.IP6.Equal(host.IP) { // changed IP
 			fmt.Printf("packet: host changed ip from=%s to=%s", host.MACEntry.IP6, host.IP)
 			go h.lockAndSetOffline(host.MACEntry.IP6) // set previous host offline in goroutine as it will lock
 			host.MACEntry.IP6 = host.IP
