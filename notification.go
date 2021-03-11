@@ -1,7 +1,6 @@
 package packet
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"time"
@@ -34,7 +33,7 @@ func (h *Handler) AddCallback(f func(Notification) error) {
 	}()
 }
 
-func (h *Handler) purgeLoop(ctx context.Context, offline time.Duration, purge time.Duration) error {
+func (h *Handler) purgeLoop(offline time.Duration, purge time.Duration) error {
 
 	// Typically one minute but loop more often if offline smaller than 1 minute
 	dur := time.Minute * 1
@@ -44,7 +43,7 @@ func (h *Handler) purgeLoop(ctx context.Context, offline time.Duration, purge ti
 	ticker := time.NewTicker(dur).C
 	for {
 		select {
-		case <-ctx.Done():
+		case <-h.closeChan:
 			return nil
 
 		case <-ticker:

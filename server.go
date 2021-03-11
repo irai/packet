@@ -47,12 +47,14 @@ type Handler struct {
 	HandlerICMP6            PacketProcessor
 	HandlerDHCP4            PacketProcessor
 	HandlerARP              PacketProcessor
+	IP4RouteValidation      func(Addr) HuntStage
 	callback                []func(Notification) error
 	FullNetworkScanInterval time.Duration // Set it to -1 if no scan required
 	ProbeInterval           time.Duration // how often to probe if IP is online
 	OfflineDeadline         time.Duration // mark offline if no updates
 	PurgeDeadline           time.Duration // purge entry if no updates
 	closed                  bool          // set to true when handler is closed
+	closeChan               chan bool     // close goroutines channel
 	sync.Mutex
 }
 
@@ -77,7 +79,7 @@ func (config Config) NewEngine(nic string) (*Handler, error) {
 
 	var err error
 
-	h := &Handler{LANHosts: newHostTable()}
+	h := &Handler{LANHosts: newHostTable(), closeChan: make(chan bool)}
 	h.MACTable = newMACTable(h)
 
 	h.NICInfo = config.NICInfo
@@ -132,6 +134,7 @@ func (h *Handler) Close() error {
 		fmt.Println("packet: close() called. closing....")
 	}
 	h.closed = true
+	close(h.closeChan) // will terminate goroutines
 	h.conn.Close()
 	return nil
 }
@@ -265,7 +268,8 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 	go h.startPlugins()
 	defer h.stopPlugins()
 
-	go h.purgeLoop(ctxt, h.OfflineDeadline, h.PurgeDeadline)
+	go h.purgeLoop(h.OfflineDeadline, h.PurgeDeadline)
+	go h.routeMonitorLoop(time.Minute)
 
 	buf := make([]byte, EthMaxSize)
 	for {
@@ -442,26 +446,23 @@ func (h *Handler) setOnline(host *Host) {
 
 	// if mac is captured, then start hunting process when IP is online
 	captured := host.MACEntry.Captured
-	if captured {
-		host.HuntStage = StageHunt
-	}
 
 	// test if we need to make previous IP offline
 	// and set macEntry current IP to new IP
 	var offlineIP net.IP
 	if host.IP.To4() != nil {
-		if !host.IP.Equal(host.MACEntry.IP4) { // changed IP
+		if !host.IP.Equal(host.MACEntry.IP4) { // changed IP4
 			fmt.Printf("packet: host changed ip4 from=%s to=%s\n", host.MACEntry.IP4, host.IP)
 			offlineIP = host.MACEntry.IP4
 			host.MACEntry.updateIP(host.IP)
 		}
 	} else {
-		if host.IP.IsGlobalUnicast() && !host.IP.Equal(host.MACEntry.IP6GUA) { // changed IP
+		if host.IP.IsGlobalUnicast() && !host.IP.Equal(host.MACEntry.IP6GUA) { // changed IP6 global unique address
 			fmt.Printf("packet: host changed ip6 from=%s to=%s\n", host.MACEntry.IP6GUA, host.IP)
 			offlineIP = host.MACEntry.IP6GUA
 			host.MACEntry.updateIP(host.IP)
 		}
-		if host.IP.IsLinkLocalUnicast() && !host.IP.Equal(host.MACEntry.IP6LLA) { // changed IP
+		if host.IP.IsLinkLocalUnicast() && !host.IP.Equal(host.MACEntry.IP6LLA) { // changed IP6 link local address
 			fmt.Printf("packet: host changed ip6LLA from=%s to=%s\n", host.MACEntry.IP6LLA, host.IP)
 			// don't set offline IP as we don't target LLA
 			host.MACEntry.updateIP(host.IP)
@@ -509,7 +510,6 @@ func (h *Handler) lockAndSetOffline(ip net.IP) {
 	}
 
 	host.Online = false
-	host.HuntStage = StageNormal // end hunting if in progress
 	mac := host.MACEntry.MAC
 	h.Unlock()
 
@@ -517,6 +517,10 @@ func (h *Handler) lockAndSetOffline(ip net.IP) {
 		fmt.Printf("packet: IP is offline ip=%s mac=%s\n", ip, mac)
 	}
 
-	notification := Notification{IP: ip, MAC: mac, Online: false}
-	go h.notifyCallback(notification)
+	go func() {
+		h.lockAndStopHunt(ip)
+
+		notification := Notification{IP: ip, MAC: mac, Online: false}
+		h.notifyCallback(notification)
+	}()
 }

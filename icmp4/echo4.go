@@ -111,3 +111,31 @@ func (h *Handler) Ping(srcAddr packet.Addr, dstAddr packet.Addr, timeout time.Du
 
 	return nil
 }
+
+// IP4RouteValidation validates the default route is pointing to us by pinging
+// client using home router IP as source IP. The reply will come to us
+// when the default route on client is netfilter. If not, the ping
+// reply will not be received.
+//
+// Note: the reply will also come to us if the client is undergoing
+// an arp attack (hunt).
+func (h *Handler) IP4RouteValidation(addr packet.Addr) packet.HuntStage {
+	// Test if client is online first
+	// If client does not respond to echo, there is little we can test
+	if err := h.Ping(packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostIP4.IP}, addr, time.Second*2); err != nil {
+		fmt.Printf("icmp4 : not responding to ping ip=%s mac=%s\n", addr.IP, addr.MAC)
+		return packet.StageNormal
+	}
+
+	err := h.Ping(packet.Addr{MAC: h.engine.NICInfo.RouterMAC, IP: h.engine.NICInfo.RouterIP4.IP}, addr, time.Second*2)
+	if err == nil {
+		return packet.StageRedirected
+	}
+	time.Sleep(time.Millisecond * 10)
+	err = h.Ping(packet.Addr{MAC: h.engine.NICInfo.RouterMAC, IP: h.engine.NICInfo.RouterIP4.IP}, addr, time.Second*2)
+	if err == nil {
+		return packet.StageRedirected
+	}
+
+	return packet.StageHunt
+}

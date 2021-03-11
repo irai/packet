@@ -16,7 +16,7 @@ func (h *Handler) startHunt(ip net.IP) error {
 		log.Printf("icmp6 force neighbor spoof mac=%s", ip)
 	}
 	host := h.engine.FindIP(ip)
-	if host == nil || host.HuntStage != packet.StageHunt || !packet.IsIP6(host.IP) {
+	if host == nil || host.HuntStageNoLock() != packet.StageHunt || !packet.IsIP6(host.IP) {
 		fmt.Println("icmp6: invalid call to startHuntIP", host)
 		return packet.ErrInvalidIP
 	}
@@ -31,7 +31,7 @@ func (h *Handler) stopHunt(ip net.IP) error {
 		log.Printf("icmp6 stop neighbor spoof mac=%s", ip)
 	}
 	host := h.engine.FindIP(ip)
-	if host != nil && (host.HuntStage == packet.StageHunt || !packet.IsIP6(host.IP)) {
+	if host != nil && (host.HuntStageNoLock() == packet.StageHunt || !packet.IsIP6(host.IP)) {
 		fmt.Println("invalid call to stopHuntIP", host)
 	}
 
@@ -54,7 +54,7 @@ func (h *Handler) spoofLoop(ip net.IP) {
 	for {
 		h.engine.Lock()
 		host := h.engine.FindIPNoLock(ip) // will lock/unlock engine
-		if host == nil || host.HuntStage != packet.StageHunt || h.closed {
+		if host == nil || host.HuntStageNoLock() != packet.StageHunt || h.closed {
 			h.engine.Unlock()
 			log.Printf("icmp6: attack end ip=%s repeat=%v duration=%v", ip, nTimes, time.Now().Sub(startTime))
 			return

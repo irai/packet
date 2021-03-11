@@ -1,8 +1,9 @@
 package packet
 
 import (
-	"bytes"
+	"fmt"
 	"net"
+	"time"
 )
 
 // Capture places the mac in capture mode
@@ -17,11 +18,8 @@ func (h *Handler) Capture(mac net.HardwareAddr) error {
 
 	list := []net.IP{}
 	// Mark all known entries as StageHunt
-	for _, v := range h.LANHosts.Table {
-		if bytes.Equal(v.MACEntry.MAC, mac) {
-			v.HuntStage = StageHunt
-			list = append(list, v.IP)
-		}
+	for _, v := range macEntry.HostList {
+		list = append(list, v.IP)
 	}
 	h.Unlock()
 
@@ -34,6 +32,16 @@ func (h *Handler) Capture(mac net.HardwareAddr) error {
 }
 
 func (h *Handler) lockAndStartHunt(ip net.IP) error {
+	h.Lock()
+	host := h.FindIPNoLock(ip)
+	if host == nil {
+		h.Unlock()
+		fmt.Printf("packet: error invalid ip in lockAndStartHunt ip=%s\n", ip)
+		return ErrInvalidIP
+	}
+	host.huntStage = StageHunt
+	h.Unlock()
+
 	// IP4 handlers
 	if ip.To4() != nil {
 		if err := h.HandlerARP.StartHunt(ip); err != nil {
@@ -67,11 +75,8 @@ func (h *Handler) Release(mac net.HardwareAddr) error {
 
 	list := []net.IP{}
 	// Mark all known entries as StageNormal
-	for _, v := range h.LANHosts.Table {
-		if bytes.Equal(v.MACEntry.MAC, mac) {
-			v.HuntStage = StageNormal
-			list = append(list, v.IP)
-		}
+	for _, v := range macEntry.HostList {
+		list = append(list, v.IP)
 	}
 
 	macEntry.Captured = false
@@ -86,6 +91,16 @@ func (h *Handler) Release(mac net.HardwareAddr) error {
 }
 
 func (h *Handler) lockAndStopHunt(ip net.IP) error {
+	h.Lock()
+	host := h.FindIPNoLock(ip)
+	if host == nil {
+		h.Unlock()
+		fmt.Printf("packet: error invalid ip in lockAndStopHunt ip=%s\n", ip)
+		return ErrInvalidIP
+	}
+	host.huntStage = StageNormal
+	h.Unlock()
+
 	// IP4 handlers
 	if ip.To4() != nil {
 		if err := h.HandlerDHCP4.StopHunt(ip); err != nil {
@@ -115,4 +130,41 @@ func (h *Handler) IsCaptured(mac net.HardwareAddr) bool {
 		return true
 	}
 	return false
+}
+
+func (h *Handler) routeMonitorLoop(interval time.Duration) (err error) {
+	if interval < time.Second*10 {
+		interval = time.Second * 10
+	}
+
+	for {
+		ip4Addrs := []Addr{}
+		h.Lock()
+		for _, host := range h.LANHosts.Table {
+			if host.huntStage == StageRedirected && host.IP.To4() != nil {
+				ip4Addrs = append(ip4Addrs, Addr{IP: host.IP, MAC: host.MACEntry.MAC})
+			}
+		}
+		h.Unlock()
+
+		if h.IP4RouteValidation != nil {
+			for _, addr := range ip4Addrs {
+				stage := h.IP4RouteValidation(addr)
+				switch stage {
+				case StageHunt:
+					fmt.Printf("packet: ip4 routing NOK ip=%s mac=%s\n", addr.IP, addr.MAC)
+					h.lockAndStartHunt(addr.IP)
+				case StageRedirected:
+					if Debug {
+						fmt.Printf("packet: ip4 routing OK ip=%s mac=%s\n", addr.IP, addr.MAC)
+					}
+				}
+			}
+		}
+		select {
+		case <-h.closeChan:
+			return
+		case <-time.After(interval):
+		}
+	}
 }

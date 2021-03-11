@@ -40,7 +40,7 @@ type Host struct {
 	MACEntry   *MACEntry // pointer to mac entry
 	Online     bool
 	IPV6Router bool
-	HuntStage  HuntStage
+	huntStage  HuntStage
 	LastSeen   time.Time
 	ICMP4      interface{}
 	DHCP4      interface{}
@@ -52,7 +52,12 @@ type Host struct {
 }
 
 func (e *Host) String() string {
-	return fmt.Sprintf("mac=%s ip=%v online=%v stage4=%s lastSeen=%s", e.MACEntry.MAC, e.IP, e.Online, e.HuntStage, time.Since(e.LastSeen))
+	return fmt.Sprintf("mac=%s ip=%v online=%v stage4=%s lastSeen=%s", e.MACEntry.MAC, e.IP, e.Online, e.huntStage, time.Since(e.LastSeen))
+}
+
+// HuntStageNoLock retusn the internal hunt stage
+func (e *Host) HuntStageNoLock() HuntStage {
+	return e.huntStage
 }
 
 // newHostTable returns a HostTable handler

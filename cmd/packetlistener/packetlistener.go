@@ -126,6 +126,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to create icmp nic=%s handler: %s", *nic, err)
 	}
+	handlers.engine.IP4RouteValidation = handlers.icmp4.IP4RouteValidation
 
 	// ICMPv6
 	handlers.icmp6, err = icmp6.Attach(handlers.engine)
