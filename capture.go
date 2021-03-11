@@ -16,48 +16,57 @@ func (h *Handler) Capture(mac net.HardwareAddr) error {
 	}
 	macEntry.Captured = true
 
-	list := []net.IP{}
+	list := []Addr{}
 	// Mark all known entries as StageHunt
 	for _, v := range macEntry.HostList {
-		list = append(list, v.IP)
+		list = append(list, Addr{IP: v.IP, MAC: v.MACEntry.MAC})
 	}
 	h.Unlock()
 
-	for _, ip := range list {
-		if err := h.lockAndStartHunt(ip); err != nil {
-			return err
+	go func() {
+		for _, addr := range list {
+			if err := h.lockAndStartHunt(addr); err != nil {
+				fmt.Printf("packet: error in initial capture ip=%s error=%s\n", addr.IP, err)
+			}
 		}
-	}
+	}()
 	return nil
 }
 
-func (h *Handler) lockAndStartHunt(ip net.IP) error {
+func (h *Handler) lockAndStartHunt(addr Addr) error {
+	if addr.IP.To4() != nil {
+		if h.HandlerICMP4.HuntStage(addr) == StageRedirected {
+			fmt.Printf("packet: ip4 successfully redirected ip=%s mac%s\n", addr.IP, addr.MAC)
+			return nil
+		}
+	}
+
 	h.Lock()
-	host := h.FindIPNoLock(ip)
+	host := h.FindIPNoLock(addr.IP)
 	if host == nil {
 		h.Unlock()
-		fmt.Printf("packet: error invalid ip in lockAndStartHunt ip=%s\n", ip)
+		fmt.Printf("packet: error invalid ip in lockAndStartHunt ip=%s\n", addr.IP)
 		return ErrInvalidIP
 	}
 	host.huntStage = StageHunt
 	h.Unlock()
 
 	// IP4 handlers
-	if ip.To4() != nil {
-		if err := h.HandlerARP.StartHunt(ip); err != nil {
+	if addr.IP.To4() != nil {
+		if err := h.HandlerARP.StartHunt(addr.IP); err != nil {
 			return err
 		}
-		if err := h.HandlerICMP4.StartHunt(ip); err != nil {
+		if err := h.HandlerICMP4.StartHunt(addr.IP); err != nil {
 			return err
 		}
-		if err := h.HandlerDHCP4.StartHunt(ip); err != nil {
+		if err := h.HandlerDHCP4.StartHunt(addr.IP); err != nil {
 			return err
 		}
 		return nil
 	}
 
 	// IP6 handlers
-	if err := h.HandlerICMP6.StartHunt(ip); err != nil {
+	if err := h.HandlerICMP6.StartHunt(addr.IP); err != nil {
 		return err
 	}
 	return nil
@@ -147,17 +156,15 @@ func (h *Handler) routeMonitorLoop(interval time.Duration) (err error) {
 		}
 		h.Unlock()
 
-		if h.IP4RouteValidation != nil {
-			for _, addr := range ip4Addrs {
-				stage := h.IP4RouteValidation(addr)
-				switch stage {
-				case StageHunt:
-					fmt.Printf("packet: ip4 routing NOK ip=%s mac=%s\n", addr.IP, addr.MAC)
-					h.lockAndStartHunt(addr.IP)
-				case StageRedirected:
-					if Debug {
-						fmt.Printf("packet: ip4 routing OK ip=%s mac=%s\n", addr.IP, addr.MAC)
-					}
+		for _, addr := range ip4Addrs {
+			stage := h.HandlerICMP4.HuntStage(addr)
+			switch stage {
+			case StageHunt:
+				fmt.Printf("packet: ip4 routing NOK ip=%s mac=%s\n", addr.IP, addr.MAC)
+				h.lockAndStartHunt(addr)
+			case StageRedirected:
+				if Debug {
+					fmt.Printf("packet: ip4 routing OK ip=%s mac=%s\n", addr.IP, addr.MAC)
 				}
 			}
 		}

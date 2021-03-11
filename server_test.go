@@ -61,3 +61,47 @@ func TestHandler_ListenAndServe(t *testing.T) {
 	}
 	cancel()
 }
+
+/****
+func TestHandler_OnlineOfflineState(t *testing.T) {
+	options := []dhcp4.Option{}
+	oDNS := dhcp4.Option{Code: dhcp4.OptionDomainNameServer, Value: []byte{}}
+
+	// packet.DebugIP4 = true
+	// Debug = true
+	tc := setupTestHandler()
+	defer tc.Close()
+
+	tests := []struct {
+		name          string
+		packet        dhcp4.DHCP4
+		wantResponse  bool
+		tableLen      int
+		responseCount int
+		srcAddr       Addr
+		dstAddr       Addr
+	}{
+		{name: "discover-mac1", wantResponse: true, responseCount: 1,
+			packet: dhcp4.RequestPacket(dhcp4.Discover, mac1, ip1, []byte{0x01}, false, append(options, oDNS)), tableLen: 5,
+			srcAddr: Addr{MAC: routerMAC, IP: routerIP4, Port: DHCP4ClientPort},
+			dstAddr: Addr{MAC: mac1, IP: ip1, Port: DHCP4ServerPort}},
+		{name: "request-mac1", wantResponse: true, responseCount: 1,
+			packet: dhcp4.RequestPacket(dhcp4.Request, mac1, ip1, []byte{0x01}, false, append(options, oDNS)), tableLen: 5,
+			srcAddr: Addr{MAC: routerMAC, IP: routerIP4, Port: DHCP4ClientPort},
+			dstAddr: Addr{MAC: mac1, IP: ip1, Port: DHCP4ServerPort}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := sendPacket(tc.outConn, tt.srcAddr, tt.dstAddr, tt.packet); err != nil {
+				t.Errorf("DHCPHandler.handleDiscover() error sending packet error=%s", err)
+				return
+			}
+			time.Sleep(time.Millisecond * 10)
+
+			if tt.responseCount != len(tc.responseTable) {
+				t.Errorf("DHCPHandler.handleDiscover() invalid response count=%d want=%d", len(tc.responseTable), tt.responseCount)
+			}
+		})
+	}
+}
+***/

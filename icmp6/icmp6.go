@@ -146,6 +146,9 @@ func (h *Handler) StopHunt(ip net.IP) error {
 	return h.stopHunt(ip)
 }
 
+// HuntStage implements PacketProcessor interface
+func (h *Handler) HuntStage(addr packet.Addr) packet.HuntStage { return packet.StageNormal }
+
 // AddNotificationChannel set the notification channel for ICMP6 messages
 func (h *Handler) AddNotificationChannel(notification chan<- Event) {
 	h.notification = notification

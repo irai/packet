@@ -236,21 +236,21 @@ func (h *Handler) AddNotificationChannel(channel chan<- Lease) {
 
 // StartHunt will start the process to capture the client MAC
 func (h *Handler) StartHunt(ip net.IP) error {
-	// func (h *Handler) Capture(mac net.HardwareAddr) error {
+	h.engine.Lock()
+	host := h.engine.FindIPNoLock(ip)
+	if host == nil {
+		h.engine.Unlock()
+		return packet.ErrInvalidIP
+	}
+	host.MACEntry.IP4Offer = net.IPv4zero
+	h.engine.Unlock()
 
-	h.mutex.Lock()
-	defer h.mutex.Unlock()
-
-	// do nothing if already captured
-	// if h.isCapturedLocked(mac) != nil {
-	// return nil
-	// }
 	if Debug {
 		fmt.Printf("dhcp4: start hunt ip=%s\n", ip)
 	}
 
-	// Add to list of macs being captured
-	// h.captureTable[string(mac)] = true
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
 
 	// Delete lease in net1 if it exist
 	if lease := h.net1.findIP(ip); lease != nil {
@@ -284,34 +284,28 @@ func (h *Handler) StopHunt(ip net.IP) error {
 
 // IsCaptured returns true if mac and ip are valid DHCP entry in the capture state.
 // Otherwise returns false.
-func (h *Handler) IsCaptured(mac net.HardwareAddr) net.IP {
+func (h *Handler) HuntStage(addr packet.Addr) packet.HuntStage {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 
-	return h.isCapturedLocked(mac)
+	return h.isCapturedLocked(addr.IP)
 }
 
-func (h *Handler) isCapturedLocked(mac net.HardwareAddr) net.IP {
-
-	if !h.engine.IsCaptured(mac) {
-		// if _, ok := h.captureTable[string(mac)]; !ok {
-		return nil
-	}
-
-	lease := h.net2.findMAC(mac)
+func (h *Handler) isCapturedLocked(ip net.IP) packet.HuntStage {
+	lease := h.net2.findIP(ip)
 	if lease == nil {
 		if debugging() {
-			log.WithFields(log.Fields{"mac": mac}).Debug("dhcp4: mac not captured - not in dhcp table")
+			log.WithFields(log.Fields{"ip": ip}).Debug("dhcp4: mac not captured - not in dhcp table")
 		}
-		return nil
+		return packet.StageHunt
 	}
 	if lease.State != StateAllocated {
 		if debugging() {
-			log.WithFields(log.Fields{"mac": mac, "state": lease.State}).Debugf("dhcp4: mac not captured")
+			log.WithFields(log.Fields{"ip": ip, "state": lease.State}).Debugf("dhcp4: mac not captured")
 		}
-		return nil
+		return packet.StageHunt
 	}
-	return lease.IP
+	return packet.StageRedirected
 }
 
 // ProcessPacket implements PacketProcessor interface

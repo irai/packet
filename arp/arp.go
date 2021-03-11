@@ -71,6 +71,9 @@ func (h *Handler) Start() error {
 	return nil
 }
 
+// HuntStage implemente PacketProcessor interface
+func (h *Handler) HuntStage(addr packet.Addr) packet.HuntStage { return packet.StageNormal }
+
 const (
 	request = iota
 	reply

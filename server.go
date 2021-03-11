@@ -47,7 +47,6 @@ type Handler struct {
 	HandlerICMP6            PacketProcessor
 	HandlerDHCP4            PacketProcessor
 	HandlerARP              PacketProcessor
-	IP4RouteValidation      func(Addr) HuntStage
 	callback                []func(Notification) error
 	FullNetworkScanInterval time.Duration // Set it to -1 if no scan required
 	ProbeInterval           time.Duration // how often to probe if IP is online
@@ -68,6 +67,7 @@ func (p PacketNOOP) Stop() error                                { return nil }
 func (p PacketNOOP) ProcessPacket(*Host, []byte) (*Host, error) { return nil, nil }
 func (p PacketNOOP) StartHunt(ip net.IP) error                  { return nil }
 func (p PacketNOOP) StopHunt(ip net.IP) error                   { return nil }
+func (p PacketNOOP) HuntStage(addr Addr) HuntStage              { return StageNormal }
 
 // New creates an ICMPv6 handler with default values
 func NewEngine(nic string) (*Handler, error) {
@@ -471,11 +471,10 @@ func (h *Handler) setOnline(host *Host) {
 
 	host.MACEntry.Online = true
 	host.Online = true
-	mac := host.MACEntry.MAC
-	ip := host.IP
+	addr := Addr{IP: host.IP, MAC: host.MACEntry.MAC}
 
 	if Debug {
-		fmt.Printf("packet: IP is online ip=%s mac=%s\n", ip, mac)
+		fmt.Printf("packet: IP is online ip=%s mac=%s\n", addr.IP, addr.MAC)
 	}
 
 	// set previous IP to offline, start hunt and notify of new IP
@@ -485,11 +484,11 @@ func (h *Handler) setOnline(host *Host) {
 			h.lockAndSetOffline(host.MACEntry.IP6LLA)
 		}
 		if captured {
-			if err := h.lockAndStartHunt(ip); err != nil {
+			if err := h.lockAndStartHunt(addr); err != nil {
 				fmt.Println("packet: failed to start hunt error", err)
 			}
 		}
-		notification := Notification{IP: ip, MAC: mac, Online: true}
+		notification := Notification{IP: addr.IP, MAC: addr.MAC, Online: true}
 		h.notifyCallback(notification)
 	}()
 }

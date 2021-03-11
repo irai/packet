@@ -65,6 +65,7 @@ type PacketProcessor interface {
 	ProcessPacket(*Host, []byte) (*Host, error)
 	StartHunt(net.IP) error
 	StopHunt(net.IP) error
+	HuntStage(Addr) HuntStage
 }
 
 // Ethernet packet types - ETHER_TYPE
