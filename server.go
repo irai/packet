@@ -446,8 +446,27 @@ func (h *Handler) setOnline(host *Host) {
 		host.HuntStage = StageHunt
 	}
 
-	// will make previous IP offline
-	h.checkIPChanged(host)
+	// test if we need to make previous IP offline
+	// and set macEntry current IP to new IP
+	var offlineIP net.IP
+	if host.IP.To4() != nil {
+		if !host.IP.Equal(host.MACEntry.IP4) { // changed IP
+			fmt.Printf("packet: host changed ip4 from=%s to=%s\n", host.MACEntry.IP4, host.IP)
+			offlineIP = host.MACEntry.IP4
+			host.MACEntry.updateIP(host.IP)
+		}
+	} else {
+		if host.IP.IsGlobalUnicast() && !host.IP.Equal(host.MACEntry.IP6GUA) { // changed IP
+			fmt.Printf("packet: host changed ip6 from=%s to=%s\n", host.MACEntry.IP6GUA, host.IP)
+			offlineIP = host.MACEntry.IP6GUA
+			host.MACEntry.updateIP(host.IP)
+		}
+		if host.IP.IsLinkLocalUnicast() && !host.IP.Equal(host.MACEntry.IP6LLA) { // changed IP
+			fmt.Printf("packet: host changed ip6LLA from=%s to=%s\n", host.MACEntry.IP6LLA, host.IP)
+			// don't set offline IP as we don't target LLA
+			host.MACEntry.updateIP(host.IP)
+		}
+	}
 
 	host.MACEntry.Online = true
 	host.Online = true
@@ -458,8 +477,12 @@ func (h *Handler) setOnline(host *Host) {
 		fmt.Printf("packet: IP is online ip=%s mac=%s\n", ip, mac)
 	}
 
-	// start hunt and notify in goroutine
+	// set previous IP to offline, start hunt and notify of new IP
+	// in goroutine
 	go func() {
+		if offlineIP != nil {
+			h.lockAndSetOffline(host.MACEntry.IP6LLA)
+		}
 		if captured {
 			if err := h.lockAndStartHunt(ip); err != nil {
 				fmt.Println("packet: failed to start hunt error", err)

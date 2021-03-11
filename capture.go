@@ -2,7 +2,6 @@ package packet
 
 import (
 	"bytes"
-	"fmt"
 	"net"
 )
 
@@ -116,28 +115,4 @@ func (h *Handler) IsCaptured(mac net.HardwareAddr) bool {
 		return true
 	}
 	return false
-}
-
-func (h *Handler) checkIPChanged(host *Host) {
-	fmt.Println("DEBUG: check ip changed ", host, host.MACEntry)
-	// set macEntry current IP
-	if host.IP.To4() != nil {
-		if !host.IP.Equal(host.MACEntry.IP4) { // changed IP
-			fmt.Printf("packet: host changed ip4 from=%s to=%s\n", host.MACEntry.IP4, host.IP)
-			go h.lockAndSetOffline(host.MACEntry.IP4) // set previous host offline in goroutine as it will lock
-			host.MACEntry.updateIP(host.IP)
-		}
-	} else {
-		// Only interested in GUA changes
-		if host.IP.IsGlobalUnicast() && !host.IP.Equal(host.MACEntry.IP6GUA) { // changed IP
-			fmt.Printf("packet: host changed ip6 from=%s to=%s\n", host.MACEntry.IP6GUA, host.IP)
-			go h.lockAndSetOffline(host.MACEntry.IP6GUA) // set previous host offline in goroutine as it will lock
-			host.MACEntry.updateIP(host.IP)
-		}
-		if host.IP.IsLinkLocalUnicast() && !host.IP.Equal(host.MACEntry.IP6LLA) { // changed IP
-			fmt.Printf("packet: host changed ip6 from=%s to=%s\n", host.MACEntry.IP6LLA, host.IP)
-			// go h.lockAndSetOffline(host.MACEntry.IP6LLA) // set previous host offline in goroutine as it will lock
-			host.MACEntry.updateIP(host.IP)
-		}
-	}
 }
