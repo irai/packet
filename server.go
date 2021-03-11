@@ -197,7 +197,7 @@ func (h *Handler) setupConn() (conn net.PacketConn, err error) {
 func (h *Handler) PrintTable() {
 	h.Lock()
 	defer h.Unlock()
-	fmt.Printf("mac table len=%d\n", len(h.MACTable.table))
+	fmt.Printf("mac table len=%d\n", len(h.MACTable.Table))
 	h.printMACTable()
 	fmt.Printf("hosts table len=%v\n", len(h.LANHosts.Table))
 	h.printHostTable()
@@ -361,18 +361,6 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			if host, err = h.HandlerARP.ProcessPacket(host, ether); err != nil {
 				fmt.Printf("packet: error processing arp: %s\n", err)
 			}
-			/***
-			// found new ip/mac host?
-			if hostkeep == nil && host != nil {
-				h.Lock()
-				if h.captureList.Index(host.MAC) != -1 {
-					host.HuntStageIP4 = StageHunt
-					host.HuntStageIP6 = StageHunt
-				}
-				h.Unlock()
-				h.startIP4HuntHandlers(host.IP)
-			}
-			***/
 			l4Proto = 0 // skip next check
 
 		default:
@@ -481,7 +469,7 @@ func (h *Handler) setOnline(host *Host) {
 	// in goroutine
 	go func() {
 		if offlineIP != nil {
-			h.lockAndSetOffline(host.MACEntry.IP6LLA)
+			h.lockAndSetOffline(offlineIP)
 		}
 		if captured {
 			if err := h.lockAndStartHunt(addr); err != nil {

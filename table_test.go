@@ -46,7 +46,7 @@ func TestHandler_findOrCreateHostTestCopyIPMAC(t *testing.T) {
 	}
 
 	if len(tc.packet.LANHosts.Table) != 2 {
-		tc.h.printHostTable()
+		tc.packet.printHostTable()
 		t.Error("findOrCreateHost invalid leng ")
 	}
 }

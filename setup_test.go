@@ -47,7 +47,6 @@ type testContext struct {
 	outConn       net.PacketConn
 	clientInConn  net.PacketConn
 	clientOutConn net.PacketConn
-	h             *Handler
 	packet        *Handler
 	wg            sync.WaitGroup
 	ctx           context.Context

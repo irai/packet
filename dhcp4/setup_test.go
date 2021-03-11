@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"syscall"
+	"testing"
 	"time"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/arp"
 )
 
 var (
@@ -98,7 +101,7 @@ func setupTestHandler() *testContext {
 	go readResponse(tc.ctx, &tc) // MUST read the out conn to avoid blocking the sender
 
 	tc.clientInConn, tc.clientOutConn = packet.TestNewBufferedConn()
-	go packet.TestReadAndDiscardLoop(context.Background(), tc.clientOutConn) // MUST read the out conn to avoid blocking the sender
+	go packet.TestReadAndDiscardLoop(tc.ctx, tc.clientOutConn) // must read to avoid blocking
 
 	nicInfo := packet.NICInfo{
 		HostMAC:   hostMAC,
@@ -147,4 +150,119 @@ func (tc *testContext) Close() {
 	}
 	tc.cancel()
 	tc.wg.Wait()
+}
+
+type testEvent struct {
+	name          string
+	action        string // capture, block, accept, release, event
+	packetEvent   packet.Notification
+	waitTimeAfter time.Duration
+	wantCapture   bool
+	wantStage     packet.HuntStage
+	wantOnline    bool
+	hostTableLen  int
+	macTableLen   int
+	srcAddr       packet.Addr
+	dstAddr       packet.Addr
+	ether         packet.Ether
+	wantHost      packet.Host
+}
+
+func newDHCP4DiscoverFrame(src packet.Addr) packet.Ether {
+	options := []Option{}
+	oDNS := Option{Code: OptionDomainNameServer, Value: []byte{}}
+
+	var err error
+	ether := packet.Ether(make([]byte, packet.EthMaxSize))
+	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IP, src.MAC, arp.EthernetBroadcast)
+	ip4 := packet.IP4MarshalBinary(ether.Payload(), 50, src.IP, net.IPv4zero)
+	udp := packet.UDPMarshalBinary(ip4.Payload(), packet.DHCP4ClientPort, packet.DHCP4ServerPort)
+	dhcp4Frame := RequestPacket(Discover, src.MAC, src.IP, src.MAC, false, append(options, oDNS))
+	udp, err = udp.AppendPayload(dhcp4Frame)
+	ip4 = ip4.SetPayload(udp, syscall.IPPROTO_UDP)
+	if ether, err = ether.SetPayload(ip4); err != nil {
+		panic(err.Error())
+	}
+	return ether
+}
+
+var mac1Packets = []testEvent{
+	{name: "discover-mac1", action: "dhcp4Discover", hostTableLen: 0, macTableLen: 1,
+		ether:         newDHCP4DiscoverFrame(packet.Addr{MAC: mac1, IP: net.IPv4zero}),
+		wantHost:      packet.Host{}, // don't want host
+		waitTimeAfter: time.Millisecond * 10,
+	},
+	{name: "discover-mac1-2", action: "dhcp4Discover", hostTableLen: 0, macTableLen: 1,
+		ether:         newDHCP4DiscoverFrame(packet.Addr{MAC: mac1, IP: net.IPv4zero}),
+		wantHost:      packet.Host{}, // don't want host
+		waitTimeAfter: time.Millisecond * 10,
+	},
+	{name: "discover-mac2", action: "dhcp4Discover", hostTableLen: 0, macTableLen: 2,
+		ether:         newDHCP4DiscoverFrame(packet.Addr{MAC: mac2, IP: net.IPv4zero}),
+		wantHost:      packet.Host{}, // don't want host
+		waitTimeAfter: time.Millisecond * 10,
+	},
+}
+
+func TestHandler_newHost(t *testing.T) {
+	tc := setupTestHandler()
+	defer tc.Close()
+
+	packet.Debug = true
+	Debug = true
+
+	tests := mac1Packets
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runAction(t, tc, tt)
+		})
+
+	}
+
+}
+
+var buf = make([]byte, packet.EthMaxSize)
+
+func runAction(t *testing.T, tc *testContext, tt testEvent) {
+
+	if _, err := tc.outConn.WriteTo(tt.ether, &packet.Addr{MAC: tt.ether.Dst()}); err != nil {
+		panic(err.Error())
+	}
+	time.Sleep(tt.waitTimeAfter)
+
+	if n := len(tc.packet.LANHosts.Table); n != tt.hostTableLen {
+		t.Errorf("%s: invalid host table len want=%v got=%v", tt.name, tt.hostTableLen, n)
+		tc.packet.PrintTable()
+	}
+	if n := len(tc.packet.MACTable.Table); n != tt.macTableLen {
+		t.Errorf("%s: invalid host table len want=%v got=%v", tt.name, tt.macTableLen, n)
+	}
+
+	switch tt.action {
+	case "capture":
+		// if _, err := tc.packet.Capture(src.MAC); err != nil {
+		// t.Errorf("runEvents() error in DoCapture: %v", err)
+		// return
+		// }
+
+	case "release":
+
+	case "dhcp4Discover":
+		buf := tc.responseTable[len(tc.responseTable)-1]
+		ip4Frame := DHCP4(packet.UDP(packet.IP4(packet.Ether(buf).Payload()).Payload()).Payload())
+		ip := ip4Frame.YIAddr().To4()
+		if ip == nil {
+			panic("ip is nil")
+		}
+		fmt.Println("offer ip=", ip)
+
+	default:
+		fmt.Println("invalid action")
+	}
+
+	if tt.wantHost.IP != nil {
+		// validate host entry
+	}
+
 }

@@ -68,7 +68,7 @@ func newHostTable() HostTable {
 // PrintTable logs ICMP6 tables to standard out
 func (h *Handler) printHostTable() {
 	count := 0
-	for _, v := range h.MACTable.table {
+	for _, v := range h.MACTable.Table {
 		for _, host := range v.HostList {
 			fmt.Println("host :", host)
 			count++

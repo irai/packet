@@ -63,16 +63,16 @@ func (e *MACEntry) updateIP(ip net.IP) {
 
 // MACTable manages a goroutine safe set for adding and removing mac addresses
 type MACTable struct {
-	table []*MACEntry
+	Table []*MACEntry
 }
 
 func newMACTable(engine *Handler) MACTable {
-	return MACTable{table: []*MACEntry{}}
+	return MACTable{Table: []*MACEntry{}}
 }
 
 // PrintTable prints the table to stdout
 func (h *Handler) printMACTable() {
-	for _, v := range h.MACTable.table {
+	for _, v := range h.MACTable.Table {
 		fmt.Println("mac  :", v)
 	}
 }
@@ -83,7 +83,7 @@ func (s *MACTable) findOrCreate(mac net.HardwareAddr) *MACEntry {
 		return e
 	}
 	e := &MACEntry{MAC: mac, IP4: net.IPv4zero, IP6GUA: net.IPv6zero, IP6LLA: net.IPv6zero, IP4Offer: net.IPv4zero}
-	s.table = append(s.table, e)
+	s.Table = append(s.Table, e)
 	return e
 }
 
@@ -111,7 +111,7 @@ func (h *Handler) FindMACEntryNoLock(mac net.HardwareAddr) *MACEntry {
 }
 
 func (s *MACTable) findMAC(mac net.HardwareAddr) *MACEntry {
-	for _, v := range s.table {
+	for _, v := range s.Table {
 		if bytes.Equal(v.MAC, mac) {
 			return v
 		}
@@ -120,8 +120,8 @@ func (s *MACTable) findMAC(mac net.HardwareAddr) *MACEntry {
 }
 
 func (s *MACTable) index(mac net.HardwareAddr) int {
-	for i := range s.table {
-		if bytes.Equal(s.table[i].MAC, mac) {
+	for i := range s.Table {
+		if bytes.Equal(s.Table[i].MAC, mac) {
 			return i
 		}
 	}
@@ -133,8 +133,8 @@ func (h *Handler) MACTableUpsertIP4Offer(mac net.HardwareAddr, ip net.IP) {
 	h.Lock()
 	defer h.Unlock()
 	if h.NICInfo.HostIP4.Contains(ip) {
-		host, _ := h.findOrCreateHost(mac, ip)
-		host.MACEntry.IP4Offer = ip
+		entry := h.MACTable.findOrCreate(mac)
+		entry.IP4Offer = ip
 	}
 }
 
@@ -144,7 +144,7 @@ func (h *Handler) MACTableGetIP4Offer(mac net.HardwareAddr) net.IP {
 	h.Lock()
 	defer h.Unlock()
 	if index := h.MACTable.index(mac); index != -1 {
-		return h.MACTable.table[index].IP4Offer
+		return h.MACTable.Table[index].IP4Offer
 	}
 	return nil
 }
