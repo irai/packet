@@ -357,11 +357,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			// h.handlerIP6.ProcessPacket(host, ether)
 
 		case syscall.ETH_P_ARP:
-			// hostkeep := host
-			if host, err = h.HandlerARP.ProcessPacket(host, ether); err != nil {
-				fmt.Printf("packet: error processing arp: %s\n", err)
-			}
-			l4Proto = 0 // skip next check
+			l4Proto = syscall.ETH_P_ARP // treat arp as l4 proto; similar to IP6 ICMP NDP
 
 		default:
 			fmt.Printf("packet: error invalid ethernet type=%x\n", ether.EtherType())
@@ -408,7 +404,10 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 			}
 
-		case 0: // skip ARP
+		case syscall.ETH_P_ARP: // skip ARP
+			if host, err = h.HandlerARP.ProcessPacket(host, ether); err != nil {
+				fmt.Printf("packet: error processing arp: %s\n", err)
+			}
 
 		default:
 			fmt.Println("packet: unsupported level 4 header", l4Proto)
