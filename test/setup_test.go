@@ -352,3 +352,23 @@ func runAction(t *testing.T, tc *testContext, tt testEvent) {
 	}
 
 }
+
+func checkOnlineCount(t *testing.T, tc *testContext, online int, offline int) {
+	countOnline, countOffline := 0, 0
+	for _, v := range tc.packet.LANHosts.Table {
+		if v.Online {
+			countOnline++
+		} else {
+			countOffline++
+		}
+	}
+
+	t.Run("online check", func(t *testing.T) {
+		if countOnline != online {
+			t.Errorf("%s: invalid n online entries want=%v got=%v", "online", online, countOnline)
+		}
+		if countOffline != offline {
+			t.Errorf("%s: invalid n offline entries want=%v got=%v", "offline", offline, countOffline)
+		}
+	})
+}

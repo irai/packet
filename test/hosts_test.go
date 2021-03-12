@@ -44,6 +44,7 @@ func TestHandler_newHostMany(t *testing.T) {
 		})
 
 	}
+	checkOnlineCount(t, tc, 5, 0)
 }
 
 func TestHandler_sameHostMany(t *testing.T) {
@@ -55,17 +56,9 @@ func TestHandler_sameHostMany(t *testing.T) {
 
 	tests := []testEvent{}
 	tests = append(tests, newHostEvents(packet.Addr{MAC: mac1}, +1, 1)...)
-	// tests = append(tests, newArpAnnoucementEvent(packet.Addr{MAC: mac1, IP: ip5.To4()}, 1, 0)...)
-
 	tests = append(tests, newHostEvents(packet.Addr{MAC: mac1}, +1, 0)...)
-	// tests = append(tests, newArpAnnoucementEvent(packet.Addr{MAC: mac1, IP: ip5.To4()}, 0, 0)...)
-
 	tests = append(tests, newHostEvents(packet.Addr{MAC: mac1}, +1, 0)...)
-	// tests = append(tests, newArpAnnoucementEvent(packet.Addr{MAC: mac1, IP: ip5}, 1, 0)...)
-
 	tests = append(tests, newHostEvents(packet.Addr{MAC: mac1}, +1, 0)...)
-	// tests = append(tests, newArpAnnoucementEvent(packet.Addr{MAC: mac1, IP: ip5}, 1, 0)...)
-
 	tests = append(tests, newHostEvents(packet.Addr{MAC: mac1}, +1, 0)...)
 
 	for _, tt := range tests {
@@ -73,6 +66,7 @@ func TestHandler_sameHostMany(t *testing.T) {
 			runAction(t, tc, tt)
 		})
 	}
+	checkOnlineCount(t, tc, 1, 4)
 	tc.packet.PrintTable()
 }
 
@@ -90,10 +84,15 @@ func TestHandler_existingHost(t *testing.T) {
 	tests = append(tests, newArpAnnoucementEvent(packet.Addr{MAC: addr.MAC, IP: addr.IP}, 1, 1)...)
 	tests = append(tests, newHostEvents(packet.Addr{MAC: addr.MAC}, 1, 0)...) // will dhcp new host ip
 
+	addr = packet.Addr{MAC: mac2, IP: ip5.To4()}
+	tests = append(tests, newArpAnnoucementEvent(packet.Addr{MAC: addr.MAC, IP: addr.IP}, 1, 0)...)
+	tests = append(tests, newHostEvents(packet.Addr{MAC: addr.MAC}, 1, 0)...) // will dhcp new host ip
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			runAction(t, tc, tt)
 		})
-
 	}
+
+	checkOnlineCount(t, tc, 1, 3)
 }
