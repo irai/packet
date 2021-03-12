@@ -2,6 +2,7 @@ package dhcp4
 
 import (
 	"bytes"
+	"fmt"
 	"net"
 	"time"
 
@@ -69,7 +70,8 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (d DHCP4) {
 
 		case StateAllocated:
 			// Attempt to reuse IP if discover happens before lease expire
-			if lease.DHCPExpiry.After(now) && reqIP == nil && subnet.LAN.Contains(lease.IP) {
+			// in case of duplicate discover packets
+			if bytes.Equal(lease.XID, p.XId()) && lease.DHCPExpiry.After(now) && reqIP == nil && subnet.LAN.Contains(lease.IP) {
 				t := fields
 				t["lan"] = subnet.LAN
 				log.WithFields(t).Debug("dhcp4: offer - lease still valid offer same ip")
@@ -82,11 +84,27 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (d DHCP4) {
 		freeLease(lease)
 	}
 
-	lease = subnet.newLease(StateDiscovery, clientID, p.CHAddr(), reqIP, p.XId())
-	if lease == nil {
-		log.WithFields(fields).Error("dhcp4: discover - all IPs allocated, failing silently")
-		return nil
+	// TODO: hack to avoid returning an existing IP
+	// this need to be rewritten
+	for i := 0; i < 16; i++ { // loop 16 time max to get free ip
+		lease = subnet.newLease(StateDiscovery, clientID, p.CHAddr(), reqIP, p.XId())
+
+		if lease == nil {
+			log.WithFields(fields).Error("dhcp4: discover - all IPs allocated, failing silently")
+			return nil
+		}
+
+		h.engine.Lock()
+		if host := h.engine.FindIPNoLock(lease.IP); host == nil || i > 15 { // loop max 16 times to get free ip
+			h.engine.Unlock()
+			break
+		}
+		h.engine.Unlock()
+		fmt.Printf("dhcp4: ip in use. retrying ip=%s\n", lease.IP)
+		freeLease(lease)
+		reqIP = net.IPv4zero
 	}
+	// fmt.Println("DEBUG ip=", reqIP, lease.IP)
 
 	opts := subnet.options.SelectOrderOrAll(options[OptionParameterRequestList])
 	ret := ReplyPacket(p, Offer, subnet.DHCPServer, lease.IP, subnet.Duration, opts)

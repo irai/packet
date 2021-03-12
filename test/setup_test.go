@@ -59,6 +59,7 @@ type testContext struct {
 	packet        *packet.Handler
 	arpHandler    *arp.Handler
 	dhcp4Handler  *dhcp4.Handler
+	dhcp4XID      uint16
 	wg            sync.WaitGroup
 	ctx           context.Context
 	cancel        context.CancelFunc
@@ -181,7 +182,7 @@ type testEvent struct {
 	wantHost         *packet.Host
 }
 
-func newDHCP4DiscoverFrame(src packet.Addr) packet.Ether {
+func newDHCP4DiscoverFrame(src packet.Addr, xid []byte) packet.Ether {
 	options := []dhcp4.Option{}
 	oDNS := dhcp4.Option{Code: dhcp4.OptionDomainNameServer, Value: []byte{}}
 
@@ -190,7 +191,7 @@ func newDHCP4DiscoverFrame(src packet.Addr) packet.Ether {
 	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IP, src.MAC, arp.EthernetBroadcast)
 	ip4 := packet.IP4MarshalBinary(ether.Payload(), 50, src.IP, net.IPv4zero)
 	udp := packet.UDPMarshalBinary(ip4.Payload(), packet.DHCP4ClientPort, packet.DHCP4ServerPort)
-	dhcp4Frame := dhcp4.RequestPacket(dhcp4.Discover, src.MAC, src.IP, src.MAC, false, append(options, oDNS))
+	dhcp4Frame := dhcp4.RequestPacket(dhcp4.Discover, src.MAC, src.IP, xid, false, append(options, oDNS))
 	udp, err = udp.AppendPayload(dhcp4Frame)
 	ip4 = ip4.SetPayload(udp, syscall.IPPROTO_UDP)
 	if ether, err = ether.SetPayload(ip4); err != nil {
@@ -199,7 +200,7 @@ func newDHCP4DiscoverFrame(src packet.Addr) packet.Ether {
 	return ether
 }
 
-func newDHCP4RequestFrame(src packet.Addr, serverID net.IP, requestedIP net.IP) packet.Ether {
+func newDHCP4RequestFrame(src packet.Addr, serverID net.IP, requestedIP net.IP, xid []byte) packet.Ether {
 	options := []dhcp4.Option{}
 	oDNS := dhcp4.Option{Code: dhcp4.OptionDomainNameServer, Value: []byte{}}
 	oReqIP := dhcp4.Option{Code: dhcp4.OptionRequestedIPAddress, Value: requestedIP}
@@ -213,7 +214,7 @@ func newDHCP4RequestFrame(src packet.Addr, serverID net.IP, requestedIP net.IP) 
 	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IP, src.MAC, arp.EthernetBroadcast)
 	ip4 := packet.IP4MarshalBinary(ether.Payload(), 50, src.IP, net.IPv4zero)
 	udp := packet.UDPMarshalBinary(ip4.Payload(), packet.DHCP4ClientPort, packet.DHCP4ServerPort)
-	dhcp4Frame := dhcp4.RequestPacket(dhcp4.Request, src.MAC, requestedIP, src.MAC, false, options)
+	dhcp4Frame := dhcp4.RequestPacket(dhcp4.Request, src.MAC, requestedIP, xid, false, options)
 	udp, err = udp.AppendPayload(dhcp4Frame)
 	ip4 = ip4.SetPayload(udp, syscall.IPPROTO_UDP)
 	if ether, err = ether.SetPayload(ip4); err != nil {
@@ -233,6 +234,16 @@ func newARPFrame(src packet.Addr, dst packet.Addr, operation uint16) packet.Ethe
 	return ether
 }
 
+func newArpAnnoucementEvent(addr packet.Addr, hostInc int, macInc int) []testEvent {
+	return []testEvent{
+		{name: "arp-announcement-" + addr.MAC.String(), action: "arpAnnouncement", hostTableInc: hostInc, macTableInc: macInc, responsePos: -1, responseTableInc: 0,
+			srcAddr:       addr,
+			wantHost:      &packet.Host{IP: addr.IP, Online: true},
+			waitTimeAfter: time.Millisecond * 10,
+		},
+	}
+}
+
 func newHostEvents(addr packet.Addr, hostInc int, macInc int) []testEvent {
 	return []testEvent{
 		{name: "discover-" + addr.MAC.String(), action: "dhcp4Discover", hostTableInc: 0, macTableInc: macInc, responsePos: -1, responseTableInc: 1,
@@ -242,17 +253,17 @@ func newHostEvents(addr packet.Addr, hostInc int, macInc int) []testEvent {
 		},
 		{name: "request-" + addr.MAC.String(), action: "dhcp4Request", hostTableInc: hostInc, macTableInc: 0, responsePos: -1, responseTableInc: 1,
 			srcAddr:       packet.Addr{MAC: addr.MAC, IP: net.IPv4zero},
-			wantHost:      &packet.Host{IP: ip1, Online: true},
+			wantHost:      &packet.Host{IP: nil, Online: true},
 			waitTimeAfter: time.Millisecond * 20,
 		},
 		{name: "arp-probe-" + addr.MAC.String(), action: "arpProbe", hostTableInc: 0, macTableInc: 0, responsePos: -1, responseTableInc: 0,
 			srcAddr:       packet.Addr{MAC: mac1, IP: net.IPv4zero},
-			wantHost:      &packet.Host{IP: ip1, Online: true},
+			wantHost:      &packet.Host{IP: nil, Online: true},
 			waitTimeAfter: time.Millisecond * 10,
 		},
 		{name: "arp-announcement-" + addr.MAC.String(), action: "arpAnnouncement", hostTableInc: 0, macTableInc: 0, responsePos: -1, responseTableInc: 0,
-			srcAddr:       packet.Addr{MAC: addr.MAC, IP: net.IPv4zero},
-			wantHost:      &packet.Host{IP: ip1, Online: true},
+			srcAddr:       packet.Addr{MAC: addr.MAC, IP: nil}, // set IP to zero to use savedIP
+			wantHost:      &packet.Host{IP: nil, Online: true},
 			waitTimeAfter: time.Millisecond * 10,
 		},
 	}
@@ -267,10 +278,11 @@ func runAction(t *testing.T, tc *testContext, tt testEvent) {
 	case "release":
 
 	case "dhcp4Request":
-		tt.ether = newDHCP4RequestFrame(tt.srcAddr, hostIP4, tc.savedIP)
+		tt.ether = newDHCP4RequestFrame(tt.srcAddr, hostIP4, tc.savedIP, []byte(fmt.Sprintf("%d", tc.dhcp4XID)))
 
 	case "dhcp4Discover":
-		tt.ether = newDHCP4DiscoverFrame(tt.srcAddr)
+		tc.dhcp4XID++
+		tt.ether = newDHCP4DiscoverFrame(tt.srcAddr, []byte(fmt.Sprintf("%d", tc.dhcp4XID)))
 
 	case "arpProbe":
 		if tc.savedIP == nil {
@@ -279,10 +291,13 @@ func runAction(t *testing.T, tc *testContext, tt testEvent) {
 		tt.ether = newARPFrame(tt.srcAddr, packet.Addr{MAC: arp.EthernetBroadcast, IP: tc.savedIP}, arp.OperationRequest)
 
 	case "arpAnnouncement":
-		if tc.savedIP == nil {
-			panic("invalid savedIP")
+		if tt.srcAddr.IP == nil {
+			if tc.savedIP == nil {
+				panic("invalid savedIP")
+			}
+			tt.srcAddr.IP = tc.savedIP
 		}
-		tt.ether = newARPFrame(packet.Addr{MAC: tt.srcAddr.MAC, IP: tc.savedIP}, packet.Addr{MAC: arp.EthernetBroadcast, IP: tc.savedIP}, arp.OperationRequest)
+		tt.ether = newARPFrame(packet.Addr{MAC: tt.srcAddr.MAC, IP: tt.srcAddr.IP.To4()}, packet.Addr{MAC: arp.EthernetBroadcast, IP: tt.srcAddr.IP.To4()}, arp.OperationRequest)
 
 	default:
 		fmt.Println("invalid action")
@@ -322,9 +337,14 @@ func runAction(t *testing.T, tc *testContext, tt testEvent) {
 	}
 
 	if tt.wantHost != nil {
-		host := tc.packet.FindIP(tt.wantHost.IP)
+		ip := tt.wantHost.IP
+		if ip == nil {
+			ip = tc.savedIP
+		}
+		host := tc.packet.FindIP(ip)
 		if host == nil {
-			t.Errorf("%s: host not found in table ip=%s ", tt.name, tt.wantHost.IP)
+			t.Errorf("%s: host not found in table ip=%s ", tt.name, ip)
+			return
 		}
 		if host.Online != tt.wantHost.Online {
 			t.Errorf("%s: host incorrect online status want=%v got=%v ", tt.name, tt.wantHost.Online, host.Online)
