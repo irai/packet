@@ -5,6 +5,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/irai/packet"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -44,7 +45,7 @@ import (
 //  indicating clearly that it presently owns that address. It then broadcasts the request on the local network.
 //
 
-func (h *Handler) handleRequest(p DHCP4, options Options, senderIP net.IP) (d DHCP4) {
+func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, senderIP net.IP) (*packet.Host, DHCP4) {
 
 	reqIP, serverIP := net.IPv4zero, net.IPv4zero
 
@@ -114,7 +115,7 @@ func (h *Handler) handleRequest(p DHCP4, options Options, senderIP net.IP) (d DH
 		fields["optionIP"] = string(options[OptionRequestedIPAddress])
 		fields["ciaddr"] = p.CIAddr()
 		log.WithFields(fields).Error("dhcp4: request - invalid IP")
-		return nil
+		return host, nil
 	}
 
 	// Main switch
@@ -134,10 +135,10 @@ func (h *Handler) handleRequest(p DHCP4, options Options, senderIP net.IP) (d DH
 				// Send a nack to client
 				fields["serverid"] = serverIP
 				log.WithFields(fields).Info("dhcp4: request NACK - select is for another server")
-				return ReplyPacket(p, NAK, subnet.DHCPServer, net.IPv4zero, 0, nil)
+				return host, ReplyPacket(p, NAK, subnet.DHCPServer, net.IPv4zero, 0, nil)
 			}
 			log.WithFields(fields).Info("dhcp4: request ignore - select is for another server")
-			return nil // request not for us - silently discard packet
+			return host, nil // request not for us - silently discard packet
 		}
 
 		if lease == nil ||
@@ -148,12 +149,17 @@ func (h *Handler) handleRequest(p DHCP4, options Options, senderIP net.IP) (d DH
 				fields["lip"] = lease.IP
 			}
 			log.WithFields(fields).Info("dhcp4: request NACK - select invalid parameters")
-			return ReplyPacket(p, NAK, subnet.DHCPServer, net.IPv4zero, 0, nil)
+			return host, ReplyPacket(p, NAK, subnet.DHCPServer, net.IPv4zero, 0, nil)
 		}
 
 		lease.Name = name
 		log.WithFields(fields).Info("dhcp4: request ACK - select")
-		return h.ackPacket(subnet, p, options, lease)
+
+		// add to the engine host table
+		if host == nil {
+			host, _ = h.engine.FindOrCreateHost(lease.MAC, lease.IP)
+		}
+		return host, h.ackPacket(subnet, p, options, lease)
 
 	case renewing:
 		// If renewing then this packet was unicast to us and the client
@@ -168,12 +174,12 @@ func (h *Handler) handleRequest(p DHCP4, options Options, senderIP net.IP) (d DH
 			log.WithFields(fields).Info("dhcp4: request NACK - renew invalid or expired lease")
 			freeLease(lease)
 
-			return ReplyPacket(p, NAK, subnet.DHCPServer, net.IPv4zero, 0, nil)
+			return host, ReplyPacket(p, NAK, subnet.DHCPServer, net.IPv4zero, 0, nil)
 		}
 
 		lease.Name = name
 		log.WithFields(fields).Info("dhcp4: request ACK - renewing")
-		return h.ackPacket(subnet, p, options, lease)
+		return host, h.ackPacket(subnet, p, options, lease)
 
 	case rebooting, rebinding:
 		// rebooting is a common operation and occurs when the client is rejoining the network after
@@ -201,7 +207,7 @@ func (h *Handler) handleRequest(p DHCP4, options Options, senderIP net.IP) (d DH
 			// always NACK so next attempt may trigger discover
 			// also, it must return nack if moving form net2 to net1
 			// in the iPhone case, this causes the iPhone to retry discover
-			return ReplyPacket(p, NAK, h.net1.DefaultGW, net.IPv4zero, 0, nil)
+			return host, ReplyPacket(p, NAK, h.net1.DefaultGW, net.IPv4zero, 0, nil)
 
 			// }
 
@@ -222,7 +228,7 @@ func (h *Handler) handleRequest(p DHCP4, options Options, senderIP net.IP) (d DH
 
 			// We have the lease but the IP or MAC don't match
 			// Send NACK
-			return ReplyPacket(p, NAK, subnet.DHCPServer, net.IPv4zero, 0, nil)
+			return host, ReplyPacket(p, NAK, subnet.DHCPServer, net.IPv4zero, 0, nil)
 		}
 
 		if operation == rebooting {
@@ -231,11 +237,11 @@ func (h *Handler) handleRequest(p DHCP4, options Options, senderIP net.IP) (d DH
 			log.WithFields(fields).Info("dhcp4: request ACK - rebinding")
 		}
 		lease.Name = name
-		return h.ackPacket(subnet, p, options, lease)
+		return host, h.ackPacket(subnet, p, options, lease)
 
 	default:
 		log.WithFields(log.Fields{"clientid": clientID, "mac": lease.MAC.String(), "ip": reqIP}).Error("dhcp4: request - ignore invalid state")
-		return nil
+		return host, nil
 	}
 }
 

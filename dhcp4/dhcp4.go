@@ -359,7 +359,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 		// if tmp, ok := options[OptionDefaultFingerServer]; ok {
 		// senderIP = net.IP(tmp)
 		// }
-		response = h.handleRequest(dhcpFrame, options, ip4.Src())
+		host, response = h.handleRequest(host, dhcpFrame, options, ip4.Src())
 
 	case Decline:
 		response = h.handleDecline(dhcpFrame, options)
