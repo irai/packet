@@ -86,10 +86,6 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (d DHCP4) {
 
 	// Client can send another discovery after the entry expiry
 	// Free the entry so that a new IP is generated.
-	// freeLease(lease)
-
-	// freeLease(lease)
-
 	lease.State = StateDiscover
 	lease.XID = packet.CopyBytes(p.XId())
 	lease.OfferExpiry = now.Add(time.Second * 5)

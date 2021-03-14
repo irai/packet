@@ -83,7 +83,6 @@ func (h *Handler) findByIP(ip net.IP) *Lease {
 }
 
 func (h *Handler) findOrCreate(clientID []byte, mac net.HardwareAddr, name string) *Lease {
-
 	var captured bool
 	subnet := h.net1
 	if captured = h.engine.IsCaptured(mac); captured {
@@ -168,15 +167,11 @@ func (h *Handler) allocIPOffer(lease *Lease, reqIP net.IP) error {
 	}
 
 	// fmt.Println("DEBUG ip offer ", ip)
-
 	lease.IPOffer = ip
 	return nil
 }
 
 func (h *Handler) freeLeases(now time.Time) error {
-	h.Lock()
-	defer h.Unlock()
-
 	for _, lease := range h.Table {
 		if lease.DHCPExpiry.Before(now) {
 			if Debug {

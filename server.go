@@ -277,7 +277,7 @@ func (h *Handler) minuteLoop() {
 
 func (h *Handler) minuteChecker(now time.Time) {
 	if Debug {
-		fmt.Printf("packet: running minute checker %v", now)
+		fmt.Printf("packet: running minute checker %v\n", now)
 	}
 
 	// Handlers

@@ -68,6 +68,8 @@ func (h *Handler) Stop() error { return nil }
 
 // MinuteTicker implements packet processor interface
 func (h *Handler) MinuteTicker(now time.Time) error {
+	h.Lock()
+	defer h.Unlock()
 	h.freeLeases(now)
 	return nil
 }
@@ -220,9 +222,7 @@ func (h *Handler) StartHunt(ip net.IP) error {
 	h.Lock()
 	defer h.Unlock()
 
-	// Delete lease in net1 if it exist
 	if lease := h.findByIP(ip); lease != nil {
-
 		// Fake a dhcp release so router will force the client to discover when it attempts to reconnect
 		if h.mode == ModeSecondaryServer || h.mode == ModeSecondaryServerNice {
 			if Debug {
@@ -249,7 +249,7 @@ func (h *Handler) StopHunt(ip net.IP) error {
 	return nil
 }
 
-// IsCaptured returns true if mac and ip are valid DHCP entry in the capture state.
+// HuntStage returns true if mac and ip are valid DHCP entry in the capture state.
 // Otherwise returns false.
 func (h *Handler) HuntStage(addr packet.Addr) packet.HuntStage {
 	h.Lock()
@@ -321,8 +321,10 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 
 	// if res := h.processDHCP(req, reqType, options, ip4.Src()); res != nil {
 	var response DHCP4
-	switch reqType {
 
+	h.Lock()
+
+	switch reqType {
 	case Discover:
 		response = h.handleDiscover(dhcpFrame, options)
 
@@ -345,6 +347,8 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 	default:
 		log.Warnf("dhcp4: message type not supported %v", reqType)
 	}
+
+	h.Unlock()
 
 	if response != nil {
 		// If IP not available, broadcast
