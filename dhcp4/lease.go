@@ -92,7 +92,7 @@ func (h *Handler) findOrCreate(clientID []byte, mac net.HardwareAddr, name strin
 
 	lease := h.Table[string(clientID)]
 	if lease != nil {
-		if lease.Name != name {
+		if name != "" && lease.Name != name {
 			lease.Name = name
 		}
 

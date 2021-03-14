@@ -25,14 +25,15 @@ func Test_requestSimple(t *testing.T) {
 		tableLen       int
 		responseCount  int
 		allocatedCount int
+		discoverCount  int
 		freeCount      int
 		srcAddr        packet.Addr
 		dstAddr        packet.Addr
 	}{
-		{name: "request-mac1", wantResponse: true, responseCount: 2, tableLen: 1, allocatedCount: 1, freeCount: 0,
+		{name: "request-mac1", wantResponse: true, responseCount: 2, tableLen: 1, allocatedCount: 1, freeCount: 0, discoverCount: 0,
 			srcAddr: packet.Addr{MAC: mac1},
 		},
-		{name: "request-mac2", wantResponse: true, responseCount: 4, tableLen: 2, allocatedCount: 2, freeCount: 0,
+		{name: "request-mac2", wantResponse: true, responseCount: 4, tableLen: 2, allocatedCount: 2, freeCount: 0, discoverCount: 0,
 			srcAddr: packet.Addr{MAC: mac2},
 		},
 	}
@@ -48,12 +49,13 @@ func Test_requestSimple(t *testing.T) {
 			if tt.responseCount != len(tc.responseTable) {
 				t.Errorf("DHCPHandler.handleDiscover() invalid response count=%d want=%d", len(tc.responseTable), tt.responseCount)
 			}
-			checkLeaseTable(t, tc, tt.allocatedCount, tt.freeCount)
+			checkLeaseTable(t, tc, tt.allocatedCount, tt.discoverCount, tt.freeCount)
 		})
 	}
 }
 
 func Test_requestExhaust(t *testing.T) {
+	Debug = false
 	os.Remove(testDHCPFilename)
 	tc := setupTestHandler()
 	defer tc.Close()
@@ -79,6 +81,7 @@ func Test_requestExhaust(t *testing.T) {
 }
 
 func Test_requestAnotherHost(t *testing.T) {
+	Debug = false
 	os.Remove(testDHCPFilename)
 	tc := setupTestHandler()
 	defer tc.Close()
@@ -95,7 +98,7 @@ func Test_requestAnotherHost(t *testing.T) {
 		return
 	}
 	time.Sleep(time.Millisecond * 10)
-	checkLeaseTable(t, tc, 0, 0)
+	checkLeaseTable(t, tc, 0, 1, 0)
 
 	// request for another host
 	dhcpFrame = newDHCP4RequestFrame(srcAddr, routerIP4, ip3, xid)
@@ -104,7 +107,7 @@ func Test_requestAnotherHost(t *testing.T) {
 		return
 	}
 	time.Sleep(time.Millisecond * 10)
-	checkLeaseTable(t, tc, 0, 1)
+	checkLeaseTable(t, tc, 0, 0, 1)
 
 	// request for our server
 	newDHCPHost(t, tc, srcAddr.MAC)
@@ -112,7 +115,7 @@ func Test_requestAnotherHost(t *testing.T) {
 	if len(tc.responseTable) != 3 {
 		t.Errorf("DHCPHandler.handleDiscover() invalid response count=%d want=%d", len(tc.responseTable), 3)
 	}
-	checkLeaseTable(t, tc, 1, 0)
+	checkLeaseTable(t, tc, 1, 0, 0)
 
 	// request for another host
 	dhcpFrame = newDHCP4RequestFrame(srcAddr, routerIP4, ip4, xid)
@@ -121,10 +124,10 @@ func Test_requestAnotherHost(t *testing.T) {
 		return
 	}
 	time.Sleep(time.Millisecond * 10)
-	checkLeaseTable(t, tc, 0, 1)
+	checkLeaseTable(t, tc, 0, 0, 1)
 }
 
-func newDHCPHost(t *testing.T, tc *testContext, mac net.HardwareAddr) {
+func newDHCPHost(t *testing.T, tc *testContext, mac net.HardwareAddr) []byte {
 	tc.xid++
 	xid := []byte(fmt.Sprintf("%d", tc.xid))
 	srcAddr := packet.Addr{MAC: mac, IP: net.IPv4zero, Port: packet.DHCP4ClientPort}
@@ -133,16 +136,17 @@ func newDHCPHost(t *testing.T, tc *testContext, mac net.HardwareAddr) {
 	dhcpFrame := newDHCP4DiscoverFrame(srcAddr, xid)
 	if err := sendPacket(tc.outConn, srcAddr, dstAddr, dhcpFrame); err != nil {
 		t.Errorf("DHCPHandler.handleDiscover() error sending packet error=%s", err)
-		return
+		return nil
 	}
 	time.Sleep(time.Millisecond * 10)
 
 	dhcpFrame = newDHCP4RequestFrame(srcAddr, hostIP4, tc.IPOffer, xid)
 	if err := sendPacket(tc.outConn, srcAddr, dstAddr, dhcpFrame); err != nil {
 		t.Errorf("DHCPHandler.handleDiscover() error sending packet error=%s", err)
-		return
+		return nil
 	}
 	time.Sleep(time.Millisecond * 10)
+	return xid
 }
 
 func exhaustAllIPs(t *testing.T, tc *testContext, mac net.HardwareAddr) {
@@ -150,5 +154,5 @@ func exhaustAllIPs(t *testing.T, tc *testContext, mac net.HardwareAddr) {
 		mac[5] = byte(i)
 		newDHCPHost(t, tc, mac)
 	}
-	checkLeaseTable(t, tc, 254, 0)
+	checkLeaseTable(t, tc, 254, 0, 0)
 }

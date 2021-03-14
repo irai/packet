@@ -66,14 +66,15 @@ func TestDHCPHandler_handleDiscover(t *testing.T) {
 			}
 		})
 	}
+	checkLeaseTable(t, tc, 0, 2, 0)
 }
 
 func TestDHCPHandler_exhaust(t *testing.T) {
 	options := []Option{}
 	oDNS := Option{Code: OptionDomainNameServer, Value: []byte{}}
 
-	// packet.DebugIP4 = true
-	// Debug = true
+	packet.DebugIP4 = false
+	Debug = false
 	os.Remove(testDHCPFilename)
 	tc := setupTestHandler()
 	defer tc.Close()
@@ -115,4 +116,5 @@ func TestDHCPHandler_exhaust(t *testing.T) {
 			}
 		})
 	}
+	checkLeaseTable(t, tc, 0, 256, 0) // there will be 256 mac addresses but only 253 ips :-)
 }

@@ -2,7 +2,6 @@ package dhcp4
 
 import (
 	"bytes"
-	"context"
 	"crypto/rand"
 	"fmt"
 	"net"
@@ -236,27 +235,4 @@ func (h *Handler) clientLoop() error {
 			h.forceDecline(clientID, serverIP, req.CHAddr(), req.YIAddr(), req.XId())
 		}
 	}
-}
-
-// ServerIsReacheable attemps to resolve "google.com" using the serverIP.
-// It return nil if okay or error if server is unreachable.
-func ServerIsReacheable(ctx context.Context, serverIP net.IP) (err error) {
-	r := &net.Resolver{
-		PreferGo:     true,
-		StrictErrors: true,
-		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
-			d := net.Dialer{}
-			// return d.DialContext(ctx, "udp", "8.8.4.4:53")
-			return d.DialContext(ctx, "udp", fmt.Sprintf("%s:53", serverIP))
-		},
-	}
-
-	ctx2, cancel := context.WithTimeout(context.Background(), time.Second*5)
-	if ctx == nil {
-		ctx = ctx2
-	}
-	_, err = r.LookupHost(ctx, "google.com")
-	cancel()
-
-	return err
 }

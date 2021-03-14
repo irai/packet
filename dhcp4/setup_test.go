@@ -186,6 +186,16 @@ type testEvent struct {
 	wantHost      packet.Host
 }
 
+func newDHCP4DeclineFrame(src packet.Addr, declineIP net.IP, serverIP net.IP, xid []byte) DHCP4 {
+	options := []Option{}
+	// oDNS := Option{Code: OptionDomainNameServer, Value: []byte{}}
+	options = append(options, Option{Code: OptionServerIdentifier, Value: serverIP.To4()})
+	options = append(options, Option{Code: OptionRequestedIPAddress, Value: declineIP.To4()})
+	options = append(options, Option{Code: OptionMessage, Value: []byte("netfilter decline")})
+	// p.AddOption(OptionDHCPMessageType, []byte{byte(mt)})
+	// p.AddOption(OptionMessage, []byte("netfilter decline"))
+	return RequestPacket(Decline, src.MAC, src.IP, xid, false, options)
+}
 func newDHCP4DiscoverFrame(src packet.Addr, xid []byte) DHCP4 {
 	options := []Option{}
 	oDNS := Option{Code: OptionDomainNameServer, Value: []byte{}}
@@ -203,9 +213,10 @@ func newDHCP4RequestFrame(src packet.Addr, serverID net.IP, requestedIP net.IP, 
 	return RequestPacket(Request, src.MAC, requestedIP, xid, false, options)
 }
 
-func checkLeaseTable(t *testing.T, tc *testContext, allocatedCount int, freeCount int) {
+func checkLeaseTable(t *testing.T, tc *testContext, allocatedCount int, discoverCount int, freeCount int) {
 	aCount := 0
 	fCount := 0
+	dCount := 0
 	for _, lease := range tc.h.Table {
 		if lease.State == StateAllocated {
 			aCount++
@@ -213,9 +224,15 @@ func checkLeaseTable(t *testing.T, tc *testContext, allocatedCount int, freeCoun
 		if lease.State == StateFree {
 			fCount++
 		}
+		if lease.State == StateDiscover {
+			dCount++
+		}
 	}
 	if aCount != allocatedCount {
 		t.Errorf("leaseTable invalid allocated lease count want=%d got=%d", allocatedCount, aCount)
+	}
+	if dCount != discoverCount {
+		t.Errorf("leaseTable invalid discover lease count want=%d got=%d", discoverCount, dCount)
 	}
 	if fCount != freeCount {
 		t.Errorf("leaseTable invalid free lease count want=%d got=%d", freeCount, fCount)

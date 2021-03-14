@@ -3,6 +3,7 @@ package packet
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"log"
@@ -11,6 +12,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/vishvananda/netlink"
 )
@@ -352,4 +354,27 @@ func LinuxConfigureInterface(nic string, ip *net.IPNet, gw *net.IPNet) error {
 		return err
 	}
 	return nil
+}
+
+// ServerIsReacheable attemps to resolve "google.com" using the serverIP.
+// It return nil if okay or error if server is unreachable.
+func ServerIsReacheable(ctx context.Context, serverIP net.IP) (err error) {
+	r := &net.Resolver{
+		PreferGo:     true,
+		StrictErrors: true,
+		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+			d := net.Dialer{}
+			// return d.DialContext(ctx, "udp", "8.8.4.4:53")
+			return d.DialContext(ctx, "udp", fmt.Sprintf("%s:53", serverIP))
+		},
+	}
+
+	ctx2, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	if ctx == nil {
+		ctx = ctx2
+	}
+	_, err = r.LookupHost(ctx, "google.com")
+	cancel()
+
+	return err
 }

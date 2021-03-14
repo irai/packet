@@ -41,7 +41,9 @@ func (h *Handler) handleDecline(p DHCP4, options Options) (d DHCP4) {
 	}
 
 	log.WithFields(log.Fields{"clientid": clientID, "mac": lease.Addr.MAC, "ip": lease.Addr.IP, "xid": p.XId()}).Info("dhcp4: decline")
-
+	lease.State = StateFree
+	lease.Addr.IP = nil
+	lease.IPOffer = nil
 	return nil
 }
 

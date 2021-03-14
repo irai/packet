@@ -200,6 +200,22 @@ func ReplyPacket(req DHCP4, mt MessageType, serverId, yIAddr net.IP, leaseDurati
 	return p
 }
 
+func DeclinePacket(mt MessageType, chAddr net.HardwareAddr, ciAddr net.IP, xId []byte, serverIP net.IP, options []Option) DHCP4 {
+	p := NewPacket(BootRequest)
+	p.SetCHAddr(chAddr)
+	p.SetCIAddr(ciAddr)
+	p.SetXId(xId)
+	// p.AddOption(OptionClientIdentifier, clientID)
+	p.AddOption(OptionServerIdentifier, serverIP.To4())
+	p.AddOption(OptionDHCPMessageType, []byte{byte(mt)})
+	p.AddOption(OptionMessage, []byte("netfilter decline"))
+	for _, v := range options {
+		p.AddOption(v.Code, v.Value)
+	}
+	p.PadToMinSize()
+	return p
+}
+
 // PadToMinSize pads a packet so that when sent over UDP, the entire packet,
 // is 300 bytes (BOOTP min), to be compatible with really old devices.
 var padder [272]byte
