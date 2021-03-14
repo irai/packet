@@ -533,6 +533,7 @@ func (h *Handler) lockAndSetOffline(ip net.IP) {
 	}
 
 	host.Online = false
+	host.huntStage = StageNormal
 	mac := host.MACEntry.MAC
 	h.Unlock()
 

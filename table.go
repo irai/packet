@@ -118,9 +118,9 @@ func (h *Handler) findOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host,
 			mac := CopyMAC(mac)
 			host.MACEntry.unlink(host) // remove IP from existing mac
 			macEntry := h.MACTable.findOrCreate(mac)
-			// macEntry.updateIP(host.IP)
 			macEntry.link(host)
 			host.MACEntry = macEntry
+			host.huntStage = StageNormal
 		}
 		host.LastSeen = now
 		host.MACEntry.LastSeen = now
@@ -130,6 +130,7 @@ func (h *Handler) findOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host,
 	macEntry := h.MACTable.findOrCreate(mac)
 	host = &Host{IP: CopyIP(ip), MACEntry: macEntry, Online: false} // set Online to false to trigger Online transition
 	host.LastSeen = now
+	host.huntStage = StageNormal
 	host.MACEntry.LastSeen = now
 	// host.MACEntry.updateIP(host.IP)
 	h.LANHosts.Table[string(host.IP)] = host
