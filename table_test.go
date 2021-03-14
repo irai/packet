@@ -45,7 +45,7 @@ func TestHandler_findOrCreateHostTestCopyIPMAC(t *testing.T) {
 		t.Error("findOrCreateHost wrong MAC", host, host.MACEntry)
 	}
 
-	if len(tc.packet.LANHosts.Table) != 2 {
+	if len(tc.packet.LANHosts.Table) != 3 {
 		tc.packet.printHostTable()
 		t.Error("findOrCreateHost invalid leng ")
 	}

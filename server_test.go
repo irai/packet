@@ -22,7 +22,7 @@ func TestHandler_ListenAndServe(t *testing.T) {
 		ether   []byte
 		wantLen int
 	}{
-		{name: "invalid", wantLen: 1, ether: ether},
+		{name: "invalid", wantLen: 2, ether: ether},
 	}
 	Debug = true
 

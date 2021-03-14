@@ -48,7 +48,7 @@ func TestHandler_newHostMany(t *testing.T) {
 		})
 
 	}
-	checkOnlineCount(t, tc, 5, 0)
+	checkOnlineCount(t, tc, 5, 1)
 }
 
 func TestHandler_sameHostMany(t *testing.T) {
@@ -70,7 +70,7 @@ func TestHandler_sameHostMany(t *testing.T) {
 			runAction(t, tc, tt)
 		})
 	}
-	checkOnlineCount(t, tc, 1, 0)
+	checkOnlineCount(t, tc, 1, 1)
 	tc.packet.PrintTable()
 }
 
@@ -98,5 +98,5 @@ func TestHandler_existingHost(t *testing.T) {
 		})
 	}
 
-	checkOnlineCount(t, tc, 1, 2)
+	checkOnlineCount(t, tc, 1, 3)
 }

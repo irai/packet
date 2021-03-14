@@ -115,15 +115,15 @@ func Test_Handler_CaptureEnterOffline(t *testing.T) {
 		{name: "replymac2",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac2, routerMAC),
 			arp:     newPacket(OperationReply, mac2, ip2, routerMAC, routerIP),
-			wantErr: nil, wantLen: 1},
+			wantErr: nil, wantLen: 2},
 		{name: "replymac3",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac3, routerMAC),
 			arp:     newPacket(OperationReply, mac3, ip3, routerMAC, routerIP),
-			wantErr: nil, wantLen: 2},
+			wantErr: nil, wantLen: 3},
 		{name: "replymac4",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac4, routerMAC),
 			arp:     newPacket(OperationReply, mac4, ip4, routerMAC, routerIP),
-			wantErr: nil, wantLen: 3},
+			wantErr: nil, wantLen: 4},
 	}
 
 	count := 0
