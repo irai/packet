@@ -6,6 +6,7 @@ package packet
 // as part of the raw package github.com/mdlayher/raw
 
 import (
+	"fmt"
 	"net"
 	"os"
 	"syscall"
@@ -26,14 +27,14 @@ type Addr struct {
 	Port uint16
 }
 
+// String returns the address's hardware address.
+func (a Addr) String() string {
+	return fmt.Sprintf("mac=%s ip=%s port=%d", a.MAC, a.IP, a.Port)
+}
+
 // Network returns the address's network name, "raw".
 func (a Addr) Network() string {
 	return "raw"
-}
-
-// String returns the address's hardware address.
-func (a Addr) String() string {
-	return a.MAC.String()
 }
 
 // Must implement net.PacketConn at compile-time.

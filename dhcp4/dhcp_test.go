@@ -2,13 +2,7 @@
 
 package dhcp4
 
-import (
-	"os"
-	"testing"
-
-	log "github.com/sirupsen/logrus"
-)
-
+/***
 func Test_DHCP_SaveAndLoad(t *testing.T) {
 
 	os.Remove(testDHCPFilename)
@@ -62,12 +56,6 @@ func Test_DHCP_Config(t *testing.T) {
 	defer tc.Close()
 	var err error
 
-	/**
-	h, err := New(nets[0].home, nets[0].netfilter, testDHCPFilename)
-	if err != nil {
-		t.Fatal("cannot create handler ", err)
-	}
-	**/
 
 	entry := tc.h.net1.newLease(StateDiscovery, mac0, mac0, nil, nil)
 	entry.State = StateAllocated
@@ -99,3 +87,4 @@ func Test_DHCP_Config(t *testing.T) {
 	}
 
 }
+***/

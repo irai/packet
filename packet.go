@@ -7,6 +7,7 @@ import (
 	"net"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/mdlayher/netx/rfc4193"
 	"golang.org/x/net/ipv4"
@@ -66,6 +67,7 @@ type PacketProcessor interface {
 	StartHunt(net.IP) error
 	StopHunt(net.IP) error
 	HuntStage(Addr) HuntStage
+	MinuteTicker(time.Time) error
 }
 
 // Ethernet packet types - ETHER_TYPE
@@ -128,6 +130,13 @@ func CopyMAC(srcMAC net.HardwareAddr) net.HardwareAddr {
 	mac := make(net.HardwareAddr, len(srcMAC))
 	copy(mac, srcMAC)
 	return mac
+}
+
+// CopyBytes simply copies a mac address to a new buffer with the same len
+func CopyBytes(b []byte) []byte {
+	bb := make([]byte, len(b))
+	copy(bb, b)
+	return bb
 }
 
 // Ether provide access to ethernet fields without copying the structure

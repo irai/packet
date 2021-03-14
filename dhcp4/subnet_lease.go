@@ -1,46 +1,16 @@
 package dhcp4
 
 import (
-	"bytes"
 	"fmt"
 	"io/ioutil"
 	"net"
 	"os"
 	"time"
 
+	"github.com/irai/packet"
 	log "github.com/sirupsen/logrus"
 	yaml "gopkg.in/yaml.v2"
 )
-
-const (
-	// StateFree indicates the lease is free for reuse
-	StateFree = "free"
-
-	// StateDiscovery indicates the lease is in discovery state
-	StateDiscovery = "discovery"
-
-	// StateAllocated indicates the lease is allocated
-	StateAllocated = "allocated"
-
-	// StateReserved indicates the lease is reserved
-	StateReserved = "reserved"
-)
-
-// Lease stores a lease lease
-//
-// Concurrency: not safe
-//    There race conditions for all functions in this file.
-//    You need to use a mutext before calling these if they are likely called by multiple goroutines.
-type Lease struct {
-	State      string
-	ClientID   []byte
-	XID        []byte `yaml:"-"`
-	Count      int    `yaml:"-"` // a counter to check for repeat packets
-	Name       string
-	MAC        net.HardwareAddr
-	IP         net.IP
-	DHCPExpiry time.Time
-}
 
 // SubnetConfig hold configuration values for the subnet
 //
@@ -55,15 +25,15 @@ type SubnetConfig struct {
 	FirstIP    net.IP        // First IP in range
 	LastIP     net.IP        // Last IP in range
 	Duration   time.Duration // lease duration
+	Captured   bool
 }
 
 // dhcpSubnet hold the 256 lease array for subnet
 // We use the last byte in IPv4 as the index.
 type dhcpSubnet struct {
-	SubnetConfig            // anonymous struct
-	broadcast    net.IP     // hold the net broadcast IP
-	options      Options    // Options to send to DHCP Clients
-	leases       leaseTable // Array to keep track of leases
+	SubnetConfig         // anonymous struct
+	broadcast    net.IP  // hold the net broadcast IP
+	options      Options // Options to send to DHCP Clients
 	nextIP       uint
 }
 
@@ -72,23 +42,25 @@ func newSubnet(config SubnetConfig) (*dhcpSubnet, error) {
 
 	config.LAN.IP = config.LAN.IP.Mask(config.LAN.Mask) // ensure this is a network address
 
-	var subnet dhcpSubnet
+	subnet := dhcpSubnet{}
 	subnet.LAN = net.IPNet{IP: config.LAN.IP.Mask(config.LAN.Mask).To4(), Mask: config.LAN.Mask}
 
 	// get broadcast addr
-	subnet.broadcast = dupIP(subnet.LAN.IP).To4()
-	for i := range subnet.broadcast {
+	subnet.broadcast = packet.CopyIP(subnet.LAN.IP).To4()
+	for i := range subnet.broadcast { // range over the 4 bytes
 		subnet.broadcast[i] = subnet.broadcast[i] | ^subnet.LAN.Mask[i]
 	}
 
 	// default values for first and last IPs
 	config.FirstIP = config.FirstIP.To4()
-	if config.FirstIP == nil || config.FirstIP.Equal(net.IPv4zero) || config.FirstIP[3] < subnet.LAN.IP[3] {
-		config.FirstIP = subnet.LAN.IP
+	if config.FirstIP == nil || config.FirstIP.Equal(net.IPv4zero) || config.FirstIP[3] <= subnet.LAN.IP[3] {
+		config.FirstIP = subnet.LAN.IP.To4()
+		config.FirstIP[3] = config.FirstIP[3] + 1
 	}
 	config.LastIP = config.LastIP.To4()
 	if config.LastIP == nil || config.LastIP.Equal(net.IPv4zero) || config.LastIP[3] > subnet.broadcast[3] {
-		config.LastIP = subnet.broadcast
+		config.LastIP = subnet.broadcast.To4()
+		config.LastIP[3] = config.LastIP[3] - 1
 	}
 	subnet.Duration = config.Duration
 	if subnet.Duration == 0 {
@@ -124,14 +96,6 @@ func newSubnet(config SubnetConfig) (*dhcpSubnet, error) {
 		log.Tracef("dhcp4: createSubnet %+v", config)
 	}
 
-	// Init the lease table
-	now := time.Now()
-	for i := range subnet.leases {
-		subnet.leases[i].State = StateFree
-		subnet.leases[i].IP = net.IPv4zero
-		subnet.leases[i].DHCPExpiry = now
-	}
-
 	// Common options request:
 	//   [1 121 3 6 15 119 252] - iphone
 	//   [1 3 6 15 31 33 43 44 46 47 119 121 249 252] - Dell Win 10
@@ -146,43 +110,9 @@ func newSubnet(config SubnetConfig) (*dhcpSubnet, error) {
 		OptionDomainNameServer: []byte(subnet.DNSServer.To4()),
 	}
 
-	maxTime := time.Now().Add(time.Hour * 24 * 365 * 10) // 10 years
-
-	// Network address is reserved
-	i := subnet.LAN.IP[3]
-	subnet.leases[i].State = StateReserved
-	subnet.leases[i].IP = net.IPv4zero
-	subnet.leases[i].DHCPExpiry = maxTime
-
-	// Broadcast address is reserved
-	i = subnet.broadcast[3]
-	subnet.leases[i].State = StateReserved
-	subnet.leases[i].IP = net.IPv4zero
-	subnet.leases[i].DHCPExpiry = maxTime
-
-	if subnet.LAN.Contains(subnet.DHCPServer) {
-		i = subnet.DHCPServer[3]
-		subnet.leases[i].State = StateReserved
-		subnet.leases[i].IP = subnet.DHCPServer
-		subnet.leases[i].DHCPExpiry = maxTime
-	}
-	if subnet.LAN.Contains(subnet.DNSServer) {
-		i = subnet.DNSServer[3]
-		subnet.leases[i].State = StateReserved
-		subnet.leases[i].IP = subnet.DNSServer
-		subnet.leases[i].DHCPExpiry = maxTime
-	}
-	if subnet.LAN.Contains(subnet.DefaultGW) {
-		i = subnet.DefaultGW[3]
-		subnet.leases[i].State = StateReserved
-		subnet.leases[i].IP = subnet.DefaultGW
-		subnet.leases[i].DHCPExpiry = maxTime
-	}
-
 	if debugging() {
 		log.Infof("dhcp4: subnet lan=%s gw=%s dhcp=%s dns=%s dur=%v options=%+v",
 			subnet.LAN, subnet.DefaultGW, subnet.DHCPServer, subnet.DNSServer, subnet.Duration, subnet.options)
-		subnet.printSubnet()
 	}
 
 	return &subnet, nil
@@ -219,201 +149,13 @@ func (h *dhcpSubnet) appendRouteOptions(ip net.IP, mask net.IPMask, routeTo net.
 	h.options[OptionClasslessRouteFormat] = buf
 }
 
-func (h *dhcpSubnet) printSubnet() {
-	count, free := h.countLeases()
-	start := uint(h.LAN.IP[3])
-	end := uint(h.broadcast[3])
-	log.Infof("dhcp4: table - len %v, count %v, free %v, start %v, end %v", len(h.leases), count, free, start, end)
-	for i := start; i <= end; i++ {
-		v := h.leases[i]
-		if v.State != StateFree {
-			log.Infof("dhcp4: lease %3d %10s %d %24s %18s %15s %v", i, v.State, v.ClientID, v.Name, v.MAC, v.IP, v.DHCPExpiry.Format("2006-01-02 15:04"))
-		}
-	}
-}
-
-func (h *dhcpSubnet) getLeases() (table []Lease) {
-	start := uint(h.FirstIP[3])
-	end := uint(h.LastIP[3])
-	for i := start; i <= end; i++ {
-		if h.leases[i].State != StateFree {
-			table = append(table, h.leases[i])
-		}
-	}
-	return table
-}
-
-func (h *dhcpSubnet) findCliendID(id []byte) *Lease {
-	start := uint(h.FirstIP[3])
-	end := uint(h.LastIP[3])
-	for i := start; i <= end; i++ {
-		if bytes.Equal(h.leases[i].ClientID, id) {
-			return &h.leases[i]
-		}
-	}
-	return nil
-}
-
-func (h *dhcpSubnet) findIP(ip net.IP) *Lease {
-	start := uint(h.FirstIP[3])
-	end := uint(h.LastIP[3])
-	for i := start; i <= end; i++ {
-		if h.leases[i].IP.Equal(ip) {
-			return &h.leases[i]
-		}
-	}
-	return nil
-}
-
-func (h *dhcpSubnet) findMAC(mac net.HardwareAddr) *Lease {
-	start := uint(h.FirstIP[3])
-	end := uint(h.LastIP[3])
-	for i := start; i <= end; i++ {
-		if bytes.Equal(h.leases[i].MAC, mac) {
-			return &h.leases[i]
-		}
-	}
-	return nil
-}
-
-func freeLease(lease *Lease) {
-	if lease == nil {
-		return
-	}
-
-	if debugging() {
-		log.WithFields(log.Fields{"clientID": lease.ClientID, "mac": lease.MAC, "ip": lease.IP}).Trace("dhcp4: free lease")
-	}
-	lease.ClientID = []byte{}
-	lease.XID = []byte{}
-	lease.MAC = net.HardwareAddr{}
-	lease.IP = net.IPv4zero
-	lease.State = StateFree
-	lease.Count = 0
-}
-
-// newLease allocates a new IP from the dhcpSubnet.
-// works on relative index from 0 - 255 - IPv4 only
-func (h *dhcpSubnet) newLease(state string, clientID []byte, reqMAC net.HardwareAddr, reqIP net.IP, xID []byte) (lease *Lease) {
-
-	// Attempt to reuse IP if given and IP in correct LAN
-	if reqIP != nil && !reqIP.IsUnspecified() && h.LAN.Contains(reqIP) {
-		lease := &h.leases[reqIP.To4()[3]]
-		if lease.State == StateFree {
-			lease.State = state
-			lease.ClientID = dupBytes(clientID) // copy to release packet buffer
-			lease.XID = dupBytes(xID)
-			lease.MAC = dupMAC(reqMAC)
-			lease.IP = dupIP(reqIP)
-			lease.DHCPExpiry = time.Now().Add(1 * time.Minute)
-
-			if debugging() {
-				log.WithFields(log.Fields{"ip": lease.IP, "mac": lease.MAC, "clientID": lease.ClientID, "xid": lease.XID}).Trace("dhcp4: new lease reusing IP")
-			}
-			return lease
-		}
-	}
-
-	// Release expired entries
-	h.freeEntries()
-
-	ip := dupIP(h.LAN.IP).To4() // copy to update array
-	end := uint(h.LastIP[3])
-
-	// Find free IP
-	if debugging() {
-		log.Tracef("dhcp4: looking up free IP from %v to %v", h.nextIP, end)
-	}
-
-	for h.nextIP <= end {
-		index := h.nextIP
-		// log.Info("nexip ", h.nextIP, lastIP, index)
-		if h.leases[index].State == StateFree {
-			lease = &h.leases[index]
-			ip[3] = byte(h.nextIP)
-			lease.State = StateDiscovery
-			lease.ClientID = dupBytes(clientID) // copy to release packet buffer
-			lease.XID = dupBytes(xID)
-			lease.MAC = dupMAC(reqMAC)
-			lease.IP = ip                                      // no need to copy, already a new copy
-			lease.DHCPExpiry = time.Now().Add(1 * time.Minute) // wait for dhcp request packet
-			h.nextIP = h.nextIP + 1
-			break
-		}
-		h.nextIP = h.nextIP + 1
-	}
-
-	// second pass
-	// If all IPs are allocated, search at begining of table
-	if lease == nil {
-		h.nextIP = uint(h.FirstIP[3])
-		//h.printSubnet()
-
-		// only search again if there are free leases
-		_, free := h.countLeases()
-		if free == 0 {
-			log.Error("dhcp4: exhausted all IPs")
-			return nil
-		}
-		lease = h.newLease(state, clientID, reqMAC, reqIP, xID)
-	}
-
-	if debugging() {
-		log.WithFields(log.Fields{"ip": lease.IP.String(), "mac": lease.MAC.String()}).Debug("dhcp4: new lease allocated IP")
-	}
-
-	return lease
-}
-
-func (h *dhcpSubnet) freeEntries() {
-	now := time.Now()
-
-	count, free := h.countLeases()
-	if debugging() {
-		log.Trace("dhcp4: free expired leases - before ", count, free)
-	}
-
-	// Find free IP
-	start := uint(h.FirstIP[3])
-	end := uint(h.LastIP[3])
-	for i := start; i <= end; i++ {
-		if h.leases[i].State == StateReserved {
-			continue
-
-		}
-		if h.leases[i].State != StateFree && h.leases[i].DHCPExpiry.Before(now) {
-			freeLease(&h.leases[i])
-		}
-
-	}
-
-	count, free = h.countLeases()
-	if debugging() {
-		log.Trace("dhcp4: free expired leases - after ", count, free)
-	}
-}
-
-func (h *dhcpSubnet) countLeases() (count uint, free uint) {
-
-	start := uint(h.FirstIP[3])
-	end := uint(h.LastIP[3])
-	for i := start; i <= end; i++ {
-		if h.leases[i].State != StateFree && h.leases[i].State != StateReserved {
-			count = count + 1
-		}
-		if h.leases[i].State == StateFree {
-			free = free + 1
-		}
-	}
-	return count, free
-}
-
+/***
 // MarshalYAML implements the YAML marshalling interface
 func (h *leaseTable) MarshalYAML() (interface{}, error) {
-	tmp := []Lease{}
-	for i := 0; i < len(h); i++ {
-		if h[i].State == StateAllocated {
-			tmp = append(tmp, h[i])
+	tmp := []LeaseNew{}
+	for _, v := range *h {
+		if v.State == StateAllocated2 {
+			tmp = append(tmp, *v)
 		}
 	}
 
@@ -422,7 +164,7 @@ func (h *leaseTable) MarshalYAML() (interface{}, error) {
 
 // UnmarshalYAML implements the YAML marshalling interface
 func (h *leaseTable) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	tmp := []Lease{}
+	tmp := []LeaseNew{}
 
 	err := unmarshal(&tmp)
 	if err != nil {
@@ -430,10 +172,10 @@ func (h *leaseTable) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	}
 
 	for i := range tmp {
-		if tmp[i].IP == nil {
+		if tmp[i].Addr.IP == nil {
 			continue
 		}
-		index := tmp[i].IP.To4()[3]
+		index := tmp[i].Addr.IP.To4()[3]
 		h[index].State = stringToState(tmp[i].State)
 		h[index].Name = tmp[i].Name
 		h[index].ClientID = dupBytes(tmp[i].ClientID)
@@ -448,35 +190,31 @@ func (h *leaseTable) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 	return nil
 }
+**/
 
-func (h *Handler) migrate() {
-
-}
-
-func loadConfig(fname string) (net1 *dhcpSubnet, net2 *dhcpSubnet, err error) {
+func loadConfig(fname string) (net1 *dhcpSubnet, net2 *dhcpSubnet, t leaseTable, err error) {
 
 	if fname == "" {
 		return
 	}
 
 	table := struct {
-		Net1    *SubnetConfig
-		Net2    *SubnetConfig
-		Leases1 *leaseTable
-		Leases2 *leaseTable
+		Net1   *SubnetConfig
+		Net2   *SubnetConfig
+		Leases *leaseTable
 	}{}
 
 	source, err := ioutil.ReadFile(fname)
 	if err != nil {
 		log.Errorf("Cannot read dhcp file: %s error %s", fname, err)
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	// Unmarshall will load a table with 256 leases
 	err = yaml.Unmarshal(source, &table)
 	if err != nil {
 		log.Errorf("Cannot parse dhcp file: %s error %s", fname, err)
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	// Validate net1 configuration to ensure IPs are good
@@ -490,20 +228,7 @@ func loadConfig(fname string) (net1 *dhcpSubnet, net2 *dhcpSubnet, err error) {
 			FirstIP:    table.Net1.FirstIP,
 			LastIP:     table.Net1.LastIP})
 		if err != nil {
-			return nil, nil, fmt.Errorf("fail to load net1 : %w", err)
-		}
-
-		// table.Leases1 contains the full 256 entries table
-		for i := range table.Leases1 {
-			if table.Leases1[i].State != StateAllocated {
-				continue
-			}
-
-			if table.Leases1[i].IP == nil || !net1.LAN.Contains(table.Leases1[i].IP) || net1.leases[i].State == StateReserved {
-				continue
-			}
-
-			*(&net1.leases[i]) = *(&table.Leases1[i])
+			return nil, nil, nil, fmt.Errorf("fail to load net1 : %w", err)
 		}
 	}
 
@@ -517,24 +242,24 @@ func loadConfig(fname string) (net1 *dhcpSubnet, net2 *dhcpSubnet, err error) {
 			FirstIP:    table.Net2.FirstIP,
 			LastIP:     table.Net2.LastIP})
 		if err != nil {
-			return nil, nil, fmt.Errorf("fail to load net1 : %w", err)
-		}
-
-		// table.Leases2 contains the full 256 entries table
-		for i := range table.Leases2 {
-			if table.Leases2[i].State != StateAllocated {
-				continue
-			}
-
-			if table.Leases2[i].IP == nil || !net2.LAN.Contains(table.Leases2[i].IP) || net2.leases[i].State == StateReserved {
-				continue
-			}
-
-			*(&net2.leases[i]) = *(&table.Leases2[i])
+			return nil, nil, nil, fmt.Errorf("fail to load net1 : %w", err)
 		}
 	}
 
-	return net1, net2, nil
+	tt := map[string]*Lease{}
+	// table.Leases1 contains the full 256 entries table
+	for _, v := range *table.Leases {
+		if v.State != StateAllocated {
+			continue
+		}
+
+		if v.Addr.IP == nil || !net1.LAN.Contains(v.Addr.IP) || v.State != StateAllocated {
+			continue
+		}
+		tt[string(v.ClientID)] = v
+	}
+
+	return net1, net2, tt, nil
 }
 
 func (h *Handler) saveConfig(fname string) (err error) {
@@ -544,11 +269,10 @@ func (h *Handler) saveConfig(fname string) (err error) {
 	}
 
 	table := struct {
-		Net1    *SubnetConfig
-		Net2    *SubnetConfig
-		Leases1 *leaseTable
-		Leases2 *leaseTable
-	}{Net1: &h.net1.SubnetConfig, Net2: &h.net2.SubnetConfig, Leases1: &h.net1.leases, Leases2: &h.net2.leases}
+		Net1   *SubnetConfig
+		Net2   *SubnetConfig
+		Leases *leaseTable
+	}{Net1: &h.net1.SubnetConfig, Net2: &h.net2.SubnetConfig, Leases: &h.Table}
 
 	stream, err := yaml.Marshal(&table)
 	if err != nil {
@@ -563,18 +287,4 @@ func (h *Handler) saveConfig(fname string) (err error) {
 	}
 
 	return nil
-}
-
-// Make sure strings are mapped to same constant address for faster comparison
-func stringToState(s string) string {
-	if s == StateAllocated {
-		return StateAllocated
-	}
-	if s == StateDiscovery {
-		return StateDiscovery
-	}
-	if s == StateReserved {
-		return StateReserved
-	}
-	return StateFree
 }

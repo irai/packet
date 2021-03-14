@@ -6,19 +6,31 @@ import (
 	"net"
 	"time"
 
+	"github.com/irai/packet"
 	log "github.com/sirupsen/logrus"
 )
 
 // HandleDiscover respond with a DHCP offer packet
 //
-// +------------------+------------------------+
-// | Current State    |    Action              |
-// |------------------|------------------------|
-// | Free             |  Offer new IP          |
-// | Discovery        |  Offer new IP          |
-// | Allocated        |  Offer same IP         |
-// |------------------|------------------------|
+// RFC2131: https://tools.ietf.org/html/rfc2131
 //
+// If an address is available, the new address
+// SHOULD be chosen as follows:
+//
+// 1) The client's current address as recorded in the client's current
+//    binding, ELSE
+//
+// 2) The client's previous address as recorded in the client's (now
+//    expired or released) binding, if that address is in the server's
+//    pool of available addresses and not already allocated, ELSE
+//
+// 3) The address requested in the 'Requested IP Address' option, if that
+//    address is valid and not already allocated, ELSE
+//
+// 4) A new address allocated from the server's pool of available
+//    addresses; the address is selected based on the subnet from which
+//    the message was received (if 'giaddr' is 0) or on the address of
+//    the relay agent that forwarded the message ('giaddr' when not 0).
 func (h *Handler) handleDiscover(p DHCP4, options Options) (d DHCP4) {
 
 	clientID := getClientID(p, options)
@@ -36,78 +48,54 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (d DHCP4) {
 		log.WithFields(t).Debug("dhcp4: discover parameters")
 	}
 
-	h.mutex.Lock()
-	defer h.mutex.Unlock()
-
-	captured, subnet := h.findSubnet(p.CHAddr())
-	lease := subnet.findCliendID(clientID)
+	lease := h.findOrCreate(clientID, p.CHAddr(), name)
+	// fmt.Println("DEBUG lease ", lease)
 
 	// Exhaust all IPs for a few seconds
-	if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && captured) {
+	if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && lease.subnet.Captured) {
 		log.WithFields(fields).Info("dhcp4: discover - send 256 discover packets")
 		h.attackDHCPServer(options)
 	}
 
 	now := time.Now()
+
+	switch lease.State {
+
+	// reuse current address if valid
+	case StateAllocated:
+		lease.IPOffer = lease.Addr.IP
+		if lease.DHCPExpiry.Before(now) { // expired
+			lease.IPOffer = nil
+		}
+
+	// more than one discover packet
 	// Android sends two discover packets in quick succession
 	// If another discover within the allowed time, return the previous offer
-	if lease != nil {
-		switch lease.State {
-		case StateDiscovery: // more than one discover packet
-			if bytes.Equal(lease.XID, p.XId()) && lease.Count < 3 {
-				lease.Count++
-				fields["count"] = lease.Count
-				log.WithFields(fields).Info("dhcp4: offer - offer same ip")
-
-				opts := subnet.options.SelectOrderOrAll(options[OptionParameterRequestList])
-				ret := ReplyPacket(p, Offer, subnet.DHCPServer, lease.IP, subnet.Duration, opts)
-				if debugging() {
-					fields["options"] = opts
-					log.WithFields(fields).Debug("dhcp4: offer options")
-				}
-				return ret
-			}
-
-		case StateAllocated:
-			// Attempt to reuse IP if discover happens before lease expire
-			// in case of duplicate discover packets
-			if bytes.Equal(lease.XID, p.XId()) && lease.DHCPExpiry.After(now) && reqIP == nil && subnet.LAN.Contains(lease.IP) {
-				t := fields
-				t["lan"] = subnet.LAN
-				log.WithFields(t).Debug("dhcp4: offer - lease still valid offer same ip")
-				reqIP = lease.IP
-			}
+	case StateDiscover:
+		if !bytes.Equal(lease.XID, p.XId()) { // new discover packet
+			lease.IPOffer = nil
 		}
-
-		// Client can send another discovery after the entry expiry
-		// Free the entry so that a new IP is generated.
-		freeLease(lease)
 	}
 
-	// TODO: hack to avoid returning an existing IP
-	// this need to be rewritten
-	for i := 0; i < 16; i++ { // loop 16 time max to get free ip
-		lease = subnet.newLease(StateDiscovery, clientID, p.CHAddr(), reqIP, p.XId())
-
-		if lease == nil {
-			log.WithFields(fields).Error("dhcp4: discover - all IPs allocated, failing silently")
+	if lease.IPOffer == nil {
+		fmt.Println("DEBUG new IP lease ", lease, reqIP)
+		if err := h.allocIPOffer(lease, reqIP); err != nil {
+			fmt.Printf("dhcp4 : error all ips allocated, failing silently")
 			return nil
 		}
-
-		h.engine.Lock()
-		if host := h.engine.FindIPNoLock(lease.IP); host == nil || i > 15 { // loop max 16 times to get free ip
-			h.engine.Unlock()
-			break
-		}
-		h.engine.Unlock()
-		fmt.Printf("dhcp4: ip in use. retrying ip=%s\n", lease.IP)
-		freeLease(lease)
-		reqIP = net.IPv4zero
 	}
-	// fmt.Println("DEBUG ip=", reqIP, lease.IP)
 
-	opts := subnet.options.SelectOrderOrAll(options[OptionParameterRequestList])
-	ret := ReplyPacket(p, Offer, subnet.DHCPServer, lease.IP, subnet.Duration, opts)
+	// Client can send another discovery after the entry expiry
+	// Free the entry so that a new IP is generated.
+	// freeLease(lease)
+
+	// freeLease(lease)
+
+	lease.State = StateDiscover
+	lease.XID = packet.CopyBytes(p.XId())
+	lease.OfferExpiry = now.Add(time.Second * 5)
+	opts := lease.subnet.options.SelectOrderOrAll(options[OptionParameterRequestList])
+	ret := ReplyPacket(p, Offer, lease.subnet.DHCPServer, lease.IPOffer, lease.subnet.Duration, opts)
 
 	if debugging() {
 		t := dupFields(fields)
@@ -120,16 +108,16 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (d DHCP4) {
 	//  The server is likely to send offer before us, so send a kill packet
 	//  assuming the other server offered the requested IP - guess
 	//
-	if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && captured) {
+	if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && lease.subnet.Captured) {
 		if reqIP != nil && !reqIP.IsUnspecified() {
-			h.forceDecline(lease.ClientID, h.net1.DefaultGW, lease.MAC, reqIP, p.XId())
+			h.forceDecline(lease.ClientID, h.net1.DefaultGW, lease.Addr.MAC, reqIP, p.XId())
 		}
 	}
 
-	fields["ip"] = lease.IP
+	fields["ip"] = lease.IPOffer
 
 	// set the IP4 to be later checked in ARP ACD
-	h.engine.MACTableUpsertIP4Offer(lease.MAC, lease.IP)
+	h.engine.MACTableUpsertIP4Offer(packet.Addr{MAC: lease.Addr.MAC, IP: lease.IPOffer})
 
 	log.WithFields(fields).Info("dhcp4: offer OK")
 	return ret

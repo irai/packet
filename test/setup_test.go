@@ -318,6 +318,7 @@ func runAction(t *testing.T, tc *testContext, tt testEvent) {
 		tc.packet.PrintTable()
 	}
 	if n := len(tc.packet.MACTable.Table) - savedMACTableCount; n != tt.macTableInc {
+		tc.packet.PrintTable()
 		t.Errorf("%s: invalid mac table len want=%v got=%v", tt.name, tt.macTableInc, n)
 	}
 	if n := len(tc.responseTable) - savedResponseTableCount; n != tt.responseTableInc {
@@ -355,6 +356,7 @@ func runAction(t *testing.T, tc *testContext, tt testEvent) {
 
 func checkOnlineCount(t *testing.T, tc *testContext, online int, offline int) {
 	countOnline, countOffline := 0, 0
+	n := 0
 	for _, v := range tc.packet.LANHosts.Table {
 		if v.Online {
 			countOnline++
@@ -365,10 +367,15 @@ func checkOnlineCount(t *testing.T, tc *testContext, online int, offline int) {
 
 	t.Run("online check", func(t *testing.T) {
 		if countOnline != online {
+			n++
 			t.Errorf("%s: invalid n online entries want=%v got=%v", "online", online, countOnline)
 		}
 		if countOffline != offline {
+			n++
 			t.Errorf("%s: invalid n offline entries want=%v got=%v", "offline", offline, countOffline)
 		}
 	})
+	if n > 0 {
+		tc.packet.PrintTable()
+	}
 }

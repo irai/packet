@@ -3,6 +3,7 @@ package icmp4
 import (
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/irai/packet"
 )
@@ -44,6 +45,11 @@ func (h *Handler) Start() error {
 
 // Stop implements PacketProcessor interface
 func (h *Handler) Stop() error {
+	return nil
+}
+
+// MinuteTicker implements packet processor interface
+func (h *Handler) MinuteTicker(now time.Time) error {
 	return nil
 }
 

@@ -5,14 +5,18 @@ import (
 
 	"github.com/irai/packet"
 	"github.com/irai/packet/arp"
+	"github.com/irai/packet/dhcp4"
+	log "github.com/sirupsen/logrus"
 )
 
 func TestHandler_newHostSimple(t *testing.T) {
 	tc := setupTestHandler()
 	defer tc.Close()
 
-	packet.Debug = true
-	arp.Debug = true
+	log.SetLevel(log.DebugLevel)
+	dhcp4.Debug = true
+	// packet.Debug = true
+	// arp.Debug = true
 
 	tests := newHostEvents(packet.Addr{MAC: mac1}, 1, 1)
 
@@ -56,17 +60,17 @@ func TestHandler_sameHostMany(t *testing.T) {
 
 	tests := []testEvent{}
 	tests = append(tests, newHostEvents(packet.Addr{MAC: mac1}, +1, 1)...)
-	tests = append(tests, newHostEvents(packet.Addr{MAC: mac1}, +1, 0)...)
-	tests = append(tests, newHostEvents(packet.Addr{MAC: mac1}, +1, 0)...)
-	tests = append(tests, newHostEvents(packet.Addr{MAC: mac1}, +1, 0)...)
-	tests = append(tests, newHostEvents(packet.Addr{MAC: mac1}, +1, 0)...)
+	tests = append(tests, newHostEvents(packet.Addr{MAC: mac1}, +0, 0)...) // dhcp will reuse ip
+	tests = append(tests, newHostEvents(packet.Addr{MAC: mac1}, +0, 0)...) // dhcp will reuse ip
+	tests = append(tests, newHostEvents(packet.Addr{MAC: mac1}, +0, 0)...) // dhcp will reuse ip
+	tests = append(tests, newHostEvents(packet.Addr{MAC: mac1}, +0, 0)...) // dhcp will reuse ip
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			runAction(t, tc, tt)
 		})
 	}
-	checkOnlineCount(t, tc, 1, 4)
+	checkOnlineCount(t, tc, 1, 0)
 	tc.packet.PrintTable()
 }
 
@@ -86,7 +90,7 @@ func TestHandler_existingHost(t *testing.T) {
 
 	addr = packet.Addr{MAC: mac2, IP: ip5.To4()}
 	tests = append(tests, newArpAnnoucementEvent(packet.Addr{MAC: addr.MAC, IP: addr.IP}, 1, 0)...)
-	tests = append(tests, newHostEvents(packet.Addr{MAC: addr.MAC}, 1, 0)...) // will dhcp new host ip
+	tests = append(tests, newHostEvents(packet.Addr{MAC: addr.MAC}, 0, 0)...) // dhcp will re-use previous still valid lease
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -94,5 +98,5 @@ func TestHandler_existingHost(t *testing.T) {
 		})
 	}
 
-	checkOnlineCount(t, tc, 1, 3)
+	checkOnlineCount(t, tc, 1, 2)
 }

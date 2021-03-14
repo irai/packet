@@ -27,14 +27,10 @@ func (h *Handler) handleDecline(p DHCP4, options Options) (d DHCP4) {
 	serverIP := net.IP(options[OptionServerIdentifier]).To4()
 	clientID := getClientID(p, options)
 
-	h.mutex.Lock()
-	defer h.mutex.Unlock()
+	lease := h.findOrCreate(clientID, p.CHAddr(), "")
 
-	_, subnet := h.findSubnet(p.CHAddr())
-	lease := subnet.findCliendID(clientID)
-
-	if !subnet.DHCPServer.Equal(serverIP) ||
-		lease == nil || !lease.IP.Equal(reqIP) || !bytes.Equal(lease.MAC, p.CHAddr()) {
+	if !lease.subnet.DHCPServer.Equal(serverIP) ||
+		lease == nil || !lease.Addr.IP.Equal(reqIP) || !bytes.Equal(lease.Addr.MAC, p.CHAddr()) {
 		lxid := []byte{}
 		if lease != nil {
 			lxid = lease.XID
@@ -44,13 +40,7 @@ func (h *Handler) handleDecline(p DHCP4, options Options) (d DHCP4) {
 		return nil
 	}
 
-	log.WithFields(log.Fields{"clientid": clientID, "mac": lease.MAC, "ip": lease.IP, "xid": p.XId()}).Info("dhcp4: decline")
-
-	freeLease(lease)
-
-	if debugging() {
-		subnet.printSubnet()
-	}
+	log.WithFields(log.Fields{"clientid": clientID, "mac": lease.Addr.MAC, "ip": lease.Addr.IP, "xid": p.XId()}).Info("dhcp4: decline")
 
 	return nil
 }
@@ -70,24 +60,14 @@ func (h *Handler) handleRelease(p DHCP4, options Options) (d DHCP4) {
 	serverIP := net.IP(options[OptionServerIdentifier]).To4()
 	clientID := getClientID(p, options)
 
-	h.mutex.Lock()
-	defer h.mutex.Unlock()
+	lease := h.findOrCreate(clientID, p.CHAddr(), "")
 
-	_, subnet := h.findSubnet(p.CHAddr())
-	lease := subnet.findCliendID(clientID)
-
-	if !subnet.DHCPServer.Equal(serverIP) || lease == nil || !lease.IP.Equal(reqIP) {
+	if !lease.subnet.DHCPServer.Equal(serverIP) || lease == nil || !lease.Addr.IP.Equal(reqIP) {
 		log.WithFields(log.Fields{"clientid": clientID, "mac": p.CHAddr(), "serverip": serverIP, "reqip": reqIP, "lease": lease}).Infof("dhcp4: release - discard invalid packet")
 		return nil
 	}
 
-	log.WithFields(log.Fields{"clientid": clientID, "mac": lease.MAC, "ip": lease.IP, "xid": p.XId()}).Info("dhcp4: release")
-
-	freeLease(lease)
-
-	if debugging() {
-		subnet.printSubnet()
-	}
+	log.WithFields(log.Fields{"clientid": clientID, "mac": lease.Addr.MAC, "ip": lease.Addr.IP, "xid": p.XId()}).Info("dhcp4: release")
 
 	return nil
 }

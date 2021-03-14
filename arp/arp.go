@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"time"
 
 	"log"
 
@@ -68,6 +69,11 @@ func (h *Handler) End() {
 
 // Start start background processes
 func (h *Handler) Start() error {
+	return nil
+}
+
+// MinuteTicker implements packet processor interface
+func (h *Handler) MinuteTicker(now time.Time) error {
 	return nil
 }
 

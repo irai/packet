@@ -3,7 +3,7 @@ package dhcp4
 import (
 	"fmt"
 	"net"
-	"sync"
+	"time"
 
 	"github.com/irai/packet"
 	log "github.com/sirupsen/logrus"
@@ -23,11 +23,8 @@ var (
 	Debug bool
 )
 
-type (
-	leaseTable [256]Lease // leaseTable type to store lease array
-	// Mode type for operational mode: Primary or Secondary server
-	Mode int32
-)
+// Mode type for operational mode: Primary or Secondary server
+type Mode int32
 
 const (
 	// ModePrimaryServer sets the server to operate as the single DHCP on the LAN
@@ -58,22 +55,6 @@ type Config struct {
 
 var _ packet.PacketProcessor = &Handler{}
 
-// Handler track ongoing leases.
-//
-type Handler struct {
-	net1 *dhcpSubnet // home LAN
-	net2 *dhcpSubnet // netfilter LAN
-	mode Mode        // if true, force decline and release packets to homeDHCPServer
-	// captureTable map[string]bool // Store the subnet for captured mac
-	clientConn   net.PacketConn  // Listen DHCP client port
-	notification chan<- Lease    // channel to send notifications
-	filename     string          // leases filename
-	engine       *packet.Handler // pointer to engine
-	closed       bool            // indicates that detach function was called
-	closeChan    chan bool       // channel to close underlying goroutines
-	mutex        sync.Mutex
-}
-
 func (h *Handler) Start() error {
 	go func() {
 		if err := h.clientLoop(); err != nil {
@@ -84,6 +65,12 @@ func (h *Handler) Start() error {
 }
 
 func (h *Handler) Stop() error { return nil }
+
+// MinuteTicker implements packet processor interface
+func (h *Handler) MinuteTicker(now time.Time) error {
+	h.freeLeases(now)
+	return nil
+}
 
 func configChanged(config SubnetConfig, current SubnetConfig) bool {
 	if !config.LAN.IP.Equal(current.LAN.IP) ||
@@ -108,7 +95,7 @@ func Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsServer net.IP, fil
 
 func (config Config) Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsServer net.IP, filename string) (handler *Handler, err error) {
 
-	handler = &Handler{}
+	handler = &Handler{Table: map[string]*Lease{}}
 	// handler.captureTable = make(map[string]bool)
 	handler.filename = filename
 	handler.mode = ModeSecondaryServerNice
@@ -134,19 +121,13 @@ func (config Config) Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsSe
 		// FirstIP:    net.ParseIP("192.168.0.10"),
 		// LastIP:     net.ParseIP("192.168.0.127"),
 	}
-	// tmp, err := dhcpghost.New(homeSubnet, netfilterSubnet, dhcpConfigFilename)
-	// if err != nil {
-	// return fmt.Errorf("Cannot create DHCP server: %w", err)
-	// }
-	// Only attack when client is in capture mode
-	// tmp.SetMode(ModeSecondaryServerNice)
-	// config.C.DHCPHandler = tmp
 
 	// Reset leases if error or config has changed
-	handler.net1, handler.net2, err = loadConfig(handler.filename)
-	if err != nil || handler.net1 == nil || handler.net2 == nil ||
+	handler.net1, handler.net2, handler.Table, err = loadConfig(handler.filename)
+	if err != nil || handler.net1 == nil || handler.net2 == nil || handler.Table == nil ||
 		configChanged(homeSubnet, handler.net1.SubnetConfig) || configChanged(netfilterSubnet, handler.net2.SubnetConfig) {
-		log.Error("dhcp4: config file reset ", err)
+		fmt.Printf("dhcp4: config file reset: %s\n", err)
+		handler.Table = make(map[string]*Lease)
 
 		// net1 is home LAN
 		handler.net1, err = newSubnet(homeSubnet)
@@ -163,14 +144,6 @@ func (config Config) Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsSe
 
 	// Add static and classless route options
 	handler.net2.appendRouteOptions(handler.net1.DefaultGW, handler.net1.LAN.Mask, handler.net2.DefaultGW)
-
-	if debugging() {
-		handler.net1.printSubnet()
-	}
-
-	// Free any expired lease and set the capture table for any lease in subnet 2
-	handler.net1.freeEntries()
-	handler.net2.freeEntries()
 
 	// Client port 68: used by dhcp client to listen for dhcp packets
 	// Accept incoming both broadcast and localaddr packets
@@ -218,10 +191,18 @@ func (h *Handler) SetMode(mode Mode) {
 
 // PrintTable is a helper function to print the table to stdout
 func (h *Handler) PrintTable() {
-	h.net1.printSubnet()
-	h.net2.printSubnet()
+	h.Lock()
+	defer h.Unlock()
+	h.printTable()
 }
 
+func (h *Handler) printTable() {
+	for _, v := range h.Table {
+		fmt.Printf("dhcp4 : %v\n", v)
+	}
+}
+
+/***
 // Leases return all DHCP leases
 func (h *Handler) Leases() []Lease {
 	l := h.net1.getLeases()
@@ -233,6 +214,7 @@ func (h *Handler) Leases() []Lease {
 func (h *Handler) AddNotificationChannel(channel chan<- Lease) {
 	h.notification = channel
 }
+***/
 
 // StartHunt will start the process to capture the client MAC
 func (h *Handler) StartHunt(ip net.IP) error {
@@ -249,19 +231,18 @@ func (h *Handler) StartHunt(ip net.IP) error {
 		fmt.Printf("dhcp4: start hunt ip=%s\n", ip)
 	}
 
-	h.mutex.Lock()
-	defer h.mutex.Unlock()
+	h.Lock()
+	defer h.Unlock()
 
 	// Delete lease in net1 if it exist
-	if lease := h.net1.findIP(ip); lease != nil {
-		freeLease(lease)
+	if lease := h.findByIP(ip); lease != nil {
 
 		// Fake a dhcp release so router will force the client to discover when it attempts to reconnect
 		if h.mode == ModeSecondaryServer || h.mode == ModeSecondaryServerNice {
 			if Debug {
 				fmt.Printf("dhcp4: send dhcp release to server clientID=%s ip=%s\n", lease.ClientID, ip)
 			}
-			h.forceRelease(lease.ClientID, h.net1.DefaultGW, lease.MAC, lease.IP, nil)
+			h.forceRelease(lease.ClientID, h.net1.DefaultGW, lease.Addr.MAC, lease.Addr.IP, nil)
 		}
 	}
 	return nil
@@ -269,7 +250,7 @@ func (h *Handler) StartHunt(ip net.IP) error {
 
 // StopHunt will end the capture process
 func (h *Handler) StopHunt(ip net.IP) error {
-	// func (h *Handler) Release(mac net.HardwareAddr) error {
+	// func (h *HandlerNew) Release(mac net.HardwareAddr) error {
 	if Debug {
 		fmt.Printf("dhcp4: stop hunt ip%s\n", ip)
 	}
@@ -285,12 +266,16 @@ func (h *Handler) StopHunt(ip net.IP) error {
 // IsCaptured returns true if mac and ip are valid DHCP entry in the capture state.
 // Otherwise returns false.
 func (h *Handler) HuntStage(addr packet.Addr) packet.HuntStage {
-	h.mutex.Lock()
-	defer h.mutex.Unlock()
+	h.Lock()
+	defer h.Unlock()
 
-	return h.isCapturedLocked(addr.IP)
+	if lease := h.findByIP(addr.IP); lease != nil && lease.subnet.Captured {
+		return packet.StageRedirected
+	}
+	return packet.StageNormal
 }
 
+/**
 func (h *Handler) isCapturedLocked(ip net.IP) packet.HuntStage {
 	lease := h.net2.findIP(ip)
 	if lease == nil {
@@ -307,6 +292,7 @@ func (h *Handler) isCapturedLocked(ip net.IP) packet.HuntStage {
 	}
 	return packet.StageRedirected
 }
+**/
 
 // ProcessPacket implements PacketProcessor interface
 func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, error) {

@@ -53,7 +53,7 @@ type testContext struct {
 	clientInConn  net.PacketConn
 	clientOutConn net.PacketConn
 	h             *Handler
-	packet        *packet.Handler
+	engine        *packet.Handler
 	wg            sync.WaitGroup
 	ctx           context.Context
 	cancel        context.CancelFunc
@@ -112,12 +112,12 @@ func setupTestHandler() *testContext {
 
 	// override handler with conn and nicInfo
 	config := packet.Config{Conn: tc.inConn, NICInfo: &nicInfo, ProbeInterval: time.Millisecond * 500, OfflineDeadline: time.Millisecond * 500, PurgeDeadline: time.Second * 2}
-	tc.packet, err = config.NewEngine("eth0")
+	tc.engine, err = config.NewEngine("eth0")
 	if err != nil {
 		panic(err)
 	}
 	if Debug {
-		fmt.Println("nicinfo: ", tc.packet.NICInfo)
+		fmt.Println("nicinfo: ", tc.engine.NICInfo)
 	}
 
 	// Default dhcp engine
@@ -127,14 +127,14 @@ func setupTestHandler() *testContext {
 	if err != nil {
 		panic(err)
 	}
-	tc.h, err = Config{ClientConn: tc.clientInConn}.Attach(tc.packet, net.IPNet{IP: netfilterIP.IP, Mask: net.IPv4Mask(255, 255, 255, 0)}, dnsIP4, testDHCPFilename)
+	tc.h, err = Config{ClientConn: tc.clientInConn}.Attach(tc.engine, net.IPNet{IP: netfilterIP.IP, Mask: net.IPv4Mask(255, 255, 255, 0)}, dnsIP4, testDHCPFilename)
 	if err != nil {
-		panic("cannot create handler" + err.Error())
+		panic("cannot create handler: " + err.Error())
 	}
 	tc.h.mode = ModeSecondaryServerNice
 
 	go func() {
-		if err := tc.packet.ListenAndServe(tc.ctx); err != nil {
+		if err := tc.engine.ListenAndServe(tc.ctx); err != nil {
 			panic(err)
 		}
 	}()
@@ -231,11 +231,11 @@ func runAction(t *testing.T, tc *testContext, tt testEvent) {
 	}
 	time.Sleep(tt.waitTimeAfter)
 
-	if n := len(tc.packet.LANHosts.Table); n != tt.hostTableLen {
+	if n := len(tc.engine.LANHosts.Table); n != tt.hostTableLen {
 		t.Errorf("%s: invalid host table len want=%v got=%v", tt.name, tt.hostTableLen, n)
-		tc.packet.PrintTable()
+		tc.engine.PrintTable()
 	}
-	if n := len(tc.packet.MACTable.Table); n != tt.macTableLen {
+	if n := len(tc.engine.MACTable.Table); n != tt.macTableLen {
 		t.Errorf("%s: invalid host table len want=%v got=%v", tt.name, tt.macTableLen, n)
 	}
 

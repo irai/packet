@@ -33,56 +33,43 @@ func (h *Handler) AddCallback(f func(Notification) error) {
 	}()
 }
 
-func (h *Handler) purgeLoop(offline time.Duration, purge time.Duration) error {
+// purge is called each minute by the minute goroutine
+func (h *Handler) purge(now time.Time, offlineDur time.Duration, purgeDur time.Duration) error {
 
-	// Typically one minute but loop more often if offline smaller than 1 minute
-	dur := time.Minute * 1
-	if offline <= dur {
-		dur = offline / 4
-	}
-	ticker := time.NewTicker(dur).C
-	for {
-		select {
-		case <-h.closeChan:
-			return nil
+	offlineCutoff := now.Add(offlineDur * -1) // Mark offline entries last updated before this time
+	deleteCutoff := now.Add(purgeDur * -1)    // Delete entries that have not responded in last hour
 
-		case <-ticker:
+	purge := make([]net.IP, 0, 16)
+	offline := make([]net.IP, 0, 16)
 
-			now := time.Now()
-			offlineCutoff := now.Add(offline * -1) // Mark offline entries last updated before this time
-			deleteCutoff := now.Add(purge * -1)    // Delete entries that have not responded in last hour
+	h.Lock()
+	for _, e := range h.LANHosts.Table {
 
-			purge := make([]net.IP, 0, 16)
-			offline := make([]net.IP, 0, 16)
+		// Delete from table if the device is offline and was not seen for the last hour
+		if !e.Online && e.LastSeen.Before(deleteCutoff) {
+			purge = append(purge, e.IP)
+			continue
+		}
 
-			h.Lock()
-			for _, e := range h.LANHosts.Table {
-
-				// Delete from table if the device is offline and was not seen for the last hour
-				if !e.Online && e.LastSeen.Before(deleteCutoff) {
-					purge = append(purge, e.IP)
-					continue
-				}
-
-				// Set offline if no updates since the offline deadline
-				if e.Online && e.LastSeen.Before(offlineCutoff) {
-					offline = append(offline, e.IP)
-				}
-			}
-			h.Unlock()
-
-			for _, ip := range offline {
-				h.lockAndSetOffline(ip) // will lock/unlock
-			}
-
-			// delete after loop because this will change the table
-			if len(purge) > 0 {
-				for _, v := range purge {
-					h.deleteHostWithLock(v)
-				}
-			}
+		// Set offline if no updates since the offline deadline
+		if e.Online && e.LastSeen.Before(offlineCutoff) {
+			offline = append(offline, e.IP)
 		}
 	}
+	h.Unlock()
+
+	for _, ip := range offline {
+		h.lockAndSetOffline(ip) // will lock/unlock
+	}
+
+	// delete after loop because this will change the table
+	if len(purge) > 0 {
+		for _, v := range purge {
+			h.deleteHostWithLock(v)
+		}
+	}
+
+	return nil
 }
 
 func (h *Handler) notifyCallback(notification Notification) {

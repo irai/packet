@@ -4,13 +4,8 @@ package dhcp4
 
 import (
 	"net"
-	"os"
-	"reflect"
-	"testing"
-	"time"
 
 	log "github.com/sirupsen/logrus"
-	yaml "gopkg.in/yaml.v2"
 )
 
 const testDHCPFilename = "./testDHCPConfig.yml"
@@ -124,165 +119,8 @@ func setupSubnets() (net1 *dhcpSubnet, net2 *dhcpSubnet) {
 	return net1, net2
 }
 
-func Test_Subnet2(t *testing.T) {
-	for i := range nets {
-		net1, _ := newSubnet(nets[i].home)
-		net2, _ := newSubnet(nets[i].netfilter)
+/****
 
-		if net1 == nil || net2 == nil {
-			t.Error("cannot create subnets")
-			return
-		}
-
-		if !net1.DNSServer.Equal(nets[i].home.DNSServer) || !net2.DNSServer.Equal(nets[i].netfilter.DNSServer) {
-			t.Error("invalid dns", net1.DNSServer, nets[i].home.DNSServer, net2.DNSServer, nets[i].netfilter.DNSServer)
-			return
-		}
-
-		net2.newLease(StateDiscovery, mac0, mac0, nil, nil)
-		l1 := net2.newLease(StateDiscovery, mac1, mac1, nil, nil)
-		count1, _ := net1.countLeases()
-		count2, _ := net2.countLeases()
-		if count1 != 0 || count2 != 2 {
-			net1.printSubnet()
-			net2.printSubnet()
-			t.Error("invalid count ", count1, count2)
-			return
-		}
-
-		freeLease(net1.findCliendID(l1.MAC))
-		count1, _ = net1.countLeases()
-		count2, _ = net2.countLeases()
-		if count1 != 0 || count2 != 2 {
-			net2.printSubnet()
-			t.Error("invalid count 2", count1, count2)
-			return
-		}
-	}
-}
-
-func Test_Subnet(t *testing.T) {
-
-	net1, net2 := setupSubnets()
-
-	l1 := net1.newLease(StateDiscovery, mac0, mac0, nil, nil)
-
-	count1, _ := net1.countLeases()
-	count2, _ := net2.countLeases()
-	if count1 != 1 || count2 != 0 {
-		t.Error("1 - invalid leases count", count1, count2)
-		return
-	}
-
-	net2.newLease(StateDiscovery, mac1, mac1, nil, nil)
-	net2.newLease(StateDiscovery, mac1, mac1, nil, nil)
-	net2.newLease(StateDiscovery, mac1, mac1, nil, nil)
-	count1, _ = net1.countLeases()
-	count2, _ = net2.countLeases()
-	if count1 != 1 || count2 != 3 {
-		t.Error("2 - invalid leases count", count1, count2)
-		return
-	}
-
-	// l1.State = StateAllocated
-	l3 := net1.newLease(StateDiscovery, mac2, mac2, nil, nil)
-	freeLease(l1)
-	freeLease(l3)
-	count1, _ = net1.countLeases()
-	count2, _ = net2.countLeases()
-	if count1 != 0 || count2 != 3 {
-		t.Error("3 - invalid leases count", count1, count2)
-		return
-	}
-
-	net1.printSubnet()
-	net2.printSubnet()
-}
-
-func Test_Subnet_DHCP_Exhaust(t *testing.T) {
-
-	// we use 3 reserved slots .00, .01, .255
-	config := SubnetConfig{
-		LAN:        net.IPNet{IP: net.ParseIP("192.168.0.0").To4(), Mask: net.CIDRMask(24, 32)},
-		DefaultGW:  net.ParseIP("192.168.0.1").To4(),
-		DHCPServer: net.ParseIP("192.168.0.1").To4(),
-		// FirstIP:    net.ParseIP("192.168.0.0").To4(),
-		// LastIP:     net.ParseIP("192.168.0.255").To4(),
-		DNSServer: dns1,
-	}
-
-	net1, err := newSubnet(config)
-	if err != nil {
-		t.Fatal("cannot create subnet ", err)
-	}
-
-	mac0 := net.HardwareAddr{0xff, 0xff, 0xff, 0xff, 0xff, 0x0}
-	mac1 := net.HardwareAddr{0xff, 0xff, 0xff, 0xff, 0x01, 0x0}
-
-	n := 253
-	for i := 0; i < n; i++ {
-		mac, _ := net.ParseMAC(mac0.String())
-		mac[5] = byte(i)
-
-		l1 := net1.newLease(StateDiscovery, mac, mac, nil, nil)
-		if l1 == nil {
-			net1.printSubnet()
-			t.Error("Exausted all IPs")
-			return
-		}
-	}
-
-	l1 := net1.newLease(StateDiscovery, mac1, mac1, nil, nil)
-	count1, _ := net1.countLeases()
-	if l1 != nil || count1 != uint(n) {
-		t.Error("Found incorrect IPs", count1)
-		return
-	}
-
-	freeLease(net1.findCliendID(mac0))
-	l1 = net1.newLease(StateDiscovery, mac1, mac1, nil, nil)
-	count1, _ = net1.countLeases()
-	if l1 == nil || count1 != uint(n) {
-		t.Error("Error IPs", count1)
-		return
-	}
-}
-
-func Test_Subnet_DHCP_Exhaust_With_Free(t *testing.T) {
-
-	n := 2048
-	net1, _ := setupSubnets()
-
-	mac0 = net.HardwareAddr{0xff, 0xff, 0xff, 0xff, 0xff, 0x0}
-	mac1 = net.HardwareAddr{0xff, 0xff, 0xff, 0xff, 0x01, 0x0}
-	for i := 0; i < n; i++ {
-		mac, _ := net.ParseMAC(mac0.String())
-		mac[5] = byte(i)
-
-		l1 := net1.newLease(StateDiscovery, mac, mac, nil, nil)
-		if l1 == nil {
-			net1.printSubnet()
-			t.Error("Exausted all IPs")
-			return
-		}
-		freeLease(l1)
-	}
-
-	// log.Infof("net1 %+v", net1)
-	l1 := net1.newLease(StateDiscovery, mac1, mac1, nil, nil)
-	count1, _ := net1.countLeases()
-	if l1 == nil || count1 != 1 {
-		t.Error("Error IPs", count1)
-		return
-	}
-
-	l1 = net1.newLease(StateDiscovery, mac1, mac1, nil, nil)
-	count1, _ = net1.countLeases()
-	if l1 == nil || count1 != 2 {
-		t.Error("Error IPs", count1)
-		return
-	}
-}
 
 func Test_Subnet_Save(t *testing.T) {
 
@@ -420,3 +258,4 @@ func Test_newSubnet(t *testing.T) {
 		})
 	}
 }
+*****/

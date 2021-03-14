@@ -136,6 +136,11 @@ func (h *Handler) Stop() error {
 	return nil
 }
 
+// MinuteTicker implements packet processor interface
+func (h *Handler) MinuteTicker(now time.Time) error {
+	return nil
+}
+
 // StartHunt implements PacketProcessor interface
 func (h *Handler) StartHunt(ip net.IP) error {
 	return h.startHunt(ip)

@@ -68,6 +68,7 @@ func (p PacketNOOP) ProcessPacket(*Host, []byte) (*Host, error) { return nil, ni
 func (p PacketNOOP) StartHunt(ip net.IP) error                  { return nil }
 func (p PacketNOOP) StopHunt(ip net.IP) error                   { return nil }
 func (p PacketNOOP) HuntStage(addr Addr) HuntStage              { return StageNormal }
+func (p PacketNOOP) MinuteTicker(now time.Time) error           { return nil }
 
 // New creates an ICMPv6 handler with default values
 func NewEngine(nic string) (*Handler, error) {
@@ -261,6 +262,36 @@ func (h *Handler) stopPlugins() error {
 	return nil
 }
 
+func (h *Handler) minuteLoop() {
+	ticker := time.Tick(time.Minute)
+	for {
+		select {
+		case <-ticker:
+			h.minuteChecker(time.Now())
+
+		case <-h.closeChan:
+			return
+		}
+	}
+}
+
+func (h *Handler) minuteChecker(now time.Time) {
+	if Debug {
+		fmt.Printf("packet: running minute checker %v", now)
+	}
+
+	// Handlers
+	h.HandlerARP.MinuteTicker(now)
+	h.HandlerICMP4.MinuteTicker(now)
+	h.HandlerICMP6.MinuteTicker(now)
+	h.HandlerDHCP4.MinuteTicker(now)
+
+	// internal checks
+	h.purge(now, h.OfflineDeadline, h.PurgeDeadline)
+	h.routeMonitor(now)
+
+}
+
 // ListenAndServe listen for raw packets and invoke hooks as required
 func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
@@ -268,8 +299,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 	go h.startPlugins()
 	defer h.stopPlugins()
 
-	go h.purgeLoop(h.OfflineDeadline, h.PurgeDeadline)
-	go h.routeMonitorLoop(time.Minute)
+	go h.minuteLoop()
 
 	buf := make([]byte, EthMaxSize)
 	for {
