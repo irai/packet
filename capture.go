@@ -37,9 +37,9 @@ func (h *Handler) lockAndStartHunt(addr Addr) error {
 	if Debug {
 		fmt.Printf("packet: start hunt for %s\n", addr)
 	}
-	var dhcp4Stage HuntStage
+	dhcp4Stage := StageNormal
 	if addr.IP.To4() != nil {
-		dhcp4Stage = h.HandlerICMP4.HuntStage(addr)
+		dhcp4Stage = h.HandlerDHCP4.HuntStage(addr)
 	}
 
 	h.Lock()
