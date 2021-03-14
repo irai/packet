@@ -55,6 +55,7 @@ type Config struct {
 
 var _ packet.PacketProcessor = &Handler{}
 
+// Start implements PacketProcessor interface
 func (h *Handler) Start() error {
 	go func() {
 		if err := h.clientLoop(); err != nil {
@@ -64,6 +65,7 @@ func (h *Handler) Start() error {
 	return nil
 }
 
+// Stop implements PacketProcessor interface
 func (h *Handler) Stop() error { return nil }
 
 // MinuteTicker implements packet processor interface
@@ -95,6 +97,7 @@ func Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsServer net.IP, fil
 	return Config{}.Attach(engine, netfilterIP, dnsServer, filename)
 }
 
+// Attach accepts a configuration structure and return a dhcp handler
 func (config Config) Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsServer net.IP, filename string) (handler *Handler, err error) {
 
 	handler = &Handler{Table: map[string]*Lease{}}
@@ -167,6 +170,7 @@ func (config Config) Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsSe
 	return handler, nil
 }
 
+// Detach implements the PacketProcessor interface
 func (h *Handler) Detach() error {
 	h.engine.Lock()
 	h.engine.HandlerDHCP4 = packet.PacketNOOP{}

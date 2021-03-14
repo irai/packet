@@ -20,7 +20,7 @@ type OptionCode byte
 type OpCode byte
 type MessageType byte // Option 53
 
-// A DHCP packet
+// A DHCP4 packet
 type DHCP4 []byte
 
 func (p DHCP4) IsValid() bool {
@@ -181,7 +181,7 @@ func RequestPacket(mt MessageType, chAddr net.HardwareAddr, cIAddr net.IP, xId [
 // ReplyPacket creates a reply packet that a Server would send to a client.
 // It uses the req Packet param to copy across common/necessary fields to
 // associate the reply the request.
-func ReplyPacket(req DHCP4, mt MessageType, serverId, yIAddr net.IP, leaseDuration time.Duration, options []Option) DHCP4 {
+func ReplyPacket(req DHCP4, mt MessageType, serverID, yIAddr net.IP, leaseDuration time.Duration, options []Option) DHCP4 {
 	p := NewPacket(BootReply)
 	p.SetXId(req.XId())
 	p.SetFlags(req.Flags())
@@ -189,7 +189,7 @@ func ReplyPacket(req DHCP4, mt MessageType, serverId, yIAddr net.IP, leaseDurati
 	p.SetGIAddr(req.GIAddr())
 	p.SetCHAddr(req.CHAddr())
 	p.AddOption(OptionDHCPMessageType, []byte{byte(mt)})
-	p.AddOption(OptionServerIdentifier, []byte(serverId))
+	p.AddOption(OptionServerIdentifier, []byte(serverID))
 	if leaseDuration > 0 {
 		p.AddOption(OptionIPAddressLeaseTime, OptionsLeaseTime(leaseDuration))
 	}

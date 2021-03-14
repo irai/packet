@@ -46,6 +46,11 @@ type Lease struct {
 	DHCPExpiry  time.Time
 }
 
+func (l Lease) String() string {
+	return fmt.Sprintf("id=% x state=%s %s name=%s offer=%s stage=%v", l.ClientID, l.State, l.Addr, l.Name, l.IPOffer, l.subnet.Captured)
+
+}
+
 // Handler is the main dhcp4 handler
 type Handler struct {
 	engine     *packet.Handler // engine handler

@@ -29,6 +29,9 @@ type Addr struct {
 
 // String returns the address's hardware address.
 func (a Addr) String() string {
+	if a.Port == 0 {
+		return fmt.Sprintf("mac=%s ip=%s", a.MAC, a.IP)
+	}
 	return fmt.Sprintf("mac=%s ip=%s port=%d", a.MAC, a.IP, a.Port)
 }
 
