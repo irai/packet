@@ -364,12 +364,12 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			}
 
 			// Only lookup host on same subnet
+			// Note: DHCP request for previous discover have zero src IP; therefore wont't create host entry here.
 			if h.NICInfo.HostIP4.Contains(ip4Frame.Src()) {
 				host, _ = h.FindOrCreateHost(ether.Src(), ip4Frame.Src()) // will lock/unlock
 			}
 			l4Proto = ip4Frame.Protocol()
 			l4Payload = ip4Frame.Payload()
-			// h.handlerIP4.ProcessPacket(host, ether)
 
 		case syscall.ETH_P_IPV6:
 			ip6Frame = IP6(ether.Payload())
@@ -425,6 +425,8 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 					fmt.Println("ip4  :", ip4Frame)
 					fmt.Printf("udp  : %s\n", udp)
 				}
+
+				// DHCP4 packet?
 				if udp.DstPort() == DHCP4ServerPort {
 					if host, err = h.HandlerDHCP4.ProcessPacket(host, ether); err != nil {
 						fmt.Printf("packet: error processing dhcp4: %s\n", err)
@@ -475,7 +477,7 @@ func (h *Handler) setOnline(host *Host) {
 	if host.IP.To4() != nil {
 		if !host.IP.Equal(host.MACEntry.IP4) { // changed IP4
 			fmt.Printf("packet: host changed ip4 from=%s to=%s\n", host.MACEntry.IP4, host.IP)
-			offlineIP = host.MACEntry.IP4
+			offlineIP = host.MACEntry.IP4 // last IP
 			host.MACEntry.updateIP(host.IP)
 		}
 	} else {
