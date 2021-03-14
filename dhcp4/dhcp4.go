@@ -202,20 +202,6 @@ func (h *Handler) printTable() {
 	}
 }
 
-/***
-// Leases return all DHCP leases
-func (h *Handler) Leases() []Lease {
-	l := h.net1.getLeases()
-	l = append(l, h.net2.getLeases()...)
-	return l
-}
-
-// AddNotificationChannel set the notification channel
-func (h *Handler) AddNotificationChannel(channel chan<- Lease) {
-	h.notification = channel
-}
-***/
-
 // StartHunt will start the process to capture the client MAC
 func (h *Handler) StartHunt(ip net.IP) error {
 	h.engine.Lock()
