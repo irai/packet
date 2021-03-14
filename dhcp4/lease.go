@@ -104,7 +104,7 @@ func (h *Handler) findOrCreate(clientID []byte, mac net.HardwareAddr, name strin
 			bytes.Equal(lease.Addr.MAC, mac) {
 			return lease
 		}
-		fmt.Printf("dhcp4 : error mismatched subnet lease=%v newsubnet=%v", lease.subnet.LAN, subnet.LAN)
+		fmt.Printf("dhcp4 : client changing subnet from=%v to=%v", lease.subnet.LAN, subnet.LAN)
 	}
 
 	lease = &Lease{}

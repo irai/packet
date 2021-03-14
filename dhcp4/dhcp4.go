@@ -139,12 +139,14 @@ func (config Config) Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsSe
 		if err != nil {
 			return nil, fmt.Errorf("home config : %w", err)
 		}
+		handler.net2.Captured = false
 
 		// net2 is netfilter LAN
 		handler.net2, err = newSubnet(netfilterSubnet)
 		if err != nil {
 			return nil, fmt.Errorf("netfilter config : %w", err)
 		}
+		handler.net2.Captured = true
 	}
 
 	// Add static and classless route options
@@ -253,7 +255,7 @@ func (h *Handler) StopHunt(ip net.IP) error {
 	return nil
 }
 
-// HuntStage returns true if mac and ip are valid DHCP entry in the capture state.
+// HuntStage returns StageHunt if mac and ip are valid DHCP entry in the capture state.
 // Otherwise returns false.
 func (h *Handler) HuntStage(addr packet.Addr) packet.HuntStage {
 	h.Lock()
@@ -264,25 +266,6 @@ func (h *Handler) HuntStage(addr packet.Addr) packet.HuntStage {
 	}
 	return packet.StageNormal
 }
-
-/**
-func (h *Handler) isCapturedLocked(ip net.IP) packet.HuntStage {
-	lease := h.net2.findIP(ip)
-	if lease == nil {
-		if debugging() {
-			log.WithFields(log.Fields{"ip": ip}).Debug("dhcp4: mac not captured - not in dhcp table")
-		}
-		return packet.StageHunt
-	}
-	if lease.State != StateAllocated {
-		if debugging() {
-			log.WithFields(log.Fields{"ip": ip, "state": lease.State}).Debugf("dhcp4: mac not captured")
-		}
-		return packet.StageHunt
-	}
-	return packet.StageRedirected
-}
-**/
 
 // ProcessPacket implements PacketProcessor interface
 func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, error) {
