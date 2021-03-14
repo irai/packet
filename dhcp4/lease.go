@@ -108,6 +108,7 @@ func (h *Handler) findOrCreate(clientID []byte, mac net.HardwareAddr, name strin
 	lease.State = StateFree
 	lease.IPOffer = nil
 	lease.Addr.MAC = packet.CopyMAC(mac)
+	lease.Addr.IP = nil
 	lease.subnet = subnet
 	lease.Name = name
 	h.Table[string(lease.ClientID)] = lease

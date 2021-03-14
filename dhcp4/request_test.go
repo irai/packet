@@ -78,6 +78,52 @@ func Test_requestExhaust(t *testing.T) {
 	}
 }
 
+func Test_requestAnotherHost(t *testing.T) {
+	os.Remove(testDHCPFilename)
+	tc := setupTestHandler()
+	defer tc.Close()
+
+	tc.IPOffer = nil
+	tc.xid++
+	xid := []byte(fmt.Sprintf("%d", tc.xid))
+	mac5 = net.HardwareAddr{0x00, 0xff, 0xaa, 0xbb, 0x05, 0x05} // new mac
+	srcAddr := packet.Addr{MAC: mac5, IP: net.IPv4zero, Port: packet.DHCP4ClientPort}
+	dstAddr := packet.Addr{MAC: arp.EthernetBroadcast, IP: net.IPv4zero, Port: packet.DHCP4ServerPort}
+	dhcpFrame := newDHCP4DiscoverFrame(srcAddr, xid)
+	if err := sendPacket(tc.outConn, srcAddr, dstAddr, dhcpFrame); err != nil {
+		t.Errorf("DHCPHandler.handleDiscover() error sending packet error=%s", err)
+		return
+	}
+	time.Sleep(time.Millisecond * 10)
+	checkLeaseTable(t, tc, 0, 0)
+
+	// request for another host
+	dhcpFrame = newDHCP4RequestFrame(srcAddr, routerIP4, ip3, xid)
+	if err := sendPacket(tc.outConn, srcAddr, dstAddr, dhcpFrame); err != nil {
+		t.Errorf("DHCPHandler.handleDiscover() error sending packet error=%s", err)
+		return
+	}
+	time.Sleep(time.Millisecond * 10)
+	checkLeaseTable(t, tc, 0, 1)
+
+	// request for our server
+	newDHCPHost(t, tc, srcAddr.MAC)
+	time.Sleep(time.Millisecond * 10)
+	if len(tc.responseTable) != 3 {
+		t.Errorf("DHCPHandler.handleDiscover() invalid response count=%d want=%d", len(tc.responseTable), 3)
+	}
+	checkLeaseTable(t, tc, 1, 0)
+
+	// request for another host
+	dhcpFrame = newDHCP4RequestFrame(srcAddr, routerIP4, ip4, xid)
+	if err := sendPacket(tc.outConn, srcAddr, dstAddr, dhcpFrame); err != nil {
+		t.Errorf("DHCPHandler.handleDiscover() error sending packet error=%s", err)
+		return
+	}
+	time.Sleep(time.Millisecond * 10)
+	checkLeaseTable(t, tc, 0, 1)
+}
+
 func newDHCPHost(t *testing.T, tc *testContext, mac net.HardwareAddr) {
 	tc.xid++
 	xid := []byte(fmt.Sprintf("%d", tc.xid))

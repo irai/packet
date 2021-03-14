@@ -2,7 +2,6 @@ package dhcp4
 
 import (
 	"bytes"
-	"fmt"
 	"net"
 	"time"
 
@@ -128,6 +127,8 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 	case selecting:
 		// selecting from another server
 		if !serverIP.Equal(subnet.DHCPServer) {
+			lease.State = StateFree
+			lease.Addr.IP = nil
 			if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && captured) {
 				// The client is attempting to confirm an offer with another server
 				// Send a nack to client
@@ -135,7 +136,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 				log.WithFields(fields).Info("dhcp4: request NACK - select is for another server")
 				return host, ReplyPacket(p, NAK, subnet.DHCPServer, net.IPv4zero, 0, nil)
 			}
-			log.WithFields(fields).Info("dhcp4: request ignore - select is for another server")
+			log.WithFields(fields).Info("dhcp4: ignore select for another server")
 			return host, nil // request not for us - silently discard packet
 		}
 
@@ -145,7 +146,6 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 			fields["lxid"] = lease.XID
 			fields["lip"] = lease.Addr.IP
 			log.WithFields(fields).Info("dhcp4: request NACK - select invalid parameters")
-			fmt.Printf("DEBUG lease request %+v \n", lease)
 			return host, ReplyPacket(p, NAK, subnet.DHCPServer, net.IPv4zero, 0, nil)
 		}
 		log.WithFields(fields).Info("dhcp4: request ACK - select")
