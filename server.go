@@ -129,6 +129,7 @@ func (config Config) NewEngine(nic string) (*Handler, error) {
 	// create the host entry manually because we don't process host packets
 	host, _ := h.findOrCreateHost(h.NICInfo.HostMAC, h.NICInfo.HostIP4.IP)
 	host.LastSeen = time.Now().Add(time.Hour * 24 * 365) // never expire
+	host.Online = true
 
 	return h, nil
 }
