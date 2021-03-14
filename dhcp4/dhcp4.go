@@ -139,7 +139,7 @@ func (config Config) Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsSe
 		if err != nil {
 			return nil, fmt.Errorf("home config : %w", err)
 		}
-		handler.net2.Captured = false
+		handler.net1.Captured = false
 
 		// net2 is netfilter LAN
 		handler.net2, err = newSubnet(netfilterSubnet)
