@@ -458,8 +458,8 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		}
 
 		elapsed := time.Since(startTime)
-		if elapsed > time.Microsecond*15 {
-			fmt.Printf("packet: warning > 15 microseconds: %v\n", elapsed)
+		if elapsed > time.Microsecond*25 {
+			fmt.Printf("packet: warning > 25 microseconds: %v\n", elapsed)
 		}
 	}
 }
