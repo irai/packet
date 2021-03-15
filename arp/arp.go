@@ -73,7 +73,23 @@ func (h *Handler) Start() error {
 }
 
 // MinuteTicker implements packet processor interface
+//
+// ARP handler will send who is packet if IP has not been seen
 func (h *Handler) MinuteTicker(now time.Time) error {
+	arpAddrs := []packet.Addr{}
+	now.Add(h.engine.ProbeInterval * -1) //
+
+	h.engine.Lock()
+	for _, host := range h.engine.LANHosts.Table {
+		if host.Online && host.LastSeen.Before(now) && host.IP.To4() != nil {
+			arpAddrs = append(arpAddrs, packet.Addr{MAC: host.MACEntry.MAC, IP: host.IP})
+		}
+	}
+	h.engine.Unlock()
+
+	for _, addr := range arpAddrs {
+		h.Request(h.engine.NICInfo.HostMAC, h.engine.NICInfo.HostIP4.IP, addr.MAC, addr.IP.To4())
+	}
 	return nil
 }
 
