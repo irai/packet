@@ -306,6 +306,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 	go h.minuteLoop()
 
+	var d1, d2, d3 time.Duration
 	var startTime time.Time
 	buf := make([]byte, EthMaxSize)
 	for {
@@ -399,6 +400,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			fmt.Printf("packet: error invalid ethernet type=%x\n", ether.EtherType())
 			continue
 		}
+		d1 = time.Since(startTime)
 
 		switch l4Proto {
 		case syscall.IPPROTO_ICMP:
@@ -450,6 +452,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		default:
 			fmt.Println("packet: unsupported level 4 header", l4Proto, ether)
 		}
+		d2 = time.Since(startTime)
 
 		if host != nil {
 			h.Lock()
@@ -457,9 +460,9 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			h.Unlock()
 		}
 
-		elapsed := time.Since(startTime)
-		if elapsed > time.Microsecond*30 {
-			fmt.Printf("packet: warning > 30 microseconds: %v l4proto=%x\n", elapsed, l4Proto)
+		d3 = time.Since(startTime)
+		if d3 > time.Microsecond*30 {
+			fmt.Printf("packet: warning > 30 microseconds: etherType=%x l4proto=%x elapsed=%v l3=%v l4=%v\n", ether.EtherType(), l4Proto, d3, d1, d2)
 		}
 	}
 }
