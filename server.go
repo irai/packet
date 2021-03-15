@@ -306,6 +306,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 	go h.minuteLoop()
 
+	var startTime time.Time
 	buf := make([]byte, EthMaxSize)
 	for {
 		if err = h.conn.SetReadDeadline(time.Now().Add(time.Second * 2)); err != nil {
@@ -325,6 +326,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			}
 			return fmt.Errorf("read error: %w", err)
 		}
+		startTime = time.Now()
 
 		ether := Ether(buf[:n])
 		if !ether.IsValid() {
@@ -389,7 +391,6 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			if ip6Frame.Src().IsLinkLocalUnicast() || ip6Frame.Src().IsGlobalUnicast() {
 				host, _ = h.FindOrCreateHost(ether.Src(), ip6Frame.Src()) // will lock/unlock
 			}
-			// h.handlerIP6.ProcessPacket(host, ether)
 
 		case syscall.ETH_P_ARP:
 			l4Proto = syscall.ETH_P_ARP // treat arp as l4 proto; similar to IP6 ICMP NDP
@@ -447,13 +448,18 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			}
 
 		default:
-			fmt.Println("packet: unsupported level 4 header", l4Proto)
+			fmt.Println("packet: unsupported level 4 header", l4Proto, ether)
 		}
 
 		if host != nil {
 			h.Lock()
 			h.setOnline(host)
 			h.Unlock()
+		}
+
+		elapsed := time.Since(startTime)
+		if elapsed > time.Microsecond*15 {
+			fmt.Printf("packet: warning > 15 microseconds: %v\n", elapsed)
 		}
 	}
 }
