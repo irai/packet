@@ -109,9 +109,6 @@ func (h *Handler) Release(mac net.HardwareAddr) error {
 }
 
 func (h *Handler) lockAndStopHunt(ip net.IP) error {
-	if Debug {
-		fmt.Printf("packet: end hunt for ip=%s\n", ip)
-	}
 	h.Lock()
 	host := h.FindIPNoLock(ip)
 	if host == nil {
@@ -119,8 +116,17 @@ func (h *Handler) lockAndStopHunt(ip net.IP) error {
 		fmt.Printf("packet: error invalid ip in lockAndStopHunt ip=%s\n", ip)
 		return ErrInvalidIP
 	}
+	if host.huntStage != StageHunt {
+		h.Unlock()
+		fmt.Printf("packet: host not in hunt stage ip=%s\n", ip)
+		return ErrInvalidIP
+	}
 	host.huntStage = StageNormal
 	h.Unlock()
+
+	if Debug {
+		fmt.Printf("packet: end hunt for ip=%s\n", ip)
+	}
 
 	// IP4 handlers
 	if ip.To4() != nil {
