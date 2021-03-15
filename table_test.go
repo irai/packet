@@ -2,6 +2,7 @@ package packet
 
 import (
 	"bytes"
+	"fmt"
 	"net"
 	"testing"
 )
@@ -48,5 +49,21 @@ func TestHandler_findOrCreateHostTestCopyIPMAC(t *testing.T) {
 	if len(tc.packet.LANHosts.Table) != 3 {
 		tc.packet.printHostTable()
 		t.Error("findOrCreateHost invalid leng ")
+	}
+}
+
+func Benchmark_findOrCreateHost(b *testing.B) {
+	tc := setupTestHandler()
+	defer tc.Close()
+
+	ip := CopyIP(hostIP4).To4()
+	mac := net.HardwareAddr{0x00, 0xff, 0xaa, 0xbb, 0x55, 0x55}
+	for i := 0; i < b.N; i++ {
+		ip[3] = byte(i)
+		mac[5] = byte(i)
+		host, _ := tc.packet.findOrCreateHost(mac, ip)
+		if host.IP.Equal(net.IPv4zero) {
+			fmt.Println("invalid host")
+		}
 	}
 }
