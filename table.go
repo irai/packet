@@ -97,26 +97,12 @@ func (h *Handler) FindOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host,
 // Must have lock before calling
 func (h *Handler) findOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host, found bool) {
 
-	// trick to avoid buffer allocation in lookup
-	// see: net.IPv4() function
-	//
-	// this function is called for every packet - i.e. VERY often
-	var v4InV6Prefix = net.IP{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00} // go ipv4 prefix
-	if len(ip) == 4 {
-		v4InV6Prefix[12] = ip[0]
-		v4InV6Prefix[13] = ip[1]
-		v4InV6Prefix[14] = ip[2]
-		v4InV6Prefix[15] = ip[3]
-	} else {
-		v4InV6Prefix = ip
-	}
-
 	// using netaddr IP
 	ipNew, _ := netaddr.FromStdIP(ip)
 	now := time.Now()
 	if host, ok := h.LANHosts.Table[ipNew]; ok {
 		if !bytes.Equal(host.MACEntry.MAC, mac) {
-			fmt.Println("packet: error mac address differ - duplicated IP???", host.MACEntry.MAC, mac, v4InV6Prefix)
+			fmt.Println("packet: error mac address differ - duplicated IP???", host.MACEntry.MAC, mac, ipNew)
 			h.printHostTable()
 			// link host to new macEntry
 			mac := CopyMAC(mac)
