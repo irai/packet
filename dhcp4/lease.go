@@ -34,20 +34,21 @@ type leaseTable map[string]*Lease
 
 // Lease stores a client lease
 type Lease struct {
-	ClientID    []byte
+	ClientID    []byte `yaml:",omitempty"`
 	State       State
 	Addr        packet.Addr
-	IPOffer     net.IP
-	OfferExpiry time.Time
-	XID         []byte `yaml:"-"`
-	Count       int    `yaml:"-"` // a counter to check for repeat packets
+	IPOffer     net.IP    `yaml:",omitempty"`
+	OfferExpiry time.Time `yaml:"-,omitempty"`
+	XID         []byte    `yaml:",omitempty"`
+	Count       int       `yaml:"-"` // a counter to check for repeat packets
 	Name        string
-	subnet      *dhcpSubnet
-	DHCPExpiry  time.Time
+	subnet      *dhcpSubnet `yaml:"-"` // yaml does not like private fields, it will not create the fields in ther unmarshal struct
+	DHCPExpiry  time.Time   `yaml:",omitempty"`
 }
 
 func (l Lease) String() string {
-	return fmt.Sprintf("id=% x state=%s %s name=%s offer=%s captured=%v lan=%s", l.ClientID, l.State, l.Addr, l.Name, l.IPOffer, l.subnet.Captured, l.subnet.LAN)
+	return fmt.Sprintf("id=% x state=%s %s name=%s offer=%s captured=%v gw=%s mask=%v",
+		l.ClientID, l.State, l.Addr, l.Name, l.IPOffer, l.subnet.Captured, l.subnet.DefaultGW, l.subnet.LAN.Mask)
 
 }
 

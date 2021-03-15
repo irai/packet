@@ -52,14 +52,14 @@ func newSubnet(config SubnetConfig) (*dhcpSubnet, error) {
 	}
 
 	// default values for first and last IPs
-	config.FirstIP = config.FirstIP.To4()
+	config.FirstIP = packet.CopyIP(config.FirstIP).To4() // must copy, we are updating the array
 	if config.FirstIP == nil || config.FirstIP.Equal(net.IPv4zero) || config.FirstIP[3] <= subnet.LAN.IP[3] {
-		config.FirstIP = subnet.LAN.IP.To4()
+		config.FirstIP = packet.CopyIP(subnet.LAN.IP).To4()
 		config.FirstIP[3] = config.FirstIP[3] + 1
 	}
-	config.LastIP = config.LastIP.To4()
+	config.LastIP = packet.CopyIP(config.LastIP).To4() // must copy, we are updating the array
 	if config.LastIP == nil || config.LastIP.Equal(net.IPv4zero) || config.LastIP[3] > subnet.broadcast[3] {
-		config.LastIP = subnet.broadcast.To4()
+		config.LastIP = packet.CopyIP(subnet.broadcast).To4()
 		config.LastIP[3] = config.LastIP[3] - 1
 	}
 	subnet.Duration = config.Duration
@@ -162,14 +162,23 @@ func (h *leaseTable) MarshalYAML() (interface{}, error) {
 	return tmp, nil
 }
 
+type LeaseNew Lease
 // UnmarshalYAML implements the YAML marshalling interface
-func (h *leaseTable) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	tmp := []LeaseNew{}
+func (h *Lease) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	tmp := LeaseNew{}
 
 	err := unmarshal(&tmp)
 	if err != nil {
+		fmt.Println("eeror entry ", err)
 		return err
 	}
+
+	fmt.Println("unmashal entry ", tmp)
+	h.ClientID = tmp.ClientID
+	h.DHCPExpiry = time.Now()
+	h.OfferExpiry = time.Now()
+	// h.subnet = &dhcpSubnet{}
+	h.XID = []byte{}
 
 	for i := range tmp {
 		if tmp[i].Addr.IP == nil {
@@ -183,17 +192,13 @@ func (h *leaseTable) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		h[index].MAC = dupMAC(tmp[i].MAC)
 		h[index].DHCPExpiry = tmp[i].DHCPExpiry
 
-		if tracing() {
-			log.Tracef("dhcp4: unmarshall %v lease=%+v ", index, h[index])
-		}
 	}
 
 	return nil
 }
-**/
+***/
 
 func loadConfig(fname string) (net1 *dhcpSubnet, net2 *dhcpSubnet, t leaseTable, err error) {
-
 	if fname == "" {
 		return
 	}
@@ -201,7 +206,7 @@ func loadConfig(fname string) (net1 *dhcpSubnet, net2 *dhcpSubnet, t leaseTable,
 	table := struct {
 		Net1   *SubnetConfig
 		Net2   *SubnetConfig
-		Leases *leaseTable
+		Leases []Lease
 	}{}
 
 	source, err := ioutil.ReadFile(fname)
@@ -211,9 +216,11 @@ func loadConfig(fname string) (net1 *dhcpSubnet, net2 *dhcpSubnet, t leaseTable,
 	}
 
 	// Unmarshall will load a table with 256 leases
+	// err = yaml.UnmarshalStrict(source, &table)
 	err = yaml.Unmarshal(source, &table)
 	if err != nil {
 		log.Errorf("Cannot parse dhcp file: %s error %s", fname, err)
+		fmt.Println("error2  ", err)
 		return nil, nil, nil, err
 	}
 
@@ -247,16 +254,34 @@ func loadConfig(fname string) (net1 *dhcpSubnet, net2 *dhcpSubnet, t leaseTable,
 	}
 
 	tt := map[string]*Lease{}
-	// table.Leases1 contains the full 256 entries table
-	for _, v := range *table.Leases {
-		if v.State != StateAllocated {
-			continue
-		}
 
-		if v.Addr.IP == nil || !net1.LAN.Contains(v.Addr.IP) || v.State != StateAllocated {
-			continue
+	// Careful: Yaml does not set private fields in unmarshaled structured.
+	//          so the v.subnet is nil and will cause a fatal error
+	if table.Leases != nil {
+		for _, v := range table.Leases {
+			// MUST set v.subnet before printing to avoid fatal error
+			//      when printing v
+			v.subnet = net1
+
+			if v.State != StateAllocated {
+				fmt.Printf("DEBUG failing allocated entry %v \n", v)
+				continue
+			}
+
+			if v.Addr.IP == nil || !net1.LAN.Contains(v.Addr.IP) {
+				fmt.Printf("DEBUG failing LAN entry %v \n", v)
+				continue
+			}
+			if v.ClientID == nil || len(v.ClientID) == 0 {
+				fmt.Printf("DEBUG failing clientID entry %v \n", v)
+				continue
+			}
+
+			if net2.LAN.Contains(v.Addr.IP) {
+				v.subnet = net2
+			}
+			tt[string(v.ClientID)] = &v
 		}
-		tt[string(v.ClientID)] = v
 	}
 
 	return net1, net2, tt, nil
@@ -271,8 +296,15 @@ func (h *Handler) saveConfig(fname string) (err error) {
 	table := struct {
 		Net1   *SubnetConfig
 		Net2   *SubnetConfig
-		Leases *leaseTable
-	}{Net1: &h.net1.SubnetConfig, Net2: &h.net2.SubnetConfig, Leases: &h.Table}
+		Leases []Lease
+	}{Net1: &h.net1.SubnetConfig, Net2: &h.net2.SubnetConfig}
+
+	for _, v := range h.Table {
+		if v.State == StateAllocated {
+			table.Leases = append(table.Leases, *v)
+			fmt.Println("saving lease ", v)
+		}
+	}
 
 	stream, err := yaml.Marshal(&table)
 	if err != nil {

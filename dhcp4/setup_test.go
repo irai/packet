@@ -145,7 +145,7 @@ func setupTestHandler() *testContext {
 	if err != nil {
 		panic(err)
 	}
-	tc.h, err = Config{ClientConn: tc.clientInConn}.Attach(tc.engine, net.IPNet{IP: netfilterIP.IP, Mask: net.IPv4Mask(255, 255, 255, 0)}, dnsIP4, testDHCPFilename)
+	tc.h, err = Config{ClientConn: tc.clientInConn}.Attach(tc.engine, netfilterIP, dnsIP4, testDHCPFilename)
 	if err != nil {
 		panic("cannot create handler: " + err.Error())
 	}

@@ -405,7 +405,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			if host, err = h.HandlerICMP4.ProcessPacket(host, l4Payload); err != nil {
 				fmt.Printf("packet: error processing icmp4: %s\n", err)
 			}
-		case syscall.IPPROTO_ICMPV6:
+		case syscall.IPPROTO_ICMPV6: // 0x03a
 			if host, err = h.HandlerICMP6.ProcessPacket(host, ether); err != nil {
 				fmt.Printf("packet: error processing icmp6: %s\n", err)
 			}
@@ -442,7 +442,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 			}
 
-		case syscall.ETH_P_ARP: // skip ARP
+		case syscall.ETH_P_ARP: // skip ARP - 0x0806
 			if host, err = h.HandlerARP.ProcessPacket(host, ether); err != nil {
 				fmt.Printf("packet: error processing arp: %s\n", err)
 			}
