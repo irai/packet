@@ -38,7 +38,7 @@ type Lease struct {
 	State       State
 	Addr        packet.Addr
 	IPOffer     net.IP    `yaml:",omitempty"`
-	OfferExpiry time.Time `yaml:"-,omitempty"`
+	OfferExpiry time.Time `yaml:",omitempty"`
 	XID         []byte    `yaml:",omitempty"`
 	Count       int       `yaml:"-"` // a counter to check for repeat packets
 	Name        string
