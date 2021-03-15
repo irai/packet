@@ -134,7 +134,7 @@ func main() {
 	}
 
 	// DHCP4
-	handlers.dhcp4, err = dhcp4.Attach(handlers.engine, handlers.netfilterIP, dhcp4.CloudFlareDNS1, "")
+	handlers.dhcp4, err = dhcp4.Attach(handlers.engine, handlers.netfilterIP, dhcp4.CloudFlareDNS1, "./dhcpconfig.yaml")
 	if err != nil {
 		log.Fatalf("Failed to create dhcp4 handler: netfilterIP=%s error=%s", handlers.netfilterIP, err)
 	}
