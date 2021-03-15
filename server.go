@@ -459,7 +459,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 		elapsed := time.Since(startTime)
 		if elapsed > time.Microsecond*30 {
-			fmt.Printf("packet: warning > 30 microseconds: %v\n", elapsed)
+			fmt.Printf("packet: warning > 30 microseconds: %v l4proto=%x\n", elapsed, l4Proto)
 		}
 	}
 }
