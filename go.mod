@@ -11,4 +11,5 @@ require (
 	golang.org/x/net v0.0.0-20200707034311-ab3426394381
 	golang.org/x/sys v0.0.0-20200803210538-64077c9b5642
 	gopkg.in/yaml.v2 v2.2.2
+	inet.af/netaddr v0.0.0-20210313195008-843b4240e319
 )

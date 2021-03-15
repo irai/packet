@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"net"
 	"time"
+
+	"inet.af/netaddr"
 )
 
 // HostTable manages host entries
 type HostTable struct {
-	Table map[string]*Host
+	Table map[netaddr.IP]*Host
 }
 
 // HuntStage holds the host hunt stage
@@ -62,7 +64,7 @@ func (e *Host) HuntStageNoLock() HuntStage {
 
 // newHostTable returns a HostTable handler
 func newHostTable() HostTable {
-	return HostTable{Table: make(map[string]*Host, 64)}
+	return HostTable{Table: make(map[netaddr.IP]*Host, 64)}
 }
 
 // PrintTable logs ICMP6 tables to standard out
@@ -109,8 +111,10 @@ func (h *Handler) findOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host,
 		v4InV6Prefix = ip
 	}
 
+	// using netaddr IP
+	ipNew, _ := netaddr.FromStdIP(ip)
 	now := time.Now()
-	if host, ok := h.LANHosts.Table[string(v4InV6Prefix)]; ok {
+	if host, ok := h.LANHosts.Table[ipNew]; ok {
 		if !bytes.Equal(host.MACEntry.MAC, mac) {
 			fmt.Println("packet: error mac address differ - duplicated IP???", host.MACEntry.MAC, mac, v4InV6Prefix)
 			h.printHostTable()
@@ -133,7 +137,7 @@ func (h *Handler) findOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host,
 	host.huntStage = StageNormal
 	host.MACEntry.LastSeen = now
 	// host.MACEntry.updateIP(host.IP)
-	h.LANHosts.Table[string(host.IP)] = host
+	h.LANHosts.Table[ipNew] = host
 
 	// link host to macEntry
 	macEntry.HostList = append(macEntry.HostList, host)
@@ -146,7 +150,8 @@ func (h *Handler) deleteHostWithLock(ip net.IP) {
 
 	if host := h.FindIPNoLock(ip); host != nil {
 		host.MACEntry.unlink(host)
-		delete(h.LANHosts.Table, string(host.IP))
+		newIP, _ := netaddr.FromStdIP(ip)
+		delete(h.LANHosts.Table, newIP)
 	}
 }
 
@@ -155,13 +160,15 @@ func (h *Handler) FindIP(ip net.IP) *Host {
 	h.Lock()
 	defer h.Unlock()
 
-	return h.LANHosts.Table[string(ip.To16())]
+	newIP, _ := netaddr.FromStdIP(ip)
+	return h.LANHosts.Table[newIP]
 }
 
 // FindIPNoLock finds the host for IP wihout locking the engine
 // Engine must be locked prior to calling this function
 func (h *Handler) FindIPNoLock(ip net.IP) *Host {
-	return h.LANHosts.Table[string(ip.To16())]
+	newIP, _ := netaddr.FromStdIP(ip)
+	return h.LANHosts.Table[newIP]
 }
 
 // FindByMAC return a list of IP addresses for mac
