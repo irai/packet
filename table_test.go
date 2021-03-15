@@ -56,11 +56,14 @@ func Benchmark_findOrCreateHost(b *testing.B) {
 	tc := setupTestHandler()
 	defer tc.Close()
 
+	// March 2021 - running benchmark on WSL 2 - 64 hosts
+	// Benchmark_findOrCreateHost-8   	 7318504	       145 ns/op	       0 B/op	       0 allocs/op
+	// Benchmark_findOrCreateHost-8   	 7555534	       141 ns/op	       0 B/op	       0 allocs/op
 	ip := CopyIP(hostIP4).To4()
 	mac := net.HardwareAddr{0x00, 0xff, 0xaa, 0xbb, 0x55, 0x55}
 	for i := 0; i < b.N; i++ {
-		ip[3] = byte(i)
-		mac[5] = byte(i)
+		ip[3] = byte(i % 64)
+		mac[5] = byte(i % 64)
 		host, _ := tc.packet.findOrCreateHost(mac, ip)
 		if host.IP.Equal(net.IPv4zero) {
 			fmt.Println("invalid host")
