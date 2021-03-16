@@ -90,7 +90,7 @@ func readResponse(ctx context.Context, tc *TestContext) error {
 
 		// used for debuging - disable to avoid verbose logging
 		if true {
-			fmt.Printf("raw: got buffere msg=%s\n", ether)
+			fmt.Printf("test  : got client test response=%s\n", ether)
 		}
 
 		if ether.EtherType() == syscall.ETH_P_IP { // IP4?

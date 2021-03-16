@@ -521,7 +521,7 @@ func (h *Handler) setOnline(host *Host) {
 				fmt.Println("packet: failed to start hunt error", err)
 			}
 		}
-		notification := Notification{IP: addr.IP, MAC: addr.MAC, Online: true}
+		notification := Notification{Addr: Addr{IP: addr.IP, MAC: addr.MAC}, Online: true}
 		h.notifyCallback(notification)
 	}()
 }
@@ -553,7 +553,7 @@ func (h *Handler) lockAndSetOffline(ip net.IP) {
 	go func() {
 		h.lockAndStopHunt(ip)
 
-		notification := Notification{IP: ip, MAC: mac, Online: false}
+		notification := Notification{Addr: Addr{MAC: mac, IP: ip}, Online: false}
 		h.notifyCallback(notification)
 	}()
 }
