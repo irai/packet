@@ -10,15 +10,15 @@ import (
 )
 
 func TestHandler_newHostSimple(t *testing.T) {
-	tc := setupTestHandler()
+	tc := NewTestContext()
 	defer tc.Close()
 
 	log.SetLevel(log.DebugLevel)
 	dhcp4.Debug = true
-	// packet.Debug = true
+	packet.Debug = true
 	// arp.Debug = true
 
-	tests := newHostEvents(packet.Addr{MAC: mac1}, 1, 1)
+	tests := NewHostEvents(packet.Addr{MAC: mac1}, 1, 1)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -29,18 +29,18 @@ func TestHandler_newHostSimple(t *testing.T) {
 }
 
 func TestHandler_newHostMany(t *testing.T) {
-	tc := setupTestHandler()
+	tc := NewTestContext()
 	defer tc.Close()
 
 	packet.Debug = true
 	arp.Debug = true
 
-	tests := []testEvent{}
-	tests = append(tests, newHostEvents(packet.Addr{MAC: mac1}, 1, 1)...)
-	tests = append(tests, newHostEvents(packet.Addr{MAC: mac2}, 1, 1)...)
-	tests = append(tests, newHostEvents(packet.Addr{MAC: mac3}, 1, 1)...)
-	tests = append(tests, newHostEvents(packet.Addr{MAC: mac4}, 1, 1)...)
-	tests = append(tests, newHostEvents(packet.Addr{MAC: mac5}, 1, 1)...)
+	tests := []TestEvent{}
+	tests = append(tests, NewHostEvents(packet.Addr{MAC: mac1}, 1, 1)...)
+	tests = append(tests, NewHostEvents(packet.Addr{MAC: mac2}, 1, 1)...)
+	tests = append(tests, NewHostEvents(packet.Addr{MAC: mac3}, 1, 1)...)
+	tests = append(tests, NewHostEvents(packet.Addr{MAC: mac4}, 1, 1)...)
+	tests = append(tests, NewHostEvents(packet.Addr{MAC: mac5}, 1, 1)...)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -52,18 +52,18 @@ func TestHandler_newHostMany(t *testing.T) {
 }
 
 func TestHandler_sameHostMany(t *testing.T) {
-	tc := setupTestHandler()
+	tc := NewTestContext()
 	defer tc.Close()
 
 	packet.Debug = true
 	arp.Debug = true
 
-	tests := []testEvent{}
-	tests = append(tests, newHostEvents(packet.Addr{MAC: mac1}, +1, 1)...)
-	tests = append(tests, newHostEvents(packet.Addr{MAC: mac1}, +0, 0)...) // dhcp will reuse ip
-	tests = append(tests, newHostEvents(packet.Addr{MAC: mac1}, +0, 0)...) // dhcp will reuse ip
-	tests = append(tests, newHostEvents(packet.Addr{MAC: mac1}, +0, 0)...) // dhcp will reuse ip
-	tests = append(tests, newHostEvents(packet.Addr{MAC: mac1}, +0, 0)...) // dhcp will reuse ip
+	tests := []TestEvent{}
+	tests = append(tests, NewHostEvents(packet.Addr{MAC: mac1}, +1, 1)...)
+	tests = append(tests, NewHostEvents(packet.Addr{MAC: mac1}, +0, 0)...) // dhcp will reuse ip
+	tests = append(tests, NewHostEvents(packet.Addr{MAC: mac1}, +0, 0)...) // dhcp will reuse ip
+	tests = append(tests, NewHostEvents(packet.Addr{MAC: mac1}, +0, 0)...) // dhcp will reuse ip
+	tests = append(tests, NewHostEvents(packet.Addr{MAC: mac1}, +0, 0)...) // dhcp will reuse ip
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -75,7 +75,7 @@ func TestHandler_sameHostMany(t *testing.T) {
 }
 
 func TestHandler_existingHost(t *testing.T) {
-	tc := setupTestHandler()
+	tc := NewTestContext()
 	defer tc.Close()
 
 	packet.Debug = true
@@ -83,14 +83,14 @@ func TestHandler_existingHost(t *testing.T) {
 	packet.DebugIP4 = true
 
 	// tc.savedIP = ip2.To4()
-	tests := []testEvent{}
+	tests := []TestEvent{}
 	addr := packet.Addr{MAC: mac2, IP: ip1.To4()}
 	tests = append(tests, newArpAnnoucementEvent(packet.Addr{MAC: addr.MAC, IP: addr.IP}, 1, 1)...)
-	tests = append(tests, newHostEvents(packet.Addr{MAC: addr.MAC}, 1, 0)...) // will dhcp new host ip
+	tests = append(tests, NewHostEvents(packet.Addr{MAC: addr.MAC}, 1, 0)...) // will dhcp new host ip
 
 	addr = packet.Addr{MAC: mac2, IP: ip5.To4()}
 	tests = append(tests, newArpAnnoucementEvent(packet.Addr{MAC: addr.MAC, IP: addr.IP}, 1, 0)...)
-	tests = append(tests, newHostEvents(packet.Addr{MAC: addr.MAC}, 0, 0)...) // dhcp will re-use previous still valid lease
+	tests = append(tests, NewHostEvents(packet.Addr{MAC: addr.MAC}, 0, 0)...) // dhcp will re-use previous still valid lease
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

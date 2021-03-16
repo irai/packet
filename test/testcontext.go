@@ -51,7 +51,7 @@ var (
 	dnsIP4 = net.IPv4(8, 8, 8, 8)
 )
 
-type testContext struct {
+type TestContext struct {
 	inConn        net.PacketConn
 	outConn       net.PacketConn
 	clientInConn  net.PacketConn
@@ -64,10 +64,11 @@ type testContext struct {
 	ctx           context.Context
 	cancel        context.CancelFunc
 	responseTable [][]byte
-	savedIP       net.IP // save the returned IP for use by subsequent calls
+	IPOffer       net.IP // offer received in discover
+	// savedIP       net.IP // save the returned IP for use by subsequent calls
 }
 
-func readResponse(ctx context.Context, tc *testContext) error {
+func readResponse(ctx context.Context, tc *TestContext) error {
 	buf := make([]byte, 2000)
 	for {
 		n, _, err := tc.outConn.ReadFrom(buf)
@@ -88,20 +89,45 @@ func readResponse(ctx context.Context, tc *testContext) error {
 		}
 
 		// used for debuging - disable to avoid verbose logging
-		if false {
+		if true {
 			fmt.Printf("raw: got buffere msg=%s\n", ether)
 		}
+
+		if ether.EtherType() == syscall.ETH_P_IP { // IP4?
+			if ip4 := packet.IP4(ether.Payload()); ip4.Protocol() == syscall.IPPROTO_UDP { // UDP?
+				// fmt.Printf("raw: got buffere ip=%s\n", ip4)
+				if udp := packet.UDP(ip4.Payload()); udp.DstPort() == packet.DHCP4ClientPort { // DHCP client port?
+					// fmt.Printf("raw: got buffere udp=%s\n", udp)
+					dhcp4Frame := dhcp4.DHCP4(udp.Payload())
+					options := dhcp4Frame.ParseOptions()
+					var reqType dhcp4.MessageType
+					if t := options[dhcp4.OptionDHCPMessageType]; len(t) != 1 {
+						continue
+					} else {
+						reqType = dhcp4.MessageType(t[0])
+					}
+					if reqType == dhcp4.Offer {
+						ip := dhcp4Frame.YIAddr().To4()
+						if ip == nil {
+							panic("ip is nil")
+						}
+						tc.IPOffer = ip
+					}
+				}
+			}
+		}
+
 		tmp := make([]byte, len(buf))
 		copy(tmp, buf)
 		tc.responseTable = append(tc.responseTable, tmp)
 	}
 }
 
-func setupTestHandler() *testContext {
+func NewTestContext() *TestContext {
 
 	var err error
 
-	tc := testContext{}
+	tc := TestContext{}
 	tc.ctx, tc.cancel = context.WithCancel(context.Background())
 
 	tc.inConn, tc.outConn = packet.TestNewBufferedConn()
@@ -155,7 +181,7 @@ func setupTestHandler() *testContext {
 	return &tc
 }
 
-func (tc *testContext) Close() {
+func (tc *TestContext) Close() {
 	time.Sleep(time.Millisecond * 20) // wait for all packets to finish
 	if packet.Debug {
 		fmt.Println("teminating context")
@@ -164,9 +190,9 @@ func (tc *testContext) Close() {
 	tc.wg.Wait()
 }
 
-type testEvent struct {
+type TestEvent struct {
 	name             string
-	action           string // capture, block, accept, release, event
+	action           Action // capture, block, accept, release, event
 	packetEvent      packet.Notification
 	waitTimeAfter    time.Duration
 	wantCapture      bool
@@ -234,8 +260,8 @@ func newARPFrame(src packet.Addr, dst packet.Addr, operation uint16) packet.Ethe
 	return ether
 }
 
-func newArpAnnoucementEvent(addr packet.Addr, hostInc int, macInc int) []testEvent {
-	return []testEvent{
+func newArpAnnoucementEvent(addr packet.Addr, hostInc int, macInc int) []TestEvent {
+	return []TestEvent{
 		{name: "arp-announcement-" + addr.MAC.String(), action: "arpAnnouncement", hostTableInc: hostInc, macTableInc: macInc, responsePos: -1, responseTableInc: 0,
 			srcAddr:       addr,
 			wantHost:      &packet.Host{IP: addr.IP, Online: true},
@@ -244,8 +270,20 @@ func newArpAnnoucementEvent(addr packet.Addr, hostInc int, macInc int) []testEve
 	}
 }
 
-func newHostEvents(addr packet.Addr, hostInc int, macInc int) []testEvent {
-	return []testEvent{
+// Action identifies a test event action
+type Action string
+
+// Possible event action
+const (
+	ActionDHCP4Discover   Action = "dhcp4Discover"
+	ActionDHCP4Request    Action = "dhcp4Request"
+	ActionDHCP4Decline    Action = "dhcp4Decline"
+	ActionARPProbe        Action = "arpProbe"
+	ActionARPAnnouncement Action = "arpAnnouncement"
+)
+
+func NewHostEvents(addr packet.Addr, hostInc int, macInc int) []TestEvent {
+	return []TestEvent{
 		{name: "discover-" + addr.MAC.String(), action: "dhcp4Discover", hostTableInc: 0, macTableInc: macInc, responsePos: -1, responseTableInc: 1,
 			srcAddr:       packet.Addr{MAC: addr.MAC, IP: net.IPv4zero},
 			wantHost:      nil, // don't validate host
@@ -256,6 +294,7 @@ func newHostEvents(addr packet.Addr, hostInc int, macInc int) []testEvent {
 			wantHost:      &packet.Host{IP: nil, Online: true},
 			waitTimeAfter: time.Millisecond * 20,
 		},
+		/**
 		{name: "arp-probe-" + addr.MAC.String(), action: "arpProbe", hostTableInc: 0, macTableInc: 0, responsePos: -1, responseTableInc: 0,
 			srcAddr:       packet.Addr{MAC: mac1, IP: net.IPv4zero},
 			wantHost:      &packet.Host{IP: nil, Online: true},
@@ -266,36 +305,37 @@ func newHostEvents(addr packet.Addr, hostInc int, macInc int) []testEvent {
 			wantHost:      &packet.Host{IP: nil, Online: true},
 			waitTimeAfter: time.Millisecond * 10,
 		},
+		**/
 	}
 }
 
 var buf = make([]byte, packet.EthMaxSize)
 
-func runAction(t *testing.T, tc *testContext, tt testEvent) {
+func runAction(t *testing.T, tc *TestContext, tt TestEvent) {
 
 	switch tt.action {
 	case "capture":
 	case "release":
 
 	case "dhcp4Request":
-		tt.ether = newDHCP4RequestFrame(tt.srcAddr, hostIP4, tc.savedIP, []byte(fmt.Sprintf("%d", tc.dhcp4XID)))
+		tt.ether = newDHCP4RequestFrame(tt.srcAddr, hostIP4, tc.IPOffer, []byte(fmt.Sprintf("%d", tc.dhcp4XID)))
 
 	case "dhcp4Discover":
 		tc.dhcp4XID++
 		tt.ether = newDHCP4DiscoverFrame(tt.srcAddr, []byte(fmt.Sprintf("%d", tc.dhcp4XID)))
 
 	case "arpProbe":
-		if tc.savedIP == nil {
-			panic("invalid savedIP")
+		if tc.IPOffer == nil {
+			panic("invalid IPOffer")
 		}
-		tt.ether = newARPFrame(tt.srcAddr, packet.Addr{MAC: arp.EthernetBroadcast, IP: tc.savedIP}, arp.OperationRequest)
+		tt.ether = newARPFrame(tt.srcAddr, packet.Addr{MAC: arp.EthernetBroadcast, IP: tc.IPOffer}, arp.OperationRequest)
 
 	case "arpAnnouncement":
 		if tt.srcAddr.IP == nil {
-			if tc.savedIP == nil {
-				panic("invalid savedIP")
+			if tc.IPOffer == nil {
+				panic("invalid IPOffer")
 			}
-			tt.srcAddr.IP = tc.savedIP
+			tt.srcAddr.IP = tc.IPOffer
 		}
 		tt.ether = newARPFrame(packet.Addr{MAC: tt.srcAddr.MAC, IP: tt.srcAddr.IP.To4()}, packet.Addr{MAC: arp.EthernetBroadcast, IP: tt.srcAddr.IP.To4()}, arp.OperationRequest)
 
@@ -325,22 +365,10 @@ func runAction(t *testing.T, tc *testContext, tt testEvent) {
 		t.Errorf("%s: invalid mac reponse count len want=%v got=%v", tt.name, tt.responseTableInc, n)
 	}
 
-	var ip net.IP = tt.srcAddr.IP
-	switch tt.action {
-	case "dhcp4Request", "dhcp4Discover":
-		buf := tc.responseTable[len(tc.responseTable)-1]
-		dhcp4Frame := dhcp4.DHCP4(packet.UDP(packet.IP4(packet.Ether(buf).Payload()).Payload()).Payload())
-		ip = dhcp4Frame.YIAddr().To4()
-		if ip == nil {
-			panic("ip is nil")
-		}
-		tc.savedIP = ip
-	}
-
 	if tt.wantHost != nil {
 		ip := tt.wantHost.IP
 		if ip == nil {
-			ip = tc.savedIP
+			ip = tc.IPOffer
 		}
 		host := tc.packet.FindIP(ip)
 		if host == nil {
@@ -351,10 +379,9 @@ func runAction(t *testing.T, tc *testContext, tt testEvent) {
 			t.Errorf("%s: host incorrect online status want=%v got=%v ", tt.name, tt.wantHost.Online, host.Online)
 		}
 	}
-
 }
 
-func checkOnlineCount(t *testing.T, tc *testContext, online int, offline int) {
+func checkOnlineCount(t *testing.T, tc *TestContext, online int, offline int) {
 	countOnline, countOffline := 0, 0
 	n := 0
 	for _, v := range tc.packet.LANHosts.Table {

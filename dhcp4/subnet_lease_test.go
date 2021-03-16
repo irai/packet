@@ -5,6 +5,7 @@ package dhcp4
 import (
 	"fmt"
 	"net"
+	"os"
 	"testing"
 
 	log "github.com/sirupsen/logrus"
@@ -127,8 +128,8 @@ func Test_Subnet_Save(t *testing.T) {
 	// Debug = true
 	filename := t.TempDir() + "/dhcpconfig.yaml"
 
-	// filename := "./dhcpconfig.yaml"
-	// os.Remove(filename)
+	// delete from previous test
+	os.Remove(testDHCPFilename)
 
 	tc := setupTestHandler()
 	defer tc.Close()
