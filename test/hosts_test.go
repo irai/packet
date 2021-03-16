@@ -71,7 +71,7 @@ func TestHandler_sameHostMany(t *testing.T) {
 		})
 	}
 	checkOnlineCount(t, tc, 2, 0)
-	tc.packet.PrintTable()
+	tc.Engine.PrintTable()
 }
 
 func TestHandler_existingHost(t *testing.T) {
