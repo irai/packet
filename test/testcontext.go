@@ -18,24 +18,24 @@ import (
 )
 
 var (
-	zeroMAC = net.HardwareAddr{0, 0, 0, 0, 0, 0}
-	ip1     = net.IPv4(192, 168, 0, 1)
-	ip2     = net.IPv4(192, 168, 0, 2)
-	ip3     = net.IPv4(192, 168, 0, 3)
-	ip4     = net.IPv4(192, 168, 0, 4)
-	ip5     = net.IPv4(192, 168, 0, 5)
+	ZeroMAC = net.HardwareAddr{0, 0, 0, 0, 0, 0}
+	IP1     = net.IPv4(192, 168, 0, 1)
+	IP2     = net.IPv4(192, 168, 0, 2)
+	IP3     = net.IPv4(192, 168, 0, 3)
+	IP4     = net.IPv4(192, 168, 0, 4)
+	IP5     = net.IPv4(192, 168, 0, 5)
 
-	hostMAC   = net.HardwareAddr{0x00, 0x55, 0x55, 0x55, 0x55, 0x55}
-	hostIP4   = net.IPv4(192, 168, 0, 129).To4()
-	routerMAC = net.HardwareAddr{0x00, 0x66, 0x66, 0x66, 0x66, 0x66}
-	routerIP4 = net.IPv4(192, 168, 0, 11).To4()
-	homeLAN   = net.IPNet{IP: net.IPv4(192, 168, 0, 0), Mask: net.IPv4Mask(255, 255, 255, 0)}
+	HostMAC   = net.HardwareAddr{0x00, 0x55, 0x55, 0x55, 0x55, 0x55}
+	HostIP4   = net.IPv4(192, 168, 0, 129).To4()
+	RouterMAC = net.HardwareAddr{0x00, 0x66, 0x66, 0x66, 0x66, 0x66}
+	RouterIP4 = net.IPv4(192, 168, 0, 11).To4()
+	HomeLAN   = net.IPNet{IP: net.IPv4(192, 168, 0, 0), Mask: net.IPv4Mask(255, 255, 255, 0)}
 
-	mac1 = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x01}
-	mac2 = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x02}
-	mac3 = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x03}
-	mac4 = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x04}
-	mac5 = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x05}
+	MAC1 = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x01}
+	MAC2 = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x02}
+	MAC3 = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x03}
+	MAC4 = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x04}
+	MAC5 = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x05}
 
 	ip6LLARouter = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}
 	ip6LLAHost   = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x10, 0x10}
@@ -45,10 +45,10 @@ var (
 	ip6LLA4      = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x04}
 	ip6LLA5      = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x05}
 
-	hostAddr   = packet.Addr{MAC: hostMAC, IP: hostIP4}
-	routerAddr = packet.Addr{MAC: routerMAC, IP: routerIP4}
+	HostAddrIP4   = packet.Addr{MAC: HostMAC, IP: HostIP4}
+	RouterAddrIP4 = packet.Addr{MAC: RouterMAC, IP: RouterIP4}
 
-	dnsIP4 = net.IPv4(8, 8, 8, 8)
+	DNSGoogleIP4 = net.IPv4(8, 8, 8, 8)
 )
 
 type TestContext struct {
@@ -137,10 +137,10 @@ func NewTestContext() *TestContext {
 	go packet.TestReadAndDiscardLoop(tc.ctx, tc.clientOutConn) // must read to avoid blocking
 
 	nicInfo := packet.NICInfo{
-		HostMAC:   hostMAC,
-		HostIP4:   net.IPNet{IP: hostIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
-		RouterIP4: net.IPNet{IP: routerIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
-		HomeLAN4:  homeLAN,
+		HostMAC:   HostMAC,
+		HostIP4:   net.IPNet{IP: HostIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
+		RouterIP4: net.IPNet{IP: RouterIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
+		HomeLAN4:  HomeLAN,
 	}
 
 	// override handler with conn and nicInfo
@@ -160,12 +160,12 @@ func NewTestContext() *TestContext {
 
 	// Default dhcp engine
 	netfilterIP, err := packet.SegmentLAN("eth0",
-		net.IPNet{IP: hostIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
-		net.IPNet{IP: routerIP4, Mask: net.IPv4Mask(255, 255, 255, 0)})
+		net.IPNet{IP: HostIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
+		net.IPNet{IP: RouterIP4, Mask: net.IPv4Mask(255, 255, 255, 0)})
 	if err != nil {
 		panic(err)
 	}
-	tc.dhcp4Handler, err = dhcp4.Config{ClientConn: tc.clientInConn}.Attach(tc.packet, net.IPNet{IP: netfilterIP.IP, Mask: net.IPv4Mask(255, 255, 255, 0)}, dnsIP4, "")
+	tc.dhcp4Handler, err = dhcp4.Config{ClientConn: tc.clientInConn}.Attach(tc.packet, net.IPNet{IP: netfilterIP.IP, Mask: net.IPv4Mask(255, 255, 255, 0)}, DNSGoogleIP4, "")
 	if err != nil {
 		panic("cannot create handler" + err.Error())
 	}
@@ -282,6 +282,14 @@ const (
 	ActionARPAnnouncement Action = "arpAnnouncement"
 )
 
+func NewHost(t *testing.T, tc *TestContext, addr packet.Addr, hostInc int, macInc int) error {
+	events := NewHostEvents(addr, hostInc, macInc)
+	for _, v := range events {
+		runAction(t, tc, v)
+	}
+	return nil
+}
+
 func NewHostEvents(addr packet.Addr, hostInc int, macInc int) []TestEvent {
 	return []TestEvent{
 		{name: "discover-" + addr.MAC.String(), action: "dhcp4Discover", hostTableInc: 0, macTableInc: macInc, responsePos: -1, responseTableInc: 1,
@@ -294,9 +302,8 @@ func NewHostEvents(addr packet.Addr, hostInc int, macInc int) []TestEvent {
 			wantHost:      &packet.Host{IP: nil, Online: true},
 			waitTimeAfter: time.Millisecond * 20,
 		},
-		/**
 		{name: "arp-probe-" + addr.MAC.String(), action: "arpProbe", hostTableInc: 0, macTableInc: 0, responsePos: -1, responseTableInc: 0,
-			srcAddr:       packet.Addr{MAC: mac1, IP: net.IPv4zero},
+			srcAddr:       packet.Addr{MAC: MAC1, IP: net.IPv4zero},
 			wantHost:      &packet.Host{IP: nil, Online: true},
 			waitTimeAfter: time.Millisecond * 10,
 		},
@@ -305,7 +312,6 @@ func NewHostEvents(addr packet.Addr, hostInc int, macInc int) []TestEvent {
 			wantHost:      &packet.Host{IP: nil, Online: true},
 			waitTimeAfter: time.Millisecond * 10,
 		},
-		**/
 	}
 }
 
@@ -318,7 +324,7 @@ func runAction(t *testing.T, tc *TestContext, tt TestEvent) {
 	case "release":
 
 	case "dhcp4Request":
-		tt.ether = newDHCP4RequestFrame(tt.srcAddr, hostIP4, tc.IPOffer, []byte(fmt.Sprintf("%d", tc.dhcp4XID)))
+		tt.ether = newDHCP4RequestFrame(tt.srcAddr, HostIP4, tc.IPOffer, []byte(fmt.Sprintf("%d", tc.dhcp4XID)))
 
 	case "dhcp4Discover":
 		tc.dhcp4XID++
