@@ -56,9 +56,9 @@ type TestContext struct {
 	outConn       net.PacketConn
 	clientInConn  net.PacketConn
 	clientOutConn net.PacketConn
-	packet        *packet.Handler
-	arpHandler    *arp.Handler
-	dhcp4Handler  *dhcp4.Handler
+	Engine        *packet.Handler
+	ARPHandler    *arp.Handler
+	DHCP4Handler  *dhcp4.Handler
 	dhcp4XID      uint16
 	wg            sync.WaitGroup
 	ctx           context.Context
@@ -145,15 +145,15 @@ func NewTestContext() *TestContext {
 
 	// override handler with conn and nicInfo
 	config := packet.Config{Conn: tc.inConn, NICInfo: &nicInfo, ProbeInterval: time.Millisecond * 500, OfflineDeadline: time.Millisecond * 500, PurgeDeadline: time.Second * 2}
-	tc.packet, err = config.NewEngine("eth0")
+	tc.Engine, err = config.NewEngine("eth0")
 	if err != nil {
 		panic(err)
 	}
 	if packet.Debug {
-		fmt.Println("nicinfo: ", tc.packet.NICInfo)
+		fmt.Println("nicinfo: ", tc.Engine.NICInfo)
 	}
 
-	tc.arpHandler, err = arp.Attach(tc.packet)
+	tc.ARPHandler, err = arp.Attach(tc.Engine)
 	if err != nil {
 		panic(err)
 	}
@@ -165,14 +165,14 @@ func NewTestContext() *TestContext {
 	if err != nil {
 		panic(err)
 	}
-	tc.dhcp4Handler, err = dhcp4.Config{ClientConn: tc.clientInConn}.Attach(tc.packet, net.IPNet{IP: netfilterIP.IP, Mask: net.IPv4Mask(255, 255, 255, 0)}, DNSGoogleIP4, "")
+	tc.DHCP4Handler, err = dhcp4.Config{ClientConn: tc.clientInConn}.Attach(tc.Engine, net.IPNet{IP: netfilterIP.IP, Mask: net.IPv4Mask(255, 255, 255, 0)}, DNSGoogleIP4, "")
 	if err != nil {
 		panic("cannot create handler" + err.Error())
 	}
-	tc.dhcp4Handler.SetMode(dhcp4.ModeSecondaryServerNice)
+	tc.DHCP4Handler.SetMode(dhcp4.ModeSecondaryServerNice)
 
 	go func() {
-		if err := tc.packet.ListenAndServe(tc.ctx); err != nil {
+		if err := tc.Engine.ListenAndServe(tc.ctx); err != nil {
 			panic(err)
 		}
 	}()
@@ -351,20 +351,20 @@ func runAction(t *testing.T, tc *TestContext, tt TestEvent) {
 	}
 
 	savedResponseTableCount := len(tc.responseTable)
-	savedHostTableCount := len(tc.packet.LANHosts.Table)
-	savedMACTableCount := len(tc.packet.MACTable.Table)
+	savedHostTableCount := len(tc.Engine.LANHosts.Table)
+	savedMACTableCount := len(tc.Engine.MACTable.Table)
 
 	if _, err := tc.outConn.WriteTo(tt.ether, &packet.Addr{MAC: tt.ether.Dst()}); err != nil {
 		panic(err.Error())
 	}
 	time.Sleep(tt.waitTimeAfter)
 
-	if n := len(tc.packet.LANHosts.Table) - savedHostTableCount; n != tt.hostTableInc {
+	if n := len(tc.Engine.LANHosts.Table) - savedHostTableCount; n != tt.hostTableInc {
 		t.Errorf("%s: invalid host table len want=%v got=%v", tt.name, tt.hostTableInc, n)
-		tc.packet.PrintTable()
+		tc.Engine.PrintTable()
 	}
-	if n := len(tc.packet.MACTable.Table) - savedMACTableCount; n != tt.macTableInc {
-		tc.packet.PrintTable()
+	if n := len(tc.Engine.MACTable.Table) - savedMACTableCount; n != tt.macTableInc {
+		tc.Engine.PrintTable()
 		t.Errorf("%s: invalid mac table len want=%v got=%v", tt.name, tt.macTableInc, n)
 	}
 	if n := len(tc.responseTable) - savedResponseTableCount; n != tt.responseTableInc {
@@ -376,7 +376,7 @@ func runAction(t *testing.T, tc *TestContext, tt TestEvent) {
 		if ip == nil {
 			ip = tc.IPOffer
 		}
-		host := tc.packet.FindIP(ip)
+		host := tc.Engine.FindIP(ip)
 		if host == nil {
 			t.Errorf("%s: host not found in table ip=%s ", tt.name, ip)
 			return
@@ -390,7 +390,7 @@ func runAction(t *testing.T, tc *TestContext, tt TestEvent) {
 func checkOnlineCount(t *testing.T, tc *TestContext, online int, offline int) {
 	countOnline, countOffline := 0, 0
 	n := 0
-	for _, v := range tc.packet.LANHosts.Table {
+	for _, v := range tc.Engine.LANHosts.Table {
 		if v.Online {
 			countOnline++
 		} else {
@@ -409,6 +409,6 @@ func checkOnlineCount(t *testing.T, tc *TestContext, online int, offline int) {
 		}
 	})
 	if n > 0 {
-		tc.packet.PrintTable()
+		tc.Engine.PrintTable()
 	}
 }
