@@ -193,14 +193,21 @@ func GetIP4DefaultGatewayAddr(nic string) (addr Addr, err error) {
 	}
 	addr.IP = addr.IP.To4()
 
-	arpList, err := LoadLinuxARPTable(nic)
-	if arpList == nil || err != nil {
-		return Addr{}, fmt.Errorf("default gw mac not available on interface")
-	}
-	for _, v := range arpList {
-		if v.IP.Equal(addr.IP) {
-			addr.MAC = v.MAC
-			break
+	// Try 3 times to read arp table
+	// This is required if we just reset the interface and the arp table is nil
+	arpList := []Addr{}
+	for i := 0; i < 3; i++ {
+		Ping(addr.IP) // ping to populate arp table
+		time.Sleep(time.Millisecond * 5)
+		arpList, err = LoadLinuxARPTable(nic)
+		if err == nil {
+			// search in table; if the arp entry is not yeet complete, the mac will be zero or wont exist
+			for _, v := range arpList {
+				if v.IP.Equal(addr.IP) {
+					addr.MAC = v.MAC
+					break
+				}
+			}
 		}
 	}
 	if addr.MAC == nil {
@@ -301,7 +308,6 @@ func locateFreeIP(nic string, hostIP net.IP, ip net.IP, start uint8, end uint8) 
 // Ping execute /usr/bin/ping
 // This is usefuel when engine is not yet running
 func Ping(ip net.IP) error {
-	fmt.Println("DEBUG ping", ip)
 	// -w deadline - wait 1 second
 	// -i frequency - one request each 0,2 seconds
 	// -c count - how many replies to receive before returning (in conjuction with -w)
@@ -309,11 +315,9 @@ func Ping(ip net.IP) error {
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	fmt.Println("DEBUG ping", ip)
 	if err := cmd.Run(); err != nil {
-		fmt.Printf("icmp4: failed to ping ip=%s error=%s", ip, err)
+		fmt.Printf("packet: failed to ping ip=%s error=%s\n", ip, err)
 	}
-	fmt.Println("DEBUG ping", ip)
 	if true { // set to true to check the output
 		fmt.Printf("out: %q\n", stdout.String())
 		fmt.Printf("errs: %q\n", stderr.String())
