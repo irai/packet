@@ -44,22 +44,25 @@ type Host struct {
 	IPV6Router bool
 	huntStage  HuntStage
 	LastSeen   time.Time
-	ICMP4      interface{}
-	DHCP4      interface{}
+	DHCPName   string
 	ICMP6      interface{}
-	DHCP6      interface{}
-	MDNS       interface{}
-	NBNS       interface{}
-	ARP        interface{}
 }
 
 func (e *Host) String() string {
 	return fmt.Sprintf("mac=%s ip=%v online=%v stage4=%s lastSeen=%s", e.MACEntry.MAC, e.IP, e.Online, e.huntStage, time.Since(e.LastSeen))
 }
 
-// HuntStageNoLock retusn the internal hunt stage
+// HuntStageNoLock retuns the internal hunt stage
 func (e *Host) HuntStageNoLock() HuntStage {
 	return e.huntStage
+}
+
+func (h *Handler) SetDHCPName(host *Host, name string) {
+	h.Lock()
+	if host.DHCPName != name {
+		host.DHCPName = name
+	}
+	h.Unlock()
 }
 
 // newHostTable returns a HostTable handler

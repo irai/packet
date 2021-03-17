@@ -57,6 +57,9 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 		serverIP = net.IP(tmp).To4()
 	}
 	name := string(options[OptionHostName])
+	if host != nil {
+		h.engine.SetDHCPName(host, name)
+	}
 
 	fields := log.Fields{"clientid": clientID, "ip": reqIP, "xid": p.XId(), "name": name}
 	if debugging() {
@@ -249,5 +252,4 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 	host, _ = h.engine.FindOrCreateHost(lease.Addr.MAC, lease.Addr.IP)
 
 	return host, ret
-	// return ret
 }
