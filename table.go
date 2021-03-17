@@ -113,6 +113,7 @@ func (h *Handler) FindOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host,
 		h.mutex.RUnlock()
 		return host, true
 	}
+	h.mutex.RUnlock()
 
 	// lock for writing
 	h.mutex.Lock()
