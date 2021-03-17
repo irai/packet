@@ -461,8 +461,8 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		}
 
 		d3 = time.Since(startTime)
-		if d3 > time.Microsecond*30 {
-			fmt.Printf("packet: warning > 30 microseconds: etherType=%x l4proto=%x elapsed=%v l3=%v l4=%v\n", ether.EtherType(), l4Proto, d3, d1, d2)
+		if d3 > time.Microsecond*100 {
+			fmt.Printf("packet: warning > 30 microseconds: etherType=%x l4proto=%x l3=%v l4=%v total=%v\n", ether.EtherType(), l4Proto, d1, d2, d3)
 		}
 	}
 }
