@@ -8,10 +8,10 @@ import (
 
 // Capture places the mac in capture mode
 func (h *Handler) Capture(mac net.HardwareAddr) error {
-	h.Lock()
+	h.RLock()
 	macEntry := h.MACTable.findMAC(mac)
 	if macEntry == nil {
-		h.Unlock()
+		h.RUnlock()
 		return nil
 	}
 	macEntry.Captured = true
@@ -21,7 +21,7 @@ func (h *Handler) Capture(mac net.HardwareAddr) error {
 	for _, v := range macEntry.HostList {
 		list = append(list, Addr{IP: v.IP, MAC: v.MACEntry.MAC})
 	}
-	h.Unlock()
+	h.RUnlock()
 
 	go func() {
 		for _, addr := range list {
@@ -42,23 +42,23 @@ func (h *Handler) lockAndStartHunt(addr Addr) error {
 		dhcp4Stage = h.HandlerDHCP4.HuntStage(addr)
 	}
 
-	h.Lock()
+	h.mutex.Lock()
 	host := h.FindIPNoLock(addr.IP)
 	if host == nil {
-		h.Unlock()
+		h.mutex.Unlock()
 		fmt.Printf("packet: error invalid ip in lockAndStartHunt ip=%s\n", addr.IP)
 		return ErrInvalidIP
 	}
 
 	if dhcp4Stage == StageRedirected {
 		host.huntStage = StageRedirected
-		h.Unlock()
+		h.mutex.Unlock()
 		fmt.Printf("packet: host successfully redirected %s\n", addr)
 		return nil
 	}
 
 	host.huntStage = StageHunt
-	h.Unlock()
+	h.mutex.Unlock()
 
 	// IP4 handlers
 	if addr.IP.To4() != nil {
@@ -83,11 +83,11 @@ func (h *Handler) lockAndStartHunt(addr Addr) error {
 
 // Release removes the mac from capture mode
 func (h *Handler) Release(mac net.HardwareAddr) error {
-	h.Lock()
+	h.mutex.Lock()
 
 	macEntry := h.MACTable.findMAC(mac)
 	if macEntry == nil {
-		h.Unlock()
+		h.mutex.Unlock()
 		return nil
 	}
 
@@ -98,7 +98,7 @@ func (h *Handler) Release(mac net.HardwareAddr) error {
 	}
 
 	macEntry.Captured = false
-	h.Unlock()
+	h.mutex.Unlock()
 
 	for _, ip := range list {
 		if err := h.lockAndStopHunt(ip); err != nil {
@@ -109,20 +109,20 @@ func (h *Handler) Release(mac net.HardwareAddr) error {
 }
 
 func (h *Handler) lockAndStopHunt(ip net.IP) error {
-	h.Lock()
+	h.mutex.Lock()
 	host := h.FindIPNoLock(ip)
 	if host == nil {
-		h.Unlock()
+		h.mutex.Unlock()
 		fmt.Printf("packet: error invalid ip in lockAndStopHunt ip=%s\n", ip)
 		return ErrInvalidIP
 	}
 	if host.huntStage != StageHunt {
-		h.Unlock()
+		h.mutex.Unlock()
 		fmt.Printf("packet: host not in hunt stage ip=%s\n", ip)
 		return ErrInvalidIP
 	}
 	host.huntStage = StageNormal
-	h.Unlock()
+	h.mutex.Unlock()
 
 	if Debug {
 		fmt.Printf("packet: end hunt for ip=%s\n", ip)
@@ -151,8 +151,8 @@ func (h *Handler) lockAndStopHunt(ip net.IP) error {
 
 // IsCaptured return true is mac is in capture mode
 func (h *Handler) IsCaptured(mac net.HardwareAddr) bool {
-	h.Lock()
-	defer h.Unlock()
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
 	if e := h.FindMACEntryNoLock(mac); e != nil && e.Captured {
 		return true
 	}
@@ -162,13 +162,13 @@ func (h *Handler) IsCaptured(mac net.HardwareAddr) bool {
 // routeMonitor monitors the default gateway is still pointing to us
 func (h *Handler) routeMonitor(now time.Time) (err error) {
 	ip4Addrs := []Addr{}
-	h.Lock()
+	h.mutex.Lock()
 	for _, host := range h.LANHosts.Table {
 		if host.huntStage == StageRedirected && host.IP.To4() != nil {
 			ip4Addrs = append(ip4Addrs, Addr{IP: host.IP, MAC: host.MACEntry.MAC})
 		}
 	}
-	h.Unlock()
+	h.mutex.Unlock()
 
 	for _, addr := range ip4Addrs {
 		stage := h.HandlerICMP4.HuntStage(addr)

@@ -79,13 +79,13 @@ func (h *Handler) MinuteTicker(now time.Time) error {
 	arpAddrs := []packet.Addr{}
 	now.Add(h.engine.ProbeInterval * -1) //
 
-	h.engine.Lock()
+	h.engine.RLock()
 	for _, host := range h.engine.LANHosts.Table {
 		if host.Online && host.LastSeen.Before(now) && host.IP.To4() != nil {
 			arpAddrs = append(arpAddrs, packet.Addr{MAC: host.MACEntry.MAC, IP: host.IP})
 		}
 	}
-	h.engine.Unlock()
+	h.engine.RUnlock()
 
 	for _, addr := range arpAddrs {
 		h.Request(h.engine.NICInfo.HostMAC, h.engine.NICInfo.HostIP4.IP, addr.MAC, addr.IP.To4())
@@ -168,16 +168,16 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 			fmt.Printf("arp  : who is %s: %s\n", frame.DstIP(), frame)
 		}
 		// if we are spoofing the IP, reply on behals of host
-		h.engine.Lock()
+		h.engine.RLock()
 		if host != nil && host.HuntStageNoLock() == packet.StageHunt && frame.DstIP().Equal(h.engine.NICInfo.RouterIP4.IP) {
-			h.engine.Unlock()
+			h.engine.RUnlock()
 			if Debug {
 				log.Printf("arp: router spoofing - send reply i am ip=%s", frame.DstIP())
 			}
 			h.reply(frame.SrcMAC(), h.engine.NICInfo.HostMAC, frame.DstIP(), frame.SrcMAC(), frame.SrcIP())
 			return host, nil
 		}
-		h.engine.Unlock()
+		h.engine.RUnlock()
 
 	case probe:
 		// We are interested in probe ACD (Address Conflict Detection) packets for IPs that we have an open DHCP offer
@@ -194,10 +194,10 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 		}
 
 		// reject any other ip
-		h.engine.Lock()
+		h.engine.RLock()
 		macEntry := h.engine.FindMACEntryNoLock(frame.SrcMAC())
 		if macEntry == nil || !macEntry.IP4Offer.Equal(frame.DstIP()) {
-			h.engine.Unlock()
+			h.engine.RUnlock()
 			// fmt.Printf("DEBUG arp  : probe reject for ip=%s from mac=%s\n", frame.DstIP(), frame.SrcMAC())
 
 			// If probing for lan IP, then unicast reply to srcMAC
@@ -210,7 +210,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 			}
 			return host, nil
 		}
-		h.engine.Unlock()
+		h.engine.RUnlock()
 
 		// don't continue
 		return host, nil

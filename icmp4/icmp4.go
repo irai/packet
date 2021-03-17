@@ -23,17 +23,13 @@ type Handler struct {
 // Attach create a ICMPv4 handler and attach to the engine
 func Attach(engine *packet.Handler) (h *Handler, err error) {
 	h = &Handler{engine: engine}
-	h.engine.Lock()
 	h.engine.HandlerICMP4 = h
-	h.engine.Unlock()
 
 	return h, nil
 }
 
 // Detach remove the plugin from the engine
 func (h *Handler) Detach() error {
-	h.engine.Lock()
-	defer h.engine.Unlock()
 	h.engine.HandlerICMP4 = packet.PacketNOOP{}
 	return nil
 }

@@ -14,13 +14,13 @@ type Notification struct {
 // AddCallback sets the call back function for notifications
 // the callback function is invoked immediately for each existing entry
 func (h *Handler) AddCallback(f func(Notification) error) {
-	h.Lock()
+	h.mutex.Lock()
 	h.callback = append(h.callback, f)
 	list := []Notification{}
 	for _, v := range h.LANHosts.Table {
 		list = append(list, Notification{Addr: Addr{MAC: v.MACEntry.MAC, IP: v.IP}, Online: v.Online})
 	}
-	h.Unlock()
+	h.mutex.Unlock()
 	// notify without lock
 	go func() {
 		time.Sleep(time.Millisecond * 10)
@@ -41,7 +41,7 @@ func (h *Handler) purge(now time.Time, offlineDur time.Duration, purgeDur time.D
 	purge := make([]net.IP, 0, 16)
 	offline := make([]net.IP, 0, 16)
 
-	h.Lock()
+	h.mutex.Lock()
 	for _, e := range h.LANHosts.Table {
 
 		// Delete from table if the device is offline and was not seen for the last hour
@@ -55,7 +55,7 @@ func (h *Handler) purge(now time.Time, offlineDur time.Duration, purgeDur time.D
 			offline = append(offline, e.IP)
 		}
 	}
-	h.Unlock()
+	h.mutex.Unlock()
 
 	for _, ip := range offline {
 		h.lockAndSetOffline(ip) // will lock/unlock

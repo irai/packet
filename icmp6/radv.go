@@ -42,8 +42,6 @@ type RADVS struct {
 }
 
 func (h *Handler) StartRADVS(managed bool, other bool, prefixes []PrefixInformation, rdnss *RecursiveDNSServer) (*RADVS, error) {
-	h.engine.Lock()
-	defer h.engine.Unlock()
 	return h.startRADVS(managed, other, prefixes, rdnss)
 }
 

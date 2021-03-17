@@ -48,14 +48,14 @@ type Event struct {
 // PrintTable logs ICMP6 tables to standard out
 func (h *Handler) PrintTable() {
 	// Important: Lock the global table
-	h.engine.Lock()
-	defer h.engine.Unlock()
+	h.engine.RLock()
+	defer h.engine.RUnlock()
 
 	if len(h.engine.LANHosts.Table) > 0 {
 		fmt.Printf("icmp6 hosts table len=%v\n", len(h.engine.LANHosts.Table))
 		for _, v := range h.engine.LANHosts.Table {
 			if packet.IsIP6(v.IP) {
-				fmt.Printf("mac=%s ip=%v online=%v IP6router=%v\n", v.MACEntry.MAC, v.IP, v.Online, v.IPV6Router)
+				fmt.Printf("mac=%s ip=%v online=%v IP6router=%v\n", v.MACEntry.MAC, v.IP, v.Online, v.IPv6Router())
 			}
 		}
 	}
@@ -211,6 +211,7 @@ var repeat int = -1
 // ProcessPacket handles icmp6 packets
 func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, error) {
 
+	/**
 	// retrieve or set store
 	var store *Data
 	if host != nil {
@@ -222,6 +223,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 		}
 		h.engine.Unlock()
 	}
+	*/
 
 	ether := packet.Ether(b)
 	ip6Frame := packet.IP6(ether.Payload())
@@ -328,9 +330,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 		}
 
 		// update router details in host
-		h.engine.Lock()
-		host.IPV6Router = true
-		h.engine.Unlock()
+		h.engine.SetIPv6Router(host, true)
 
 	case ipv6.ICMPTypeRouterSolicitation:
 		msg := new(RouterSolicitation)

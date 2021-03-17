@@ -130,8 +130,8 @@ func (s *MACTable) index(mac net.HardwareAddr) int {
 
 // MACTableUpsertIP4Offer insert of update mac IP4. Set by dhcp discovery.
 func (h *Handler) MACTableUpsertIP4Offer(addr Addr) {
-	h.Lock()
-	defer h.Unlock()
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
 	if h.NICInfo.HostIP4.Contains(addr.IP) {
 		entry := h.MACTable.findOrCreate(addr.MAC)
 		entry.IP4Offer = addr.IP
@@ -141,8 +141,8 @@ func (h *Handler) MACTableUpsertIP4Offer(addr Addr) {
 // MACTableGetIP4Offer returns the IP4 associated with this mac.
 // Checked by arp ACP
 func (h *Handler) MACTableGetIP4Offer(mac net.HardwareAddr) net.IP {
-	h.Lock()
-	defer h.Unlock()
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
 	if index := h.MACTable.index(mac); index != -1 {
 		return h.MACTable.Table[index].IP4Offer
 	}

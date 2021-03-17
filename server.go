@@ -54,7 +54,14 @@ type Handler struct {
 	PurgeDeadline           time.Duration // purge entry if no updates
 	closed                  bool          // set to true when handler is closed
 	closeChan               chan bool     // close goroutines channel
-	sync.Mutex
+	mutex                   sync.RWMutex
+}
+
+func (h *Handler) RLock() {
+	h.mutex.RLock()
+}
+func (h *Handler) RUnlock() {
+	h.mutex.RUnlock()
 }
 
 // PacketNOOP is a no op packet processor
@@ -201,8 +208,8 @@ func (h *Handler) setupConn() (conn net.PacketConn, err error) {
 
 // PrintTable logs the table to standard out
 func (h *Handler) PrintTable() {
-	h.Lock()
-	defer h.Unlock()
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
 	fmt.Printf("mac table len=%d\n", len(h.MACTable.Table))
 	h.printMACTable()
 	fmt.Printf("hosts table len=%v\n", len(h.LANHosts.Table))
@@ -455,9 +462,9 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		d2 = time.Since(startTime)
 
 		if host != nil {
-			h.Lock()
+			h.mutex.Lock()
 			h.setOnline(host)
-			h.Unlock()
+			h.mutex.Unlock()
 		}
 
 		d3 = time.Since(startTime)
@@ -527,24 +534,24 @@ func (h *Handler) setOnline(host *Host) {
 }
 
 func (h *Handler) lockAndSetOffline(ip net.IP) {
-	h.Lock()
+	h.mutex.Lock()
 	host := h.FindIPNoLock(ip)
 	if host == nil {
-		h.Unlock()
+		h.mutex.Unlock()
 		if !ip.Equal(net.IPv4zero) && !ip.Equal(net.IPv6zero) {
 			fmt.Printf("packet: error in setOffline - host not found ip=%v\n", ip)
 		}
 		return
 	}
 	if !host.Online {
-		h.Unlock()
+		h.mutex.Unlock()
 		return
 	}
 
 	host.Online = false
 	host.huntStage = StageNormal
 	mac := host.MACEntry.MAC
-	h.Unlock()
+	h.mutex.Unlock()
 
 	if Debug {
 		fmt.Printf("packet: IP is offline ip=%s mac=%s\n", ip, mac)

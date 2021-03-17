@@ -148,8 +148,8 @@ func Test_Handler_CaptureEnterOffline(t *testing.T) {
 			}
 			time.Sleep(time.Millisecond * 10)
 
-			tc.arp.engine.Lock()
-			defer tc.arp.engine.Unlock()
+			tc.arp.engine.RLock()
+			defer tc.arp.engine.RUnlock()
 
 			if len(tc.arp.engine.LANHosts.Table) != tt.wantLen {
 				t.Errorf("Test_Requests:%s table len = %v, wantLen %v", tt.name, len(tc.arp.engine.LANHosts.Table), tt.wantLen)

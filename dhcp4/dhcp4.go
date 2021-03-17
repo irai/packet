@@ -174,9 +174,7 @@ func (config Config) Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsSe
 
 // Detach implements the PacketProcessor interface
 func (h *Handler) Detach() error {
-	h.engine.Lock()
 	h.engine.HandlerDHCP4 = packet.PacketNOOP{}
-	h.engine.Unlock()
 	h.closed = true
 	close(h.closeChan)
 	if h.clientConn != nil {
@@ -212,14 +210,14 @@ func (h *Handler) printTable() {
 
 // StartHunt will start the process to capture the client MAC
 func (h *Handler) StartHunt(ip net.IP) error {
-	h.engine.Lock()
+	h.engine.RLock()
 	host := h.engine.FindIPNoLock(ip)
 	if host == nil {
-		h.engine.Unlock()
+		h.engine.RUnlock()
 		return packet.ErrInvalidIP
 	}
-	host.MACEntry.IP4Offer = net.IPv4zero
-	h.engine.Unlock()
+	h.engine.RUnlock()
+	h.engine.SetIP4Offer(host, net.IPv4zero)
 
 	if Debug {
 		fmt.Printf("dhcp4: start hunt ip=%s\n", ip)

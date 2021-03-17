@@ -41,7 +41,7 @@ type Host struct {
 	IP         net.IP    // either IP6 or ip4
 	MACEntry   *MACEntry // pointer to mac entry
 	Online     bool
-	IPV6Router bool
+	ipv6Router bool
 	huntStage  HuntStage
 	LastSeen   time.Time
 	DHCPName   string
@@ -57,12 +57,28 @@ func (e *Host) HuntStageNoLock() HuntStage {
 	return e.huntStage
 }
 
+func (h *Handler) SetIP4Offer(host *Host, ip net.IP) {
+	h.mutex.Lock()
+	host.MACEntry.IP4Offer = ip
+	h.mutex.Unlock()
+}
+
+func (h *Handler) SetIPv6Router(host *Host, b bool) {
+	h.mutex.Lock()
+	host.ipv6Router = b
+	h.mutex.Unlock()
+}
+
+func (e *Host) IPv6Router() bool {
+	return e.ipv6Router
+}
+
 func (h *Handler) SetDHCPName(host *Host, name string) {
-	h.Lock()
+	h.mutex.Lock()
 	if host.DHCPName != name {
 		host.DHCPName = name
 	}
-	h.Unlock()
+	h.mutex.Unlock()
 }
 
 // newHostTable returns a HostTable handler
@@ -89,8 +105,18 @@ func (h *Handler) printHostTable() {
 //
 // The funcion copies both the mac and the ip; it is safe to call this with a frame.IP(), frame.MAC()
 func (h *Handler) FindOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host, found bool) {
-	h.Lock()
-	defer h.Unlock()
+
+	//optimise the common path
+	ipNew, _ := netaddr.FromStdIP(ip)
+	h.mutex.RLock()
+	if host, ok := h.LANHosts.Table[ipNew]; ok && bytes.Equal(host.MACEntry.MAC, mac) {
+		h.mutex.RUnlock()
+		return host, true
+	}
+
+	// lock for writing
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
 
 	return h.findOrCreateHost(mac, ip)
 }
@@ -134,8 +160,8 @@ func (h *Handler) findOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host,
 }
 
 func (h *Handler) deleteHostWithLock(ip net.IP) {
-	h.Lock()
-	defer h.Unlock()
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
 
 	if host := h.FindIPNoLock(ip); host != nil {
 		host.MACEntry.unlink(host)
@@ -146,8 +172,8 @@ func (h *Handler) deleteHostWithLock(ip net.IP) {
 
 // FindIP returns the host entry for IP or nil othewise
 func (h *Handler) FindIP(ip net.IP) *Host {
-	h.Lock()
-	defer h.Unlock()
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
 
 	newIP, _ := netaddr.FromStdIP(ip)
 	return h.LANHosts.Table[newIP]
@@ -162,8 +188,8 @@ func (h *Handler) FindIPNoLock(ip net.IP) *Host {
 
 // FindByMAC return a list of IP addresses for mac
 func (h *Handler) FindByMAC(mac net.HardwareAddr) (list []Addr) {
-	h.Lock()
-	defer h.Unlock()
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
 	for _, v := range h.LANHosts.Table {
 		if bytes.Equal(v.MACEntry.MAC, mac) {
 			list = append(list, Addr{MAC: v.MACEntry.MAC, IP: v.IP})
@@ -174,8 +200,8 @@ func (h *Handler) FindByMAC(mac net.HardwareAddr) (list []Addr) {
 
 // GetTable returns a copy of the current table
 func (h *Handler) GetTable() (list []Host) {
-	h.Lock()
-	defer h.Unlock()
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
 	list = make([]Host, len(h.LANHosts.Table))
 	for _, v := range h.LANHosts.Table {
 		list = append(list, *v)
