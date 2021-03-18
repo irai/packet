@@ -131,7 +131,7 @@ func (config Config) Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsSe
 	handler.net1, handler.net2, handler.Table, err = loadConfig(handler.filename)
 	if err != nil || handler.net1 == nil || handler.net2 == nil || handler.Table == nil ||
 		configChanged(homeSubnet, handler.net1.SubnetConfig) || configChanged(netfilterSubnet, handler.net2.SubnetConfig) {
-		fmt.Printf("dhcp4: config file reset: %s\n", err)
+		fmt.Printf("dhcp4: invalid or missing config file=%s. resetting...\n", handler.filename)
 		handler.Table = make(map[string]*Lease)
 
 		// net1 is home LAN

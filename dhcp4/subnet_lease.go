@@ -211,7 +211,6 @@ func loadConfig(fname string) (net1 *dhcpSubnet, net2 *dhcpSubnet, t leaseTable,
 
 	source, err := ioutil.ReadFile(fname)
 	if err != nil {
-		log.Errorf("Cannot read dhcp file: %s error %s", fname, err)
 		return nil, nil, nil, err
 	}
 
