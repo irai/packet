@@ -208,8 +208,8 @@ func (h *Handler) setupConn() (conn net.PacketConn, err error) {
 
 // PrintTable logs the table to standard out
 func (h *Handler) PrintTable() {
-	h.mutex.Lock()
-	defer h.mutex.Unlock()
+	h.mutex.RLock()
+	defer h.mutex.RUnlock()
 	fmt.Printf("mac table len=%d\n", len(h.MACTable.Table))
 	h.printMACTable()
 	fmt.Printf("hosts table len=%v\n", len(h.LANHosts.Table))

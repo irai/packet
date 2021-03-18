@@ -173,8 +173,8 @@ func (h *Handler) deleteHostWithLock(ip net.IP) {
 
 // FindIP returns the host entry for IP or nil othewise
 func (h *Handler) FindIP(ip net.IP) *Host {
-	h.mutex.Lock()
-	defer h.mutex.Unlock()
+	h.mutex.RLock()
+	defer h.mutex.RUnlock()
 
 	newIP, _ := netaddr.FromStdIP(ip)
 	return h.LANHosts.Table[newIP]
@@ -189,8 +189,8 @@ func (h *Handler) FindIPNoLock(ip net.IP) *Host {
 
 // FindByMAC return a list of IP addresses for mac
 func (h *Handler) FindByMAC(mac net.HardwareAddr) (list []Addr) {
-	h.mutex.Lock()
-	defer h.mutex.Unlock()
+	h.mutex.RLock()
+	defer h.mutex.RUnlock()
 	for _, v := range h.LANHosts.Table {
 		if bytes.Equal(v.MACEntry.MAC, mac) {
 			list = append(list, Addr{MAC: v.MACEntry.MAC, IP: v.IP})
@@ -201,8 +201,8 @@ func (h *Handler) FindByMAC(mac net.HardwareAddr) (list []Addr) {
 
 // GetTable returns a copy of the current table
 func (h *Handler) GetTable() (list []Host) {
-	h.mutex.Lock()
-	defer h.mutex.Unlock()
+	h.mutex.RLock()
+	defer h.mutex.RUnlock()
 	list = make([]Host, len(h.LANHosts.Table))
 	for _, v := range h.LANHosts.Table {
 		list = append(list, *v)
