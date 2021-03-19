@@ -142,8 +142,13 @@ func main() {
 	go func() {
 		for {
 			select {
-			case notification := <-handlers.engine.GetNotificationChannel():
-				fmt.Println("DHCP notification received", notification)
+			case notification, ok := <-handlers.engine.GetNotificationChannel():
+				if !ok {
+					return
+				}
+				fmt.Println("Engine notification received", notification)
+			case <-ctx.Done():
+				return
 			}
 		}
 
