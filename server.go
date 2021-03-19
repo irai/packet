@@ -66,9 +66,29 @@ func (h *Handler) RUnlock() {
 }
 
 func (h *Handler) GetNameChannel() <-chan Notification {
-	if h.nameChannel == nil {
-		h.nameChannel = make(chan Notification, 2)
+	if h.nameChannel != nil {
+		return h.nameChannel
 	}
+
+	// Notify of all existing hosts
+	list := []Notification{}
+	h.mutex.RLock()
+	for _, host := range h.LANHosts.Table {
+		if host.DHCPName != "" {
+			list = append(list, Notification{Addr: Addr{IP: host.IP, MAC: host.MACEntry.MAC}, Online: host.Online, DHCPName: host.DHCPName})
+		}
+	}
+	h.mutex.RUnlock()
+
+	h.nameChannel = make(chan Notification, notificationChannelCap)
+
+	go func() {
+		for _, n := range list {
+			h.nameChannel <- n
+			time.Sleep(time.Millisecond * 5) // time for reader to process
+		}
+	}()
+
 	return h.nameChannel
 }
 
@@ -89,6 +109,8 @@ func (p PacketNOOP) MinuteTicker(now time.Time) error           { return nil }
 func NewEngine(nic string) (*Handler, error) {
 	return Config{}.NewEngine(nic)
 }
+
+const notificationChannelCap = 16
 
 // NewEngine creates an packet handler with config values
 func (config Config) NewEngine(nic string) (*Handler, error) {
@@ -487,7 +509,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			h.mutex.Unlock()
 
 			// TODO: fix double announcement for dhcp
-			if notify && h.nameChannel != nil && len(h.nameChannel) < 1 {
+			if notify && h.nameChannel != nil && len(h.nameChannel) < notificationChannelCap { // don't let it block; if reader died
 				h.nameChannel <- n
 			}
 		}

@@ -196,20 +196,25 @@ func newDHCP4DeclineFrame(src packet.Addr, declineIP net.IP, serverIP net.IP, xi
 	// p.AddOption(OptionMessage, []byte("netfilter decline"))
 	return RequestPacket(Decline, src.MAC, src.IP, xid, false, options)
 }
-func newDHCP4DiscoverFrame(src packet.Addr, xid []byte) DHCP4 {
+func newDHCP4DiscoverFrame(src packet.Addr, name string, xid []byte) DHCP4 {
 	options := []Option{}
-	oDNS := Option{Code: OptionDomainNameServer, Value: []byte{}}
-	return RequestPacket(Discover, src.MAC, src.IP, xid, false, append(options, oDNS))
+	opt := Option{Code: OptionDomainNameServer, Value: []byte{}}
+	options = append(options, opt)
+	opt = Option{Code: OptionHostName, Value: []byte(name)}
+	options = append(options, opt)
+	return RequestPacket(Discover, src.MAC, src.IP, xid, false, options)
 }
 
-func newDHCP4RequestFrame(src packet.Addr, serverID net.IP, requestedIP net.IP, xid []byte) DHCP4 {
+func newDHCP4RequestFrame(src packet.Addr, name string, serverID net.IP, requestedIP net.IP, xid []byte) DHCP4 {
 	options := []Option{}
-	oDNS := Option{Code: OptionDomainNameServer, Value: []byte{}}
-	oReqIP := Option{Code: OptionRequestedIPAddress, Value: requestedIP}
-	oServerID := Option{Code: OptionServerIdentifier, Value: serverID}
-	options = append(options, oDNS)
-	options = append(options, oReqIP)
-	options = append(options, oServerID)
+	opt := Option{Code: OptionDomainNameServer, Value: []byte{}}
+	options = append(options, opt)
+	opt = Option{Code: OptionRequestedIPAddress, Value: requestedIP}
+	options = append(options, opt)
+	opt = Option{Code: OptionServerIdentifier, Value: serverID}
+	options = append(options, opt)
+	opt = Option{Code: OptionHostName, Value: []byte(name)}
+	options = append(options, opt)
 	return RequestPacket(Request, src.MAC, requestedIP, xid, false, options)
 }
 

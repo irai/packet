@@ -301,7 +301,6 @@ func (h *Handler) saveConfig(fname string) (err error) {
 	for _, v := range h.Table {
 		if v.State == StateAllocated {
 			table.Leases = append(table.Leases, *v)
-			fmt.Println("saving lease ", v)
 		}
 	}
 

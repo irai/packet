@@ -86,7 +86,7 @@ func newHostTable() HostTable {
 	return HostTable{Table: make(map[netaddr.IP]*Host, 64)}
 }
 
-// PrintTable logs ICMP6 tables to standard out
+// PrintTable print table to standard out
 func (h *Handler) printHostTable() {
 	count := 0
 	for _, v := range h.MACTable.Table {

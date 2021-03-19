@@ -139,6 +139,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 				log.WithFields(fields).Info("dhcp4: request NACK - select is for another server")
 				return host, ReplyPacket(p, NAK, subnet.DHCPServer, net.IPv4zero, 0, nil)
 			}
+
 			log.WithFields(fields).Info("dhcp4: ignore select for another server")
 			return host, nil // request not for us - silently discard packet
 		}
@@ -250,6 +251,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 	h.saveConfig(h.filename)
 
 	host, _ = h.engine.FindOrCreateHost(lease.Addr.MAC, lease.Addr.IP)
+	h.engine.SetDHCPName(host, lease.Name)
 
 	return host, ret
 }

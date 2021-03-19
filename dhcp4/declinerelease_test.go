@@ -42,7 +42,7 @@ func Test_DeclineFromAnotherServer(t *testing.T) {
 	dstAddr := packet.Addr{MAC: arp.EthernetBroadcast, IP: net.IPv4zero, Port: packet.DHCP4ServerPort}
 
 	// discover packet
-	dhcpFrame := newDHCP4DiscoverFrame(srcAddr, xid)
+	dhcpFrame := newDHCP4DiscoverFrame(srcAddr, "name1", xid)
 	sendPacket(tc.outConn, srcAddr, dstAddr, dhcpFrame)
 	time.Sleep(time.Millisecond * 10)
 	checkLeaseTable(t, tc, 0, 1, 0)
