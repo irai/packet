@@ -18,7 +18,7 @@ func TestHandler_findOrCreateHostTestCopyIPMAC(t *testing.T) {
 	defer tc.Close()
 
 	host, _ := tc.packet.findOrCreateHost(net.HardwareAddr(bufMAC), net.IP(bufIP))
-	tc.packet.setOnline(host)
+	tc.packet.lockAndSetOnline(host, false)
 
 	bufIP[0] = 0xff
 	bufMAC[0] = 0x00
@@ -36,7 +36,7 @@ func TestHandler_findOrCreateHostTestCopyIPMAC(t *testing.T) {
 	ip6 := net.IP{0x20, 0x01, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}
 
 	host, _ = tc.packet.findOrCreateHost(net.HardwareAddr(bufMAC), net.IP(bufIP6))
-	tc.packet.setOnline(host)
+	tc.packet.lockAndSetOnline(host, false)
 	bufIP6[8] = 0xff
 	bufMAC[0] = 0x00
 	if !host.IP.Equal(ip6) || !host.MACEntry.IP6GUA.Equal(ip6) {

@@ -1,7 +1,6 @@
 package packet
 
 import (
-	"fmt"
 	"net"
 	"time"
 )
@@ -13,7 +12,8 @@ type Notification struct {
 	MDNSName string
 }
 
-// AddCallback sets the call back function for notifications
+/***
+// AddCallback sets theO call back function for notifications
 // the callback function is invoked immediately for each existing entry
 func (h *Handler) AddCallback(f func(Notification) error) {
 	h.mutex.Lock()
@@ -33,6 +33,7 @@ func (h *Handler) AddCallback(f func(Notification) error) {
 		}
 	}()
 }
+***/
 
 // purge is called each minute by the minute goroutine
 func (h *Handler) purge(now time.Time, offlineDur time.Duration, purgeDur time.Duration) error {
@@ -73,6 +74,7 @@ func (h *Handler) purge(now time.Time, offlineDur time.Duration, purgeDur time.D
 	return nil
 }
 
+/***
 func (h *Handler) notifyCallback(notification Notification) {
 	for _, f := range h.callback {
 		if err := f(notification); err != nil {
@@ -80,3 +82,4 @@ func (h *Handler) notifyCallback(notification Notification) {
 		}
 	}
 }
+***/

@@ -27,7 +27,7 @@ func Test_requestSimple(t *testing.T) {
 	go func() {
 		for {
 			select {
-			case notification := <-tc.engine.GetNameChannel():
+			case notification := <-tc.engine.GetNotificationChannel():
 				if Debug {
 					fmt.Println("dhcp notification=", notification, notificationCount)
 				}
@@ -93,7 +93,7 @@ func Test_requestExhaust(t *testing.T) {
 	go func() {
 		for {
 			select {
-			case notification := <-tc.engine.GetNameChannel():
+			case notification := <-tc.engine.GetNotificationChannel():
 				if Debug {
 					fmt.Println("dhcp notification=", notification)
 				}

@@ -127,15 +127,20 @@ func Test_Handler_CaptureEnterOffline(t *testing.T) {
 	}
 
 	count := 0
-	tc.packet.AddCallback(
-		func(n packet.Notification) error {
-			if n.Online {
-				count++
-			} else {
-				count--
+	go func() {
+		for {
+			select {
+			case n := <-tc.packet.GetNotificationChannel():
+				if n.Online {
+					count++
+				} else {
+					count--
+				}
+			case <-tc.ctx.Done():
+				return
 			}
-			return nil
-		})
+		}
+	}()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

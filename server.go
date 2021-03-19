@@ -36,17 +36,17 @@ type Config struct {
 // Handler implements ICMPv6 Neighbor Discovery Protocol
 // see: https://mdlayher.com/blog/network-protocol-breakdown-ndp-and-go/
 type Handler struct {
-	NICInfo                 *NICInfo
-	conn                    net.PacketConn
-	LANHosts                HostTable // store IP list - one for each host
-	MACTable                MACTable  // store mac list
-	HandlerIP4              PacketProcessor
-	HandlerIP6              PacketProcessor
-	HandlerICMP4            PacketProcessor
-	HandlerICMP6            PacketProcessor
-	HandlerDHCP4            PacketProcessor
-	HandlerARP              PacketProcessor
-	callback                []func(Notification) error
+	NICInfo      *NICInfo
+	conn         net.PacketConn
+	LANHosts     HostTable // store IP list - one for each host
+	MACTable     MACTable  // store mac list
+	HandlerIP4   PacketProcessor
+	HandlerIP6   PacketProcessor
+	HandlerICMP4 PacketProcessor
+	HandlerICMP6 PacketProcessor
+	HandlerDHCP4 PacketProcessor
+	HandlerARP   PacketProcessor
+	// callback                []func(Notification) error
 	FullNetworkScanInterval time.Duration // Set it to -1 if no scan required
 	ProbeInterval           time.Duration // how often to probe if IP is online
 	OfflineDeadline         time.Duration // mark offline if no updates
@@ -65,7 +65,7 @@ func (h *Handler) RUnlock() {
 	h.mutex.RUnlock()
 }
 
-func (h *Handler) GetNameChannel() <-chan Notification {
+func (h *Handler) GetNotificationChannel() <-chan Notification {
 	if h.nameChannel != nil {
 		return h.nameChannel
 	}
@@ -503,15 +503,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		d2 = time.Since(startTime)
 
 		if host != nil {
-			h.mutex.Lock()
-			h.setOnline(host)
-			n := Notification{Addr: Addr{MAC: host.MACEntry.MAC, IP: host.IP}, DHCPName: host.DHCPName, Online: host.Online}
-			h.mutex.Unlock()
-
-			// TODO: fix double announcement for dhcp
-			if notify && h.nameChannel != nil && len(h.nameChannel) < notificationChannelCap { // don't let it block; if reader died
-				h.nameChannel <- n
-			}
+			h.lockAndSetOnline(host, notify)
 		}
 
 		d3 = time.Since(startTime)
@@ -521,38 +513,55 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 	}
 }
 
-func (h *Handler) setOnline(host *Host) {
+func (h *Handler) lockAndSetOnline(host *Host, notify bool) {
 	now := time.Now()
 
-	// set macEntry to online
+	h.mutex.RLock()
+	if host.Online && !notify { // nothing to do - just another IP packet
+		if now.Sub(host.LastSeen) < time.Second*2 { // update LastSeen every 2 seconds to minimise locking
+			h.mutex.RUnlock()
+			return
+		}
+	}
+	h.mutex.RUnlock()
+
+	// lock engine
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
+
+	// update LastSeen
 	host.MACEntry.LastSeen = now
 	host.LastSeen = now
-	if host.Online {
+
+	// return immediately if host already online and not notification
+	if host.Online && !notify {
 		return
 	}
 
 	// if mac is captured, then start hunting process when IP is online
 	captured := host.MACEntry.Captured
 
-	// test if we need to make previous IP offline
+	// if transitioning to online, test if we need to make previous IP offline
 	// and set macEntry current IP to new IP
 	var offlineIP net.IP
-	if host.IP.To4() != nil {
-		if !host.IP.Equal(host.MACEntry.IP4) { // changed IP4
-			fmt.Printf("packet: host changed ip4 from=%s to=%s\n", host.MACEntry.IP4, host.IP)
-			offlineIP = host.MACEntry.IP4 // last IP
-			host.MACEntry.updateIP(host.IP)
-		}
-	} else {
-		if host.IP.IsGlobalUnicast() && !host.IP.Equal(host.MACEntry.IP6GUA) { // changed IP6 global unique address
-			fmt.Printf("packet: host changed ip6 from=%s to=%s\n", host.MACEntry.IP6GUA, host.IP)
-			offlineIP = host.MACEntry.IP6GUA
-			host.MACEntry.updateIP(host.IP)
-		}
-		if host.IP.IsLinkLocalUnicast() && !host.IP.Equal(host.MACEntry.IP6LLA) { // changed IP6 link local address
-			fmt.Printf("packet: host changed ip6LLA from=%s to=%s\n", host.MACEntry.IP6LLA, host.IP)
-			// don't set offline IP as we don't target LLA
-			host.MACEntry.updateIP(host.IP)
+	if !host.Online {
+		if host.IP.To4() != nil {
+			if !host.IP.Equal(host.MACEntry.IP4) { // changed IP4
+				fmt.Printf("packet: host changed ip4 from=%s to=%s\n", host.MACEntry.IP4, host.IP)
+				offlineIP = host.MACEntry.IP4 // last IP
+				host.MACEntry.updateIP(host.IP)
+			}
+		} else {
+			if host.IP.IsGlobalUnicast() && !host.IP.Equal(host.MACEntry.IP6GUA) { // changed IP6 global unique address
+				fmt.Printf("packet: host changed ip6 from=%s to=%s\n", host.MACEntry.IP6GUA, host.IP)
+				offlineIP = host.MACEntry.IP6GUA
+				host.MACEntry.updateIP(host.IP)
+			}
+			if host.IP.IsLinkLocalUnicast() && !host.IP.Equal(host.MACEntry.IP6LLA) { // changed IP6 link local address
+				fmt.Printf("packet: host changed ip6LLA from=%s to=%s\n", host.MACEntry.IP6LLA, host.IP)
+				// don't set offline IP as we don't target LLA
+				host.MACEntry.updateIP(host.IP)
+			}
 		}
 	}
 
@@ -562,7 +571,7 @@ func (h *Handler) setOnline(host *Host) {
 	notification := Notification{Addr: addr, Online: true, DHCPName: host.DHCPName}
 
 	if Debug {
-		fmt.Printf("packet: IP is online ip=%s mac=%s\n", addr.IP, addr.MAC)
+		fmt.Printf("packet: IP is online ip=%s mac=%s name=%s\n", addr.IP, addr.MAC, host.DHCPName)
 	}
 
 	// set previous IP to offline, start hunt and notify of new IP
@@ -576,7 +585,10 @@ func (h *Handler) setOnline(host *Host) {
 				fmt.Println("packet: failed to start hunt error", err)
 			}
 		}
-		h.notifyCallback(notification)
+		if h.nameChannel != nil {
+			h.nameChannel <- notification
+		}
+		// h.notifyCallback(notification)
 	}()
 }
 
@@ -608,6 +620,8 @@ func (h *Handler) lockAndSetOffline(ip net.IP) {
 		h.lockAndStopHunt(ip)
 
 		notification := Notification{Addr: Addr{MAC: mac, IP: ip}, Online: false}
-		h.notifyCallback(notification)
+		if h.nameChannel != nil {
+			h.nameChannel <- notification
+		}
 	}()
 }

@@ -142,17 +142,12 @@ func main() {
 	go func() {
 		for {
 			select {
-			case notification := <-handlers.engine.GetNameChannel():
+			case notification := <-handlers.engine.GetNotificationChannel():
 				fmt.Println("DHCP notification received", notification)
 			}
 		}
 
 	}()
-
-	handlers.engine.AddCallback(func(n packet.Notification) error {
-		// fmt.Println("Got notification : ", n)
-		return nil
-	})
 
 	// Start server listener
 	go func() {
