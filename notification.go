@@ -7,8 +7,10 @@ import (
 )
 
 type Notification struct {
-	Addr   Addr
-	Online bool
+	Addr     Addr
+	Online   bool
+	DHCPName string
+	MDNSName string
 }
 
 // AddCallback sets the call back function for notifications

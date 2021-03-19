@@ -23,9 +23,8 @@ var (
 
 // Config has a list of configurable parameters that overide package defaults
 type Config struct {
-
 	// Conn enables the client to override the connection with a another packet conn
-	// usefule for testing
+	// useful for testing
 	Conn                    net.PacketConn // listen connectinon
 	NICInfo                 *NICInfo       // override nic information
 	FullNetworkScanInterval time.Duration  // Set it to zero if no scan required
@@ -55,13 +54,22 @@ type Handler struct {
 	closed                  bool          // set to true when handler is closed
 	closeChan               chan bool     // close goroutines channel
 	mutex                   sync.RWMutex
+	nameChannel             chan Notification
 }
 
 func (h *Handler) RLock() {
 	h.mutex.RLock()
 }
+
 func (h *Handler) RUnlock() {
 	h.mutex.RUnlock()
+}
+
+func (h *Handler) GetNameChannel() <-chan Notification {
+	if h.nameChannel == nil {
+		h.nameChannel = make(chan Notification, 2)
+	}
+	return h.nameChannel
 }
 
 // PacketNOOP is a no op packet processor
@@ -147,6 +155,9 @@ func (h *Handler) Close() error {
 		fmt.Println("packet: close() called. closing....")
 	}
 	h.closed = true
+	if h.nameChannel != nil {
+		close(h.nameChannel)
+	}
 	close(h.closeChan) // will terminate goroutines
 	h.conn.Close()
 	return nil
@@ -356,6 +367,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			continue
 		}
 
+		notify := false
 		var ip4Frame IP4
 		var ip6Frame IP6
 		var l4Proto int
@@ -438,8 +450,15 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 				// DHCP4 packet?
 				if udp.DstPort() == DHCP4ServerPort {
+					name := ""
+					if host != nil {
+						name = host.DHCPName
+					}
 					if host, err = h.HandlerDHCP4.ProcessPacket(host, ether); err != nil {
 						fmt.Printf("packet: error processing dhcp4: %s\n", err)
+					}
+					if host != nil && host.DHCPName != name {
+						notify = true
 					}
 				}
 			} else {
@@ -464,7 +483,13 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		if host != nil {
 			h.mutex.Lock()
 			h.setOnline(host)
+			n := Notification{Addr: Addr{MAC: host.MACEntry.MAC, IP: host.IP}, DHCPName: host.DHCPName, Online: host.Online}
 			h.mutex.Unlock()
+
+			// TODO: fix double announcement for dhcp
+			if notify && h.nameChannel != nil && len(h.nameChannel) < 1 {
+				h.nameChannel <- n
+			}
 		}
 
 		d3 = time.Since(startTime)
@@ -512,6 +537,7 @@ func (h *Handler) setOnline(host *Host) {
 	host.MACEntry.Online = true
 	host.Online = true
 	addr := Addr{IP: host.IP, MAC: host.MACEntry.MAC}
+	notification := Notification{Addr: addr, Online: true, DHCPName: host.DHCPName}
 
 	if Debug {
 		fmt.Printf("packet: IP is online ip=%s mac=%s\n", addr.IP, addr.MAC)
@@ -528,7 +554,6 @@ func (h *Handler) setOnline(host *Host) {
 				fmt.Println("packet: failed to start hunt error", err)
 			}
 		}
-		notification := Notification{Addr: Addr{IP: addr.IP, MAC: addr.MAC}, Online: true}
 		h.notifyCallback(notification)
 	}()
 }

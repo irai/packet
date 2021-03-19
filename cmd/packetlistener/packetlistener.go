@@ -139,6 +139,16 @@ func main() {
 		log.Fatalf("Failed to create dhcp4 handler: netfilterIP=%s error=%s", handlers.netfilterIP, err)
 	}
 
+	go func() {
+		for {
+			select {
+			case notification := <-handlers.engine.GetNameChannel():
+				fmt.Println("DHCP notification received", notification)
+			}
+		}
+
+	}()
+
 	handlers.engine.AddCallback(func(n packet.Notification) error {
 		// fmt.Println("Got notification : ", n)
 		return nil
