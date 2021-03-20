@@ -16,3 +16,4 @@
 # Dependency directories (remove the comment below to include it)
 # vendor/
 dhcp4/testDHCPConfig.yml
+cmd/packetlistener/dhcpconfig.yaml

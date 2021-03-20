@@ -65,6 +65,7 @@ type TestContext struct {
 	cancel        context.CancelFunc
 	responseTable [][]byte
 	IPOffer       net.IP // offer received in discover
+	mutex         sync.Mutex
 	// savedIP       net.IP // save the returned IP for use by subsequent calls
 }
 
@@ -94,7 +95,12 @@ func readResponse(ctx context.Context, tc *TestContext) error {
 		}
 
 		if ether.EtherType() == syscall.ETH_P_IP { // IP4?
-			if ip4 := packet.IP4(ether.Payload()); ip4.Protocol() == syscall.IPPROTO_UDP { // UDP?
+			ip4 := packet.IP4(ether.Payload())
+			if !ip4.IsValid() {
+				fmt.Println("invalid ip4 packet ", len(ether.Payload()), ether.Payload())
+				continue
+			}
+			if ip4.Protocol() == syscall.IPPROTO_UDP { // UDP?
 				// fmt.Printf("raw: got buffere ip=%s\n", ip4)
 				if udp := packet.UDP(ip4.Payload()); udp.DstPort() == packet.DHCP4ClientPort { // DHCP client port?
 					// fmt.Printf("raw: got buffere udp=%s\n", udp)
@@ -119,7 +125,10 @@ func readResponse(ctx context.Context, tc *TestContext) error {
 
 		tmp := make([]byte, len(buf))
 		copy(tmp, buf)
+
+		tc.mutex.Lock()
 		tc.responseTable = append(tc.responseTable, tmp)
+		tc.mutex.Unlock()
 	}
 }
 
@@ -179,6 +188,13 @@ func NewTestContext() *TestContext {
 
 	time.Sleep(time.Millisecond * 10) // time for all goroutine to start
 	return &tc
+}
+
+// GetResponse returns a goroutine safe response
+func (tc *TestContext) GetResponse(index int) []byte {
+	tc.mutex.Lock()
+	defer tc.mutex.Unlock()
+	return tc.responseTable[index]
 }
 
 func (tc *TestContext) Close() {
@@ -303,7 +319,7 @@ func NewHostEvents(addr packet.Addr, hostInc int, macInc int) []TestEvent {
 			waitTimeAfter: time.Millisecond * 20,
 		},
 		{name: "arp-probe-" + addr.MAC.String(), action: "arpProbe", hostTableInc: 0, macTableInc: 0, responsePos: -1, responseTableInc: 0,
-			srcAddr:       packet.Addr{MAC: MAC1, IP: net.IPv4zero},
+			srcAddr:       packet.Addr{MAC: addr.MAC, IP: net.IPv4zero},
 			wantHost:      &packet.Host{IP: nil, Online: true},
 			waitTimeAfter: time.Millisecond * 10,
 		},
@@ -350,7 +366,9 @@ func runAction(t *testing.T, tc *TestContext, tt TestEvent) {
 		return
 	}
 
+	tc.mutex.Lock()
 	savedResponseTableCount := len(tc.responseTable)
+	tc.mutex.Unlock()
 	savedHostTableCount := len(tc.Engine.LANHosts.Table)
 	savedMACTableCount := len(tc.Engine.MACTable.Table)
 
@@ -367,8 +385,14 @@ func runAction(t *testing.T, tc *TestContext, tt TestEvent) {
 		tc.Engine.PrintTable()
 		t.Errorf("%s: invalid mac table len want=%v got=%v", tt.name, tt.macTableInc, n)
 	}
+	tc.mutex.Lock()
 	if n := len(tc.responseTable) - savedResponseTableCount; n != tt.responseTableInc {
 		t.Errorf("%s: invalid mac reponse count len want=%v got=%v", tt.name, tt.responseTableInc, n)
+	}
+	tc.mutex.Unlock()
+
+	if savedResponseTableCount > 0 {
+		fmt.Println("Response table ", len(tc.responseTable), packet.Ether(tc.responseTable[len(tc.responseTable)-1]))
 	}
 
 	if tt.wantHost != nil {

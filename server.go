@@ -396,7 +396,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		var l4Payload []byte
 		var host *Host
 		switch ether.EtherType() {
-		case syscall.ETH_P_IP:
+		case syscall.ETH_P_IP: // 0x0800
 			ip4Frame = IP4(ether.Payload())
 			if !ip4Frame.IsValid() {
 				fmt.Println("packet: error invalid ip4 frame type=", ether.EtherType())
@@ -415,7 +415,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			l4Proto = ip4Frame.Protocol()
 			l4Payload = ip4Frame.Payload()
 
-		case syscall.ETH_P_IPV6:
+		case syscall.ETH_P_IPV6: // 0x86dd
 			ip6Frame = IP6(ether.Payload())
 			if !ip6Frame.IsValid() {
 				fmt.Println("packet: error invalid ip6 frame type=", ether.EtherType())
@@ -434,7 +434,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				host, _ = h.FindOrCreateHost(ether.Src(), ip6Frame.Src()) // will lock/unlock
 			}
 
-		case syscall.ETH_P_ARP:
+		case syscall.ETH_P_ARP: // 0x806
 			l4Proto = syscall.ETH_P_ARP // treat arp as l4 proto; similar to IP6 ICMP NDP
 
 		default:
