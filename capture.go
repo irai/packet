@@ -8,20 +8,20 @@ import (
 
 // Capture places the mac in capture mode
 func (h *Handler) Capture(mac net.HardwareAddr) error {
-	h.RLock()
-	macEntry := h.MACTable.findMAC(mac)
-	if macEntry == nil {
-		h.RUnlock()
+	h.mutex.Lock()
+	macEntry := h.MACTable.findOrCreate(mac)
+	if macEntry.Captured {
+		h.mutex.Unlock()
 		return nil
 	}
 	macEntry.Captured = true
 
 	list := []Addr{}
 	// Mark all known entries as StageHunt
-	for _, v := range macEntry.HostList {
-		list = append(list, Addr{IP: v.IP, MAC: v.MACEntry.MAC})
+	for _, host := range macEntry.HostList {
+		list = append(list, Addr{IP: host.IP, MAC: host.MACEntry.MAC})
 	}
-	h.RUnlock()
+	h.mutex.Unlock()
 
 	go func() {
 		for _, addr := range list {
