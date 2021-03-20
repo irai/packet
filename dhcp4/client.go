@@ -205,7 +205,7 @@ func (h *Handler) clientLoop() error {
 		reqType := MessageType(t[0])
 
 		// An offer for a fakeMAC that we initiated? Discard it.
-		if bytes.Compare(req.CHAddr()[0:4], fakeMAC[0:4]) == 0 {
+		if bytes.Equal(req.CHAddr()[0:4], fakeMAC[0:4]) {
 			continue
 		}
 

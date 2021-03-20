@@ -9,8 +9,6 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const configFilename = "./private/dhcp.yaml"
-
 const (
 	rebinding uint8 = iota
 	selecting
@@ -98,13 +96,13 @@ func Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsServer net.IP, fil
 }
 
 // Attach accepts a configuration structure and return a dhcp handler
-func (config Config) Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsServer net.IP, filename string) (handler *Handler, err error) {
+func (config Config) Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsServer net.IP, filename string) (h *Handler, err error) {
 
-	handler = &Handler{Table: map[string]*Lease{}}
+	h = &Handler{Table: map[string]*Lease{}}
 	// handler.captureTable = make(map[string]bool)
-	handler.filename = filename
-	handler.mode = ModeSecondaryServerNice
-	handler.closeChan = make(chan bool) // go routines listen on this for closure
+	h.filename = filename
+	h.mode = ModeSecondaryServerNice
+	h.closeChan = make(chan bool) // go routines listen on this for closure
 
 	if dnsServer == nil {
 		dnsServer = engine.NICInfo.RouterIP4.IP
@@ -128,48 +126,50 @@ func (config Config) Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsSe
 	}
 
 	// Reset leases if error or config has changed
-	handler.net1, handler.net2, handler.Table, err = loadConfig(handler.filename)
-	if err != nil || handler.net1 == nil || handler.net2 == nil || handler.Table == nil ||
-		configChanged(homeSubnet, handler.net1.SubnetConfig) || configChanged(netfilterSubnet, handler.net2.SubnetConfig) {
-		fmt.Printf("dhcp4: invalid or missing config file=%s. resetting...\n", handler.filename)
-		handler.Table = make(map[string]*Lease)
+	h.net1, h.net2, h.Table, err = loadConfig(h.filename)
+	if err != nil || h.net1 == nil || h.net2 == nil || h.Table == nil ||
+		configChanged(homeSubnet, h.net1.SubnetConfig) || configChanged(netfilterSubnet, h.net2.SubnetConfig) {
+		fmt.Printf("dhcp4: invalid or missing config file=%s. resetting...\n", h.filename)
+		h.Table = make(map[string]*Lease)
 
 		// net1 is home LAN
-		handler.net1, err = newSubnet(homeSubnet)
+		h.net1, err = newSubnet(homeSubnet)
 		if err != nil {
 			return nil, fmt.Errorf("home config : %w", err)
 		}
-		handler.net1.Captured = false
+		h.net1.Captured = false
 
 		// net2 is netfilter LAN
-		handler.net2, err = newSubnet(netfilterSubnet)
+		h.net2, err = newSubnet(netfilterSubnet)
 		if err != nil {
 			return nil, fmt.Errorf("netfilter config : %w", err)
 		}
-		handler.net2.Captured = true
+		h.net2.Captured = true
 	}
 
 	// Add static and classless route options
-	handler.net2.appendRouteOptions(handler.net1.DefaultGW, handler.net1.LAN.Mask, handler.net2.DefaultGW)
+	h.net2.appendRouteOptions(h.net1.DefaultGW, h.net1.LAN.Mask, h.net2.DefaultGW)
 
 	// Client port 68: used by dhcp client to listen for dhcp packets
 	// Accept incoming both broadcast and localaddr packets
-	handler.clientConn = config.ClientConn
-	if handler.clientConn == nil {
-		handler.clientConn, err = net.ListenPacket("udp4", ":68")
+	h.clientConn = config.ClientConn
+	if h.clientConn == nil {
+		h.clientConn, err = net.ListenPacket("udp4", ":68")
 		if err != nil {
 			return nil, fmt.Errorf("port 68 listen error: %w ", err)
 		}
 	}
 
 	if debugging() {
-		log.WithFields(log.Fields{"netfilterLAN": handler.net2.LAN.String(), "netfilterGW": handler.net2.DefaultGW, "firstIP": handler.net2.FirstIP,
-			"lastIP": handler.net2.LastIP}).Debug("dhcp4: Server Config")
+		log.WithFields(log.Fields{"netfilterLAN": h.net2.LAN.String(), "netfilterGW": h.net2.DefaultGW, "firstIP": h.net2.FirstIP,
+			"lastIP": h.net2.LastIP}).Debug("dhcp4: Server Config")
 	}
 
-	handler.engine = engine
-	engine.HandlerDHCP4 = handler
-	return handler, nil
+	h.engine = engine
+	engine.HandlerDHCP4 = h
+
+	h.saveConfig(h.filename)
+	return h, nil
 }
 
 // Detach implements the PacketProcessor interface
@@ -356,20 +356,6 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 		}
 	}
 	return host, nil
-}
-
-func (h *Handler) findSubnet(mac net.HardwareAddr) (captured bool, subnet *dhcpSubnet) {
-	if h.engine.IsCaptured(mac) {
-		// if _, ok := h.captureTable[string(mac)]; ok {
-		if tracing() {
-			log.Tracef("dhcp4: use subnet2 lan=%v defaultGW=%v", h.net2.LAN, h.net2.DefaultGW)
-		}
-		return true, h.net2
-	}
-	if tracing() {
-		log.Tracef("dhcp4: use subnet1 lan=%v defaultGW=%v", h.net1.LAN, h.net1.DefaultGW)
-	}
-	return false, h.net1
 }
 
 func getClientID(p DHCP4, options Options) []byte {
