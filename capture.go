@@ -34,9 +34,6 @@ func (h *Handler) Capture(mac net.HardwareAddr) error {
 }
 
 func (h *Handler) lockAndStartHunt(addr Addr) error {
-	if Debug {
-		fmt.Printf("packet: start hunt for %s\n", addr)
-	}
 	dhcp4Stage := StageNormal
 	if addr.IP.To4() != nil {
 		dhcp4Stage = h.HandlerDHCP4.HuntStage(addr)
@@ -49,7 +46,6 @@ func (h *Handler) lockAndStartHunt(addr Addr) error {
 		fmt.Printf("packet: error invalid ip in lockAndStartHunt ip=%s\n", addr.IP)
 		return ErrInvalidIP
 	}
-
 	if dhcp4Stage == StageRedirected {
 		host.huntStage = StageRedirected
 		h.mutex.Unlock()
@@ -59,6 +55,10 @@ func (h *Handler) lockAndStartHunt(addr Addr) error {
 
 	host.huntStage = StageHunt
 	h.mutex.Unlock()
+
+	if Debug {
+		fmt.Printf("packet: start hunt for %s\n", addr)
+	}
 
 	// IP4 handlers
 	if addr.IP.To4() != nil {

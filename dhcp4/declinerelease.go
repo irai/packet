@@ -36,7 +36,7 @@ func (h *Handler) handleDecline(p DHCP4, options Options) (d DHCP4) {
 			lxid = lease.XID
 		}
 		log.WithFields(log.Fields{"clientid": clientID, "mac": p.CHAddr().String(),
-			"xid": p.XId(), "leasexid": lxid, "serverip": serverIP, "reqip": reqIP}).Infof("dhcp4: decline - ignore invalid packet")
+			"xid": p.XId(), "leasexid": lxid, "serverip": serverIP, "reqip": reqIP}).Infof("dhcp4: decline for another server - ignore")
 		return nil
 	}
 

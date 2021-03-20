@@ -130,8 +130,12 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 	case selecting:
 		// selecting from another server
 		if !serverIP.Equal(subnet.DHCPServer) {
-			lease.State = StateFree
-			lease.Addr.IP = nil
+			// Keep state discover in case we get a second request
+			// Free all other states - the host is trying to get an IP from the other server
+			if lease.State != StateDiscover {
+				lease.State = StateFree
+				lease.Addr.IP = nil
+			}
 			if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && captured) {
 				// The client is attempting to confirm an offer with another server
 				// Send a nack to client

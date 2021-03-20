@@ -141,6 +141,8 @@ func Test_requestAnotherHost(t *testing.T) {
 	mac5 = net.HardwareAddr{0x00, 0xff, 0xaa, 0xbb, 0x05, 0x05} // new mac
 	srcAddr := packet.Addr{MAC: mac5, IP: net.IPv4zero, Port: packet.DHCP4ClientPort}
 	dstAddr := packet.Addr{MAC: arp.EthernetBroadcast, IP: net.IPv4zero, Port: packet.DHCP4ServerPort}
+
+	// first discover packet
 	dhcpFrame := newDHCP4DiscoverFrame(srcAddr, srcAddr.MAC.String(), xid)
 	if err := sendPacket(tc.outConn, srcAddr, dstAddr, dhcpFrame); err != nil {
 		t.Errorf("DHCPHandler.handleDiscover() error sending packet error=%s", err)
@@ -156,7 +158,7 @@ func Test_requestAnotherHost(t *testing.T) {
 		return
 	}
 	time.Sleep(time.Millisecond * 10)
-	checkLeaseTable(t, tc, 0, 0, 1)
+	checkLeaseTable(t, tc, 0, 1, 0)
 
 	// request for our server
 	newDHCPHost(t, tc, srcAddr.MAC)

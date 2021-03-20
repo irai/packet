@@ -217,7 +217,6 @@ func (h *Handler) StartHunt(ip net.IP) error {
 		return packet.ErrInvalidIP
 	}
 	h.engine.RUnlock()
-	h.engine.SetIP4Offer(host, net.IPv4zero)
 
 	if Debug {
 		fmt.Printf("dhcp4: start hunt ip=%s\n", ip)
@@ -226,7 +225,7 @@ func (h *Handler) StartHunt(ip net.IP) error {
 	h.Lock()
 	defer h.Unlock()
 
-	if lease := h.findByIP(ip); lease != nil {
+	if lease := h.findByIP(ip); lease != nil && !lease.subnet.Captured {
 		// Fake a dhcp release so router will force the client to discover when it attempts to reconnect
 		if h.mode == ModeSecondaryServer || h.mode == ModeSecondaryServerNice {
 			if Debug {
@@ -234,6 +233,7 @@ func (h *Handler) StartHunt(ip net.IP) error {
 			}
 			h.forceRelease(lease.ClientID, h.net1.DefaultGW, lease.Addr.MAC, lease.Addr.IP, nil)
 		}
+		// h.engine.SetIP4Offer(host, net.IPv4zero)
 	}
 	return nil
 }
