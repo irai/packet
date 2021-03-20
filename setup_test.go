@@ -47,7 +47,7 @@ type testContext struct {
 	outConn       net.PacketConn
 	clientInConn  net.PacketConn
 	clientOutConn net.PacketConn
-	packet        *Handler
+	engine        *Handler
 	wg            sync.WaitGroup
 	ctx           context.Context
 	cancel        context.CancelFunc
@@ -106,16 +106,16 @@ func setupTestHandler() *testContext {
 
 	// override handler with conn and nicInfo
 	config := Config{Conn: tc.inConn, NICInfo: &nicInfo, ProbeInterval: time.Millisecond * 500, OfflineDeadline: time.Millisecond * 500, PurgeDeadline: time.Second * 2}
-	tc.packet, err = config.NewEngine("eth0")
+	tc.engine, err = config.NewEngine("eth0")
 	if err != nil {
 		panic(err)
 	}
 	if Debug {
-		fmt.Println("nicinfo: ", tc.packet.NICInfo)
+		fmt.Println("nicinfo: ", tc.engine.NICInfo)
 	}
 
 	go func() {
-		if err := tc.packet.ListenAndServe(tc.ctx); err != nil {
+		if err := tc.engine.ListenAndServe(tc.ctx); err != nil {
 			panic(err)
 		}
 	}()

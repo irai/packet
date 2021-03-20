@@ -17,8 +17,8 @@ func TestHandler_findOrCreateHostTestCopyIPMAC(t *testing.T) {
 	tc := setupTestHandler()
 	defer tc.Close()
 
-	host, _ := tc.packet.findOrCreateHost(net.HardwareAddr(bufMAC), net.IP(bufIP))
-	tc.packet.lockAndSetOnline(host, false)
+	host, _ := tc.engine.findOrCreateHost(net.HardwareAddr(bufMAC), net.IP(bufIP))
+	tc.engine.lockAndSetOnline(host, false)
 
 	bufIP[0] = 0xff
 	bufMAC[0] = 0x00
@@ -35,8 +35,8 @@ func TestHandler_findOrCreateHostTestCopyIPMAC(t *testing.T) {
 	bufIP6 := []byte{0x20, 0x01, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}
 	ip6 := net.IP{0x20, 0x01, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}
 
-	host, _ = tc.packet.findOrCreateHost(net.HardwareAddr(bufMAC), net.IP(bufIP6))
-	tc.packet.lockAndSetOnline(host, false)
+	host, _ = tc.engine.findOrCreateHost(net.HardwareAddr(bufMAC), net.IP(bufIP6))
+	tc.engine.lockAndSetOnline(host, false)
 	bufIP6[8] = 0xff
 	bufMAC[0] = 0x00
 	if !host.IP.Equal(ip6) || !host.MACEntry.IP6GUA.Equal(ip6) {
@@ -46,8 +46,8 @@ func TestHandler_findOrCreateHostTestCopyIPMAC(t *testing.T) {
 		t.Error("findOrCreateHost wrong MAC", host, host.MACEntry)
 	}
 
-	if len(tc.packet.LANHosts.Table) != 3 {
-		tc.packet.printHostTable()
+	if len(tc.engine.LANHosts.Table) != 3 {
+		tc.engine.printHostTable()
 		t.Error("findOrCreateHost invalid leng ")
 	}
 }
@@ -64,7 +64,7 @@ func Benchmark_findOrCreateHost(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		ip[3] = byte(i % 64)
 		mac[5] = byte(i % 64)
-		host, _ := tc.packet.findOrCreateHost(mac, ip)
+		host, _ := tc.engine.findOrCreateHost(mac, ip)
 		if host.IP.Equal(net.IPv4zero) {
 			fmt.Println("invalid host")
 		}

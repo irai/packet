@@ -34,6 +34,9 @@ func (h *Handler) Capture(mac net.HardwareAddr) error {
 }
 
 func (h *Handler) lockAndStartHunt(addr Addr) error {
+	if Debug {
+		fmt.Printf("packet: lockAndStartHunt for %s\n", addr)
+	}
 	dhcp4Stage := StageNormal
 	if addr.IP.To4() != nil {
 		dhcp4Stage = h.HandlerDHCP4.HuntStage(addr)
@@ -49,7 +52,7 @@ func (h *Handler) lockAndStartHunt(addr Addr) error {
 	if dhcp4Stage == StageRedirected {
 		host.huntStage = StageRedirected
 		h.mutex.Unlock()
-		fmt.Printf("packet: host successfully redirected %s\n", addr)
+		fmt.Printf("packet: host successfully redirected %s\n", host)
 		return nil
 	}
 
@@ -57,7 +60,7 @@ func (h *Handler) lockAndStartHunt(addr Addr) error {
 	h.mutex.Unlock()
 
 	if Debug {
-		fmt.Printf("packet: start hunt for %s\n", addr)
+		fmt.Printf("packet: start hunt for %s dhcp4Stage=%s\n", host, dhcp4Stage)
 	}
 
 	// IP4 handlers
@@ -109,6 +112,9 @@ func (h *Handler) Release(mac net.HardwareAddr) error {
 }
 
 func (h *Handler) lockAndStopHunt(ip net.IP) error {
+	if Debug {
+		fmt.Printf("packet: lockAndStopHunt for ip=%s\n", ip)
+	}
 	h.mutex.Lock()
 	host := h.FindIPNoLock(ip)
 	if host == nil {
@@ -118,14 +124,14 @@ func (h *Handler) lockAndStopHunt(ip net.IP) error {
 	}
 	if host.huntStage != StageHunt {
 		h.mutex.Unlock()
-		fmt.Printf("packet: host not in hunt stage ip=%s\n", ip)
+		fmt.Printf("packet: host not in hunt stage %s\n", host)
 		return ErrInvalidIP
 	}
 	host.huntStage = StageNormal
 	h.mutex.Unlock()
 
 	if Debug {
-		fmt.Printf("packet: end hunt for ip=%s\n", ip)
+		fmt.Printf("packet: end hunt for %s\n", host)
 	}
 
 	// IP4 handlers
