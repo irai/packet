@@ -151,8 +151,8 @@ func (h *Handler) lockAndStopHunt(ip net.IP) error {
 
 // IsCaptured return true is mac is in capture mode
 func (h *Handler) IsCaptured(mac net.HardwareAddr) bool {
-	h.mutex.Lock()
-	defer h.mutex.Unlock()
+	h.mutex.RLock()
+	defer h.mutex.RUnlock()
 	if e := h.FindMACEntryNoLock(mac); e != nil && e.Captured {
 		return true
 	}
