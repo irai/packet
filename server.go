@@ -471,7 +471,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				}
 
 				// DHCP4 packet?
-				if udp.DstPort() == DHCP4ServerPort {
+				if udp.DstPort() == DHCP4ServerPort || udp.DstPort() == DHCP4ClientPort {
 					name := ""
 					if host != nil {
 						name = host.DHCPName

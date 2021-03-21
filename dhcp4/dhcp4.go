@@ -3,6 +3,7 @@ package dhcp4
 import (
 	"fmt"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/irai/packet"
@@ -55,11 +56,6 @@ var _ packet.PacketProcessor = &Handler{}
 
 // Start implements PacketProcessor interface
 func (h *Handler) Start() error {
-	go func() {
-		if err := h.clientLoop(); err != nil {
-			fmt.Println("dhcp4: client loop exited with error=", err)
-		}
-	}()
 	return nil
 }
 
@@ -87,6 +83,20 @@ func configChanged(config SubnetConfig, current SubnetConfig) bool {
 		return true
 	}
 	return false
+}
+
+// Handler is the main dhcp4 handler
+type Handler struct {
+	engine *packet.Handler // engine handler
+	// clientConn net.PacketConn  // Listen DHCP client port
+	mode      Mode        // if true, force decline and release packets to homeDHCPServer
+	filename  string      // leases filename
+	closed    bool        // indicates that detach function was called
+	closeChan chan bool   // channel to close underlying goroutines
+	Table     leaseTable  // lease table
+	net1      *dhcpSubnet // home LAN
+	net2      *dhcpSubnet // netfilter LAN
+	sync.Mutex
 }
 
 // Attach return a dhcp handler with two internal subnets.
@@ -157,6 +167,7 @@ func (config Config) Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsSe
 
 	// Client port 68: used by dhcp client to listen for dhcp packets
 	// Accept incoming both broadcast and localaddr packets
+	/**
 	h.clientConn = config.ClientConn
 	if h.clientConn == nil {
 		h.clientConn, err = net.ListenPacket("udp4", ":68")
@@ -164,6 +175,7 @@ func (config Config) Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsSe
 			return nil, fmt.Errorf("port 68 listen error: %w ", err)
 		}
 	}
+	*/
 
 	if debugging() {
 		log.WithFields(log.Fields{"netfilterLAN": h.net2.LAN.String(), "netfilterGW": h.net2.DefaultGW, "firstIP": h.net2.FirstIP,
@@ -182,9 +194,9 @@ func (h *Handler) Detach() error {
 	h.engine.HandlerDHCP4 = packet.PacketNOOP{}
 	h.closed = true
 	close(h.closeChan)
-	if h.clientConn != nil {
-		h.clientConn.Close() // kill client goroutine
-	}
+	// if h.clientConn != nil {
+	// h.clientConn.Close() // kill client goroutine
+	// }
 	return nil
 }
 
@@ -294,6 +306,11 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 		fmt.Printf("ip4  : %s\n", ip4)
 		fmt.Printf("udp  : %s\n", udp)
 		fmt.Printf("dhcp4: %s\n", dhcpFrame)
+	}
+
+	if udp.DstPort() == packet.DHCP4ClientPort {
+		err := h.processClientPacket(host, dhcpFrame)
+		return host, err
 	}
 
 	options := dhcpFrame.ParseOptions()

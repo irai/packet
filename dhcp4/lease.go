@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"net"
-	"sync"
 	"time"
 
 	"github.com/irai/packet"
@@ -50,20 +49,6 @@ func (l Lease) String() string {
 	return fmt.Sprintf("id=% x state=%s %s name=%s offer=%s captured=%v gw=%s mask=%v",
 		l.ClientID, l.State, l.Addr, l.Name, l.IPOffer, l.subnet.Captured, l.subnet.DefaultGW, l.subnet.LAN.Mask)
 
-}
-
-// Handler is the main dhcp4 handler
-type Handler struct {
-	engine     *packet.Handler // engine handler
-	clientConn net.PacketConn  // Listen DHCP client port
-	mode       Mode            // if true, force decline and release packets to homeDHCPServer
-	filename   string          // leases filename
-	closed     bool            // indicates that detach function was called
-	closeChan  chan bool       // channel to close underlying goroutines
-	Table      leaseTable      // lease table
-	net1       *dhcpSubnet     // home LAN
-	net2       *dhcpSubnet     // netfilter LAN
-	sync.Mutex
 }
 
 func (h *Handler) find(clientID []byte) *Lease {

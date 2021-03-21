@@ -105,7 +105,7 @@ func (h *Handler) SendDiscoverPacket(chAddr net.HardwareAddr, cIAddr net.IP, xID
 	p := RequestPacket(Discover, chAddr, cIAddr, xID, false, options.SelectOrderOrAll(nil))
 	srcAddr := packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostIP4.IP, Port: packet.DHCP4ClientPort}
 	dstAddr := packet.Addr{MAC: h.engine.NICInfo.RouterMAC, IP: h.engine.NICInfo.RouterIP4.IP, Port: packet.DHCP4ServerPort}
-	err = sendDHCP4Packet(h.clientConn, srcAddr, dstAddr, p)
+	err = sendDHCP4Packet(h.engine.Conn(), srcAddr, dstAddr, p)
 	return err
 }
 
@@ -151,7 +151,7 @@ func (h *Handler) sendDeclineReleasePacket(msgType MessageType, clientID []byte,
 	p.PadToMinSize()
 	srcAddr := packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostIP4.IP, Port: packet.DHCP4ClientPort}
 	dstAddr := packet.Addr{MAC: h.engine.NICInfo.RouterMAC, IP: h.engine.NICInfo.RouterIP4.IP, Port: packet.DHCP4ServerPort}
-	err = sendDHCP4Packet(h.clientConn, srcAddr, dstAddr, p)
+	err = sendDHCP4Packet(h.engine.Conn(), srcAddr, dstAddr, p)
 	// err = h.sendDHCPPacket(serverIP, packet)
 	return err
 }
@@ -169,79 +169,61 @@ func (h *Handler) sendDHCPPacket(srcAddr packet.Addr, dstAddr packet.Addr, packe
 }
 ***/
 
-func (h *Handler) clientLoop() error {
-	buffer := make([]byte, packet.EthMaxSize)
-	for {
-		n, _, err := h.clientConn.ReadFrom(buffer)
-
-		if err != nil {
-			if nerr, ok := err.(net.Error); ok && nerr.Temporary() {
-				time.Sleep(time.Millisecond * 2)
-				continue
-			}
-			if h.closed { // detach called?
-				return nil
-			}
-			return err
-		}
-
-		req := DHCP4(buffer[:n])
-		if !req.IsValid() {
-			fmt.Println("dhcp4: clientLoop invalid packet len", n)
-			continue
-		}
-
-		options := req.ParseOptions()
-		t := options[OptionDHCPMessageType]
-		if len(t) != 1 {
-			log.Warn("dhcp4: skiping dhcp packet with option len not 1")
-			continue
-		}
-
-		clientID := getClientID(req, options)
-
-		serverIP := net.IPv4zero
-		if tmp, ok := options[OptionServerIdentifier]; ok {
-			serverIP = net.IP(tmp)
-		}
-
-		fields := log.Fields{"clientID": clientID, "ip": req.YIAddr(), "server": serverIP, "xid": req.XId()}
-		if serverIP.IsUnspecified() {
-			log.WithFields(fields).Error("dhcp4: client offer invalid serverIP")
-			continue
-		}
-
-		reqType := MessageType(t[0])
-
-		// An offer for a fakeMAC that we initiated? Discard it.
-		if bytes.Equal(req.CHAddr()[0:4], fakeMAC[0:4]) {
-			continue
-		}
-
-		// Did we send this?
-		if serverIP.Equal(h.net1.DHCPServer) || serverIP.Equal(h.net2.DHCPServer) {
-			continue
-		}
-
-		if debugging() {
-			fields["msgType"] = reqType
-			fields["mac"] = req.CHAddr()
-			log.WithFields(fields).Debug("dhcp4: client dhcp received")
-		}
-
-		// only interested in offer packets
-		if reqType != Offer {
-			continue
-		}
-
-		log.WithFields(fields).Info("dhcp4: client offer from another dhcp server")
-
-		// Force dhcp server to release the IP
-		// h.mutex.Lock()
-		// _, captured := h.captureTable[string(req.CHAddr())]
-		// h.mutex.Unlock()
-		if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && h.engine.IsCaptured(req.CHAddr())) {
-			h.forceDecline(clientID, serverIP, req.CHAddr(), req.YIAddr(), req.XId())
-		}
+func (h *Handler) processClientPacket(host *packet.Host, req DHCP4) error {
+	// req := DHCP4(buffer[:n])
+	if !req.IsValid() {
+		fmt.Println("dhcp4: clientLoop invalid packet len")
+		return packet.ErrParseMessage
 	}
+
+	options := req.ParseOptions()
+	t := options[OptionDHCPMessageType]
+	if len(t) != 1 {
+		log.Warn("dhcp4: skiping dhcp packet with option len not 1")
+		return packet.ErrParseMessage
+	}
+
+	clientID := getClientID(req, options)
+
+	serverIP := net.IPv4zero
+	if tmp, ok := options[OptionServerIdentifier]; ok {
+		serverIP = net.IP(tmp)
+	}
+
+	fields := log.Fields{"clientID": clientID, "ip": req.YIAddr(), "server": serverIP, "xid": req.XId()}
+	if serverIP.IsUnspecified() {
+		log.WithFields(fields).Error("dhcp4: client offer invalid serverIP")
+		return packet.ErrParseMessage
+	}
+
+	reqType := MessageType(t[0])
+
+	// An offer for a fakeMAC that we initiated? Discard it.
+	if bytes.Equal(req.CHAddr()[0:4], fakeMAC[0:4]) {
+		return nil
+	}
+
+	// Did we send this?
+	if serverIP.Equal(h.net1.DHCPServer) || serverIP.Equal(h.net2.DHCPServer) {
+		return nil
+	}
+
+	if debugging() {
+		fields["msgType"] = reqType
+		fields["mac"] = req.CHAddr()
+		log.WithFields(fields).Debug("dhcp4: client dhcp received")
+	}
+
+	// only interested in offer packets
+	if reqType != Offer {
+		return nil
+	}
+
+	log.WithFields(fields).Info("dhcp4: client offer from another dhcp server")
+
+	// Force dhcp server to release the IP
+	if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && h.engine.IsCaptured(req.CHAddr())) {
+		h.forceDecline(clientID, serverIP, req.CHAddr(), req.YIAddr(), req.XId())
+	}
+	return nil
 }
