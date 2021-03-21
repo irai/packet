@@ -56,6 +56,11 @@ func (h *Handler) lockAndStartHunt(addr Addr) error {
 		return nil
 	}
 
+	if host.huntStage == StageHunt {
+		h.mutex.Unlock()
+		return nil
+	}
+
 	host.huntStage = StageHunt
 	h.mutex.Unlock()
 

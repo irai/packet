@@ -8,7 +8,7 @@ import (
 	"github.com/irai/packet"
 )
 
-func sendPacket(conn net.PacketConn, srcAddr packet.Addr, dstAddr packet.Addr, p DHCP4) (err error) {
+func sendDHCP4Packet(conn net.PacketConn, srcAddr packet.Addr, dstAddr packet.Addr, p DHCP4) (err error) {
 	ether := packet.Ether(make([]byte, packet.EthMaxSize)) // Ping is called many times concurrently by client
 
 	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IP, srcAddr.MAC, dstAddr.MAC)
@@ -28,7 +28,7 @@ func sendPacket(conn net.PacketConn, srcAddr packet.Addr, dstAddr packet.Addr, p
 	// }
 
 	if Debug {
-		fmt.Printf("icmp4: send %s\n", p)
+		fmt.Printf("dhcp4: send packet %s %s\n", dstAddr, p)
 	}
 	if _, err := conn.WriteTo(ether, &dstAddr); err != nil {
 		fmt.Println("icmp failed to write ", err)

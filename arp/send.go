@@ -62,24 +62,20 @@ func (h *Handler) request(srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr ne
 var buffer = packet.EtherBuffer{}
 
 func (h *Handler) requestWithDstEthernet(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
-	ether := buffer.Alloc()
-	defer buffer.Free()
+	var b [packet.EthMaxSize]byte
+	ether := packet.Ether(b[0:])
 
 	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_ARP, srcHwAddr, dstEther)
-	arp, err := ARPMarshalBinary(ether.Payload(), OperationRequest, srcHwAddr, srcIP, dstHwAddr, dstIP)
+	arp, err := MarshalBinary(ether.Payload(), OperationRequest, srcHwAddr, srcIP, dstHwAddr, dstIP)
 	if err != nil {
 		return err
 	}
-	n := len(ether) + len(arp)
-
-	// if err := c.conn.SetWriteDeadline(time.Now().Add(writeTimeout)); err != nil {
-	// return err
-	// }
-
-	if _, err := h.engine.Conn().WriteTo(ether[:n], &packet.Addr{MAC: dstEther}); err != nil {
+	if ether, err = ether.SetPayload(arp); err != nil {
 		return err
 	}
-	return nil
+
+	_, err = h.engine.Conn().WriteTo(ether, &packet.Addr{MAC: dstEther})
+	return err
 }
 
 // Reply send ARP reply from the src to the dst
@@ -96,21 +92,19 @@ func (h *Handler) Reply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, s
 //
 // dstEther identifies the target for the Ethernet packet : i.e. use EthernetBroadcast for gratuitous ARP
 func (h *Handler) reply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
-	ether := buffer.Alloc()
-	defer buffer.Free()
+	var b [packet.EthMaxSize]byte
+	ether := packet.Ether(b[0:])
 
 	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_ARP, srcHwAddr, dstEther)
-	arp, err := ARPMarshalBinary(ether.Payload(), OperationReply, srcHwAddr, srcIP, dstHwAddr, dstIP)
+	arp, err := MarshalBinary(ether.Payload(), OperationReply, srcHwAddr, srcIP, dstHwAddr, dstIP)
 	if err != nil {
 		return err
 	}
-	n := len(ether) + len(arp)
+	if ether, err = ether.SetPayload(arp); err != nil {
+		return err
+	}
 
-	// if err := c.conn.SetWriteDeadline(time.Now().Add(writeTimeout)); err != nil {
-	// return err
-	// }
-
-	_, err = h.engine.Conn().WriteTo(ether[:n], &packet.Addr{MAC: dstEther})
+	_, err = h.engine.Conn().WriteTo(ether, &packet.Addr{MAC: dstEther})
 	return err
 }
 

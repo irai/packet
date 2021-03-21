@@ -24,7 +24,7 @@ func Test_declineSimple(t *testing.T) {
 
 	dhcpFrame := newDHCP4DeclineFrame(srcAddr, tc.IPOffer, hostIP4, xid)
 	dstAddr := packet.Addr{MAC: hostMAC, IP: hostIP4, Port: packet.DHCP4ServerPort}
-	sendPacket(tc.outConn, srcAddr, dstAddr, dhcpFrame)
+	sendDHCP4Packet(tc.outConn, srcAddr, dstAddr, dhcpFrame)
 	time.Sleep(time.Millisecond * 10)
 	checkLeaseTable(t, tc, 0, 0, 1)
 }
@@ -43,14 +43,14 @@ func Test_DeclineFromAnotherServer(t *testing.T) {
 
 	// discover packet
 	dhcpFrame := newDHCP4DiscoverFrame(srcAddr, "name1", xid)
-	sendPacket(tc.outConn, srcAddr, dstAddr, dhcpFrame)
+	sendDHCP4Packet(tc.outConn, srcAddr, dstAddr, dhcpFrame)
 	time.Sleep(time.Millisecond * 10)
 	checkLeaseTable(t, tc, 0, 1, 0)
 
 	// decline for other host
 	dhcpFrame = newDHCP4DeclineFrame(srcAddr, ip5, routerIP4, xid)
 	dstAddr = packet.Addr{MAC: routerMAC, IP: routerIP4, Port: packet.DHCP4ServerPort}
-	sendPacket(tc.outConn, srcAddr, dstAddr, dhcpFrame)
+	sendDHCP4Packet(tc.outConn, srcAddr, dstAddr, dhcpFrame)
 	time.Sleep(time.Millisecond * 10)
 	checkLeaseTable(t, tc, 0, 1, 0)
 

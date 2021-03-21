@@ -81,7 +81,7 @@ func (b ARP) String() string {
 	return fmt.Sprintf("operation=%d proto=%d srcMAC=%s srcIP=%s dstMAC=%s dstIP=%s", b.Operation(), b.Proto(), b.SrcMAC(), b.SrcIP(), b.DstMAC(), b.DstIP())
 }
 
-func ARPMarshalBinary(b []byte, operation uint16, srcMAC net.HardwareAddr, srcIP net.IP, dstMAC net.HardwareAddr, dstIP net.IP) (ARP, error) {
+func MarshalBinary(b []byte, operation uint16, srcMAC net.HardwareAddr, srcIP net.IP, dstMAC net.HardwareAddr, dstIP net.IP) (ARP, error) {
 	if b == nil {
 		b = make([]byte, arpLen)
 	}

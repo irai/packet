@@ -118,7 +118,7 @@ func Test_requestExhaust(t *testing.T) {
 	srcAddr := packet.Addr{MAC: mac5, IP: net.IPv4zero, Port: packet.DHCP4ClientPort}
 	dstAddr := packet.Addr{MAC: arp.EthernetBroadcast, IP: net.IPv4zero, Port: packet.DHCP4ServerPort}
 	dhcpFrame := newDHCP4DiscoverFrame(srcAddr, "onelastname", xid)
-	if err := sendPacket(tc.outConn, srcAddr, dstAddr, dhcpFrame); err != nil {
+	if err := sendDHCP4Packet(tc.outConn, srcAddr, dstAddr, dhcpFrame); err != nil {
 		t.Errorf("DHCPHandler.handleDiscover() error sending packet error=%s", err)
 		return
 	}
@@ -144,7 +144,7 @@ func Test_requestAnotherHost(t *testing.T) {
 
 	// first discover packet
 	dhcpFrame := newDHCP4DiscoverFrame(srcAddr, srcAddr.MAC.String(), xid)
-	if err := sendPacket(tc.outConn, srcAddr, dstAddr, dhcpFrame); err != nil {
+	if err := sendDHCP4Packet(tc.outConn, srcAddr, dstAddr, dhcpFrame); err != nil {
 		t.Errorf("DHCPHandler.handleDiscover() error sending packet error=%s", err)
 		return
 	}
@@ -153,7 +153,7 @@ func Test_requestAnotherHost(t *testing.T) {
 
 	// request for another host
 	dhcpFrame = newDHCP4RequestFrame(srcAddr, srcAddr.MAC.String(), routerIP4, ip3, xid)
-	if err := sendPacket(tc.outConn, srcAddr, dstAddr, dhcpFrame); err != nil {
+	if err := sendDHCP4Packet(tc.outConn, srcAddr, dstAddr, dhcpFrame); err != nil {
 		t.Errorf("DHCPHandler.handleDiscover() error sending packet error=%s", err)
 		return
 	}
@@ -170,7 +170,7 @@ func Test_requestAnotherHost(t *testing.T) {
 
 	// request for another host
 	dhcpFrame = newDHCP4RequestFrame(srcAddr, srcAddr.MAC.String(), routerIP4, ip4, xid)
-	if err := sendPacket(tc.outConn, srcAddr, dstAddr, dhcpFrame); err != nil {
+	if err := sendDHCP4Packet(tc.outConn, srcAddr, dstAddr, dhcpFrame); err != nil {
 		t.Errorf("DHCPHandler.handleDiscover() error sending packet error=%s", err)
 		return
 	}
@@ -185,14 +185,14 @@ func newDHCPHost(t *testing.T, tc *testContext, mac net.HardwareAddr) []byte {
 	dstAddr := packet.Addr{MAC: arp.EthernetBroadcast, IP: net.IPv4zero, Port: packet.DHCP4ServerPort}
 
 	dhcpFrame := newDHCP4DiscoverFrame(srcAddr, srcAddr.MAC.String(), xid)
-	if err := sendPacket(tc.outConn, srcAddr, dstAddr, dhcpFrame); err != nil {
+	if err := sendDHCP4Packet(tc.outConn, srcAddr, dstAddr, dhcpFrame); err != nil {
 		t.Errorf("DHCPHandler.handleDiscover() error sending packet error=%s", err)
 		return nil
 	}
 	time.Sleep(time.Millisecond * 10)
 
 	dhcpFrame = newDHCP4RequestFrame(srcAddr, srcAddr.MAC.String(), hostIP4, tc.IPOffer, xid)
-	if err := sendPacket(tc.outConn, srcAddr, dstAddr, dhcpFrame); err != nil {
+	if err := sendDHCP4Packet(tc.outConn, srcAddr, dstAddr, dhcpFrame); err != nil {
 		t.Errorf("DHCPHandler.handleDiscover() error sending packet error=%s", err)
 		return nil
 	}

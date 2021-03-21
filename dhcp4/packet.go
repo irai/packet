@@ -31,7 +31,7 @@ func (p DHCP4) IsValid() bool {
 }
 
 func (p DHCP4) String() string {
-	return fmt.Sprintf("dhcp4 opcode=%v chaddr=%s ciaddr=%s yiaddr=%s", p.OpCode(), p.CHAddr(), p.CIAddr(), p.YIAddr())
+	return fmt.Sprintf("opcode=%v chaddr=%s ciaddr=%s yiaddr=%s len=%d", p.OpCode(), p.CHAddr(), p.CIAddr(), p.YIAddr(), len(p))
 }
 
 func (p DHCP4) OpCode() OpCode { return OpCode(p[0]) }

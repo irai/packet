@@ -98,6 +98,11 @@ func Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsServer net.IP, fil
 // Attach accepts a configuration structure and return a dhcp handler
 func (config Config) Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsServer net.IP, filename string) (h *Handler, err error) {
 
+	// validate networks
+	if !engine.NICInfo.HomeLAN4.Contains(netfilterIP.IP) || netfilterIP.Contains(engine.NICInfo.HomeLAN4.IP) {
+		return nil, packet.ErrInvalidIP
+	}
+
 	h = &Handler{Table: map[string]*Lease{}}
 	// handler.captureTable = make(map[string]bool)
 	h.filename = filename
@@ -259,7 +264,10 @@ func (h *Handler) HuntStage(addr packet.Addr) packet.HuntStage {
 	h.Lock()
 	defer h.Unlock()
 
-	if lease := h.findByIP(addr.IP); lease != nil && lease.subnet.Captured {
+	lease := h.findByIP(addr.IP)
+	fmt.Println("DEBUG log dhcp4 HuntStage ", lease)
+
+	if lease != nil && lease.subnet.Captured {
 		return packet.StageRedirected
 	}
 	return packet.StageNormal
@@ -350,7 +358,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 		}
 
 		srcAddr := packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostIP4.IP, Port: packet.DHCP4ServerPort}
-		if err := sendPacket(h.engine.Conn(), srcAddr, dstAddr, response); err != nil {
+		if err := sendDHCP4Packet(h.engine.Conn(), srcAddr, dstAddr, response); err != nil {
 			fmt.Printf("dhcp4: failed sending packet error=%s", err)
 			return host, err
 		}

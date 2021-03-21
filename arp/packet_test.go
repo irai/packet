@@ -16,7 +16,7 @@ func newEtherPacket(hType uint16, srcMAC net.HardwareAddr, dstMAC net.HardwareAd
 }
 
 func newPacket(op uint16, sMAC net.HardwareAddr, sIP net.IP, tMAC net.HardwareAddr, tIP net.IP) ARP {
-	p, err := ARPMarshalBinary(nil, op, sMAC, sIP, tMAC, tIP)
+	p, err := MarshalBinary(nil, op, sMAC, sIP, tMAC, tIP)
 	if err != nil {
 		panic(err)
 	}
@@ -24,7 +24,7 @@ func newPacket(op uint16, sMAC net.HardwareAddr, sIP net.IP, tMAC net.HardwareAd
 }
 
 func tFrame(proto uint16, operation uint16, srcMAC net.HardwareAddr, srcIP net.IP, dstMAC net.HardwareAddr, dstIP net.IP) []byte {
-	b, _ := ARPMarshalBinary(nil, operation, srcMAC, srcIP, dstMAC, dstIP)
+	b, _ := MarshalBinary(nil, operation, srcMAC, srcIP, dstMAC, dstIP)
 	return b
 }
 
@@ -32,7 +32,7 @@ func TestMarshalUnmarshall(t *testing.T) {
 	// marshall
 	buf := make([]byte, packet.EthMaxSize) // allocate in the stack
 	ether := packet.EtherMarshalBinary(buf, syscall.ETH_P_ARP, mac1, mac2)
-	arpFrame, err := ARPMarshalBinary(ether.Payload(), OperationRequest, mac1, ip1, mac2, ip2)
+	arpFrame, err := MarshalBinary(ether.Payload(), OperationRequest, mac1, ip1, mac2, ip2)
 	if err != nil {
 		t.Errorf("error in marshall binary: %s", err)
 	}
@@ -71,7 +71,7 @@ func TestMarshalBinary(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			buf, err := ARPMarshalBinary(nil, tt.operation, tt.srcMAC, tt.srcIP, tt.dstMAC, tt.dstIP)
+			buf, err := MarshalBinary(nil, tt.operation, tt.srcMAC, tt.srcIP, tt.dstMAC, tt.dstIP)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("%s: MarshalBinary() error = %v, wantErr %v", tt.name, err, tt.wantErr)
 				return

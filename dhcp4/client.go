@@ -21,6 +21,7 @@ func (h *Handler) attackDHCPServer(options Options) {
 		return
 	}
 
+	fmt.Println("DEBUG dhcp attack")
 	xID := []byte{0xff, 0xee, 0xdd, 0}
 	tmpMAC := net.HardwareAddr{0xff, 0xee, 0xdd, 0xcc, 0xbb, 0x0}
 	copy(fakeMAC[:], tmpMAC) // keep for comparison
@@ -101,8 +102,10 @@ func (h *Handler) SendDiscoverPacket(chAddr net.HardwareAddr, cIAddr net.IP, xID
 	if tracing() {
 		log.Tracef("dhcp4: send discover packet from %s ciAddr=%v xID=%v", chAddr, cIAddr, xID)
 	}
-	pkt := RequestPacket(Discover, chAddr, cIAddr, xID, false, options.SelectOrderOrAll(nil))
-	err = h.sendDHCPPacket(h.net1.DefaultGW, pkt)
+	p := RequestPacket(Discover, chAddr, cIAddr, xID, false, options.SelectOrderOrAll(nil))
+	srcAddr := packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostIP4.IP, Port: packet.DHCP4ClientPort}
+	dstAddr := packet.Addr{MAC: h.engine.NICInfo.RouterMAC, IP: h.engine.NICInfo.RouterIP4.IP, Port: packet.DHCP4ServerPort}
+	err = sendDHCP4Packet(h.clientConn, srcAddr, dstAddr, p)
 	return err
 }
 
@@ -134,31 +137,37 @@ func (h *Handler) sendDeclineReleasePacket(msgType MessageType, clientID []byte,
 		}
 	}
 
-	packet := NewPacket(BootRequest)
-	packet.SetCHAddr(chAddr)
-	packet.SetCIAddr(ciAddr)
-	packet.SetXId(xid)
-	packet.AddOption(OptionClientIdentifier, clientID)
-	packet.AddOption(OptionDHCPMessageType, []byte{byte(msgType)})
-	packet.AddOption(OptionServerIdentifier, serverIP.To4())
-	packet.AddOption(OptionMessage, []byte("netfilter decline"))
+	p := NewPacket(BootRequest)
+	p.SetCHAddr(chAddr)
+	p.SetCIAddr(ciAddr)
+	p.SetXId(xid)
+	p.AddOption(OptionClientIdentifier, clientID)
+	p.AddOption(OptionDHCPMessageType, []byte{byte(msgType)})
+	p.AddOption(OptionServerIdentifier, serverIP.To4())
+	p.AddOption(OptionMessage, []byte("netfilter decline"))
 	for k, v := range options {
-		packet.AddOption(k, v)
+		p.AddOption(k, v)
 	}
-	packet.PadToMinSize()
-	err = h.sendDHCPPacket(serverIP, packet)
+	p.PadToMinSize()
+	srcAddr := packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostIP4.IP, Port: packet.DHCP4ClientPort}
+	dstAddr := packet.Addr{MAC: h.engine.NICInfo.RouterMAC, IP: h.engine.NICInfo.RouterIP4.IP, Port: packet.DHCP4ServerPort}
+	err = sendDHCP4Packet(h.clientConn, srcAddr, dstAddr, p)
+	// err = h.sendDHCPPacket(serverIP, packet)
 	return err
 }
 
-func (h *Handler) sendDHCPPacket(serverAddr net.IP, packet DHCP4) (err error) {
-	dstAddr := net.UDPAddr{IP: serverAddr, Port: 67}
-	_, err = h.clientConn.WriteTo(packet, &dstAddr)
+/***
+func (h *Handler) sendDHCPPacket(srcAddr packet.Addr, dstAddr packet.Addr, packet DHCP4) (err error) {
+	// dstAddr := packet.Addr{MAC: h.engine.NICInfo.RouterMAC, IP: h.engine.NICInfo.RouterIP4, Port: 67}
+	// _, err = h.clientConn.WriteTo(packet, &dstAddr)
+	sendPacket(h.clientConn, srcAddr, dstAddr, packet)
 	if err != nil {
 		log.Debug("DHCPClient failed to dial UDP ", err)
 		return err
 	}
 	return nil
 }
+***/
 
 func (h *Handler) clientLoop() error {
 	buffer := make([]byte, packet.EthMaxSize)

@@ -55,8 +55,9 @@ type testContext struct {
 }
 
 func readResponse(ctx context.Context, tc *testContext) error {
-	buf := make([]byte, 2000)
+	buffer := make([]byte, 2000)
 	for {
+		buf := buffer[:]
 		n, _, err := tc.outConn.ReadFrom(buf)
 		if err != nil {
 			if ctx.Err() != context.Canceled {

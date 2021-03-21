@@ -70,8 +70,9 @@ type TestContext struct {
 }
 
 func readResponse(ctx context.Context, tc *TestContext) error {
-	buf := make([]byte, 2000)
+	buffer := make([]byte, 2000)
 	for {
+		buf := buffer[:]
 		n, _, err := tc.outConn.ReadFrom(buf)
 		if err != nil {
 			if ctx.Err() != context.Canceled {
@@ -90,7 +91,7 @@ func readResponse(ctx context.Context, tc *TestContext) error {
 		}
 
 		// used for debuging - disable to avoid verbose logging
-		if true {
+		if false {
 			fmt.Printf("test  : got client test response=%s\n", ether)
 		}
 
@@ -149,6 +150,7 @@ func NewTestContext() *TestContext {
 		HostMAC:   HostMAC,
 		HostIP4:   net.IPNet{IP: HostIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
 		RouterIP4: net.IPNet{IP: RouterIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
+		RouterMAC: RouterMAC,
 		HomeLAN4:  HomeLAN,
 	}
 
@@ -174,7 +176,7 @@ func NewTestContext() *TestContext {
 	if err != nil {
 		panic(err)
 	}
-	tc.DHCP4Handler, err = dhcp4.Config{ClientConn: tc.clientInConn}.Attach(tc.Engine, net.IPNet{IP: netfilterIP.IP, Mask: net.IPv4Mask(255, 255, 255, 0)}, DNSGoogleIP4, "")
+	tc.DHCP4Handler, err = dhcp4.Config{ClientConn: tc.clientInConn}.Attach(tc.Engine, netfilterIP, DNSGoogleIP4, "")
 	if err != nil {
 		panic("cannot create handler" + err.Error())
 	}
@@ -269,7 +271,7 @@ func newARPFrame(src packet.Addr, dst packet.Addr, operation uint16) packet.Ethe
 	var err error
 	ether := packet.Ether(make([]byte, packet.EthMaxSize))
 	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_ARP, src.MAC, dst.MAC)
-	arpFrame, err := arp.ARPMarshalBinary(ether.Payload(), operation, src.MAC, src.IP, dst.MAC, dst.IP)
+	arpFrame, err := arp.MarshalBinary(ether.Payload(), operation, src.MAC, src.IP, dst.MAC, dst.IP)
 	if ether, err = ether.SetPayload(arpFrame); err != nil {
 		panic(err.Error())
 	}
@@ -334,11 +336,15 @@ func NewHostEvents(addr packet.Addr, hostInc int, macInc int) []TestEvent {
 var buf = make([]byte, packet.EthMaxSize)
 
 func runAction(t *testing.T, tc *TestContext, tt TestEvent) {
+	sendPacket := true
 
 	switch tt.action {
 	case "capture":
+		tc.Engine.Capture(tt.srcAddr.MAC)
+		sendPacket = false
 	case "release":
-
+		tc.Engine.Capture(tt.srcAddr.MAC)
+		sendPacket = false
 	case "dhcp4Request":
 		tt.ether = newDHCP4RequestFrame(tt.srcAddr, HostIP4, tc.IPOffer, []byte(fmt.Sprintf("%d", tc.dhcp4XID)))
 
@@ -372,8 +378,10 @@ func runAction(t *testing.T, tc *TestContext, tt TestEvent) {
 	savedHostTableCount := len(tc.Engine.LANHosts.Table)
 	savedMACTableCount := len(tc.Engine.MACTable.Table)
 
-	if _, err := tc.outConn.WriteTo(tt.ether, &packet.Addr{MAC: tt.ether.Dst()}); err != nil {
-		panic(err.Error())
+	if sendPacket {
+		if _, err := tc.outConn.WriteTo(tt.ether, &packet.Addr{MAC: tt.ether.Dst()}); err != nil {
+			panic(err.Error())
+		}
 	}
 	time.Sleep(tt.waitTimeAfter)
 
@@ -382,8 +390,8 @@ func runAction(t *testing.T, tc *TestContext, tt TestEvent) {
 		tc.Engine.PrintTable()
 	}
 	if n := len(tc.Engine.MACTable.Table) - savedMACTableCount; n != tt.macTableInc {
-		tc.Engine.PrintTable()
 		t.Errorf("%s: invalid mac table len want=%v got=%v", tt.name, tt.macTableInc, n)
+		tc.Engine.PrintTable()
 	}
 	tc.mutex.Lock()
 	if n := len(tc.responseTable) - savedResponseTableCount; n != tt.responseTableInc {
@@ -403,6 +411,7 @@ func runAction(t *testing.T, tc *TestContext, tt TestEvent) {
 		host := tc.Engine.FindIP(ip)
 		if host == nil {
 			t.Errorf("%s: host not found in table ip=%s ", tt.name, ip)
+			tc.Engine.PrintTable()
 			return
 		}
 		if host.Online != tt.wantHost.Online {
@@ -430,6 +439,35 @@ func checkOnlineCount(t *testing.T, tc *TestContext, online int, offline int) {
 		if countOffline != offline {
 			n++
 			t.Errorf("%s: invalid n offline entries want=%v got=%v", "offline", offline, countOffline)
+		}
+	})
+	if n > 0 {
+		tc.Engine.PrintTable()
+	}
+}
+
+func checkCaptureCount(t *testing.T, tc *TestContext, nHosts int, nMACs int) {
+	countHosts, countMacs := 0, 0
+	n := 0
+	for _, v := range tc.Engine.MACTable.Table {
+		if v.Captured {
+			countMacs++
+		}
+		for _, host := range v.HostList {
+			if host.MACEntry.Captured {
+				countHosts++
+			}
+		}
+	}
+
+	t.Run("capture check", func(t *testing.T) {
+		if countHosts != nHosts {
+			n++
+			t.Errorf("capturedhosts: invalid n hosts in capture mode want=%v got=%v", nHosts, countHosts)
+		}
+		if countMacs != nMACs {
+			n++
+			t.Errorf("capturedmacs: invalid n macs in capture mode want=%v got=%v", nMACs, countMacs)
 		}
 	})
 	if n > 0 {

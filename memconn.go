@@ -68,7 +68,7 @@ func TestReadAndDiscardLoop(ctx context.Context, conn net.PacketConn) error {
 
 		// used for debuging - disable to avoid verbose logging
 		if false {
-			fmt.Printf("raw: got buffere msg=%s\n", ether)
+			fmt.Printf("raw: got buffer msg=%s\n", ether)
 		}
 	}
 }
