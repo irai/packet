@@ -571,7 +571,7 @@ func (h *Handler) lockAndSetOnline(host *Host, notify bool) {
 	notification := Notification{Addr: addr, Online: true, DHCPName: host.DHCPName}
 
 	if Debug {
-		fmt.Printf("packet: IP is online ip=%s mac=%s name=%s\n", addr.IP, addr.MAC, host.DHCPName)
+		fmt.Printf("packet: IP is online %s\n", host)
 	}
 
 	// set previous IP to offline, start hunt and notify of new IP
@@ -610,11 +610,10 @@ func (h *Handler) lockAndSetOffline(ip net.IP) {
 	host.Online = false
 	host.huntStage = StageNormal
 	mac := host.MACEntry.MAC
-	h.mutex.Unlock()
-
 	if Debug {
-		fmt.Printf("packet: IP is offline ip=%s mac=%s\n", ip, mac)
+		fmt.Printf("packet: IP is offline %s\n", host)
 	}
+	h.mutex.Unlock()
 
 	go func() {
 		h.lockAndStopHunt(ip)
