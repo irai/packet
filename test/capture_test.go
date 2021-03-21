@@ -26,7 +26,7 @@ func TestHandler_capture(t *testing.T) {
 	addr := packet.Addr{MAC: MAC1}
 	tests = append(tests, NewHostEvents(addr, 1, 1)...)
 	tests = append(tests, TestEvent{name: "capture-" + addr.MAC.String(), hostTableInc: 0, macTableInc: 0, responsePos: 0, responseTableInc: -1, // -1 means don't count
-		waitTimeAfter: time.Millisecond * 30,
+		waitTimeAfter: time.Millisecond * 10,
 		action:        "capture", srcAddr: packet.Addr{MAC: addr.MAC, IP: net.IPv4zero},
 	})
 	tests = append(tests, NewHostEvents(addr, 1, 0)...) // get a second IP with captured net
@@ -37,6 +37,13 @@ func TestHandler_capture(t *testing.T) {
 		action: "capture", srcAddr: packet.Addr{MAC: addr.MAC, IP: net.IPv4zero},
 	})
 	tests = append(tests, NewHostEvents(addr, 1, 0)...)
+
+	// capture MAC1 again
+	addr = packet.Addr{MAC: MAC1}
+	tests = append(tests, TestEvent{name: "capture-" + addr.MAC.String(), hostTableInc: 0, macTableInc: 0, responsePos: 0, responseTableInc: -1, // -1 means don't count
+		waitTimeAfter: time.Millisecond * 10,
+		action:        "capture", srcAddr: packet.Addr{MAC: addr.MAC, IP: net.IPv4zero},
+	})
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
