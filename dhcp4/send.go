@@ -23,13 +23,9 @@ func sendDHCP4Packet(conn net.PacketConn, srcAddr packet.Addr, dstAddr packet.Ad
 	if ether, err = ether.SetPayload(ip4); err != nil {
 		return err
 	}
-	// if dstAddr.MAC == nil {
-	// dstAddr.MAC = packet.Eth4AllNodesMulticast
-	// }
 
-	if Debug {
-		fmt.Printf("dhcp4: send packet %s %s\n", dstAddr, p)
-	}
+	// fmt.Printf("dhcp4: DEBUG: send packet %s %s\n", dstAddr, p)
+
 	if _, err := conn.WriteTo(ether, &dstAddr); err != nil {
 		fmt.Println("icmp failed to write ", err)
 		return err
