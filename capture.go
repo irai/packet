@@ -55,6 +55,10 @@ func (h *Handler) lockAndStartHunt(addr Addr) error {
 		fmt.Printf("packet: host successfully redirected %s\n", host)
 		return nil
 	}
+	if !host.Online { // host offline, nothing to do
+		h.mutex.Unlock()
+		return nil
+	}
 
 	if host.huntStage == StageHunt {
 		h.mutex.Unlock()
