@@ -25,7 +25,7 @@ type SubnetConfig struct {
 	FirstIP    net.IP        // First IP in range
 	LastIP     net.IP        // Last IP in range
 	Duration   time.Duration // lease duration
-	Captured   bool
+	Stage      packet.HuntStage
 }
 
 // dhcpSubnet hold the 256 lease array for subnet

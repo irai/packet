@@ -47,7 +47,7 @@ type Lease struct {
 
 func (l Lease) String() string {
 	return fmt.Sprintf("id=% x state=%s %s name=%s offer=%s captured=%v gw=%s mask=%v",
-		l.ClientID, l.State, l.Addr, l.Name, l.IPOffer, l.subnet.Captured, l.subnet.DefaultGW, l.subnet.LAN.Mask)
+		l.ClientID, l.State, l.Addr, l.Name, l.IPOffer, l.subnet.Stage, l.subnet.DefaultGW, l.subnet.LAN.Mask)
 
 }
 

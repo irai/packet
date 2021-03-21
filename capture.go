@@ -37,10 +37,6 @@ func (h *Handler) lockAndStartHunt(addr Addr) error {
 	if Debug {
 		fmt.Printf("packet: lockAndStartHunt for %s\n", addr)
 	}
-	dhcp4Stage := StageNormal
-	if addr.IP.To4() != nil {
-		dhcp4Stage = h.HandlerDHCP4.HuntStage(addr)
-	}
 
 	h.mutex.Lock()
 	host := h.FindIPNoLock(addr.IP)
@@ -49,8 +45,7 @@ func (h *Handler) lockAndStartHunt(addr Addr) error {
 		fmt.Printf("packet: error invalid ip in lockAndStartHunt ip=%s\n", addr.IP)
 		return ErrInvalidIP
 	}
-	if dhcp4Stage == StageRedirected {
-		host.huntStage = StageRedirected
+	if host.huntStage == StageRedirected {
 		h.mutex.Unlock()
 		fmt.Printf("packet: host successfully redirected %s\n", host)
 		return nil
@@ -69,7 +64,7 @@ func (h *Handler) lockAndStartHunt(addr Addr) error {
 	h.mutex.Unlock()
 
 	if Debug {
-		fmt.Printf("packet: start hunt for %s dhcp4Stage=%s\n", host, dhcp4Stage)
+		fmt.Printf("packet: start hunt for %s\n", host)
 	}
 
 	// IP4 handlers

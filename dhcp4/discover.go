@@ -52,7 +52,7 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (d DHCP4) {
 	// fmt.Println("DEBUG lease ", lease)
 
 	// Exhaust all IPs for a few seconds
-	if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && lease.subnet.Captured) {
+	if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && lease.subnet.Stage == packet.StageRedirected) {
 		log.WithFields(fields).Info("dhcp4: discover - send 256 discover packets")
 		h.attackDHCPServer(options)
 	}
@@ -103,7 +103,7 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (d DHCP4) {
 	//  The server is likely to send offer before us, so send a kill packet
 	//  assuming the other server offered the requested IP - guess
 	//
-	if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && lease.subnet.Captured) {
+	if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && lease.subnet.Stage == packet.StageRedirected) {
 		if reqIP != nil && !reqIP.IsUnspecified() {
 			h.forceDecline(lease.ClientID, h.net1.DefaultGW, lease.Addr.MAC, reqIP, p.XId())
 		}

@@ -152,14 +152,14 @@ func (config Config) Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsSe
 		if err != nil {
 			return nil, fmt.Errorf("home config : %w", err)
 		}
-		h.net1.Captured = false
+		h.net1.Stage = packet.StageNormal
 
 		// net2 is netfilter LAN
 		h.net2, err = newSubnet(netfilterSubnet)
 		if err != nil {
 			return nil, fmt.Errorf("netfilter config : %w", err)
 		}
-		h.net2.Captured = true
+		h.net2.Stage = packet.StageRedirected
 	}
 
 	// Add static and classless route options
@@ -242,7 +242,7 @@ func (h *Handler) StartHunt(ip net.IP) error {
 	h.Lock()
 	defer h.Unlock()
 
-	if lease := h.findByIP(ip); lease != nil && !lease.subnet.Captured {
+	if lease := h.findByIP(ip); lease != nil && lease.subnet.Stage != packet.StageRedirected {
 		// Fake a dhcp release so router will force the client to discover when it attempts to reconnect
 		if h.mode == ModeSecondaryServer || h.mode == ModeSecondaryServerNice {
 			if Debug {
@@ -279,8 +279,8 @@ func (h *Handler) HuntStage(addr packet.Addr) packet.HuntStage {
 	lease := h.findByIP(addr.IP)
 	fmt.Println("DEBUG log dhcp4 HuntStage ", lease)
 
-	if lease != nil && lease.subnet.Captured {
-		return packet.StageRedirected
+	if lease != nil && lease.State == StateAllocated {
+		return lease.subnet.Stage
 	}
 	return packet.StageNormal
 }

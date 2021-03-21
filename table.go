@@ -19,19 +19,23 @@ type HuntStage byte
 
 // possible hunt stages
 const (
-	StageNormal     HuntStage = 0 // not captured
-	StageHunt       HuntStage = 1 // host is not redirected
-	StageRedirected HuntStage = 2 // host is not redirected
+	StageNoChange   HuntStage = 0 // no change to stage - used as no op
+	StageNormal     HuntStage = 1 // not captured
+	StageHunt       HuntStage = 2 // host is not redirected
+	StageRedirected HuntStage = 3 // host is not redirected
 )
 
 func (s HuntStage) String() string {
 	if s == StageNormal {
 		return "normal"
 	}
+	if s == StageRedirected {
+		return "redirected"
+	}
 	if s == StageHunt {
 		return "hunt"
 	}
-	return "redirected"
+	return "noop"
 }
 
 // Host holds a host identification
@@ -73,10 +77,18 @@ func (e *Host) IPv6Router() bool {
 	return e.ipv6Router
 }
 
-func (h *Handler) SetDHCPName(host *Host, name string) {
+func (h *Handler) SetDHCP4Fields(host *Host, stage HuntStage, name string) {
 	h.mutex.Lock()
 	if host.DHCPName != name {
 		host.DHCPName = name
+	}
+
+	// DHCP stage overides all other stages
+	if stage == StageRedirected {
+		host.huntStage = StageRedirected
+	}
+	if stage == StageNormal {
+		host.huntStage = StageNormal
 	}
 	h.mutex.Unlock()
 }
