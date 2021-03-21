@@ -49,7 +49,7 @@ type Host struct {
 }
 
 func (e *Host) String() string {
-	return fmt.Sprintf("mac=%s ip=%v online=%v stage4=%s lastSeen=%s", e.MACEntry.MAC, e.IP, e.Online, e.huntStage, time.Since(e.LastSeen))
+	return fmt.Sprintf("mac=%s ip=%v online=%v capture=%v stage4=%s lastSeen=%s", e.MACEntry.MAC, e.IP, e.Online, e.MACEntry.Captured, e.huntStage, time.Since(e.LastSeen))
 }
 
 // HuntStageNoLock retuns the internal hunt stage
