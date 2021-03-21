@@ -1,7 +1,6 @@
 package packet
 
 import (
-	"fmt"
 	"testing"
 	"time"
 )
@@ -23,7 +22,6 @@ func Test_bufferedPacketConn_ReadFrom(t *testing.T) {
 	}(t)
 	time.Sleep(time.Millisecond * 10) // time for read to start
 
-	fmt.Println("going to write")
 	a.WriteTo(sent, nil)
 	a.WriteTo(sent, nil)
 	a.WriteTo(sent, nil)
