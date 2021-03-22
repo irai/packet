@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"sync"
 	"syscall"
 	"time"
 
@@ -84,24 +83,6 @@ const (
 
 	IP6HeaderLen = 40 // IP6 header len
 )
-
-// EtherBuffer creates a lockable buffer to avoid mem allocation
-// during send packets. Benchmark shows this technique is 20x faster than allocating each time.
-type EtherBuffer struct {
-	b [EthMaxSize]byte
-	sync.Mutex
-}
-
-// Alloc locks and return the buffer
-func (e *EtherBuffer) Alloc() Ether {
-	e.Lock()
-	return Ether(e.b[0:14])
-}
-
-// Free release the lock on the buffer
-func (e *EtherBuffer) Free() {
-	e.Unlock()
-}
 
 // Sentinel errors
 var (

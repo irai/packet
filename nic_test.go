@@ -98,10 +98,6 @@ func TestSegmentLAN(t *testing.T) {
 }
 
 func dontrunTestServerIsReacheable(t *testing.T) {
-	type args struct {
-		ctx     context.Context
-		address string
-	}
 	tests := []struct {
 		name    string
 		ip      net.IP
