@@ -58,9 +58,6 @@ func (h *Handler) request(srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr ne
 	return h.requestWithDstEthernet(EthernetBroadcast, srcHwAddr, srcIP, dstHwAddr, dstIP)
 }
 
-// buffer is a lockable buffer to avoid allocation
-var buffer = packet.EtherBuffer{}
-
 func (h *Handler) requestWithDstEthernet(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
 	var b [packet.EthMaxSize]byte
 	ether := packet.Ether(b[0:])

@@ -161,19 +161,3 @@ func Benchmark_Pool(b *testing.B) {
 		}()
 	}
 }
-
-func Benchmark_EthBuffer(b *testing.B) {
-	// This seems to be the faster approach for sequential access to buffer
-	var buffer = EtherBuffer{}
-	for i := 0; i < b.N; i++ {
-		func() {
-			ether := buffer.Alloc()
-			defer buffer.Free()
-
-			ether = EtherMarshalBinary(ether, syscall.ETH_P_IPV6, hostMAC, mac2)
-			if ether.EtherType() == 0 {
-				fmt.Println("test")
-			}
-		}()
-	}
-}
