@@ -44,7 +44,7 @@ func (h *Handler) purge(now time.Time, offlineDur time.Duration, purgeDur time.D
 	purge := make([]net.IP, 0, 16)
 	offline := make([]*Host, 0, 16)
 
-	h.mutex.Lock()
+	h.mutex.RLock()
 	for _, e := range h.LANHosts.Table {
 		e.Row.RLock()
 
@@ -61,7 +61,7 @@ func (h *Handler) purge(now time.Time, offlineDur time.Duration, purgeDur time.D
 		}
 		e.Row.RUnlock()
 	}
-	h.mutex.Unlock()
+	h.mutex.RUnlock()
 
 	for _, host := range offline {
 		h.lockAndSetOffline(host) // will lock/unlock row
