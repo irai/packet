@@ -270,7 +270,7 @@ func doARP(h *handlers, tokens []string) {
 			return
 		}
 		if ip := getIP4(tokens, 2); ip != nil {
-			if err := h.arp.StartHunt(ip); err != nil {
+			if _, err := h.arp.StartHunt(packet.Addr{IP: ip}); err != nil {
 				fmt.Println("error in start hunt ", err)
 			}
 		}
@@ -280,7 +280,7 @@ func doARP(h *handlers, tokens []string) {
 			return
 		}
 		if ip := getIP4(tokens, 2); ip != nil {
-			if err := h.arp.StopHunt(ip); err != nil {
+			if _, err := h.arp.StopHunt(packet.Addr{IP: ip}); err != nil {
 				fmt.Println("error in start hunt ", err)
 			}
 		}
@@ -317,13 +317,13 @@ func doICMP6(h *handlers, tokens []string) {
 		}
 	case "hunt":
 		if ip := getIP6(tokens, 2); ip != nil {
-			if err := h.icmp6.StartHunt(ip); err != nil {
+			if _, err := h.icmp6.StartHunt(packet.Addr{IP: ip}); err != nil {
 				fmt.Println("error in start hunt ", err)
 			}
 		}
 	case "release":
 		if ip := getIP6(tokens, 2); ip != nil {
-			if err := h.icmp6.StopHunt(ip); err != nil {
+			if _, err := h.icmp6.StopHunt(packet.Addr{IP: ip}); err != nil {
 				fmt.Println("error in start hunt ", err)
 			}
 		}
