@@ -38,34 +38,32 @@ func (h *Handler) lockAndStartHunt(addr Addr) (err error) {
 		fmt.Printf("packet: lockAndStartHunt for %s\n", addr)
 	}
 
-	h.mutex.Lock()
-	host := h.findIP(addr.IP)
+	host := h.FindIP(addr.IP)
 	if host == nil {
-		h.mutex.Unlock()
 		fmt.Printf("packet: error invalid ip in lockAndStartHunt ip=%s\n", addr.IP)
 		return ErrInvalidIP
 	}
+
+	host.Row.Lock()
 	if host.huntStage == StageRedirected {
-		h.mutex.Unlock()
 		fmt.Printf("packet: host successfully redirected %s\n", host)
+		host.Row.Unlock()
 		return nil
 	}
 	if !host.Online { // host offline, nothing to do
-		h.mutex.Unlock()
+		host.Row.Unlock()
 		return nil
 	}
-
 	if host.huntStage == StageHunt {
-		h.mutex.Unlock()
+		host.Row.Unlock()
 		return nil
 	}
 
 	host.huntStage = StageHunt
-	h.mutex.Unlock()
-
 	if Debug {
 		fmt.Printf("packet: start hunt for %s\n", host)
 	}
+	host.Row.Unlock()
 
 	// IP4 handlers
 	arpStage := StageNoChange
@@ -111,11 +109,7 @@ func (h *Handler) Release(mac net.HardwareAddr) error {
 	}
 
 	list := []*Host{}
-	// Mark all known entries as StageNormal
-	for _, v := range macEntry.HostList {
-		list = append(list, v)
-	}
-
+	list = append(list, macEntry.HostList...)
 	macEntry.Captured = false
 	h.mutex.Unlock()
 
@@ -180,7 +174,7 @@ func (h *Handler) stopHunt(host *Host) (err error) {
 func (h *Handler) IsCaptured(mac net.HardwareAddr) bool {
 	h.mutex.RLock()
 	defer h.mutex.RUnlock()
-	if e := h.FindMACEntryNoLock(mac); e != nil && e.Captured {
+	if e := h.MACTable.findMAC(mac); e != nil && e.Captured {
 		return true
 	}
 	return false
@@ -191,14 +185,15 @@ func (h *Handler) routeMonitor(now time.Time) (err error) {
 	hosts := []*Host{}
 	h.mutex.RLock()
 	for _, host := range h.LANHosts.Table {
+		host.Row.RLock()
 		if host.huntStage == StageRedirected && host.IP.To4() != nil {
 			hosts = append(hosts, host)
 		}
+		host.Row.RUnlock()
 	}
 	h.mutex.RUnlock()
 
 	for _, host := range hosts {
-		// stage := h.HandlerICMP4.HuntStage(Addr{MAC: host.MACEntry.MAC, IP: host.IP})
 		h.transitionHuntStage(host, StageNoChange, StageHunt)
 	}
 	return nil

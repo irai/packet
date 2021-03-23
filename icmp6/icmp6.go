@@ -47,13 +47,10 @@ type Event struct {
 
 // PrintTable logs ICMP6 tables to standard out
 func (h *Handler) PrintTable() {
-	// Important: Lock the global table
-	h.engine.RLock()
-	defer h.engine.RUnlock()
-
-	if len(h.engine.LANHosts.Table) > 0 {
-		fmt.Printf("icmp6 hosts table len=%v\n", len(h.engine.LANHosts.Table))
-		for _, host := range h.engine.LANHosts.Table {
+	table := h.engine.GetHosts()
+	if len(table) > 0 {
+		fmt.Printf("icmp6 hosts table len=%v\n", len(table))
+		for _, host := range table {
 			host.Row.RLock()
 			if packet.IsIP6(host.IP) {
 				fmt.Printf("mac=%s ip=%v online=%v IP6router=%v\n", host.MACEntry.MAC, host.IP, host.Online, host.GetICMP6StoreNoLock())

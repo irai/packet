@@ -79,13 +79,13 @@ func (h *Handler) MinuteTicker(now time.Time) error {
 	arpAddrs := []packet.Addr{}
 	now.Add(h.engine.ProbeInterval * -1) //
 
-	h.engine.RLock()
-	for _, host := range h.engine.LANHosts.Table {
+	for _, host := range h.engine.GetHosts() {
+		host.Row.RLock()
 		if host.Online && host.LastSeen.Before(now) && host.IP.To4() != nil {
 			arpAddrs = append(arpAddrs, packet.Addr{MAC: host.MACEntry.MAC, IP: host.IP})
 		}
+		host.Row.RUnlock()
 	}
-	h.engine.RUnlock()
 
 	for _, addr := range arpAddrs {
 		h.Request(h.engine.NICInfo.HostMAC, h.engine.NICInfo.HostIP4.IP, addr.MAC, addr.IP.To4())
@@ -196,10 +196,9 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 		}
 
 		// reject any other ip
-		h.engine.RLock()
-		macEntry := h.engine.FindMACEntryNoLock(frame.SrcMAC())
+		// TODO: move lock to mac entry
+		macEntry := h.engine.FindMACEntry(frame.SrcMAC())
 		if macEntry == nil || !macEntry.IP4Offer.Equal(frame.DstIP()) {
-			h.engine.RUnlock()
 			// fmt.Printf("DEBUG arp  : probe reject for ip=%s from mac=%s\n", frame.DstIP(), frame.SrcMAC())
 
 			// If probing for lan IP, then unicast reply to srcMAC
@@ -212,7 +211,6 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 			}
 			return host, nil
 		}
-		h.engine.RUnlock()
 
 		// don't continue
 		return host, nil

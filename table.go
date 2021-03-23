@@ -255,13 +255,13 @@ func (h *Handler) FindByMAC(mac net.HardwareAddr) (list []Addr) {
 	return list
 }
 
-// GetTable returns a copy of the current table
-func (h *Handler) GetTable() (list []Host) {
+// GetTable returns a shallow copy of the current table
+func (h *Handler) GetHosts() (list []*Host) {
 	h.mutex.RLock()
 	defer h.mutex.RUnlock()
-	list = make([]Host, len(h.LANHosts.Table))
+	list = make([]*Host, 0, len(h.LANHosts.Table))
 	for _, v := range h.LANHosts.Table {
-		list = append(list, *v)
+		list = append(list, v)
 	}
 	return list
 }

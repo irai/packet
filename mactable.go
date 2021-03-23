@@ -106,7 +106,9 @@ func (s *MACTable) delete(mac net.HardwareAddr) error {
 **/
 
 // FindMACEntryNoLock returns pointer to macEntry or nil if not found
-func (h *Handler) FindMACEntryNoLock(mac net.HardwareAddr) *MACEntry {
+func (h *Handler) FindMACEntry(mac net.HardwareAddr) *MACEntry {
+	h.mutex.RLock()
+	defer h.mutex.RUnlock()
 	return h.MACTable.findMAC(mac)
 }
 
@@ -136,15 +138,4 @@ func (h *Handler) MACTableUpsertIP4Offer(addr Addr) {
 		entry := h.MACTable.findOrCreate(addr.MAC)
 		entry.IP4Offer = addr.IP
 	}
-}
-
-// MACTableGetIP4Offer returns the IP4 associated with this mac.
-// Checked by arp ACP
-func (h *Handler) MACTableGetIP4Offer(mac net.HardwareAddr) net.IP {
-	h.mutex.Lock()
-	defer h.mutex.Unlock()
-	if index := h.MACTable.index(mac); index != -1 {
-		return h.MACTable.Table[index].IP4Offer
-	}
-	return nil
 }

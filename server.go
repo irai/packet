@@ -57,14 +57,6 @@ type Handler struct {
 	nameChannel             chan Notification
 }
 
-func (h *Handler) RLock() {
-	h.mutex.RLock()
-}
-
-func (h *Handler) RUnlock() {
-	h.mutex.RUnlock()
-}
-
 func (h *Handler) GetNotificationChannel() <-chan Notification {
 	if h.nameChannel != nil {
 		return h.nameChannel
