@@ -58,7 +58,13 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 	}
 	name := string(options[OptionHostName])
 	if host != nil {
-		h.engine.SetDHCP4Fields(host, packet.StageNoChange, name)
+		host.Row.Lock() // lock for update
+		store := host.GetDHCP4StoreNoLock()
+		if store.Name != name {
+			store.Name = name
+			host.SetDHCP4StoreNoLock(h.engine, store)
+		}
+		host.Row.Unlock()
 	}
 
 	fields := log.Fields{"clientid": clientID, "ip": reqIP, "xid": p.XId(), "name": name}
@@ -255,7 +261,13 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 	h.saveConfig(h.filename)
 
 	host, _ = h.engine.FindOrCreateHost(lease.Addr.MAC, lease.Addr.IP)
-	h.engine.SetDHCP4Fields(host, lease.subnet.Stage, lease.Name)
+	host.Row.Lock()
+	store := host.GetDHCP4StoreNoLock()
+	store.HuntStage = lease.subnet.Stage
+	store.Name = lease.Name
+	host.SetDHCP4StoreNoLock(h.engine, store)
+	host.Row.Unlock()
+	// h.engine.SetDHCP4Fields(host, lease.subnet.Stage, lease.Name)
 
 	return host, ret
 }

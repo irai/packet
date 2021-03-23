@@ -15,11 +15,14 @@ func (h *Handler) startHunt(ip net.IP) error {
 	if Debug {
 		log.Printf("icmp6 force neighbor spoof mac=%s", ip)
 	}
-	host := h.engine.FindIP(ip)
-	if host == nil || host.HuntStageNoLock() != packet.StageHunt || !packet.IsIP6(host.IP) {
-		fmt.Println("icmp6: invalid call to startHuntIP", host)
+	host := h.engine.MustFindIP(ip)
+	host.Row.RLock()
+	if host.GetICMP6StoreNoLock().HuntStage != packet.StageHunt || !packet.IsIP6(host.IP) {
+		fmt.Printf("icmp6: invalid call to startHuntIP %s\n", host)
+		host.Row.RUnlock()
 		return packet.ErrInvalidIP
 	}
+	host.Row.RUnlock()
 
 	go h.spoofLoop(ip)
 	return nil
@@ -30,11 +33,12 @@ func (h *Handler) stopHunt(ip net.IP) error {
 	if Debug {
 		log.Printf("icmp6 stop neighbor spoof mac=%s", ip)
 	}
-	host := h.engine.FindIP(ip)
-	if host != nil && (host.HuntStageNoLock() == packet.StageHunt || !packet.IsIP6(host.IP)) {
+	host := h.engine.MustFindIP(ip)
+	host.Row.RLock()
+	defer host.Row.RUnlock()
+	if host.GetICMP6StoreNoLock().HuntStage == packet.StageHunt || !packet.IsIP6(host.IP) {
 		fmt.Println("invalid call to stopHuntIP", host)
 	}
-
 	return nil
 }
 
@@ -52,15 +56,14 @@ func (h *Handler) spoofLoop(ip net.IP) {
 	nTimes := 0
 	log.Printf("icmp6: na attack ip=%s time=%v", ip, startTime)
 	for {
-		h.engine.RLock()
-		host := h.engine.FindIPNoLock(ip) // will lock/unlock engine
-		if host == nil || host.HuntStageNoLock() != packet.StageHunt || h.closed {
-			h.engine.RUnlock()
+		host := h.engine.MustFindIP(ip) // will lock/unlock engine
+		host.Row.RLock()
+		if host.GetICMP6StoreNoLock().HuntStage != packet.StageHunt || h.closed {
+			host.Row.RLock()
 			log.Printf("icmp6: attack end ip=%s repeat=%v duration=%v", ip, nTimes, time.Now().Sub(startTime))
 			return
 		}
 		mac := host.MACEntry.MAC
-		h.engine.RUnlock()
 
 		// Send NA to any IPv6 IP associated with mac
 		if packet.IsIP6(ip) && ip.IsLinkLocalUnicast() {

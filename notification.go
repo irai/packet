@@ -42,26 +42,29 @@ func (h *Handler) purge(now time.Time, offlineDur time.Duration, purgeDur time.D
 	deleteCutoff := now.Add(purgeDur * -1)    // Delete entries that have not responded in last hour
 
 	purge := make([]net.IP, 0, 16)
-	offline := make([]net.IP, 0, 16)
+	offline := make([]*Host, 0, 16)
 
 	h.mutex.Lock()
 	for _, e := range h.LANHosts.Table {
+		e.Row.RLock()
 
 		// Delete from table if the device is offline and was not seen for the last hour
 		if !e.Online && e.LastSeen.Before(deleteCutoff) {
 			purge = append(purge, e.IP)
+			e.Row.RUnlock()
 			continue
 		}
 
 		// Set offline if no updates since the offline deadline
 		if e.Online && e.LastSeen.Before(offlineCutoff) {
-			offline = append(offline, e.IP)
+			offline = append(offline, e)
 		}
+		e.Row.RUnlock()
 	}
 	h.mutex.Unlock()
 
-	for _, ip := range offline {
-		h.lockAndSetOffline(ip) // will lock/unlock
+	for _, host := range offline {
+		h.lockAndSetOffline(host) // will lock/unlock row
 	}
 
 	// delete after loop because this will change the table

@@ -53,10 +53,12 @@ func (h *Handler) PrintTable() {
 
 	if len(h.engine.LANHosts.Table) > 0 {
 		fmt.Printf("icmp6 hosts table len=%v\n", len(h.engine.LANHosts.Table))
-		for _, v := range h.engine.LANHosts.Table {
-			if packet.IsIP6(v.IP) {
-				fmt.Printf("mac=%s ip=%v online=%v IP6router=%v\n", v.MACEntry.MAC, v.IP, v.Online, v.IPv6Router())
+		for _, host := range h.engine.LANHosts.Table {
+			host.Row.RLock()
+			if packet.IsIP6(host.IP) {
+				fmt.Printf("mac=%s ip=%v online=%v IP6router=%v\n", host.MACEntry.MAC, host.IP, host.Online, host.GetICMP6StoreNoLock())
 			}
+			host.Row.RUnlock()
 		}
 	}
 
@@ -142,13 +144,13 @@ func (h *Handler) MinuteTicker(now time.Time) error {
 }
 
 // StartHunt implements PacketProcessor interface
-func (h *Handler) StartHunt(ip net.IP) error {
-	return h.startHunt(ip)
+func (h *Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
+	return packet.StageHunt, h.startHunt(addr.IP)
 }
 
 // StopHunt implements PacketProcessor interface
-func (h *Handler) StopHunt(ip net.IP) error {
-	return h.stopHunt(ip)
+func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
+	return packet.StageHunt, h.stopHunt(addr.IP)
 }
 
 // HuntStage implements PacketProcessor interface
@@ -210,20 +212,6 @@ var repeat int = -1
 
 // ProcessPacket handles icmp6 packets
 func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, error) {
-
-	/**
-	// retrieve or set store
-	var store *Data
-	if host != nil {
-		h.engine.Lock()
-		store, _ = host.ICMP6.(*Data)
-		if store == nil {
-			store = &Data{}
-			host.ICMP6 = store
-		}
-		h.engine.Unlock()
-	}
-	*/
 
 	ether := packet.Ether(b)
 	ip6Frame := packet.IP6(ether.Payload())
@@ -330,7 +318,10 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 		}
 
 		// update router details in host
-		h.engine.SetIPv6Router(host, true)
+		host.Row.Lock()
+		host.SetICMP6StoreNoLock(packet.ICMP6Store{Router: true})
+		host.Row.Unlock()
+		// h.engine.SetIPv6Router(host, true)
 
 	case ipv6.ICMPTypeRouterSolicitation:
 		msg := new(RouterSolicitation)

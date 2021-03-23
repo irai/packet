@@ -226,48 +226,34 @@ func (h *Handler) printTable() {
 }
 
 // StartHunt will start the process to capture the client MAC
-func (h *Handler) StartHunt(ip net.IP) error {
-	h.engine.RLock()
-	host := h.engine.FindIPNoLock(ip)
-	if host == nil {
-		h.engine.RUnlock()
-		return packet.ErrInvalidIP
-	}
-	h.engine.RUnlock()
-
+func (h *Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
+	host := h.engine.MustFindIP(addr.IP)
 	if Debug {
-		fmt.Printf("dhcp4: start hunt ip=%s\n", ip)
+		fmt.Printf("dhcp4: start hunt %s\n", host)
 	}
 
-	h.Lock()
+	h.Lock() // local handler lock
 	defer h.Unlock()
 
-	if lease := h.findByIP(ip); lease != nil && lease.subnet.Stage != packet.StageRedirected {
+	if lease := h.findByIP(addr.IP); lease != nil && lease.subnet.Stage != packet.StageRedirected {
 		// Fake a dhcp release so router will force the client to discover when it attempts to reconnect
 		if h.mode == ModeSecondaryServer || h.mode == ModeSecondaryServerNice {
 			if Debug {
-				fmt.Printf("dhcp4: send dhcp release to server clientID=%s ip=%s\n", lease.ClientID, ip)
+				fmt.Printf("dhcp4: send dhcp release to server clientID=%s %s\n", lease.ClientID, host)
 			}
 			h.forceRelease(lease.ClientID, h.net1.DefaultGW, lease.Addr.MAC, lease.Addr.IP, nil)
 		}
 		// h.engine.SetIP4Offer(host, net.IPv4zero)
 	}
-	return nil
+	return packet.StageHunt, nil
 }
 
 // StopHunt will end the capture process
-func (h *Handler) StopHunt(ip net.IP) error {
-	// func (h *HandlerNew) Release(mac net.HardwareAddr) error {
+func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
 	if Debug {
-		fmt.Printf("dhcp4: stop hunt ip%s\n", ip)
+		fmt.Printf("dhcp4: stop hunt %s\n", addr)
 	}
-
-	// h.mutex.Lock()
-	// defer h.mutex.Unlock()
-	// if e := h.net2.findMAC(mac); e != nil {
-	// freeLease(e)
-	// }
-	return nil
+	return packet.StageNormal, nil
 }
 
 // HuntStage returns StageHunt if mac and ip are valid DHCP entry in the capture state.

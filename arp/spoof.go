@@ -11,25 +11,28 @@ import (
 )
 
 // StartHunt implements PacketProcessor interface
-// Engine must set host.HuntStageIP4 to StageHunt prior to calling this
-func (h *Handler) StartHunt(ip net.IP) error {
-	host := h.engine.FindIP(ip)
-	if host == nil || host.HuntStageNoLock() != packet.StageHunt || host.IP.To4() == nil {
+func (h *Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
+	host := h.engine.FindIP(addr.IP)
+	host.Row.RLock()
+	if host == nil || host.GetARPStore().HuntStage == packet.StageHunt || host.IP.To4() == nil {
 		fmt.Println("arp: invalid call to startHuntIP", host)
-		return packet.ErrInvalidIP
+		host.Row.RUnlock()
+		return packet.StageNoChange, packet.ErrInvalidIP
 	}
-	go h.spoofLoop(ip)
-	return nil
+	host.Row.RUnlock()
+	go h.spoofLoop(addr.IP)
+	return packet.StageHunt, nil
 }
 
 // StopHunt implements PacketProcessor interface
-// Engine must set host.HuntStageIP4 != StageHunt prior to calling this
-func (h *Handler) StopHunt(ip net.IP) error {
-	host := h.engine.FindIP(ip)
-	if host != nil && host.HuntStageNoLock() == packet.StageHunt {
+func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
+	host := h.engine.FindIP(addr.IP)
+	host.Row.RLock()
+	defer host.Row.RUnlock()
+	if host != nil && host.GetARPStore().HuntStage != packet.StageHunt {
 		fmt.Println("invalid call to stopHuntIP", host)
 	}
-	return nil
+	return packet.StageNormal, nil
 }
 
 // startSpoof performs the following:
@@ -74,15 +77,15 @@ func (h *Handler) spoofLoop(ip net.IP) {
 	nTimes := 0
 	log.Printf("arp attack start ip=%s time=%v", ip, startTime)
 	for {
-		h.engine.RLock()
-		host := h.engine.FindIPNoLock(ip) // will lock/unlock engine
-		if host == nil || host.HuntStageNoLock() != packet.StageHunt || h.closed {
-			h.engine.RUnlock()
+		host := h.engine.FindIP(ip) // will lock/unlock engine
+		host.Row.RLock()
+		if host == nil || host.GetARPStore().HuntStage != packet.StageHunt || h.closed {
+			host.Row.RUnlock()
 			log.Printf("arp attack end ip=%s repeat=%v duration=%v", ip, nTimes, time.Now().Sub(startTime))
 			return
 		}
 		mac := host.MACEntry.MAC
-		h.engine.RUnlock()
+		host.Row.RUnlock()
 
 		// Re-arp target to change router to host so all traffic comes to us
 		// i.e. tell target I am 192.168.0.1

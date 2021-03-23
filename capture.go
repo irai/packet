@@ -33,13 +33,13 @@ func (h *Handler) Capture(mac net.HardwareAddr) error {
 	return nil
 }
 
-func (h *Handler) lockAndStartHunt(addr Addr) error {
+func (h *Handler) lockAndStartHunt(addr Addr) (err error) {
 	if Debug {
 		fmt.Printf("packet: lockAndStartHunt for %s\n", addr)
 	}
 
 	h.mutex.Lock()
-	host := h.FindIPNoLock(addr.IP)
+	host := h.findIP(addr.IP)
 	if host == nil {
 		h.mutex.Unlock()
 		fmt.Printf("packet: error invalid ip in lockAndStartHunt ip=%s\n", addr.IP)
@@ -68,23 +68,35 @@ func (h *Handler) lockAndStartHunt(addr Addr) error {
 	}
 
 	// IP4 handlers
+	arpStage := StageNoChange
+	icmp4Stage := StageNoChange
+	dhcp4Stage := StageNoChange
 	if addr.IP.To4() != nil {
-		if err := h.HandlerARP.StartHunt(addr.IP); err != nil {
+		if arpStage, err = h.HandlerARP.StartHunt(addr); err != nil {
 			return err
 		}
-		if err := h.HandlerICMP4.StartHunt(addr.IP); err != nil {
+		if icmp4Stage, err = h.HandlerICMP4.StartHunt(addr); err != nil {
 			return err
 		}
-		if err := h.HandlerDHCP4.StartHunt(addr.IP); err != nil {
+		if dhcp4Stage, err = h.HandlerDHCP4.StartHunt(addr); err != nil {
 			return err
 		}
+		host.Row.Lock()
+		host.arpStore.HuntStage = arpStage
+		host.icmp4Store.HuntStage = icmp4Stage
+		host.dhcp4Store.HuntStage = dhcp4Stage
+		host.Row.Unlock()
 		return nil
 	}
 
 	// IP6 handlers
-	if err := h.HandlerICMP6.StartHunt(addr.IP); err != nil {
+	icmp6Stage := StageNoChange
+	if icmp6Stage, err = h.HandlerICMP6.StartHunt(addr); err != nil {
 		return err
 	}
+	host.Row.Lock()
+	host.icmp6Store.HuntStage = icmp6Stage
+	host.Row.Unlock()
 	return nil
 }
 
@@ -98,64 +110,69 @@ func (h *Handler) Release(mac net.HardwareAddr) error {
 		return nil
 	}
 
-	list := []net.IP{}
+	list := []*Host{}
 	// Mark all known entries as StageNormal
 	for _, v := range macEntry.HostList {
-		list = append(list, v.IP)
+		list = append(list, v)
 	}
 
 	macEntry.Captured = false
 	h.mutex.Unlock()
 
-	for _, ip := range list {
-		if err := h.lockAndStopHunt(ip); err != nil {
+	for _, host := range list {
+		if err := h.stopHunt(host); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (h *Handler) lockAndStopHunt(ip net.IP) error {
-	if Debug {
-		fmt.Printf("packet: lockAndStopHunt for ip=%s\n", ip)
-	}
-	h.mutex.Lock()
-	host := h.FindIPNoLock(ip)
-	if host == nil {
-		h.mutex.Unlock()
-		fmt.Printf("packet: error invalid ip in lockAndStopHunt ip=%s\n", ip)
-		return ErrInvalidIP
-	}
+// stopHunt will stop hunting for all modules
+//
+// Host must be locked for writing
+func (h *Handler) stopHunt(host *Host) (err error) {
 	if host.huntStage != StageHunt {
-		h.mutex.Unlock()
-		fmt.Printf("packet: host not in hunt stage %s\n", host)
+		fmt.Printf("packet: stopHunt host not in hunt stage %s\n", host)
 		return ErrInvalidIP
 	}
-	host.huntStage = StageNormal
-	h.mutex.Unlock()
 
+	host.huntStage = StageNormal
 	if Debug {
 		fmt.Printf("packet: end hunt for %s\n", host)
 	}
+	addr := Addr{MAC: host.MACEntry.MAC, IP: host.IP}
 
 	// IP4 handlers
-	if ip.To4() != nil {
-		if err := h.HandlerDHCP4.StopHunt(ip); err != nil {
+	if host.IP.To4() != nil {
+		arpStage := StageNoChange
+		icmp4Stage := StageNoChange
+		dhcp4Stage := StageNoChange
+
+		if dhcp4Stage, err = h.HandlerDHCP4.StopHunt(addr); err != nil {
 			return err
 		}
-		if err := h.HandlerICMP4.StopHunt(ip); err != nil {
+		if icmp4Stage, err = h.HandlerICMP4.StopHunt(addr); err != nil {
 			return err
 		}
-		if err := h.HandlerARP.StopHunt(ip); err != nil {
+		if arpStage, err = h.HandlerARP.StopHunt(addr); err != nil {
 			return err
 		}
+		host.Row.Lock()
+		host.arpStore.HuntStage = arpStage
+		host.icmp4Store.HuntStage = icmp4Stage
+		host.dhcp4Store.HuntStage = dhcp4Stage
+		host.Row.Unlock()
 		return nil
 	}
 
 	// IP6 handlers
-	if err := h.HandlerICMP6.StopHunt(ip); err != nil {
+	icmp6Stage := StageNoChange
+	if icmp6Stage, err = h.HandlerICMP6.StopHunt(addr); err != nil {
 		return err
 	}
+	host.Row.Lock()
+	host.icmp6Store.HuntStage = icmp6Stage
+	host.Row.Unlock()
 	return nil
 }
 
@@ -171,26 +188,48 @@ func (h *Handler) IsCaptured(mac net.HardwareAddr) bool {
 
 // routeMonitor monitors the default gateway is still pointing to us
 func (h *Handler) routeMonitor(now time.Time) (err error) {
-	ip4Addrs := []Addr{}
-	h.mutex.Lock()
+	hosts := []*Host{}
+	h.mutex.RLock()
 	for _, host := range h.LANHosts.Table {
 		if host.huntStage == StageRedirected && host.IP.To4() != nil {
-			ip4Addrs = append(ip4Addrs, Addr{IP: host.IP, MAC: host.MACEntry.MAC})
+			hosts = append(hosts, host)
 		}
 	}
-	h.mutex.Unlock()
+	h.mutex.RUnlock()
 
-	for _, addr := range ip4Addrs {
-		stage := h.HandlerICMP4.HuntStage(addr)
-		switch stage {
-		case StageHunt:
-			fmt.Printf("packet: ip4 routing NOK ip=%s mac=%s\n", addr.IP, addr.MAC)
-			h.lockAndStartHunt(addr)
-		case StageRedirected:
-			if Debug {
-				fmt.Printf("packet: ip4 routing OK ip=%s mac=%s\n", addr.IP, addr.MAC)
-			}
-		}
+	for _, host := range hosts {
+		// stage := h.HandlerICMP4.HuntStage(Addr{MAC: host.MACEntry.MAC, IP: host.IP})
+		h.transitionHuntStage(host, StageNoChange, StageHunt)
 	}
 	return nil
+}
+
+func (h *Handler) transitionHuntStage(host *Host, dhcp4Stage HuntStage, icmp4Stage HuntStage) {
+	if dhcp4Stage == StageNoChange {
+		dhcp4Stage = host.dhcp4Store.HuntStage
+	}
+	if icmp4Stage == StageNoChange {
+		icmp4Stage = host.icmp4Store.HuntStage
+	}
+
+	newStage := dhcp4Stage
+	if dhcp4Stage == StageRedirected {
+		newStage = StageRedirected
+		if icmp4Stage == StageHunt { // override dhcp4
+			fmt.Printf("packet: ip4 routing NOK %s\n", host)
+			newStage = StageHunt
+		}
+	}
+
+	if host.huntStage == newStage {
+		return
+	}
+
+	host.huntStage = newStage
+	if host.huntStage == StageHunt {
+		go h.lockAndStartHunt(Addr{MAC: host.MACEntry.MAC, IP: host.IP})
+		return
+	}
+
+	h.stopHunt(host)
 }

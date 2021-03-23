@@ -2,7 +2,6 @@ package icmp4
 
 import (
 	"fmt"
-	"net"
 	"time"
 
 	"github.com/irai/packet"
@@ -50,13 +49,13 @@ func (h *Handler) MinuteTicker(now time.Time) error {
 }
 
 // StartHunt implements PacketProcessor interface
-func (h *Handler) StartHunt(ip net.IP) error {
-	return nil
+func (h *Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
+	return packet.StageHunt, nil
 }
 
 // StopHunt implements PacketProcessor interface
-func (h *Handler) StopHunt(ip net.IP) error {
-	return nil
+func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
+	return packet.StageNormal, nil
 }
 
 func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, error) {

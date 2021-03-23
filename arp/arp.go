@@ -168,16 +168,18 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 			fmt.Printf("arp  : who is %s: %s\n", frame.DstIP(), frame)
 		}
 		// if we are spoofing the IP, reply on behals of host
-		h.engine.RLock()
-		if host != nil && host.HuntStageNoLock() == packet.StageHunt && frame.DstIP().Equal(h.engine.NICInfo.RouterIP4.IP) {
-			h.engine.RUnlock()
-			if Debug {
-				log.Printf("arp: router spoofing - send reply i am ip=%s", frame.DstIP())
+		if host != nil {
+			host.Row.RLock()
+			if host.GetARPStore().HuntStage == packet.StageHunt && frame.DstIP().Equal(h.engine.NICInfo.RouterIP4.IP) {
+				host.Row.RUnlock()
+				if Debug {
+					log.Printf("arp: router spoofing - send reply i am ip=%s", frame.DstIP())
+				}
+				h.reply(frame.SrcMAC(), h.engine.NICInfo.HostMAC, frame.DstIP(), frame.SrcMAC(), frame.SrcIP())
+				return host, nil
 			}
-			h.reply(frame.SrcMAC(), h.engine.NICInfo.HostMAC, frame.DstIP(), frame.SrcMAC(), frame.SrcIP())
-			return host, nil
+			host.Row.RUnlock()
 		}
-		h.engine.RUnlock()
 
 	case probe:
 		// We are interested in probe ACD (Address Conflict Detection) packets for IPs that we have an open DHCP offer
