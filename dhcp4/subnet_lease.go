@@ -263,16 +263,16 @@ func loadConfig(fname string) (net1 *dhcpSubnet, net2 *dhcpSubnet, t leaseTable,
 			v.subnet = net1
 
 			if v.State != StateAllocated {
-				fmt.Printf("DEBUG failing allocated entry %v \n", v)
+				fmt.Printf("dhcp4: load config invalid state %v \n", v)
 				continue
 			}
 
 			if v.Addr.IP == nil || !net1.LAN.Contains(v.Addr.IP) {
-				fmt.Printf("DEBUG failing LAN entry %v \n", v)
+				fmt.Printf("dhcp4: load config invalid LAN %v \n", v)
 				continue
 			}
 			if v.ClientID == nil || len(v.ClientID) == 0 {
-				fmt.Printf("DEBUG failing clientID entry %v \n", v)
+				fmt.Printf("dhcp4: load config invalid clientID %v \n", v)
 				continue
 			}
 

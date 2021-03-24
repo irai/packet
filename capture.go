@@ -60,41 +60,37 @@ func (h *Handler) lockAndStartHunt(addr Addr) (err error) {
 	}
 
 	host.huntStage = StageHunt
+	host.arpStore.HuntStage = StageHunt
+	host.icmp4Store.HuntStage = StageHunt
+	host.dhcp4Store.HuntStage = StageHunt
+	host.icmp6Store.HuntStage = StageHunt
 	if Debug {
 		fmt.Printf("packet: start hunt for %s\n", host)
 	}
 	host.Row.Unlock()
 
 	// IP4 handlers
-	arpStage := StageNoChange
-	icmp4Stage := StageNoChange
-	dhcp4Stage := StageNoChange
 	if addr.IP.To4() != nil {
-		if arpStage, err = h.HandlerARP.StartHunt(addr); err != nil {
-			return err
-		}
-		if icmp4Stage, err = h.HandlerICMP4.StartHunt(addr); err != nil {
-			return err
-		}
-		if dhcp4Stage, err = h.HandlerDHCP4.StartHunt(addr); err != nil {
-			return err
-		}
-		host.Row.Lock()
-		host.arpStore.HuntStage = arpStage
-		host.icmp4Store.HuntStage = icmp4Stage
-		host.dhcp4Store.HuntStage = dhcp4Stage
-		host.Row.Unlock()
+		go func() {
+			if _, err = h.HandlerARP.StartHunt(addr); err != nil {
+				fmt.Printf("packet: failed to start arp hunt: %s", err.Error())
+			}
+			if _, err = h.HandlerICMP4.StartHunt(addr); err != nil {
+				fmt.Printf("packet: failed to start icmp4 hunt: %s", err.Error())
+			}
+			if _, err = h.HandlerDHCP4.StartHunt(addr); err != nil {
+				fmt.Printf("packet: failed to start dhcp4 hunt: %s", err.Error())
+			}
+		}()
 		return nil
 	}
 
 	// IP6 handlers
-	icmp6Stage := StageNoChange
-	if icmp6Stage, err = h.HandlerICMP6.StartHunt(addr); err != nil {
-		return err
-	}
-	host.Row.Lock()
-	host.icmp6Store.HuntStage = icmp6Stage
-	host.Row.Unlock()
+	go func() {
+		if _, err = h.HandlerICMP6.StartHunt(addr); err != nil {
+			fmt.Printf("packet: failed to start icmp6 hunt: %s", err.Error())
+		}
+	}()
 	return nil
 }
 
@@ -107,66 +103,61 @@ func (h *Handler) Release(mac net.HardwareAddr) error {
 		h.mutex.Unlock()
 		return nil
 	}
-
 	list := []*Host{}
 	list = append(list, macEntry.HostList...)
 	macEntry.Captured = false
+
 	h.mutex.Unlock()
 
 	for _, host := range list {
-		if err := h.stopHunt(host); err != nil {
+		if err := h.lockAndStopHunt(host); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// stopHunt will stop hunting for all modules
+// lockAndStopHunt will stop hunting for all modules
 //
-// Host must be locked for writing
-func (h *Handler) stopHunt(host *Host) (err error) {
+func (h *Handler) lockAndStopHunt(host *Host) (err error) {
+	host.Row.Lock()
 	if host.huntStage != StageHunt {
-		fmt.Printf("packet: stopHunt host not in hunt stage %s\n", host)
-		return ErrInvalidIP
+		host.Row.Unlock()
+		return nil
 	}
-
-	host.huntStage = StageNormal
 	if Debug {
 		fmt.Printf("packet: end hunt for %s\n", host)
 	}
+	host.huntStage = StageNormal
+	host.arpStore.HuntStage = StageNormal
+	host.icmp4Store.HuntStage = StageNormal
+	host.dhcp4Store.HuntStage = StageNormal
+	host.icmp6Store.HuntStage = StageNormal
 	addr := Addr{MAC: host.MACEntry.MAC, IP: host.IP}
+	host.Row.Unlock()
 
 	// IP4 handlers
-	if host.IP.To4() != nil {
-		arpStage := StageNoChange
-		icmp4Stage := StageNoChange
-		dhcp4Stage := StageNoChange
-
-		if dhcp4Stage, err = h.HandlerDHCP4.StopHunt(addr); err != nil {
-			return err
-		}
-		if icmp4Stage, err = h.HandlerICMP4.StopHunt(addr); err != nil {
-			return err
-		}
-		if arpStage, err = h.HandlerARP.StopHunt(addr); err != nil {
-			return err
-		}
-		host.Row.Lock()
-		host.arpStore.HuntStage = arpStage
-		host.icmp4Store.HuntStage = icmp4Stage
-		host.dhcp4Store.HuntStage = dhcp4Stage
-		host.Row.Unlock()
+	if addr.IP.To4() != nil {
+		go func() {
+			if _, err = h.HandlerDHCP4.StopHunt(addr); err != nil {
+				fmt.Printf("packet: failed to stop dhcp4 hunt: %s", err.Error())
+			}
+			if _, err = h.HandlerICMP4.StopHunt(addr); err != nil {
+				fmt.Printf("packet: failed to stop icmp4 hunt: %s", err.Error())
+			}
+			if _, err = h.HandlerARP.StopHunt(addr); err != nil {
+				fmt.Printf("packet: failed to stop arp hunt: %s", err.Error())
+			}
+		}()
 		return nil
 	}
 
 	// IP6 handlers
-	icmp6Stage := StageNoChange
-	if icmp6Stage, err = h.HandlerICMP6.StopHunt(addr); err != nil {
-		return err
-	}
-	host.Row.Lock()
-	host.icmp6Store.HuntStage = icmp6Stage
-	host.Row.Unlock()
+	go func() {
+		if _, err = h.HandlerICMP6.StopHunt(addr); err != nil {
+			fmt.Printf("packet: failed to stop icmp6 hunt: %s", err.Error())
+		}
+	}()
 	return nil
 }
 
@@ -226,5 +217,5 @@ func (h *Handler) transitionHuntStage(host *Host, dhcp4Stage HuntStage, icmp4Sta
 		return
 	}
 
-	h.stopHunt(host)
+	h.lockAndStopHunt(host)
 }

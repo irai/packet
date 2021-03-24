@@ -505,6 +505,26 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		if d3 > time.Microsecond*100 {
 			fmt.Printf("packet: warning > 100 microseconds: etherType=%x l4proto=%x l3=%v l4=%v total=%v\n", ether.EtherType(), l4Proto, d1, d2, d3)
 		}
+
+		/****
+		 ** Uncomment this to help identify deadlocks
+		 **
+		if Debug {
+			fmt.Println("Check engine")
+			h.mutex.Lock()
+			fmt.Println("Check lock engine pass")
+			for _, host := range h.LANHosts.Table {
+				fmt.Println("Check row ", host.IP)
+				host.Row.Lock()
+				fmt.Println("Check lock row pass ", host.IP)
+				host.Row.Unlock()
+				fmt.Println("Check unlock row pass ", host.IP)
+			}
+			fmt.Println("Check lock pass rows")
+			h.mutex.Unlock()
+			fmt.Println("Check unlock engine pass ")
+		}
+		 **/
 	}
 }
 
@@ -596,22 +616,19 @@ func (h *Handler) lockAndSetOnline(host *Host, notify bool) {
 
 func (h *Handler) lockAndSetOffline(host *Host) {
 	host.Row.Lock()
-	defer host.Row.Unlock()
-
 	if !host.Online {
 		return
 	}
-
-	host.Online = false
-	host.huntStage = StageNormal
 	if Debug {
 		fmt.Printf("packet: IP is offline %s\n", host)
 	}
+	host.Online = false
+	notification := Notification{Addr: Addr{MAC: host.MACEntry.MAC, IP: host.IP}, Online: false}
+	host.Row.Unlock()
 
-	h.stopHunt(host) // must be locked before calling
+	h.lockAndStopHunt(host)
 
 	go func() {
-		notification := Notification{Addr: Addr{MAC: host.MACEntry.MAC, IP: host.IP}, Online: false}
 		if h.nameChannel != nil {
 			h.nameChannel <- notification
 		}

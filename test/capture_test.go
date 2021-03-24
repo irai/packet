@@ -17,8 +17,8 @@ func TestHandler_capture(t *testing.T) {
 
 	log.SetLevel(log.DebugLevel)
 	dhcp4.Debug = false
-	packet.Debug = false
-	arp.Debug = false
+	packet.Debug = true
+	arp.Debug = true
 
 	tests := []TestEvent{}
 

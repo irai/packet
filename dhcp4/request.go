@@ -62,9 +62,11 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 		store := host.GetDHCP4StoreNoLock()
 		if store.Name != name {
 			store.Name = name
-			host.SetDHCP4StoreNoLock(h.engine, store)
+			host.Row.Unlock()
+			host.SetDHCP4Store(h.engine, store)
+		} else {
+			host.Row.Unlock()
 		}
-		host.Row.Unlock()
 	}
 
 	fields := log.Fields{"clientid": clientID, "ip": reqIP, "xid": p.XId(), "name": name}
@@ -121,8 +123,6 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 		return host, nil
 	}
 
-	// h.mutex.Lock()
-	// defer h.mutex.Unlock()
 	captured := h.engine.IsCaptured(p.CHAddr())
 	subnet := h.net1
 	if captured {
@@ -265,8 +265,8 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 	store := host.GetDHCP4StoreNoLock()
 	store.HuntStage = lease.subnet.Stage
 	store.Name = lease.Name
-	host.SetDHCP4StoreNoLock(h.engine, store)
 	host.Row.Unlock()
+	host.SetDHCP4Store(h.engine, store)
 	// h.engine.SetDHCP4Fields(host, lease.subnet.Stage, lease.Name)
 
 	return host, ret

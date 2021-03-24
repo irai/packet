@@ -21,7 +21,6 @@ func (h *Handler) attackDHCPServer(options Options) {
 		return
 	}
 
-	fmt.Println("DEBUG dhcp attack")
 	xID := []byte{0xff, 0xee, 0xdd, 0}
 	tmpMAC := net.HardwareAddr{0xff, 0xee, 0xdd, 0xcc, 0xbb, 0x0}
 	copy(fakeMAC[:], tmpMAC) // keep for comparison

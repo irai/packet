@@ -14,7 +14,7 @@ import (
 func (h *Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
 	host := h.engine.FindIP(addr.IP)
 	host.Row.RLock()
-	if host == nil || host.GetARPStore().HuntStage == packet.StageHunt || host.IP.To4() == nil {
+	if host == nil || host.GetARPStore().HuntStage != packet.StageHunt || host.IP.To4() == nil {
 		fmt.Println("arp: invalid call to startHuntIP", host)
 		host.Row.RUnlock()
 		return packet.StageNoChange, packet.ErrInvalidIP
@@ -77,9 +77,9 @@ func (h *Handler) spoofLoop(ip net.IP) {
 	nTimes := 0
 	log.Printf("arp attack start ip=%s time=%v", ip, startTime)
 	for {
-		host := h.engine.FindIP(ip) // will lock/unlock engine
+		host := h.engine.MustFindIP(ip) // will lock/unlock engine
 		host.Row.RLock()
-		if host == nil || host.GetARPStore().HuntStage != packet.StageHunt || h.closed {
+		if host.GetARPStore().HuntStage != packet.StageHunt || h.closed {
 			host.Row.RUnlock()
 			log.Printf("arp attack end ip=%s repeat=%v duration=%v", ip, nTimes, time.Now().Sub(startTime))
 			return

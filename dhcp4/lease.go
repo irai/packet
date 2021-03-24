@@ -85,7 +85,7 @@ func (h *Handler) findOrCreate(clientID []byte, mac net.HardwareAddr, name strin
 		if name != "" && lease.Name != name {
 			lease.Name = name
 		}
-		fmt.Printf("DEBUG : client changing subnet from=%v to=%v\n", lease, subnet)
+		// fmt.Printf("DEBUG : client changing subnet from=%v to=%v\n", lease, subnet)
 
 		if lease.subnet.LAN.IP.Mask(lease.subnet.LAN.Mask).Equal(subnet.LAN.IP.Mask(subnet.LAN.Mask)) &&
 			bytes.Equal(lease.Addr.MAC, mac) {

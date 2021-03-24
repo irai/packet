@@ -271,7 +271,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 			fmt.Println("ip6  :", ip6Frame)
 			fmt.Printf("icmp6: RA managed=%v rpreference=%v other=%v repeated=%d\n",
 				msg.ManagedConfiguration, msg.RouterSelectionPreference, msg.OtherConfiguration, repeat)
-			fmt.Printf("DEBUG RA %+v\n", msg)
+			// fmt.Printf("DEBUG RA %+v\n", msg)
 		}
 
 		// Protect agains nil host

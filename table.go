@@ -91,15 +91,19 @@ func (e *Host) String() string {
 	return fmt.Sprintf("mac=%s ip=%v online=%v capture=%v stage4=%s lastSeen=%s", e.MACEntry.MAC, e.IP, e.Online, e.MACEntry.Captured, e.huntStage, time.Since(e.LastSeen))
 }
 
-func (host *Host) SetDHCP4StoreNoLock(h *Handler, store DHCP4Store) {
+// SetDHCP4Store updates the DHCP4 store and transition hunt stage
+// The function will lock the row
+func (host *Host) SetDHCP4Store(h *Handler, store DHCP4Store) {
+	host.Row.Lock()
 	host.MACEntry.IP4Offer = store.IPOffer
 	if host.dhcp4Store.Name != store.Name {
 		host.dhcp4Store.Name = store.Name
 	}
+	host.dhcp4Store.HuntStage = store.HuntStage
+	host.Row.Unlock()
 
 	// DHCP stage overides all other stages
 	if store.HuntStage != StageNoChange {
-		host.dhcp4Store.HuntStage = store.HuntStage
 		h.transitionHuntStage(host, store.HuntStage, StageNoChange)
 	}
 }
