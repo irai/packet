@@ -65,7 +65,7 @@ type PacketProcessor interface {
 	ProcessPacket(*Host, []byte) (*Host, error)
 	StartHunt(Addr) (HuntStage, error)
 	StopHunt(Addr) (HuntStage, error)
-	// HuntStage(Addr) HuntStage
+	HuntStage(Addr) HuntStage
 	MinuteTicker(time.Time) error
 }
 

@@ -173,30 +173,35 @@ func (h *Handler) IsCaptured(mac net.HardwareAddr) bool {
 
 // routeMonitor monitors the default gateway is still pointing to us
 func (h *Handler) routeMonitor(now time.Time) (err error) {
-	hosts := []*Host{}
 	h.mutex.RLock()
 	for _, host := range h.LANHosts.Table {
 		host.Row.RLock()
 		if host.huntStage == StageRedirected && host.IP.To4() != nil {
-			hosts = append(hosts, host)
+			addr := Addr{MAC: host.MACEntry.MAC, IP: host.IP}
+			host.Row.RUnlock()
+			stage := h.HandlerICMP4.HuntStage(addr)
+			if stage == StageHunt {
+				h.lockAndTransitionHuntStage(host, StageNoChange, stage)
+			}
+			host.Row.RLock()
 		}
 		host.Row.RUnlock()
 	}
 	h.mutex.RUnlock()
 
-	for _, host := range hosts {
-		h.transitionHuntStage(host, StageNoChange, StageHunt)
-	}
 	return nil
 }
 
-func (h *Handler) transitionHuntStage(host *Host, dhcp4Stage HuntStage, icmp4Stage HuntStage) {
+func (h *Handler) lockAndTransitionHuntStage(host *Host, dhcp4Stage HuntStage, icmp4Stage HuntStage) {
+	if Debug {
+		fmt.Printf("packet: transitioning hunt state dhcp4Stage=%v icmp4Stage=%v\n", dhcp4Stage, icmp4Stage)
+	}
 	if dhcp4Stage == StageNoChange {
 		dhcp4Stage = host.dhcp4Store.HuntStage
 	}
-	if icmp4Stage == StageNoChange {
-		icmp4Stage = host.icmp4Store.HuntStage
-	}
+	// if icmp4Stage == StageNoChange {
+	// icmp4Stage = host.icmp4Store.HuntStage
+	// }
 
 	newStage := dhcp4Stage
 	if dhcp4Stage == StageRedirected {

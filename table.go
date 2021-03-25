@@ -15,6 +15,29 @@ type HostTable struct {
 	Table map[netaddr.IP]*Host
 }
 
+// Host holds a pointer to the host record. The pointer is always valid and will be garbage collected
+// when no longer in use. Host pointers are shared with all plugins.
+//
+// CAUTION:
+// Host has a RWMutex used to sync access to the record. This must be read locked to access fields or write locked for updating
+// When locking the engine, you must lock the engine first then row lock to avoid deadlocks
+type Host struct {
+	IP         net.IP       // either IP6 or ip4
+	MACEntry   *MACEntry    // pointer to mac entry
+	Online     bool         // keep host online / offline state
+	huntStage  HuntStage    // keep host overall huntStage
+	LastSeen   time.Time    // keep last packet time
+	icmp4Store ICMP4Store   // ICMP4 private store
+	arpStore   ARPStore     // ARP private store
+	icmp6Store ICMP6Store   // ICMP6 private store
+	dhcp4Store DHCP4Store   // DHCP4 private store
+	Row        sync.RWMutex // Row level mutex
+}
+
+func (e *Host) String() string {
+	return fmt.Sprintf("mac=%s ip=%v online=%v capture=%v stage4=%s lastSeen=%s", e.MACEntry.MAC, e.IP, e.Online, e.MACEntry.Captured, e.huntStage, time.Since(e.LastSeen))
+}
+
 // HuntStage holds the host hunt stage
 type HuntStage byte
 
@@ -68,29 +91,6 @@ func (e ICMP6Store) String() string {
 	return fmt.Sprintf("icmp6stage=%s router=%v", e.HuntStage, e.Router)
 }
 
-// Host holds a pointer to the host record. The pointer is always valid and will be garbage collected
-// when no longer in use. Host pointers are shared with all plugins.
-//
-// CAUTION:
-// Host has a RWMutex used to sync access to the record. This must be read locked to access fields or write locked for updating
-// When locking the engine, you must lock the engine first then row lock to avoid deadlocks
-type Host struct {
-	IP         net.IP       // either IP6 or ip4
-	MACEntry   *MACEntry    // pointer to mac entry
-	Online     bool         // keep host online / offline state
-	huntStage  HuntStage    // keep host overall huntStage
-	LastSeen   time.Time    // keep last packet time
-	icmp4Store ICMP4Store   // ICMP4 private store
-	arpStore   ARPStore     // ARP private store
-	icmp6Store ICMP6Store   // ICMP6 private store
-	dhcp4Store DHCP4Store   // DHCP4 private store
-	Row        sync.RWMutex // Row level mutex
-}
-
-func (e *Host) String() string {
-	return fmt.Sprintf("mac=%s ip=%v online=%v capture=%v stage4=%s lastSeen=%s", e.MACEntry.MAC, e.IP, e.Online, e.MACEntry.Captured, e.huntStage, time.Since(e.LastSeen))
-}
-
 // SetDHCP4Store updates the DHCP4 store and transition hunt stage
 // The function will lock the row
 func (host *Host) SetDHCP4Store(h *Handler, store DHCP4Store) {
@@ -104,7 +104,7 @@ func (host *Host) SetDHCP4Store(h *Handler, store DHCP4Store) {
 
 	// DHCP stage overides all other stages
 	if store.HuntStage != StageNoChange {
-		h.transitionHuntStage(host, store.HuntStage, StageNoChange)
+		h.lockAndTransitionHuntStage(host, store.HuntStage, StageNoChange)
 	}
 }
 

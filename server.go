@@ -96,6 +96,7 @@ func (p PacketNOOP) Stop() error                                { return nil }
 func (p PacketNOOP) ProcessPacket(*Host, []byte) (*Host, error) { return nil, nil }
 func (p PacketNOOP) StartHunt(addr Addr) (HuntStage, error)     { return StageNoChange, nil }
 func (p PacketNOOP) StopHunt(addr Addr) (HuntStage, error)      { return StageNoChange, nil }
+func (p PacketNOOP) HuntStage(addr Addr) HuntStage              { return StageNoChange }
 
 // func (p PacketNOOP) HuntStage(addr Addr) HuntStage              { return StageNormal }
 func (p PacketNOOP) MinuteTicker(now time.Time) error { return nil }
@@ -591,6 +592,7 @@ func (h *Handler) lockAndSetOnline(host *Host, notify bool) {
 
 	// if mac is captured, then start hunting process when IP is online
 	captured := host.MACEntry.Captured
+	fmt.Println("TRACE captued state ", captured, host)
 
 	host.MACEntry.Online = true
 	host.Online = true
@@ -604,6 +606,11 @@ func (h *Handler) lockAndSetOnline(host *Host, notify bool) {
 	// in goroutine - cannot access host fields
 	go func() {
 		if captured {
+			// update dhcp stage
+			if notification.Addr.IP.To4() != nil {
+				stage := h.HandlerDHCP4.HuntStage(addr)
+				h.lockAndTransitionHuntStage(host, stage, StageNoChange)
+			}
 			if err := h.lockAndStartHunt(addr); err != nil {
 				fmt.Println("packet: failed to start hunt error", err)
 			}
@@ -617,6 +624,7 @@ func (h *Handler) lockAndSetOnline(host *Host, notify bool) {
 func (h *Handler) lockAndSetOffline(host *Host) {
 	host.Row.Lock()
 	if !host.Online {
+		host.Row.Unlock()
 		return
 	}
 	if Debug {
