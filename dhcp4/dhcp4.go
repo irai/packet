@@ -253,7 +253,7 @@ func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
 	if Debug {
 		fmt.Printf("dhcp4: stop hunt %s\n", addr)
 	}
-	return packet.StageNormal, nil
+	return h.HuntStage(addr), nil
 }
 
 // HuntStage returns StageHunt if mac and ip are valid DHCP entry in the capture state.

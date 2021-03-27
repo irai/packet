@@ -592,7 +592,6 @@ func (h *Handler) lockAndSetOnline(host *Host, notify bool) {
 
 	// if mac is captured, then start hunting process when IP is online
 	captured := host.MACEntry.Captured
-	fmt.Println("TRACE captued state ", captured, host)
 
 	host.MACEntry.Online = true
 	host.Online = true
@@ -606,7 +605,7 @@ func (h *Handler) lockAndSetOnline(host *Host, notify bool) {
 	// in goroutine - cannot access host fields
 	go func() {
 		if captured {
-			// update dhcp stage
+			// update dhcp stage - dhcp dictates if host is redirected
 			if notification.Addr.IP.To4() != nil {
 				stage := h.HandlerDHCP4.HuntStage(addr)
 				h.lockAndTransitionHuntStage(host, stage, StageNoChange)

@@ -63,25 +63,27 @@ func TestHandler_Capture(t *testing.T) {
 		{name: "4-ip3-capture", operation: "capture", addr: addr3, wantErr: false,
 			wantCaptured: true, wantOnline: false, wantStage: StageNormal, wantMACOnline: true},
 		{name: "4-ip3-online", operation: "online", addr: addr3, wantErr: false,
-			wantCaptured: true, wantOnline: true, wantStage: StageRedirected, wantMACOnline: true},
+			wantCaptured: true, wantOnline: true, wantStage: StageHunt, wantMACOnline: true},
 		{name: "4-ip3-transition", operation: "transition", addr: addr3, wantErr: false, dhcp4Stage: StageRedirected, icmp4Stage: StageNoChange,
 			wantCaptured: true, wantOnline: true, wantStage: StageRedirected, wantMACOnline: true},
 		{name: "4-ip3-offline", operation: "offline", addr: addr3, wantErr: false,
 			wantCaptured: true, wantOnline: false, wantStage: StageNormal, wantMACOnline: true},
 		{name: "4-ip3-online", operation: "online", addr: addr3, wantErr: false,
-			wantCaptured: true, wantOnline: true, wantStage: StageRedirected, wantMACOnline: true},
+			wantCaptured: true, wantOnline: true, wantStage: StageHunt, wantMACOnline: true},
 		{name: "4-ip3-release", operation: "release", addr: addr3, wantErr: false,
 			wantCaptured: false, wantOnline: true, wantStage: StageNormal, wantMACOnline: true},
 	}
+
+	Debug = true
 
 	tc := setupTestHandler()
 	defer tc.Close()
 
 	// two hosts, same MAC
 	tc.engine.FindOrCreateHost(addr1.MAC, addr1.IP)
-	tc.engine.FindOrCreateHost(addr2.MAC, addr2.IP)            // same mac as addr1
-	host, _ := tc.engine.FindOrCreateHost(addr3.MAC, addr3.IP) // same mac as addr1
-	host.dhcp4Store.HuntStage = StageRedirected                // fix stage to redirected to pass test 4
+	tc.engine.FindOrCreateHost(addr2.MAC, addr2.IP) // same mac as addr1
+	tc.engine.FindOrCreateHost(addr3.MAC, addr3.IP) // same mac as addr1
+	// host.dhcp4Store.HuntStage = StageRedirected                // fix stage to redirected to pass test 4
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -123,6 +125,7 @@ func TestHandler_Capture(t *testing.T) {
 			}
 			if host.huntStage != tt.wantStage {
 				t.Errorf("Handler.Capture() invalid stage got=%v, want=%v", host.huntStage, tt.wantStage)
+				tc.engine.printHostTable()
 			}
 			if host.Online != tt.wantOnline {
 				t.Errorf("Handler.Capture() invalid online got=%v, want=%v", host.Online, tt.wantOnline)

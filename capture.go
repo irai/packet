@@ -118,21 +118,36 @@ func (h *Handler) Release(mac net.HardwareAddr) error {
 }
 
 // lockAndStopHunt will stop hunting for all modules
+// host could be in one of two states:
+//  - StageHunt       - an active hunt is in progress
+//  - StageRedirected - the host is redirected
 //
 func (h *Handler) lockAndStopHunt(host *Host) (err error) {
 	host.Row.Lock()
-	if host.huntStage != StageHunt {
+	if host.huntStage == StageNormal {
 		host.Row.Unlock()
 		return nil
 	}
 	if Debug {
 		fmt.Printf("packet: end hunt for %s\n", host)
 	}
-	host.huntStage = StageNormal
-	host.arpStore.HuntStage = StageNormal
-	host.icmp4Store.HuntStage = StageNormal
-	host.dhcp4Store.HuntStage = StageNormal
-	host.icmp6Store.HuntStage = StageNormal
+
+	// Keep host in StageRedirected is stop hunting because of redirection
+	if host.huntStage == StageHunt || !host.Online {
+		host.huntStage = StageNormal
+	}
+	if host.arpStore.HuntStage == StageHunt {
+		host.arpStore.HuntStage = StageNormal
+	}
+	if host.icmp4Store.HuntStage == StageHunt {
+		host.icmp4Store.HuntStage = StageNormal
+	}
+	if host.dhcp4Store.HuntStage == StageHunt {
+		host.dhcp4Store.HuntStage = StageNormal
+	}
+	if host.icmp6Store.HuntStage == StageHunt {
+		host.icmp6Store.HuntStage = StageNormal
+	}
 	addr := Addr{MAC: host.MACEntry.MAC, IP: host.IP}
 	host.Row.Unlock()
 
