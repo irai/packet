@@ -151,7 +151,9 @@ func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
 }
 
 // HuntStage implements PacketProcessor interface
-func (h *Handler) HuntStage(addr packet.Addr) packet.HuntStage { return packet.StageNormal }
+func (h *Handler) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
+	return packet.StageNormal, nil
+}
 
 // AddNotificationChannel set the notification channel for ICMP6 messages
 func (h *Handler) AddNotificationChannel(notification chan<- Event) {

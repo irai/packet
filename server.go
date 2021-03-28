@@ -96,7 +96,7 @@ func (p PacketNOOP) Stop() error                                        { return
 func (p PacketNOOP) ProcessPacket(*Host, []byte) (*Host, Result, error) { return nil, Result{}, nil }
 func (p PacketNOOP) StartHunt(addr Addr) (HuntStage, error)             { return StageNoChange, nil }
 func (p PacketNOOP) StopHunt(addr Addr) (HuntStage, error)              { return StageNoChange, nil }
-func (p PacketNOOP) HuntStage(addr Addr) HuntStage                      { return StageNoChange }
+func (p PacketNOOP) CheckAddr(addr Addr) (HuntStage, error)             { return StageNoChange, nil }
 
 // func (p PacketNOOP) HuntStage(addr Addr) HuntStage              { return StageNormal }
 func (p PacketNOOP) MinuteTicker(now time.Time) error { return nil }
@@ -328,8 +328,8 @@ func (h *Handler) minuteChecker(now time.Time) {
 	h.HandlerDHCP4.MinuteTicker(now)
 
 	// internal checks
-	h.purge(now, h.OfflineDeadline, h.PurgeDeadline)
-	h.routeMonitor(now)
+	h.lockAndMonitorRoute(now)
+	h.purge(now, h.ProbeInterval, h.OfflineDeadline, h.PurgeDeadline)
 
 }
 
@@ -604,8 +604,9 @@ func (h *Handler) lockAndSetOnline(host *Host, notify bool) {
 		if captured {
 			// update dhcp stage - dhcp dictates if host is redirected
 			if notification.Addr.IP.To4() != nil {
-				stage := h.HandlerDHCP4.HuntStage(addr)
-				h.lockAndTransitionHuntStage(host, stage, StageNoChange)
+				if stage, err := h.HandlerDHCP4.CheckAddr(addr); err == nil {
+					h.lockAndTransitionHuntStage(host, stage, StageNoChange)
+				}
 			}
 			if err := h.lockAndStartHunt(addr); err != nil {
 				fmt.Println("packet: failed to start hunt error", err)

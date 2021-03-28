@@ -253,22 +253,22 @@ func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
 	if Debug {
 		fmt.Printf("dhcp4: stop hunt %s\n", addr)
 	}
-	return h.HuntStage(addr), nil
+	return h.CheckAddr(addr)
 }
 
 // HuntStage returns StageHunt if mac and ip are valid DHCP entry in the capture state.
 // Otherwise returns false.
-func (h *Handler) HuntStage(addr packet.Addr) packet.HuntStage {
+func (h *Handler) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
 	h.Lock()
 	defer h.Unlock()
 
 	lease := h.findByIP(addr.IP)
-	fmt.Println("DEBUG log dhcp4 HuntStage ", lease)
+	fmt.Println("TRACE log dhcp4 HuntStage ", lease)
 
 	if lease != nil && lease.State == StateAllocated {
-		return lease.subnet.Stage
+		return lease.subnet.Stage, nil
 	}
-	return packet.StageNormal
+	return packet.StageNormal, packet.ErrNotFound
 }
 
 // ProcessPacket implements PacketProcessor interface

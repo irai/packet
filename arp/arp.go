@@ -93,8 +93,13 @@ func (h *Handler) MinuteTicker(now time.Time) error {
 	return nil
 }
 
-// HuntStage implemente PacketProcessor interface
-func (h *Handler) HuntStage(addr packet.Addr) packet.HuntStage { return packet.StageNormal }
+// CheckAddr implements the PacketProcessor interface
+//
+// The ARP handler sends a ARP Request packet
+func (h *Handler) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
+	err := h.request(h.engine.NICInfo.HostMAC, h.engine.NICInfo.HostIP4.IP, EthernetBroadcast, addr.IP)
+	return packet.StageNoChange, err
+}
 
 const (
 	request = iota

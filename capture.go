@@ -1,6 +1,7 @@
 package packet
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"time"
@@ -186,17 +187,17 @@ func (h *Handler) IsCaptured(mac net.HardwareAddr) bool {
 	return false
 }
 
-// routeMonitor monitors the default gateway is still pointing to us
-func (h *Handler) routeMonitor(now time.Time) (err error) {
-	h.mutex.RLock()
-	for _, host := range h.LANHosts.Table {
+// lockAndMonitorRoute monitors the default gateway is still pointing to us
+func (h *Handler) lockAndMonitorRoute(now time.Time) (err error) {
+	table := h.GetHosts()
+	for _, host := range table {
 		host.Row.RLock()
 		if host.huntStage == StageRedirected && host.IP.To4() != nil {
 			addr := Addr{MAC: host.MACEntry.MAC, IP: host.IP}
 			host.Row.RUnlock()
-			stage := h.HandlerICMP4.HuntStage(addr)
-			if stage == StageHunt {
-				h.lockAndTransitionHuntStage(host, StageNoChange, stage)
+			_, err := h.HandlerICMP4.CheckAddr(addr) // ping host
+			if errors.Is(err, ErrNotRedirected) {
+				h.lockAndTransitionHuntStage(host, StageNoChange, StageHunt)
 			}
 			host.Row.RLock()
 		}

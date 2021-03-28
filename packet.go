@@ -65,7 +65,7 @@ type PacketProcessor interface {
 	ProcessPacket(*Host, []byte) (*Host, Result, error)
 	StartHunt(Addr) (HuntStage, error)
 	StopHunt(Addr) (HuntStage, error)
-	HuntStage(Addr) HuntStage
+	CheckAddr(Addr) (HuntStage, error)
 	MinuteTicker(time.Time) error
 }
 
@@ -93,6 +93,7 @@ var (
 	ErrInvalidIP     = errors.New("invalid ip")
 	ErrNotFound      = errors.New("not found")
 	ErrTimeout       = errors.New("timeout")
+	ErrNotRedirected = errors.New("not redirected")
 )
 
 // CopyIP simply copies the IP to a new buffer

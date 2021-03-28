@@ -12,32 +12,10 @@ type Notification struct {
 	MDNSName string
 }
 
-/***
-// AddCallback sets theO call back function for notifications
-// the callback function is invoked immediately for each existing entry
-func (h *Handler) AddCallback(f func(Notification) error) {
-	h.mutex.Lock()
-	h.callback = append(h.callback, f)
-	list := []Notification{}
-	for _, v := range h.LANHosts.Table {
-		list = append(list, Notification{Addr: Addr{MAC: v.MACEntry.MAC, IP: v.IP}, Online: v.Online})
-	}
-	h.mutex.Unlock()
-	// notify without lock
-	go func() {
-		time.Sleep(time.Millisecond * 10)
-		for _, v := range list {
-			if err := f(v); err != nil {
-				fmt.Printf("packet: error in call back %+v error: %s", v, err)
-			}
-		}
-	}()
-}
-***/
-
 // purge is called each minute by the minute goroutine
-func (h *Handler) purge(now time.Time, offlineDur time.Duration, purgeDur time.Duration) error {
+func (h *Handler) purge(now time.Time, probeDur time.Duration, offlineDur time.Duration, purgeDur time.Duration) error {
 
+	probeCutoff := now.Add(probeDur * -1)     // Mark offline entries last updated before this time
 	offlineCutoff := now.Add(offlineDur * -1) // Mark offline entries last updated before this time
 	deleteCutoff := now.Add(purgeDur * -1)    // Delete entries that have not responded in last hour
 
@@ -53,6 +31,11 @@ func (h *Handler) purge(now time.Time, offlineDur time.Duration, purgeDur time.D
 			purge = append(purge, e.IP)
 			e.Row.RUnlock()
 			continue
+		}
+
+		// Probe if device not seen recently
+		if e.Online && e.LastSeen.Before(probeCutoff) {
+			h.HandlerARP.CheckAddr(Addr{MAC: e.MACEntry.MAC, IP: e.IP})
 		}
 
 		// Set offline if no updates since the offline deadline
@@ -76,13 +59,3 @@ func (h *Handler) purge(now time.Time, offlineDur time.Duration, purgeDur time.D
 
 	return nil
 }
-
-/***
-func (h *Handler) notifyCallback(notification Notification) {
-	for _, f := range h.callback {
-		if err := f(notification); err != nil {
-			fmt.Printf("packet: error in call back: %s", err)
-		}
-	}
-}
-***/
