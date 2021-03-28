@@ -128,6 +128,7 @@ func (config Config) Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsSe
 		DefaultGW:  engine.NICInfo.RouterIP4.IP.To4(),
 		DHCPServer: engine.NICInfo.HostIP4.IP.To4(),
 		DNSServer:  dnsServer.To4(),
+		Stage:      packet.StageNormal,
 		// FirstIP:    net.ParseIP("192.168.0.10"),
 		// LastIP:     net.ParseIP("192.168.0.127"),
 	}
@@ -136,6 +137,7 @@ func (config Config) Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsSe
 		DefaultGW:  netfilterIP.IP.To4(),
 		DHCPServer: engine.NICInfo.HostIP4.IP,
 		DNSServer:  CloudFlareFamilyDNS1,
+		Stage:      packet.StageRedirected,
 		// FirstIP:    net.ParseIP("192.168.0.10"),
 		// LastIP:     net.ParseIP("192.168.0.127"),
 	}
@@ -152,14 +154,12 @@ func (config Config) Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsSe
 		if err != nil {
 			return nil, fmt.Errorf("home config : %w", err)
 		}
-		h.net1.Stage = packet.StageNormal
 
 		// net2 is netfilter LAN
 		h.net2, err = newSubnet(netfilterSubnet)
 		if err != nil {
 			return nil, fmt.Errorf("netfilter config : %w", err)
 		}
-		h.net2.Stage = packet.StageRedirected
 	}
 
 	// Add static and classless route options

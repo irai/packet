@@ -67,7 +67,7 @@ func newSubnet(config SubnetConfig) (*dhcpSubnet, error) {
 		subnet.Duration = 4 * time.Hour
 	}
 	subnet.Stage = config.Stage
-	if subnet.Stage != packet.StageHunt && subnet.Stage != packet.StageRedirected {
+	if subnet.Stage != packet.StageNormal && subnet.Stage != packet.StageRedirected {
 		return nil, fmt.Errorf("invalid subnet stage")
 	}
 
