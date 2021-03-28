@@ -272,20 +272,20 @@ func (h *Handler) HuntStage(addr packet.Addr) packet.HuntStage {
 }
 
 // ProcessPacket implements PacketProcessor interface
-func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, error) {
+func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, packet.Result, error) {
 	ether := packet.Ether(b)
 	ip4 := packet.IP4(ether.Payload())
 	if !ip4.IsValid() {
-		return host, packet.ErrInvalidIP
+		return host, packet.Result{}, packet.ErrInvalidIP
 	}
 	udp := packet.UDP(ip4.Payload())
 	if !udp.IsValid() || len(udp.Payload()) < 240 {
-		return host, packet.ErrInvalidIP
+		return host, packet.Result{}, packet.ErrInvalidIP
 	}
 
 	dhcpFrame := DHCP4(udp.Payload())
 	if !dhcpFrame.IsValid() {
-		return host, packet.ErrParseMessage
+		return host, packet.Result{}, packet.ErrParseMessage
 	}
 	if Debug {
 		fmt.Printf("ether: %s\n", ether)
@@ -296,19 +296,19 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 
 	if udp.DstPort() == packet.DHCP4ClientPort {
 		err := h.processClientPacket(host, dhcpFrame)
-		return host, err
+		return host, packet.Result{}, err
 	}
 
 	options := dhcpFrame.ParseOptions()
 	var reqType MessageType
 	if t := options[OptionDHCPMessageType]; len(t) != 1 {
 		log.Warn("dhcp4: skiping dhcp packet with len not 1")
-		return host, packet.ErrParseMessage
+		return host, packet.Result{}, packet.ErrParseMessage
 	} else {
 		reqType = MessageType(t[0])
 		if reqType < Discover || reqType > Inform {
 			log.Warn("dhcp4: skiping dhcp packet invalid type ", reqType)
-			return host, packet.ErrParseMessage
+			return host, packet.Result{}, packet.ErrParseMessage
 		}
 	}
 
@@ -317,19 +317,16 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 
 	// if res := h.processDHCP(req, reqType, options, ip4.Src()); res != nil {
 	var response DHCP4
+	var result packet.Result
 
 	h.Lock()
 
 	switch reqType {
 	case Discover:
-		response = h.handleDiscover(dhcpFrame, options)
+		result, response = h.handleDiscover(dhcpFrame, options)
 
 	case Request:
-		// var senderIP net.IP
-		// if tmp, ok := options[OptionDefaultFingerServer]; ok {
-		// senderIP = net.IP(tmp)
-		// }
-		host, response = h.handleRequest(host, dhcpFrame, options, ip4.Src())
+		host, result, response = h.handleRequest(host, dhcpFrame, options, ip4.Src())
 
 	case Decline:
 		response = h.handleDecline(dhcpFrame, options)
@@ -363,10 +360,10 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 		srcAddr := packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostIP4.IP, Port: packet.DHCP4ServerPort}
 		if err := sendDHCP4Packet(h.engine.Conn(), srcAddr, dstAddr, response); err != nil {
 			fmt.Printf("dhcp4: failed sending packet error=%s", err)
-			return host, err
+			return host, packet.Result{}, err
 		}
 	}
-	return host, nil
+	return host, result, nil
 }
 
 func getClientID(p DHCP4, options Options) []byte {

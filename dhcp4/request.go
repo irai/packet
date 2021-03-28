@@ -45,9 +45,10 @@ import (
 //  indicating clearly that it presently owns that address. It then broadcasts the request on the local network.
 //
 
-func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, senderIP net.IP) (*packet.Host, DHCP4) {
+func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, senderIP net.IP) (*packet.Host, packet.Result, DHCP4) {
 
 	reqIP, serverIP := net.IPv4zero, net.IPv4zero
+	result := packet.Result{}
 
 	clientID := getClientID(p, options)
 	if tmp, ok := options[OptionRequestedIPAddress]; ok {
@@ -58,14 +59,9 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 	}
 	name := string(options[OptionHostName])
 	if host != nil {
-		host.Row.Lock() // lock for update
-		store := host.GetDHCP4StoreNoLock()
-		if store.Name != name {
-			store.Name = name
-			host.Row.Unlock()
-			host.SetDHCP4Store(h.engine, store)
-		} else {
-			host.Row.Unlock()
+		if name != "" {
+			result.Update = true
+			result.Name = name
 		}
 	}
 
@@ -120,7 +116,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 		fields["optionIP"] = string(options[OptionRequestedIPAddress])
 		fields["ciaddr"] = p.CIAddr()
 		log.WithFields(fields).Error("dhcp4: request - invalid IP")
-		return host, nil
+		return host, result, nil
 	}
 
 	captured := h.engine.IsCaptured(p.CHAddr())
@@ -147,11 +143,11 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 				// Send a nack to client
 				fields["serverid"] = serverIP
 				log.WithFields(fields).Info("dhcp4: request NACK - select is for another server")
-				return host, ReplyPacket(p, NAK, subnet.DHCPServer, net.IPv4zero, 0, nil)
+				return host, result, ReplyPacket(p, NAK, subnet.DHCPServer, net.IPv4zero, 0, nil)
 			}
 
 			log.WithFields(fields).Info("dhcp4: ignore select for another server")
-			return host, nil // request not for us - silently discard packet
+			return host, result, nil // request not for us - silently discard packet
 		}
 
 		if !bytes.Equal(lease.Addr.MAC, p.CHAddr()) || // invalid hardware
@@ -160,7 +156,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 			fields["lxid"] = lease.XID
 			fields["lip"] = lease.Addr.IP
 			log.WithFields(fields).Info("dhcp4: request NACK - select invalid parameters")
-			return host, ReplyPacket(p, NAK, subnet.DHCPServer, net.IPv4zero, 0, nil)
+			return host, result, ReplyPacket(p, NAK, subnet.DHCPServer, net.IPv4zero, 0, nil)
 		}
 		log.WithFields(fields).Info("dhcp4: request ACK - select")
 
@@ -177,7 +173,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 			log.WithFields(fields).Info("dhcp4: request NACK - renew invalid or expired lease")
 			// freeLease(lease)
 
-			return host, ReplyPacket(p, NAK, subnet.DHCPServer, net.IPv4zero, 0, nil)
+			return host, result, ReplyPacket(p, NAK, subnet.DHCPServer, net.IPv4zero, 0, nil)
 		}
 
 		log.WithFields(fields).Info("dhcp4: request ACK - renewing")
@@ -202,7 +198,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 				// always NACK so next attempt may trigger discover
 				// also, it must return nack if moving form net2 to net1
 				// in the iPhone case, this causes the iPhone to retry discover
-				return host, ReplyPacket(p, NAK, h.net1.DefaultGW, net.IPv4zero, 0, nil)
+				return host, result, ReplyPacket(p, NAK, h.net1.DefaultGW, net.IPv4zero, 0, nil)
 
 			}
 
@@ -223,7 +219,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 
 			// We have the lease but the IP or MAC don't match
 			// Send NACK
-			return host, ReplyPacket(p, NAK, subnet.DHCPServer, net.IPv4zero, 0, nil)
+			return host, result, ReplyPacket(p, NAK, subnet.DHCPServer, net.IPv4zero, 0, nil)
 		}
 
 		if operation == rebooting {
@@ -234,7 +230,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 
 	default:
 		log.WithFields(log.Fields{"clientid": clientID, "mac": lease.Addr.MAC.String(), "ip": reqIP}).Error("dhcp4: request - ignore invalid state")
-		return host, nil
+		return host, result, nil
 	}
 
 	// successful request
@@ -261,13 +257,9 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 	h.saveConfig(h.filename)
 
 	host, _ = h.engine.FindOrCreateHost(lease.Addr.MAC, lease.Addr.IP)
-	host.Row.Lock()
-	store := host.GetDHCP4StoreNoLock()
-	store.HuntStage = lease.subnet.Stage
-	store.Name = lease.Name
-	host.Row.Unlock()
-	host.SetDHCP4Store(h.engine, store)
-	// h.engine.SetDHCP4Fields(host, lease.subnet.Stage, lease.Name)
+	result.Update = true
+	result.HuntStage = lease.subnet.Stage
+	result.Name = lease.Name
 
-	return host, ret
+	return host, result, ret
 }

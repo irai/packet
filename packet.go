@@ -62,7 +62,7 @@ func GenerateULA(mac net.HardwareAddr, subnet uint16) (*net.IPNet, error) {
 type PacketProcessor interface {
 	Start() error
 	Stop() error
-	ProcessPacket(*Host, []byte) (*Host, error)
+	ProcessPacket(*Host, []byte) (*Host, Result, error)
 	StartHunt(Addr) (HuntStage, error)
 	StopHunt(Addr) (HuntStage, error)
 	HuntStage(Addr) HuntStage

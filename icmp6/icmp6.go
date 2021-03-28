@@ -208,14 +208,14 @@ func (h *Handler) sendPacket(srcAddr packet.Addr, dstAddr packet.Addr, b []byte)
 var repeat int = -1
 
 // ProcessPacket handles icmp6 packets
-func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, error) {
+func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, packet.Result, error) {
 
 	ether := packet.Ether(b)
 	ip6Frame := packet.IP6(ether.Payload())
 	icmp6Frame := ICMP6(ip6Frame.Payload())
 
 	if !icmp6Frame.IsValid() {
-		return host, fmt.Errorf("invalid icmp msg=%v: %w", icmp6Frame, errParseMessage)
+		return host, packet.Result{}, fmt.Errorf("invalid icmp msg=%v: %w", icmp6Frame, errParseMessage)
 	}
 	if Debug && ipv6.ICMPType(icmp6Frame.Type()) != ipv6.ICMPTypeRouterAdvertisement {
 		fmt.Println("ether:", ether)
@@ -227,7 +227,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 	case ipv6.ICMPTypeNeighborAdvertisement:
 		msg := new(NeighborAdvertisement)
 		if err := msg.unmarshal(icmp6Frame[4:]); err != nil {
-			return host, fmt.Errorf("ndp: failed to unmarshal %s: %w", t, errParseMessage)
+			return host, packet.Result{}, fmt.Errorf("ndp: failed to unmarshal %s: %w", t, errParseMessage)
 		}
 		if Debug {
 			fmt.Printf("icmp6: neighbor advertisement: %+v\n", msg)
@@ -242,7 +242,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 	case ipv6.ICMPTypeNeighborSolicitation:
 		msg := new(NeighborSolicitation)
 		if err := msg.unmarshal(icmp6Frame[4:]); err != nil {
-			return host, fmt.Errorf("ndp: failed to unmarshal %s: %w", t, errParseMessage)
+			return host, packet.Result{}, fmt.Errorf("ndp: failed to unmarshal %s: %w", t, errParseMessage)
 		}
 		if Debug {
 			fmt.Printf("icmp6: na target=%s options=%+v\n", msg.TargetAddress, msg.Options)
@@ -258,7 +258,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 	case ipv6.ICMPTypeRouterAdvertisement:
 		msg := new(RouterAdvertisement)
 		if err := msg.unmarshal(icmp6Frame[4:]); err != nil {
-			return host, fmt.Errorf("ndp: failed to unmarshal %s: %w", t, errParseMessage)
+			return host, packet.Result{}, fmt.Errorf("ndp: failed to unmarshal %s: %w", t, errParseMessage)
 		}
 
 		repeat++
@@ -277,7 +277,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 		// Protect agains nil host
 		// NS source IP is sometimes ff02::1 (multicast), which means that host is not in the table (nil)
 		if host == nil {
-			return host, fmt.Errorf("ra host cannot be nil")
+			return host, packet.Result{}, fmt.Errorf("ra host cannot be nil")
 		}
 		router, _ := h.findOrCreateRouter(host.MACEntry.MAC, host.IP)
 		router.ManagedFlag = msg.ManagedConfiguration
@@ -323,7 +323,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 	case ipv6.ICMPTypeRouterSolicitation:
 		msg := new(RouterSolicitation)
 		if err := msg.unmarshal(icmp6Frame[4:]); err != nil {
-			return host, fmt.Errorf("ndp: failed to unmarshal %s: %w", t, errParseMessage)
+			return host, packet.Result{}, fmt.Errorf("ndp: failed to unmarshal %s: %w", t, errParseMessage)
 		}
 		if Debug {
 			fmt.Printf("icmp6 router solicitation: %+v\n", msg)
@@ -340,7 +340,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 	case ipv6.ICMPTypeEchoReply:
 		echo := packet.ICMPEcho(icmp6Frame)
 		if !echo.IsValid() {
-			return host, fmt.Errorf("invalid icmp echo msg len=%d", len(icmp6Frame))
+			return host, packet.Result{}, fmt.Errorf("invalid icmp echo msg len=%d", len(icmp6Frame))
 		}
 		if Debug {
 			fmt.Printf("icmp6: echo reply rcvd %s\n", echo)
@@ -355,12 +355,12 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 
 	default:
 		log.Printf("icmp6 not implemented type=%v ip6=%s\n", t, icmp6Frame)
-		return host, fmt.Errorf("unrecognized icmp6 type %d: %w", t, errParseMessage)
+		return host, packet.Result{}, fmt.Errorf("unrecognized icmp6 type %d: %w", t, errParseMessage)
 	}
 
 	if h.notification != nil {
 		go func() { h.notification <- Event{Type: t} }()
 	}
 
-	return host, nil
+	return host, packet.Result{}, nil
 }

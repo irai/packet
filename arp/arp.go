@@ -122,12 +122,12 @@ const (
 // | ACD probe  | 1 | broadcast | clientMAC | clientMAC  | 0x00       | 00:00:00:00:00:00 |  targetIP |
 // | ACD announ | 1 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  clientIP |
 // +============+===+===========+===========+============+============+===================+===========+
-func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, error) {
+func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, packet.Result, error) {
 
 	ether := packet.Ether(b)
 	frame := ARP(ether.Payload())
 	if !frame.IsValid() {
-		return host, packet.ErrParseMessage
+		return host, packet.Result{}, packet.ErrParseMessage
 	}
 
 	// skip link local packets
@@ -135,7 +135,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 		if Debug {
 			log.Printf("arp skipping link local packet smac=%v sip=%v tmac=%v tip=%v", frame.SrcMAC(), frame.SrcIP(), frame.DstMAC(), frame.DstIP())
 		}
-		return host, nil
+		return host, packet.Result{}, nil
 	}
 
 	var operation int
@@ -153,7 +153,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 		}
 	default:
 		log.Printf("arp invalid operation: %s", frame)
-		return host, nil
+		return host, packet.Result{}, nil
 	}
 
 	switch operation {
@@ -176,7 +176,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 					log.Printf("arp: router spoofing - send reply i am ip=%s", frame.DstIP())
 				}
 				h.reply(frame.SrcMAC(), h.engine.NICInfo.HostMAC, frame.DstIP(), frame.SrcMAC(), frame.SrcIP())
-				return host, nil
+				return host, packet.Result{}, nil
 			}
 			host.Row.RUnlock()
 		}
@@ -209,11 +209,11 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 				fmt.Printf("arp  : probe reject for ip=%s from mac=%s macentry=%s\n", frame.DstIP(), frame.SrcMAC(), macEntry)
 				h.reply(frame.SrcMAC(), h.engine.NICInfo.HostMAC, frame.DstIP(), frame.SrcMAC(), net.IP(EthernetBroadcast))
 			}
-			return host, nil
+			return host, packet.Result{}, nil
 		}
 
 		// don't continue
-		return host, nil
+		return host, packet.Result{}, nil
 
 	case announcement:
 		// +============+===+===========+===========+============+============+===================+===========+
@@ -243,5 +243,5 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 	if host == nil && h.engine.NICInfo.HostIP4.Contains(frame.SrcIP()) {
 		host, _ = h.engine.FindOrCreateHost(frame.SrcMAC(), frame.SrcIP())
 	}
-	return host, nil
+	return host, packet.Result{}, nil
 }

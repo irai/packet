@@ -58,7 +58,7 @@ func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
 	return packet.StageNormal, nil
 }
 
-func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, error) {
+func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, packet.Result, error) {
 
 	icmpFrame := packet.ICMP4(b)
 
@@ -69,7 +69,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 		echo := packet.ICMPEcho(icmpFrame)
 		if !echo.IsValid() {
 			fmt.Println("icmp4: invalid echo reply", icmpFrame, len(icmpFrame))
-			return host, fmt.Errorf("icmp invalid icmp4 packet")
+			return host, packet.Result{}, fmt.Errorf("icmp invalid icmp4 packet")
 		}
 		if Debug {
 			fmt.Printf("icmp4: echo reply rcvd %s\n", echo)
@@ -85,5 +85,5 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, erro
 	default:
 		fmt.Printf("icmp4 not implemented type=%d: frame:0x[% x]\n", icmpFrame.Type(), icmpFrame)
 	}
-	return host, nil
+	return host, packet.Result{}, nil
 }

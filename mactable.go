@@ -130,10 +130,8 @@ func (s *MACTable) index(mac net.HardwareAddr) int {
 	return -1
 }
 
-// MACTableUpsertIP4Offer insert of update mac IP4. Set by dhcp discovery.
-func (h *Handler) MACTableUpsertIP4Offer(addr Addr) {
-	h.mutex.Lock()
-	defer h.mutex.Unlock()
+// macTableUpsertIPOffer insert of update mac IP4. Set by dhcp discovery.
+func (h *Handler) macTableUpsertIPOffer(addr Addr) {
 	if h.NICInfo.HostIP4.Contains(addr.IP) {
 		entry := h.MACTable.findOrCreate(addr.MAC)
 		entry.IP4Offer = addr.IP

@@ -31,7 +31,7 @@ import (
 //    addresses; the address is selected based on the subnet from which
 //    the message was received (if 'giaddr' is 0) or on the address of
 //    the relay agent that forwarded the message ('giaddr' when not 0).
-func (h *Handler) handleDiscover(p DHCP4, options Options) (d DHCP4) {
+func (h *Handler) handleDiscover(p DHCP4, options Options) (result packet.Result, d DHCP4) {
 
 	clientID := getClientID(p, options)
 	reqIP := net.IP(options[OptionRequestedIPAddress]).To4()
@@ -80,7 +80,7 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (d DHCP4) {
 	if lease.IPOffer == nil {
 		if err := h.allocIPOffer(lease, reqIP); err != nil {
 			fmt.Printf("dhcp4 : error all ips allocated, failing silently")
-			return nil
+			return result, nil
 		}
 	}
 
@@ -112,8 +112,11 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (d DHCP4) {
 	fields["ip"] = lease.IPOffer
 
 	// set the IP4 to be later checked in ARP ACD
-	h.engine.MACTableUpsertIP4Offer(packet.Addr{MAC: lease.Addr.MAC, IP: lease.IPOffer})
+	result.Update = true
+	result.Addr = packet.Addr{MAC: lease.Addr.MAC, IP: lease.IPOffer}
+	// result.IPOffer = lease.IPOffer
+	// h.engine.MACTableUpsertIP4Offer(packet.Addr{MAC: lease.Addr.MAC, IP: lease.IPOffer})
 
 	log.WithFields(fields).Info("dhcp4: offer OK")
-	return ret
+	return result, ret
 }

@@ -30,7 +30,7 @@ type Host struct {
 	icmp4Store ICMP4Store   // ICMP4 private store
 	arpStore   ARPStore     // ARP private store
 	icmp6Store ICMP6Store   // ICMP6 private store
-	dhcp4Store DHCP4Store   // DHCP4 private store
+	dhcp4Store Result       // DHCP4 private store
 	Row        sync.RWMutex // Row level mutex
 }
 
@@ -62,15 +62,17 @@ func (s HuntStage) String() string {
 	return "noop"
 }
 
-// DHCP4Store keeps dhcp4 specific settings
-type DHCP4Store struct {
+// Result keeps dhcp4 specific settings
+type Result struct {
+	Update    bool      // Set to true if update is required
 	HuntStage HuntStage // DHCP4 hunt stage
 	Name      string    // DHCP4 host name
-	IPOffer   net.IP    // DCHCP discover offer
+	Addr      Addr      // IP and MAC
+	// IPOffer   net.IP    // DCHCP discover offer
 }
 
-func (e DHCP4Store) String() string {
-	return fmt.Sprintf("dhcp4stage=%s name=%v ipoffer=%v", e.HuntStage, e.Name, e.IPOffer)
+func (e Result) String() string {
+	return fmt.Sprintf("dhcp4stage=%s name=%v ipoffer=%v", e.HuntStage, e.Name, e.Addr)
 }
 
 // ARPStore keeps arp specific settings
@@ -91,29 +93,44 @@ func (e ICMP6Store) String() string {
 	return fmt.Sprintf("icmp6stage=%s router=%v", e.HuntStage, e.Router)
 }
 
-// SetDHCP4Store updates the DHCP4 store and transition hunt stage
+// lockAndProcessDHCP4Update updates the DHCP4 store and transition hunt stage
 // The function will lock the row
-func (host *Host) SetDHCP4Store(h *Handler, store DHCP4Store) {
-	host.Row.Lock()
-	host.MACEntry.IP4Offer = store.IPOffer
-	if host.dhcp4Store.Name != store.Name {
-		host.dhcp4Store.Name = store.Name
-	}
-	host.dhcp4Store.HuntStage = store.HuntStage
-	host.Row.Unlock()
+func (h *Handler) lockAndProcessDHCP4Update(host *Host, result Result) (notify bool) {
+	if host != nil {
+		host.Row.Lock()
+		defer host.Row.Unlock()
 
-	// DHCP stage overides all other stages
-	if store.HuntStage != StageNoChange {
-		h.lockAndTransitionHuntStage(host, store.HuntStage, StageNoChange)
+		if host.dhcp4Store.Name != result.Name {
+			host.dhcp4Store.Name = result.Name
+			notify = true
+		}
+		if result.Addr.IP != nil { // Discover IPOffer?
+			host.MACEntry.IP4Offer = result.Addr.IP
+		}
+		// DHCP stage overides all other stages
+		if result.HuntStage != StageNoChange && result.HuntStage != host.dhcp4Store.HuntStage {
+			host.dhcp4Store.HuntStage = result.HuntStage
+			host.Row.Unlock()
+			h.lockAndTransitionHuntStage(host, result.HuntStage, StageNoChange)
+			host.Row.Lock()
+		}
+		return notify
 	}
+
+	// First dhcp discovery has no host entry
+	if result.Addr.IP != nil { // Discover IPOffer?
+		h.macTableUpsertIPOffer(result.Addr)
+	}
+	return false
 }
 
-func (host *Host) GetDHCP4StoreNoLock() (store DHCP4Store) {
-	store.IPOffer = host.MACEntry.IP4Offer
+/**
+func (host *Host) GetDHCP4StoreNoLock() (store Result) {
 	store.HuntStage = host.dhcp4Store.HuntStage
 	store.Name = host.dhcp4Store.Name
 	return store
 }
+***/
 
 func (host *Host) SetICMP6StoreNoLock(store ICMP6Store) {
 	host.icmp6Store.Router = store.Router
