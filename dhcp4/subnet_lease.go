@@ -18,14 +18,14 @@ import (
 // example: lan 192.168.0.0/24, gw 192.168.0.1
 //          lan 192.168.0.128/25, gw 192.168.0.129
 type SubnetConfig struct {
-	LAN        net.IPNet     // lan address & netmask
-	DefaultGW  net.IP        // Default Gateway for subnet
-	DHCPServer net.IP        // DHCP server ID
-	DNSServer  net.IP        // DNS server IP
-	FirstIP    net.IP        // First IP in range
-	LastIP     net.IP        // Last IP in range
-	Duration   time.Duration // lease duration
-	Stage      packet.HuntStage
+	LAN        net.IPNet        // lan address & netmask
+	DefaultGW  net.IP           // Default Gateway for subnet
+	DHCPServer net.IP           // DHCP server ID
+	DNSServer  net.IP           // DNS server IP
+	FirstIP    net.IP           // First IP in range
+	LastIP     net.IP           // Last IP in range
+	Duration   time.Duration    // lease duration
+	Stage      packet.HuntStage // Default stage for subnet
 }
 
 // dhcpSubnet hold the 256 lease array for subnet
@@ -231,6 +231,7 @@ func loadConfig(fname string) (net1 *dhcpSubnet, net2 *dhcpSubnet, t leaseTable,
 			DHCPServer: table.Net1.DHCPServer,
 			DNSServer:  table.Net1.DNSServer,
 			Duration:   table.Net1.Duration,
+			Stage:      table.Net1.Stage,
 			FirstIP:    table.Net1.FirstIP,
 			LastIP:     table.Net1.LastIP})
 		if err != nil {
@@ -245,6 +246,7 @@ func loadConfig(fname string) (net1 *dhcpSubnet, net2 *dhcpSubnet, t leaseTable,
 			DHCPServer: table.Net2.DHCPServer,
 			DNSServer:  table.Net2.DNSServer,
 			Duration:   table.Net2.Duration,
+			Stage:      table.Net2.Stage,
 			FirstIP:    table.Net2.FirstIP,
 			LastIP:     table.Net2.LastIP})
 		if err != nil {
