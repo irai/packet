@@ -66,6 +66,10 @@ func newSubnet(config SubnetConfig) (*dhcpSubnet, error) {
 	if subnet.Duration == 0 {
 		subnet.Duration = 4 * time.Hour
 	}
+	subnet.Stage = config.Stage
+	if subnet.Stage != packet.StageHunt && subnet.Stage != packet.StageRedirected {
+		return nil, fmt.Errorf("invalid subnet stage")
+	}
 
 	// convert all to IPv4
 	subnet.DHCPServer = config.DHCPServer.To4()
