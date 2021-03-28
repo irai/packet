@@ -35,7 +35,11 @@ func (h *Handler) purge(now time.Time, probeDur time.Duration, offlineDur time.D
 
 		// Probe if device not seen recently
 		if e.Online && e.LastSeen.Before(probeCutoff) {
-			h.HandlerARP.CheckAddr(Addr{MAC: e.MACEntry.MAC, IP: e.IP})
+			if ip := e.IP.To4(); ip != nil {
+				h.HandlerARP.CheckAddr(Addr{MAC: e.MACEntry.MAC, IP: ip})
+			} else {
+				h.HandlerICMP6.CheckAddr(Addr{MAC: e.MACEntry.MAC, IP: e.IP})
+			}
 		}
 
 		// Set offline if no updates since the offline deadline

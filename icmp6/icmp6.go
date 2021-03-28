@@ -152,6 +152,9 @@ func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
 
 // HuntStage implements PacketProcessor interface
 func (h *Handler) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
+	if err := h.Ping(packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, addr, time.Second*2); err != nil {
+		return packet.StageNoChange, packet.ErrTimeout
+	}
 	return packet.StageNormal, nil
 }
 
