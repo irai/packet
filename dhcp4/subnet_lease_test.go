@@ -215,49 +215,107 @@ func Test_Subnet_Load(t *testing.T) {
 	}
 
 }
+***/
+
 func Test_Migration(t *testing.T) {
 
 	h := Handler{}
-	h.net1, _ = newSubnet(nets[0].home)
+	var err error
 
-	err := yaml.Unmarshal(testMigrationFile, &h.net1.leases)
-	if err != nil {
-		t.Error("cannot parse byte array", err)
+	if h.net1, h.net2, h.Table, err = loadByteArray(testMigrationFile); err != nil {
+		t.Error("error in loading []byte stream ", err)
 		return
 	}
 
-	count1, _ := h.net1.countLeases()
-	if count1 != 2 {
-		h.net1.printSubnet()
-		h.net2.printSubnet()
-		t.Error("invalid count ", count1)
-		return
+	if n := len(h.Table); n != 1 {
+		t.Errorf("invalid len want=%v got=%v", 2, n)
 	}
-
 }
 
 var testMigrationFile = []byte(`
-- state: allocated
-  name: "v1.1migration 2"
-  mac:
-  - 255
-  - 255
-  - 255
-  - 255
-  - 255
-  - 2
-  ip: 192.168.0.2
-  dhcpexpiry: 2020-04-29T08:19:05.0460045+10:00
-- state: allocated
-  name: "v1.1migration 1"
-  mac:
-  - 255
-  - 255
-  - 255
-  - 255
-  - 255
+net1:
+  lan:
+    ip: 192.168.1.0
+    mask:
+    - 255
+    - 255
+    - 255
+    - 0
+  defaultgw: 192.168.1.1
+  dhcpserver: 192.168.1.129
+  dnsserver: 1.1.1.2
+  firstip: 192.168.1.1
+  lastip: 192.168.1.254
+  duration: 4h0m0s
+  stage: 1
+net2:
+  lan:
+    ip: 192.168.1.128
+    mask:
+    - 255
+    - 255
+    - 255
+    - 128
+  defaultgw: 192.168.1.129
+  dhcpserver: 192.168.1.129
+  dnsserver: 1.1.1.3
+  firstip: 192.168.1.129
+  lastip: 192.168.1.254
+  duration: 4h0m0s
+  stage: 3
+leases:
+- clientid:
   - 1
-  ip: 192.168.0.3
-  dhcpexpiry: 2020-04-29T08:19:05.0460119+10:00
-  `)
-  ***/
+  - 72
+  - 134
+  - 232
+  - 40
+  - 84
+  - 48
+  state: 2
+  addr:
+    mac:
+    - 72
+    - 134
+    - 232
+    - 40
+    - 84
+    - 48
+    ip: 192.168.1.8
+    port: 0
+  offerexpiry: 2021-03-29T02:20:12.866955344+11:00
+  xid:
+  - 177
+  - 103
+  - 18
+  - 87
+  name: Windows-Phone
+  dhcpexpiry: 2021-03-29T08:20:05.123493088+11:00
+- clientid:
+  - 1
+  - 72
+  - 134
+  - 232
+  - 40
+  - 84
+  - 48
+  state: 2
+  addr:
+    mac:
+    - 72
+    - 134
+    - 232
+    - 40
+    - 84
+    - 48
+    ip: 192.168.1.8
+    port: 0
+  offerexpiry: 2021-03-29T02:20:12.866955344+11:00
+  xid:
+  - 177
+  - 103
+  - 18
+  - 87
+  name: Windows-Phone (Duplicated)
+  dhcpexpiry: 2021-03-29T08:20:05.123493088+11:00
+`)

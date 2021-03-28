@@ -206,24 +206,23 @@ func loadConfig(fname string) (net1 *dhcpSubnet, net2 *dhcpSubnet, t leaseTable,
 	if fname == "" {
 		return
 	}
+	source, err := ioutil.ReadFile(fname)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return loadByteArray(source)
+}
 
+func loadByteArray(source []byte) (net1 *dhcpSubnet, net2 *dhcpSubnet, t leaseTable, err error) {
 	table := struct {
 		Net1   *SubnetConfig
 		Net2   *SubnetConfig
 		Leases []Lease
 	}{}
 
-	source, err := ioutil.ReadFile(fname)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	// Unmarshall will load a table with 256 leases
 	// err = yaml.UnmarshalStrict(source, &table)
 	err = yaml.Unmarshal(source, &table)
 	if err != nil {
-		log.Errorf("Cannot parse dhcp file: %s error %s", fname, err)
-		fmt.Println("error2  ", err)
 		return nil, nil, nil, err
 	}
 
