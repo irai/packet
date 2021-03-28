@@ -203,7 +203,6 @@ func (h *Handler) lockAndMonitorRoute(now time.Time) (err error) {
 		}
 		host.Row.RUnlock()
 	}
-	h.mutex.RUnlock()
 
 	return nil
 }
