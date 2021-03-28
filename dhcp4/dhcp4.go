@@ -238,9 +238,6 @@ func (h *Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
 	if lease := h.findByIP(addr.IP); lease != nil && lease.subnet.Stage != packet.StageRedirected {
 		// Fake a dhcp release so router will force the client to discover when it attempts to reconnect
 		if h.mode == ModeSecondaryServer || h.mode == ModeSecondaryServerNice {
-			if Debug {
-				fmt.Printf("dhcp4: send dhcp release to server clientID=%s %s\n", lease.ClientID, host)
-			}
 			h.forceRelease(lease.ClientID, h.net1.DefaultGW, lease.Addr.MAC, lease.Addr.IP, nil)
 		}
 		// h.engine.SetIP4Offer(host, net.IPv4zero)

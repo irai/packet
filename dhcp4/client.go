@@ -77,7 +77,7 @@ func (h *Handler) forceRelease(clientID []byte, serverIP net.IP, chAddr net.Hard
 	if debugging() {
 		fields["mac"] = chAddr
 	}
-	log.WithFields(fields).Info("dhcp4: client send release to server")
+	log.WithFields(fields).Info("dhcp4: sent force release to server")
 
 	// use a copy in the goroutine
 	clientIP = dupIP(clientIP)

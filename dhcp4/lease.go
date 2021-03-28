@@ -85,13 +85,12 @@ func (h *Handler) findOrCreate(clientID []byte, mac net.HardwareAddr, name strin
 		if name != "" && lease.Name != name {
 			lease.Name = name
 		}
-		// fmt.Printf("DEBUG : client changing subnet from=%v to=%v\n", lease, subnet)
 
 		if lease.subnet.LAN.IP.Mask(lease.subnet.LAN.Mask).Equal(subnet.LAN.IP.Mask(subnet.LAN.Mask)) &&
 			bytes.Equal(lease.Addr.MAC, mac) {
 			return lease
 		}
-		fmt.Printf("dhcp4 : client changing subnet from=%v to=%v\n", lease.subnet.LAN, subnet.LAN)
+		fmt.Printf("dhcp4 : client changed subnet from=%v to=%v\n", lease.subnet.LAN, subnet.LAN)
 	}
 
 	lease = &Lease{}
@@ -103,6 +102,9 @@ func (h *Handler) findOrCreate(clientID []byte, mac net.HardwareAddr, name strin
 	lease.subnet = subnet
 	lease.Name = name
 	h.Table[string(lease.ClientID)] = lease
+	if Debug {
+		fmt.Printf("dhcp4 : new lease allocated %s\n", lease)
+	}
 	return lease
 }
 
@@ -116,7 +118,9 @@ func (h *Handler) allocIPOffer(lease *Lease, reqIP net.IP) error {
 		if l := h.findByIP(reqIP); l == nil || l.State == StateFree || bytes.Equal(l.ClientID, lease.ClientID) {
 			if h.engine.FindIP(reqIP) == nil {
 				lease.IPOffer = packet.CopyIP(reqIP).To4()
-				// fmt.Println("DEBUG ip offer 1= ", lease.IPOffer)
+				if Debug {
+					fmt.Printf("dhcp4 : offer ip=%s\n", lease.IPOffer)
+				}
 				return nil
 			}
 		}
@@ -158,8 +162,10 @@ func (h *Handler) allocIPOffer(lease *Lease, reqIP net.IP) error {
 		return fmt.Errorf("exhausted all ips")
 	}
 
-	// fmt.Println("DEBUG ip offer ", ip)
 	lease.IPOffer = ip
+	if Debug {
+		fmt.Printf("dhcp4 : offer ip=%s\n", lease.IPOffer)
+	}
 	return nil
 }
 
