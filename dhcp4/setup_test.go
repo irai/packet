@@ -223,7 +223,7 @@ func checkLeaseTable(t *testing.T, tc *testContext, allocatedCount int, discover
 	aCount := 0
 	fCount := 0
 	dCount := 0
-	for _, lease := range tc.h.Table {
+	for _, lease := range tc.h.table {
 		if lease.State == StateAllocated {
 			aCount++
 		}

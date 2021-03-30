@@ -93,7 +93,7 @@ type Handler struct {
 	filename  string      // leases filename
 	closed    bool        // indicates that detach function was called
 	closeChan chan bool   // channel to close underlying goroutines
-	Table     leaseTable  // lease table
+	table     leaseTable  // lease table
 	net1      *dhcpSubnet // home LAN
 	net2      *dhcpSubnet // netfilter LAN
 	sync.Mutex
@@ -113,11 +113,11 @@ func (config Config) Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsSe
 		return nil, packet.ErrInvalidIP
 	}
 
-	h = &Handler{Table: map[string]*Lease{}}
+	h = &Handler{table: map[string]*Lease{}}
 	// handler.captureTable = make(map[string]bool)
 	h.filename = filename
 	h.mode = ModeSecondaryServerNice
-	h.closeChan = make(chan bool) // go routines listen on this for closure
+	h.closeChan = make(chan bool) // goroutines listen on this for closure
 
 	if dnsServer == nil {
 		dnsServer = engine.NICInfo.RouterIP4.IP
@@ -143,11 +143,11 @@ func (config Config) Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsSe
 	}
 
 	// Reset leases if error or config has changed
-	h.net1, h.net2, h.Table, err = loadConfig(h.filename)
-	if err != nil || h.net1 == nil || h.net2 == nil || h.Table == nil ||
+	h.net1, h.net2, h.table, err = loadConfig(h.filename)
+	if err != nil || h.net1 == nil || h.net2 == nil || h.table == nil ||
 		configChanged(homeSubnet, h.net1.SubnetConfig) || configChanged(netfilterSubnet, h.net2.SubnetConfig) {
 		fmt.Printf("dhcp4: invalid or missing config file=%s. resetting...\n", h.filename)
-		h.Table = make(map[string]*Lease)
+		h.table = make(map[string]*Lease)
 
 		// net1 is home LAN
 		h.net1, err = newSubnet(homeSubnet)
@@ -220,7 +220,7 @@ func (h *Handler) PrintTable() {
 }
 
 func (h *Handler) printTable() {
-	for _, v := range h.Table {
+	for _, v := range h.table {
 		fmt.Printf("dhcp4 : %v\n", v)
 	}
 }

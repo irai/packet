@@ -222,12 +222,12 @@ func Test_Migration(t *testing.T) {
 	h := Handler{}
 	var err error
 
-	if h.net1, h.net2, h.Table, err = loadByteArray(testMigrationFile); err != nil {
+	if h.net1, h.net2, h.table, err = loadByteArray(testMigrationFile); err != nil {
 		t.Error("error in loading []byte stream ", err)
 		return
 	}
 
-	if n := len(h.Table); n != 1 {
+	if n := len(h.table); n != 1 {
 		t.Errorf("invalid len want=%v got=%v", 2, n)
 	}
 }

@@ -303,7 +303,7 @@ func (h *Handler) saveConfig(fname string) (err error) {
 		Leases []Lease
 	}{Net1: &h.net1.SubnetConfig, Net2: &h.net2.SubnetConfig}
 
-	for _, v := range h.Table {
+	for _, v := range h.table {
 		if v.State == StateAllocated {
 			table.Leases = append(table.Leases, *v)
 		}

@@ -61,7 +61,7 @@ func Test_requestSimple(t *testing.T) {
 			newDHCPHost(t, tc, tt.srcAddr.MAC)
 			time.Sleep(time.Millisecond * 10)
 
-			if n := len(tc.h.Table); n != tt.tableLen {
+			if n := len(tc.h.table); n != tt.tableLen {
 				tc.h.printTable()
 				t.Errorf("DHCPHandler.handleDiscover() invalid lease table len=%d want=%d", n, tt.tableLen)
 			}

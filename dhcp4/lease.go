@@ -52,11 +52,11 @@ func (l Lease) String() string {
 }
 
 func (h *Handler) find(clientID []byte) *Lease {
-	return h.Table[string(clientID)]
+	return h.table[string(clientID)]
 }
 
 func (h *Handler) findByMAC(mac net.HardwareAddr) *Lease {
-	for _, v := range h.Table {
+	for _, v := range h.table {
 		if bytes.Equal(v.Addr.MAC, mac) {
 			return v
 		}
@@ -65,7 +65,7 @@ func (h *Handler) findByMAC(mac net.HardwareAddr) *Lease {
 }
 
 func (h *Handler) findByIP(ip net.IP) *Lease {
-	for _, v := range h.Table {
+	for _, v := range h.table {
 		if v.Addr.IP.Equal(ip) {
 			return v
 		}
@@ -80,7 +80,7 @@ func (h *Handler) findOrCreate(clientID []byte, mac net.HardwareAddr, name strin
 		subnet = h.net2
 	}
 
-	lease := h.Table[string(clientID)]
+	lease := h.table[string(clientID)]
 	if lease != nil {
 		if name != "" && lease.Name != name {
 			lease.Name = name
@@ -101,7 +101,7 @@ func (h *Handler) findOrCreate(clientID []byte, mac net.HardwareAddr, name strin
 	lease.Addr.IP = nil
 	lease.subnet = subnet
 	lease.Name = name
-	h.Table[string(lease.ClientID)] = lease
+	h.table[string(lease.ClientID)] = lease
 	if Debug {
 		fmt.Printf("dhcp4 : new lease allocated %s\n", lease)
 	}
@@ -109,7 +109,7 @@ func (h *Handler) findOrCreate(clientID []byte, mac net.HardwareAddr, name strin
 }
 
 func (h *Handler) delete(lease *Lease) {
-	delete(h.Table, string(lease.ClientID))
+	delete(h.table, string(lease.ClientID))
 }
 
 // allocIP allocates a free IP
@@ -170,7 +170,7 @@ func (h *Handler) allocIPOffer(lease *Lease, reqIP net.IP) error {
 }
 
 func (h *Handler) freeLeases(now time.Time) error {
-	for _, lease := range h.Table {
+	for _, lease := range h.table {
 		if lease.DHCPExpiry.Before(now) {
 			if Debug {
 				fmt.Printf("dhcp4 : freeing lease %v\n", lease)
