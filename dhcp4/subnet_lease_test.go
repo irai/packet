@@ -227,8 +227,19 @@ func Test_Migration(t *testing.T) {
 		return
 	}
 
-	if n := len(h.table); n != 1 {
+	if n := len(h.table); n != 2 {
 		t.Errorf("invalid len want=%v got=%v", 2, n)
+	}
+
+	count := 0
+	for _, v := range h.table {
+		if v.Addr.IP.Equal(net.IPv4(192, 168, 1, 8)) || v.Addr.IP.Equal(net.IPv4(192, 168, 1, 7)) {
+			count++
+		}
+	}
+	if count != 2 {
+		t.Errorf("missing ips ")
+		h.printTable()
 	}
 }
 
@@ -317,5 +328,32 @@ leases:
   - 18
   - 87
   name: Windows-Phone (Duplicated)
+  dhcpexpiry: 2021-03-29T08:20:05.123493088+11:00
+- clientid:
+  - 1
+  - 72
+  - 134
+  - 232
+  - 40
+  - 84
+  - 00
+  state: 2
+  addr:
+    mac:
+    - 72
+    - 134
+    - 232
+    - 40
+    - 84
+    - 00
+    ip: 192.168.1.7
+    port: 0
+  offerexpiry: 2021-03-29T02:20:12.866955344+11:00
+  xid:
+  - 177
+  - 103
+  - 18
+  - 87
+  name: Fake client
   dhcpexpiry: 2021-03-29T08:20:05.123493088+11:00
 `)

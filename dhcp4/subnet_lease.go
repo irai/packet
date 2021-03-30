@@ -284,7 +284,9 @@ func loadByteArray(source []byte) (net1 *dhcpSubnet, net2 *dhcpSubnet, t leaseTa
 			if net2.LAN.Contains(v.Addr.IP) {
 				v.subnet = net2
 			}
-			tt[string(v.ClientID)] = &v
+			l := Lease{}
+			l = v
+			tt[string(v.ClientID)] = &l
 		}
 	}
 
