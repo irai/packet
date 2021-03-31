@@ -333,6 +333,120 @@ func (h *Handler) minuteChecker(now time.Time) {
 
 }
 
+// lockAndSetOnline will ensure this host is marked as online and that an
+// event is generated if host is transitioning to online
+//
+// This funcion will also mark the previous IP4 host as offline
+//  Parameters:
+//     notify: force a notification as another parameter (likely name) has changed
+func (h *Handler) lockAndSetOnline(host *Host, notify bool) {
+	now := time.Now()
+
+	host.Row.RLock()
+
+	if host.Online && !notify { // just another IP packet - nothing to do
+		if now.Sub(host.LastSeen) < time.Second*1 { // update LastSeen every 1 seconds to minimise locking
+			host.Row.RUnlock()
+			return
+		}
+	}
+
+	// if transitioning to online, test if we need to make previous IP offline
+	var offlineIP net.IP
+	if !host.Online {
+		if host.IP.To4() != nil {
+			if !host.IP.Equal(host.MACEntry.IP4) { // changed IP4
+				fmt.Printf("packet: host changed ip4 from=%s to=%s\n", host.MACEntry.IP4, host.IP)
+				offlineIP = host.MACEntry.IP4 // last IP
+			}
+		} else {
+			if host.IP.IsGlobalUnicast() && !host.IP.Equal(host.MACEntry.IP6GUA) { // changed IP6 global unique address
+				fmt.Printf("packet: host changed ip6 from=%s to=%s\n", host.MACEntry.IP6GUA, host.IP)
+				offlineIP = host.MACEntry.IP6GUA
+			}
+			if host.IP.IsLinkLocalUnicast() && !host.IP.Equal(host.MACEntry.IP6LLA) { // changed IP6 link local address
+				fmt.Printf("packet: host changed ip6LLA from=%s to=%s\n", host.MACEntry.IP6LLA, host.IP)
+				// don't set offline IP as we don't target LLA
+			}
+		}
+	}
+	host.Row.RUnlock()
+
+	// set previous IP to offline, start hunt and notify of new IP
+	if offlineIP != nil {
+		previousHost := h.FindIP(offlineIP) // will lock the engine; we cannot have Row lock
+		if previousHost != nil {
+			h.lockAndSetOffline(previousHost)
+		}
+	}
+
+	// lock row for update
+	host.Row.Lock()
+	defer host.Row.Unlock()
+
+	// update LastSeen and current mac IP
+	host.MACEntry.LastSeen = now
+	host.LastSeen = now
+	host.MACEntry.updateIP(host.IP)
+
+	// return immediately if host already online and not notification
+	if host.Online && !notify {
+		return
+	}
+
+	// if mac is captured, then start hunting process when IP is online
+	captured := host.MACEntry.Captured
+
+	host.MACEntry.Online = true
+	host.Online = true
+	addr := Addr{IP: host.IP, MAC: host.MACEntry.MAC}
+	notification := Notification{Addr: addr, Online: true, DHCPName: host.dhcp4Store.Name}
+
+	if Debug {
+		fmt.Printf("packet: IP is online %s\n", host)
+	}
+
+	// in goroutine - cannot access host fields
+	go func() {
+		if captured {
+			// update dhcp stage - dhcp dictates if host is redirected
+			if notification.Addr.IP.To4() != nil {
+				if stage, err := h.HandlerDHCP4.CheckAddr(addr); err == nil {
+					h.lockAndTransitionHuntStage(host, stage, StageNoChange)
+				}
+			}
+			if err := h.lockAndStartHunt(addr); err != nil {
+				fmt.Println("packet: failed to start hunt error", err)
+			}
+		}
+		if h.nameChannel != nil {
+			h.nameChannel <- notification
+		}
+	}()
+}
+
+func (h *Handler) lockAndSetOffline(host *Host) {
+	host.Row.Lock()
+	if !host.Online {
+		host.Row.Unlock()
+		return
+	}
+	if Debug {
+		fmt.Printf("packet: IP is offline %s\n", host)
+	}
+	host.Online = false
+	notification := Notification{Addr: Addr{MAC: host.MACEntry.MAC, IP: host.IP}, Online: false}
+	host.Row.Unlock()
+
+	h.lockAndStopHunt(host)
+
+	go func() {
+		if h.nameChannel != nil {
+			h.nameChannel <- notification
+		}
+	}()
+}
+
 // ListenAndServe listen for raw packets and invoke hooks as required
 func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
@@ -524,118 +638,4 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		}
 		 **/
 	}
-}
-
-// lockAndSetOnline will ensure this host is marked as online and that an
-// event is generated if host is transitioning to online
-//
-// This funcion will also mark the previous IP4 host as offline
-//  Parameters:
-//     notify: force a notification as another parameter (likely name) has changed
-func (h *Handler) lockAndSetOnline(host *Host, notify bool) {
-	now := time.Now()
-
-	host.Row.RLock()
-
-	if host.Online && !notify { // just another IP packet - nothing to do
-		if now.Sub(host.LastSeen) < time.Second*1 { // update LastSeen every 1 seconds to minimise locking
-			host.Row.RUnlock()
-			return
-		}
-	}
-
-	// if transitioning to online, test if we need to make previous IP offline
-	var offlineIP net.IP
-	if !host.Online {
-		if host.IP.To4() != nil {
-			if !host.IP.Equal(host.MACEntry.IP4) { // changed IP4
-				fmt.Printf("packet: host changed ip4 from=%s to=%s\n", host.MACEntry.IP4, host.IP)
-				offlineIP = host.MACEntry.IP4 // last IP
-			}
-		} else {
-			if host.IP.IsGlobalUnicast() && !host.IP.Equal(host.MACEntry.IP6GUA) { // changed IP6 global unique address
-				fmt.Printf("packet: host changed ip6 from=%s to=%s\n", host.MACEntry.IP6GUA, host.IP)
-				offlineIP = host.MACEntry.IP6GUA
-			}
-			if host.IP.IsLinkLocalUnicast() && !host.IP.Equal(host.MACEntry.IP6LLA) { // changed IP6 link local address
-				fmt.Printf("packet: host changed ip6LLA from=%s to=%s\n", host.MACEntry.IP6LLA, host.IP)
-				// don't set offline IP as we don't target LLA
-			}
-		}
-	}
-	host.Row.RUnlock()
-
-	// set previous IP to offline, start hunt and notify of new IP
-	if offlineIP != nil {
-		previousHost := h.FindIP(offlineIP) // will lock the engine; we cannot have Row lock
-		if previousHost != nil {
-			h.lockAndSetOffline(previousHost)
-		}
-	}
-
-	// lock row for update
-	host.Row.Lock()
-	defer host.Row.Unlock()
-
-	// update LastSeen and current mac IP
-	host.MACEntry.LastSeen = now
-	host.LastSeen = now
-	host.MACEntry.updateIP(host.IP)
-
-	// return immediately if host already online and not notification
-	if host.Online && !notify {
-		return
-	}
-
-	// if mac is captured, then start hunting process when IP is online
-	captured := host.MACEntry.Captured
-
-	host.MACEntry.Online = true
-	host.Online = true
-	addr := Addr{IP: host.IP, MAC: host.MACEntry.MAC}
-	notification := Notification{Addr: addr, Online: true, DHCPName: host.dhcp4Store.Name}
-
-	if Debug {
-		fmt.Printf("packet: IP is online %s\n", host)
-	}
-
-	// in goroutine - cannot access host fields
-	go func() {
-		if captured {
-			// update dhcp stage - dhcp dictates if host is redirected
-			if notification.Addr.IP.To4() != nil {
-				if stage, err := h.HandlerDHCP4.CheckAddr(addr); err == nil {
-					h.lockAndTransitionHuntStage(host, stage, StageNoChange)
-				}
-			}
-			if err := h.lockAndStartHunt(addr); err != nil {
-				fmt.Println("packet: failed to start hunt error", err)
-			}
-		}
-		if h.nameChannel != nil {
-			h.nameChannel <- notification
-		}
-	}()
-}
-
-func (h *Handler) lockAndSetOffline(host *Host) {
-	host.Row.Lock()
-	if !host.Online {
-		host.Row.Unlock()
-		return
-	}
-	if Debug {
-		fmt.Printf("packet: IP is offline %s\n", host)
-	}
-	host.Online = false
-	notification := Notification{Addr: Addr{MAC: host.MACEntry.MAC, IP: host.IP}, Online: false}
-	host.Row.Unlock()
-
-	h.lockAndStopHunt(host)
-
-	go func() {
-		if h.nameChannel != nil {
-			h.nameChannel <- notification
-		}
-	}()
 }

@@ -10,36 +10,25 @@ import (
 	"github.com/irai/packet"
 )
 
-// startHunt performs the following:
-func (h *Handler) startHunt(ip net.IP) error {
+// StartHunt implements packet processor interface
+func (h *Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
 	if Debug {
-		log.Printf("icmp6 force neighbor spoof mac=%s", ip)
+		log.Printf("icmp6 force neighbor spoof %s", addr)
 	}
-	host := h.engine.MustFindIP(ip)
-	host.Row.RLock()
-	if host.GetICMP6StoreNoLock().HuntStage != packet.StageHunt || !packet.IsIP6(host.IP) {
-		fmt.Printf("icmp6: invalid call to startHuntIP %s\n", host)
-		host.Row.RUnlock()
-		return packet.ErrInvalidIP
-	}
-	host.Row.RUnlock()
+	ip := net.ParseIP("fe80::ce32:e5ff:fe0e:67f4") // my home router
+	fmt.Println("icmp6 : FIXME ROUTER IP LLA IS HARDCODED")
+	srcAddr := packet.Addr{IP: ip, MAC: h.engine.NICInfo.HostMAC}
+	go h.spoofLoop(srcAddr, addr)
 
-	go h.spoofLoop(ip)
-	return nil
+	return packet.StageHunt, nil
 }
 
-// stopHunt terminate the hunting process
-func (h *Handler) stopHunt(ip net.IP) error {
+// StopHunt implements PacketProcessor interface
+func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
 	if Debug {
-		log.Printf("icmp6 stop neighbor spoof mac=%s", ip)
+		log.Printf("icmp6 stop neighbor spoof %s", addr)
 	}
-	host := h.engine.MustFindIP(ip)
-	host.Row.RLock()
-	defer host.Row.RUnlock()
-	if host.GetICMP6StoreNoLock().HuntStage == packet.StageHunt || !packet.IsIP6(host.IP) {
-		fmt.Println("invalid call to stopHuntIP", host)
-	}
-	return nil
+	return packet.StageNormal, nil
 }
 
 // spoofLoop attacks the client with ARP attacks
@@ -48,32 +37,29 @@ func (h *Handler) stopHunt(ip net.IP) error {
 //   1. spoof the client arp table to send router packets to us
 //   2. optionally, claim the ownership of the IP to force client to change IP or go offline
 //
-func (h *Handler) spoofLoop(ip net.IP) {
+func (h *Handler) spoofLoop(srcAddr packet.Addr, dstAddr packet.Addr) {
 
 	// 4 second re-do seem to be adequate;
 	ticker := time.NewTicker(time.Second * 4).C
 	startTime := time.Now()
 	nTimes := 0
-	log.Printf("icmp6: na attack ip=%s time=%v", ip, startTime)
+	log.Printf("icmp6: na attack ip=%s time=%v", dstAddr.IP, startTime)
 	for {
-		host := h.engine.MustFindIP(ip) // will lock/unlock engine
+		host := h.engine.MustFindIP(dstAddr.IP) // will lock/unlock engine
 		host.Row.RLock()
 		if host.GetICMP6StoreNoLock().HuntStage != packet.StageHunt || h.closed {
-			host.Row.RLock()
-			log.Printf("icmp6: attack end ip=%s repeat=%v duration=%v", ip, nTimes, time.Now().Sub(startTime))
+			host.Row.RUnlock()
+			log.Printf("icmp6: attack end ip=%s repeat=%v duration=%v", dstAddr.IP, nTimes, time.Now().Sub(startTime))
 			return
 		}
-		mac := host.MACEntry.MAC
+		host.Row.RUnlock()
 
-		// Send NA to any IPv6 IP associated with mac
-		if packet.IsIP6(ip) && ip.IsLinkLocalUnicast() {
-			if err := h.SendNeighborAdvertisement(packet.IP6DefaultRouter, packet.Addr{MAC: mac, IP: ip}); err != nil {
-				fmt.Println("icmp6: error sending na ", err)
-			}
+		if err := h.SendNeighborAdvertisement(srcAddr, dstAddr); err != nil {
+			fmt.Println("icmp6: error sending na ", err)
 		}
 
 		if nTimes%16 == 0 {
-			log.Printf("icmp6 attack ip=%s mac=%s repeat=%v duration=%v", ip, mac, nTimes, time.Now().Sub(startTime))
+			log.Printf("icmp6 attack %s repeat=%v duration=%v", dstAddr, nTimes, time.Now().Sub(startTime))
 		}
 		nTimes++
 

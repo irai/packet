@@ -79,16 +79,16 @@ func (h *Handler) SendRouterSolicitation() error {
 	return h.sendPacket(packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, packet.IP6AllNodesAddr, mb)
 }
 
-func (h *Handler) SendNeighborAdvertisement(ip net.IP, dstAddr packet.Addr) error {
+func (h *Handler) SendNeighborAdvertisement(srcAddr packet.Addr, dstAddr packet.Addr) error {
 	m := &NeighborAdvertisement{
 		Router:        true,
 		Solicited:     true,
 		Override:      true,
-		TargetAddress: ip,
+		TargetAddress: srcAddr.IP,
 		Options: []Option{
 			&LinkLayerAddress{
 				Direction: Target,
-				Addr:      h.engine.NICInfo.HostMAC,
+				Addr:      srcAddr.MAC,
 			},
 		},
 	}

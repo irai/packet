@@ -140,16 +140,6 @@ func (h *Handler) MinuteTicker(now time.Time) error {
 	return nil
 }
 
-// StartHunt implements PacketProcessor interface
-func (h *Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
-	return packet.StageHunt, h.startHunt(addr.IP)
-}
-
-// StopHunt implements PacketProcessor interface
-func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
-	return packet.StageHunt, h.stopHunt(addr.IP)
-}
-
 // HuntStage implements PacketProcessor interface
 func (h *Handler) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
 	if err := h.Ping(packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, addr, time.Second*2); err != nil {
