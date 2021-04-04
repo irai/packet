@@ -52,7 +52,10 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (result packet.Result
 	// fmt.Println("DEBUG lease ", lease)
 
 	// Exhaust all IPs for a few seconds
-	if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && lease.subnet.Stage == packet.StageRedirected) {
+	if true {
+		// Always attack: new mode 4 April 21 ;
+		// To fix forever discovery loop where client always get the IP from router but is rejected by our ARP
+		// if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && lease.subnet.Stage == packet.StageRedirected) {
 		log.WithFields(fields).Info("dhcp4: discover - send 256 discover packets")
 		h.attackDHCPServer(options)
 	}
