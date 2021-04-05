@@ -451,11 +451,9 @@ func (h *Handler) lockAndSetOffline(host *Host) {
 
 	h.lockAndStopHunt(host)
 
-	go func() {
-		if h.nameChannel != nil {
-			h.nameChannel <- notification
-		}
-	}()
+	if h.nameChannel != nil {
+		h.nameChannel <- notification
+	}
 }
 
 // ListenAndServe listen for raw packets and invoke hooks as required
