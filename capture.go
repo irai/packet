@@ -205,8 +205,9 @@ func (h *Handler) lockAndMonitorRoute(now time.Time) (err error) {
 }
 
 func (h *Handler) lockAndTransitionHuntStage(host *Host, dhcp4Stage HuntStage, icmp4Stage HuntStage) {
+	host.Row.RLock()
 	if Debug {
-		fmt.Printf("packet: transitioning hunt state dhcp4Stage=%v icmp4Stage=%v\n", dhcp4Stage, icmp4Stage)
+		fmt.Printf("packet: transitioning hunt stage=%s dhcp4Stage=%v icmp4Stage=%v\n", host.huntStage, dhcp4Stage, icmp4Stage)
 	}
 	if dhcp4Stage == StageNoChange {
 		dhcp4Stage = host.dhcp4Store.HuntStage
@@ -225,14 +226,17 @@ func (h *Handler) lockAndTransitionHuntStage(host *Host, dhcp4Stage HuntStage, i
 	}
 
 	if host.huntStage == newStage {
+		host.Row.RUnlock()
 		return
 	}
 
 	host.huntStage = newStage
 	if host.huntStage == StageHunt {
+		host.Row.RUnlock()
 		go h.lockAndStartHunt(Addr{MAC: host.MACEntry.MAC, IP: host.IP})
 		return
 	}
 
+	host.Row.RUnlock()
 	h.lockAndStopHunt(host)
 }
