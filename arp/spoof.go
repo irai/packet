@@ -25,6 +25,11 @@ func (h *Handler) findHuntByIP(ip net.IP) (packet.Addr, bool) {
 }
 
 // StartHunt implements PacketProcessor interface
+//
+// ARP StartHunt performs the following:
+//  1. add addr to "hunt" list
+//  2. start spoof goroutine to which will continuously spoof the client ARP table
+//
 func (h *Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
 	if addr.MAC == nil || addr.IP.To4() == nil {
 		fmt.Println("arp: invalid call to startHuntIP", addr)
@@ -38,11 +43,12 @@ func (h *Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
 	}
 	h.huntList[string(addr.MAC)] = addr
 
-	go h.spoofLoop(addr.IP)
+	go h.spoofLoop(addr)
 	return packet.StageHunt, nil
 }
 
 // StopHunt implements PacketProcessor interface
+// ARP StopHunt will remove the addr from the hunt list which will terminate the hunting goroutine
 func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
 	h.arpMutex.Lock()
 	_, hunting := h.huntList[string(addr.MAC)]
@@ -57,54 +63,27 @@ func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
 	return packet.StageNormal, nil
 }
 
-// startSpoof performs the following:
-//  1. set client state to "hunt" which will continuously spoof the client ARP table
-//  2. start spoof goroutine to poison client arp table
-//
-// client will revert back to "normal" when a new IP is detected for the MAC
-func (h *Handler) startSpoof(mac net.HardwareAddr) error {
-	if Debug {
-		log.Printf("arp start spoof mac=%s", mac)
-	}
-
-	for _, v := range h.engine.FindByMAC(mac) {
-		if ip := v.IP.To4(); ip != nil {
-			go h.spoofLoop(v.IP)
-		}
-	}
-	return nil
-}
-
-// stopSpoof terminate the hunting process
-func (h *Handler) stopSpoof(mac net.HardwareAddr) error {
-	if Debug {
-		log.Printf("arp stop spoof mac=%s", mac)
-	}
-
-	return nil
-}
-
 // spoofLoop attacks the client with ARP attacks
 //
 // It will continuously send a number of ARP packets to client:
 //   1. spoof the client arp table to send router packets to us
 //   2. optionally, claim the ownership of the IP to force client to change IP or go offline
 //
-func (h *Handler) spoofLoop(ip net.IP) {
+func (h *Handler) spoofLoop(addr packet.Addr) {
 
 	// 4 second re-arp seem to be adequate;
 	// Experimented with 300ms but no noticeable improvement other the chatty net.
 	ticker := time.NewTicker(time.Second * 4).C
 	startTime := time.Now()
 	nTimes := 0
-	log.Printf("arp attack start ip=%s time=%v", ip, startTime)
+	log.Printf("arp attack start %s time=%v", addr, startTime)
 	for {
 		h.arpMutex.Lock()
-		addr, hunting := h.findHuntByIP(ip)
+		addr, hunting := h.findHuntByIP(addr.IP)
 		h.arpMutex.Unlock()
 
 		if !hunting || h.closed {
-			log.Printf("arp attack end ip=%s repeat=%v duration=%v", ip, nTimes, time.Now().Sub(startTime))
+			log.Printf("arp attack end %s repeat=%v duration=%v", addr, nTimes, time.Since(startTime))
 			return
 		}
 

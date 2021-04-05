@@ -35,9 +35,6 @@ func (h *Handler) Capture(mac net.HardwareAddr) error {
 }
 
 func (h *Handler) lockAndStartHunt(addr Addr) (err error) {
-	if Debug {
-		fmt.Printf("packet: lockAndStartHunt for %s\n", addr)
-	}
 
 	host := h.FindIP(addr.IP)
 	if host == nil {
@@ -207,7 +204,7 @@ func (h *Handler) lockAndMonitorRoute(now time.Time) (err error) {
 func (h *Handler) lockAndTransitionHuntStage(host *Host, dhcp4Stage HuntStage, icmp4Stage HuntStage) {
 	host.Row.RLock()
 	if Debug {
-		fmt.Printf("packet: transitioning hunt stage=%s dhcp4Stage=%v icmp4Stage=%v\n", host.huntStage, dhcp4Stage, icmp4Stage)
+		fmt.Printf("packet: transitioning hunt %s dhcp4Stage=%v icmp4Stage=%v\n", host, dhcp4Stage, icmp4Stage)
 	}
 	if dhcp4Stage == StageNoChange {
 		dhcp4Stage = host.dhcp4Store.HuntStage
@@ -231,6 +228,14 @@ func (h *Handler) lockAndTransitionHuntStage(host *Host, dhcp4Stage HuntStage, i
 	}
 
 	host.huntStage = newStage
+
+	// If this is an existing IP, the host will be online at this time
+	// If this is a new IP, the host will be offline and will set on online by the main server loop
+	if !host.Online {
+		host.Row.RUnlock()
+		return
+	}
+
 	if host.huntStage == StageHunt {
 		host.Row.RUnlock()
 		go h.lockAndStartHunt(Addr{MAC: host.MACEntry.MAC, IP: host.IP})

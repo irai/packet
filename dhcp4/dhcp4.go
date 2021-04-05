@@ -260,7 +260,6 @@ func (h *Handler) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
 	defer h.Unlock()
 
 	lease := h.findByIP(addr.IP)
-	fmt.Println("TRACE log dhcp4 HuntStage ", lease)
 
 	if lease != nil && lease.State == StateAllocated {
 		return lease.subnet.Stage, nil
