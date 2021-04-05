@@ -59,8 +59,11 @@ func (h *Handler) Stop() error {
 
 // PrintTable print the ARP table to stdout.
 func (h *Handler) PrintTable() {
-	return // nothing to do
-	// h.engine.PrintTable()
+	h.arpMutex.Lock()
+	defer h.arpMutex.Unlock()
+	for _, v := range h.huntList {
+		fmt.Printf("arp   : hunting %s", v)
+	}
 }
 
 // End will terminate the ListenAndServer goroutine as well as all other pending goroutines.

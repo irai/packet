@@ -436,6 +436,17 @@ func (h *Handler) lockAndSetOffline(host *Host) {
 	}
 	host.Online = false
 	notification := Notification{Addr: Addr{MAC: host.MACEntry.MAC, IP: host.IP}, Online: false}
+
+	// Update mac online status if all hosts are offline
+	macOnline := false
+	for _, host := range host.MACEntry.HostList {
+		if host.Online {
+			macOnline = true
+			break
+		}
+	}
+	host.MACEntry.Online = macOnline
+
 	host.Row.Unlock()
 
 	h.lockAndStopHunt(host)
