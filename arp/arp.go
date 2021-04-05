@@ -18,6 +18,7 @@ var _ packet.PacketProcessor = &Handler{}
 type Handler struct {
 	arpMutex  sync.RWMutex
 	engine    *packet.Handler
+	huntList  map[string]packet.Addr
 	closed    bool
 	closeChan chan bool
 }
@@ -29,7 +30,7 @@ var (
 
 // Attach creates the ARP handler and attach to the engine
 func Attach(engine *packet.Handler) (h *Handler, err error) {
-	h = &Handler{engine: engine, closeChan: make(chan bool)}
+	h = &Handler{engine: engine, huntList: make(map[string]packet.Addr, 6), closeChan: make(chan bool)}
 	// h.table, _ = loadARPProcTable() // load linux proc table
 	if h.engine.NICInfo.HostIP4.IP.To4() == nil {
 		return nil, packet.ErrInvalidIP
@@ -98,7 +99,12 @@ func (h *Handler) MinuteTicker(now time.Time) error {
 // The ARP handler sends a ARP Request packet
 func (h *Handler) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
 	err := h.request(h.engine.NICInfo.HostMAC, h.engine.NICInfo.HostIP4.IP, EthernetBroadcast, addr.IP)
-	return packet.StageNoChange, err
+	h.arpMutex.Lock()
+	defer h.arpMutex.Unlock()
+	if _, found := h.huntList[string(addr.MAC)]; found {
+		return packet.StageHunt, err
+	}
+	return packet.StageNormal, err
 }
 
 const (
@@ -172,18 +178,17 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, pack
 			fmt.Println("ether:", ether)
 			fmt.Printf("arp  : who is %s: %s\n", frame.DstIP(), frame)
 		}
-		// if we are spoofing the IP, reply on behals of host
-		if host != nil {
-			host.Row.RLock()
-			if host.GetARPStore().HuntStage == packet.StageHunt && frame.DstIP().Equal(h.engine.NICInfo.RouterIP4.IP) {
-				host.Row.RUnlock()
-				if Debug {
-					log.Printf("arp: router spoofing - send reply i am ip=%s", frame.DstIP())
-				}
-				h.reply(frame.SrcMAC(), h.engine.NICInfo.HostMAC, frame.DstIP(), frame.SrcMAC(), frame.SrcIP())
-				return host, packet.Result{}, nil
+		// if we are spoofing the src host and the src host is trying to discover the router IP,
+		// reply on behalf of the router
+		h.arpMutex.Lock()
+		_, hunting := h.huntList[string(frame.SrcMAC())]
+		h.arpMutex.Unlock()
+		if hunting && frame.DstIP().Equal(h.engine.NICInfo.RouterIP4.IP) {
+			if Debug {
+				log.Printf("arp: router spoofing - send reply i am ip=%s", frame.DstIP())
 			}
-			host.Row.RUnlock()
+			h.reply(frame.SrcMAC(), h.engine.NICInfo.HostMAC, frame.DstIP(), frame.SrcMAC(), frame.SrcIP())
+			return host, packet.Result{}, nil
 		}
 
 	case probe:

@@ -28,7 +28,6 @@ type Host struct {
 	huntStage  HuntStage    // keep host overall huntStage
 	LastSeen   time.Time    // keep last packet time
 	icmp4Store ICMP4Store   // ICMP4 private store
-	arpStore   ARPStore     // ARP private store
 	icmp6Store ICMP6Store   // ICMP6 private store
 	dhcp4Store Result       // DHCP4 private store
 	Row        sync.RWMutex // Row level mutex
@@ -124,14 +123,6 @@ func (h *Handler) lockAndProcessDHCP4Update(host *Host, result Result) (notify b
 	return false
 }
 
-/**
-func (host *Host) GetDHCP4StoreNoLock() (store Result) {
-	store.HuntStage = host.dhcp4Store.HuntStage
-	store.Name = host.dhcp4Store.Name
-	return store
-}
-***/
-
 func (host *Host) SetICMP6StoreNoLock(store ICMP6Store) {
 	host.icmp6Store.Router = store.Router
 	host.icmp6Store.HuntStage = store.HuntStage
@@ -139,13 +130,6 @@ func (host *Host) SetICMP6StoreNoLock(store ICMP6Store) {
 
 func (host *Host) GetICMP6StoreNoLock() (store ICMP6Store) {
 	return host.icmp6Store
-}
-
-func (host *Host) GetARPStore() (store ARPStore) {
-	return host.arpStore
-}
-func (host *Host) SetARPStore(store ARPStore) {
-	host.arpStore = store
 }
 
 // newHostTable returns a HostTable handler

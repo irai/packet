@@ -61,7 +61,6 @@ func (h *Handler) lockAndStartHunt(addr Addr) (err error) {
 	}
 
 	host.huntStage = StageHunt
-	host.arpStore.HuntStage = StageHunt
 	host.icmp4Store.HuntStage = StageHunt
 	host.dhcp4Store.HuntStage = StageHunt
 	host.icmp6Store.HuntStage = StageHunt
@@ -137,9 +136,6 @@ func (h *Handler) lockAndStopHunt(host *Host) (err error) {
 	if host.huntStage == StageHunt || !host.Online {
 		host.huntStage = StageNormal
 	}
-	if host.arpStore.HuntStage == StageHunt {
-		host.arpStore.HuntStage = StageNormal
-	}
 	if host.icmp4Store.HuntStage == StageHunt {
 		host.icmp4Store.HuntStage = StageNormal
 	}
@@ -155,7 +151,8 @@ func (h *Handler) lockAndStopHunt(host *Host) (err error) {
 	// IP4 handlers
 	if addr.IP.To4() != nil {
 		go func() {
-			if _, err = h.HandlerDHCP4.StopHunt(addr); err != nil {
+			// DHCP4 will return not found if there is no lease entry; this is okay if the host has not acquired an IP yet
+			if _, err = h.HandlerDHCP4.StopHunt(addr); err != nil && !errors.Is(err, ErrNotFound) {
 				fmt.Printf("packet: failed to stop dhcp4 hunt: %s", err.Error())
 			}
 			if _, err = h.HandlerICMP4.StopHunt(addr); err != nil {

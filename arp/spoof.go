@@ -10,28 +10,50 @@ import (
 	"github.com/irai/packet"
 )
 
+func (h *Handler) findHuntByMAC(mac net.HardwareAddr) (packet.Addr, bool) {
+	addr, hunting := h.huntList[string(mac)]
+	return addr, hunting
+}
+
+func (h *Handler) findHuntByIP(ip net.IP) (packet.Addr, bool) {
+	for _, v := range h.huntList {
+		if v.IP.Equal(ip) {
+			return v, true
+		}
+	}
+	return packet.Addr{}, false
+}
+
 // StartHunt implements PacketProcessor interface
 func (h *Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
-	host := h.engine.FindIP(addr.IP)
-	host.Row.RLock()
-	if host == nil || host.GetARPStore().HuntStage != packet.StageHunt || host.IP.To4() == nil {
-		fmt.Println("arp: invalid call to startHuntIP", host)
-		host.Row.RUnlock()
+	if addr.MAC == nil || addr.IP.To4() == nil {
+		fmt.Println("arp: invalid call to startHuntIP", addr)
 		return packet.StageNoChange, packet.ErrInvalidIP
 	}
-	host.Row.RUnlock()
+
+	h.arpMutex.Lock()
+	defer h.arpMutex.Unlock()
+	if _, found := h.huntList[string(addr.MAC)]; found {
+		return packet.StageHunt, nil
+	}
+	h.huntList[string(addr.MAC)] = addr
+
 	go h.spoofLoop(addr.IP)
 	return packet.StageHunt, nil
 }
 
 // StopHunt implements PacketProcessor interface
 func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
-	host := h.engine.FindIP(addr.IP)
-	host.Row.RLock()
-	defer host.Row.RUnlock()
-	if host != nil && host.GetARPStore().HuntStage != packet.StageHunt {
-		fmt.Println("invalid call to stopHuntIP", host)
+	h.arpMutex.Lock()
+	_, hunting := h.huntList[string(addr.MAC)]
+	if hunting {
+		delete(h.huntList, string(addr.MAC))
 	}
+	h.arpMutex.Unlock()
+	if !hunting {
+		fmt.Println("ARP StopHunt failed - not in hunt stage", addr)
+	}
+
 	return packet.StageNormal, nil
 }
 
@@ -77,24 +99,23 @@ func (h *Handler) spoofLoop(ip net.IP) {
 	nTimes := 0
 	log.Printf("arp attack start ip=%s time=%v", ip, startTime)
 	for {
-		host := h.engine.MustFindIP(ip) // will lock/unlock engine
-		host.Row.RLock()
-		if host.GetARPStore().HuntStage != packet.StageHunt || h.closed {
-			host.Row.RUnlock()
+		h.arpMutex.Lock()
+		addr, hunting := h.findHuntByIP(ip)
+		h.arpMutex.Unlock()
+
+		if !hunting || h.closed {
 			log.Printf("arp attack end ip=%s repeat=%v duration=%v", ip, nTimes, time.Now().Sub(startTime))
 			return
 		}
-		mac := host.MACEntry.MAC
-		host.Row.RUnlock()
 
 		// Re-arp target to change router to host so all traffic comes to us
 		// i.e. tell target I am 192.168.0.1
 		//
 		// Use virtual IP as it is guaranteed to not change.
-		h.forceSpoof(mac, ip)
+		h.forceSpoof(addr)
 
 		if nTimes%16 == 0 {
-			log.Printf("arp attack ip=%s mac=%s repeat=%v duration=%v", ip, mac, nTimes, time.Now().Sub(startTime))
+			log.Printf("arp attack %s repeat=%v duration=%v", addr, nTimes, time.Now().Sub(startTime))
 		}
 		nTimes++
 
@@ -113,21 +134,21 @@ func (h *Handler) spoofLoop(ip net.IP) {
 // The client ARP table is refreshed often and only last for a short while (few minutes)
 // hence the goroutine that re-arp clients
 // To make sure the cache stays poisoned, replay every 5 seconds with a loop.
-func (h *Handler) forceSpoof(mac net.HardwareAddr, ip net.IP) error {
+func (h *Handler) forceSpoof(addr packet.Addr) error {
 
 	// Announce to target that we own the router IP
 	// This will update the target arp table with our mac
-	err := h.announce(mac, h.engine.NICInfo.HostMAC, h.engine.NICInfo.RouterIP4.IP, EthernetBroadcast, 2)
+	err := h.announce(addr.MAC, h.engine.NICInfo.HostMAC, h.engine.NICInfo.RouterIP4.IP, EthernetBroadcast, 2)
 	if err != nil {
-		log.Printf("arp error send announcement packet mac=%s ip=%s: %s", mac, ip, err)
+		log.Printf("arp error send announcement packet %s: %s", addr, err)
 		return err
 	}
 
 	// Send 3 unsolicited ARP reply; clients may discard this
 	for i := 0; i < 2; i++ {
-		err = h.reply(mac, h.engine.NICInfo.HostMAC, h.engine.NICInfo.RouterIP4.IP, mac, ip)
+		err = h.reply(addr.MAC, h.engine.NICInfo.HostMAC, h.engine.NICInfo.RouterIP4.IP, addr.MAC, addr.IP)
 		if err != nil {
-			log.Printf("arp error spoof client mac=%s ip=%s: %s", mac, ip, err)
+			log.Printf("arp error spoof client %s: %s", addr, err)
 			return err
 		}
 		time.Sleep(time.Millisecond * 10)
