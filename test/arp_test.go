@@ -28,7 +28,7 @@ func TestHandler_arpcapture(t *testing.T) {
 			waitTimeAfter: time.Millisecond * 30,
 		},
 		{name: "arp-announcement-" + addr.MAC.String(),
-			action: "arpAnnouncement", hostTableInc: 1, macTableInc: 0, responsePos: -1, responseTableInc: 2,
+			action: "arpAnnouncement", hostTableInc: 1, macTableInc: 0, responsePos: -1, responseTableInc: -1,
 			srcAddr:       packet.Addr{MAC: addr.MAC, IP: IP1}, // set IP to zero to use savedIP
 			wantHost:      &packet.Host{IP: IP1, Online: true},
 			waitTimeAfter: time.Millisecond * 10,

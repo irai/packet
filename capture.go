@@ -34,6 +34,12 @@ func (h *Handler) Capture(mac net.HardwareAddr) error {
 	return nil
 }
 
+// lockAndStartHunt controls when to start the hunt process
+//
+// the following situations are possible:
+//   - capture command issued by user
+//   - host has come online
+//   - icmp ping no longer redirected
 func (h *Handler) lockAndStartHunt(addr Addr) (err error) {
 
 	host := h.FindIP(addr.IP)
@@ -107,7 +113,7 @@ func (h *Handler) Release(mac net.HardwareAddr) error {
 	h.mutex.Unlock()
 
 	for _, host := range list {
-		if err := h.lockAndStopHunt(host); err != nil {
+		if err := h.lockAndStopHunt(host, StageNormal); err != nil {
 			return err
 		}
 	}
@@ -115,24 +121,31 @@ func (h *Handler) Release(mac net.HardwareAddr) error {
 }
 
 // lockAndStopHunt will stop hunting for all modules
+//
 // host could be in one of two states:
 //  - StageHunt       - an active hunt is in progress
-//  - StageRedirected - the host is redirected
+//  - StageRedirected - the host is redirected; typically called when host went offline
 //
-func (h *Handler) lockAndStopHunt(host *Host) (err error) {
+func (h *Handler) lockAndStopHunt(host *Host, stage HuntStage) (err error) {
 	host.Row.Lock()
-	if host.huntStage == StageNormal {
+	switch host.huntStage {
+	case StageNormal:
+		host.Row.Unlock()
+		return nil
+	case StageRedirected:
+		host.huntStage = stage
+		if Debug {
+			fmt.Printf("packet: stop hunt for %s\n", host)
+		}
 		host.Row.Unlock()
 		return nil
 	}
+
+	host.huntStage = stage
 	if Debug {
-		fmt.Printf("packet: end hunt for %s\n", host)
+		fmt.Printf("packet: stop hunt for %s\n", host)
 	}
 
-	// Keep host in StageRedirected is stop hunting because of redirection
-	if host.huntStage == StageHunt || !host.Online {
-		host.huntStage = StageNormal
-	}
 	if host.icmp4Store.HuntStage == StageHunt {
 		host.icmp4Store.HuntStage = StageNormal
 	}
@@ -191,7 +204,10 @@ func (h *Handler) lockAndMonitorRoute(now time.Time) (err error) {
 			host.Row.RUnlock()
 			_, err := h.HandlerICMP4.CheckAddr(addr) // ping host
 			if errors.Is(err, ErrNotRedirected) {
-				h.lockAndTransitionHuntStage(host, StageNoChange, StageHunt)
+				fmt.Printf("packet: ip4 routing NOK %s\n", host)
+				if err := h.lockAndStartHunt(addr); err != nil {
+					fmt.Printf("packet: failed to start hunt %s error=\"%s\"\n", host, err)
+				}
 			}
 			host.Row.RLock()
 		}
@@ -199,49 +215,4 @@ func (h *Handler) lockAndMonitorRoute(now time.Time) (err error) {
 	}
 
 	return nil
-}
-
-func (h *Handler) lockAndTransitionHuntStage(host *Host, dhcp4Stage HuntStage, icmp4Stage HuntStage) {
-	host.Row.RLock()
-	if Debug {
-		fmt.Printf("packet: transitioning hunt %s dhcp4Stage=%v icmp4Stage=%v\n", host, dhcp4Stage, icmp4Stage)
-	}
-	if dhcp4Stage == StageNoChange {
-		dhcp4Stage = host.dhcp4Store.HuntStage
-	}
-	// if icmp4Stage == StageNoChange {
-	// icmp4Stage = host.icmp4Store.HuntStage
-	// }
-
-	newStage := dhcp4Stage
-	if dhcp4Stage == StageRedirected {
-		newStage = StageRedirected
-		if icmp4Stage == StageHunt { // override dhcp4
-			fmt.Printf("packet: ip4 routing NOK %s\n", host)
-			newStage = StageHunt
-		}
-	}
-
-	if host.huntStage == newStage {
-		host.Row.RUnlock()
-		return
-	}
-
-	host.huntStage = newStage
-
-	// If this is an existing IP, the host will be online at this time
-	// If this is a new IP, the host will be offline and will set on online by the main server loop
-	if !host.Online {
-		host.Row.RUnlock()
-		return
-	}
-
-	if host.huntStage == StageHunt {
-		host.Row.RUnlock()
-		go h.lockAndStartHunt(Addr{MAC: host.MACEntry.MAC, IP: host.IP})
-		return
-	}
-
-	host.Row.RUnlock()
-	h.lockAndStopHunt(host)
 }

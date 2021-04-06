@@ -57,9 +57,10 @@ func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
 	}
 	h.arpMutex.Unlock()
 	if !hunting {
-		fmt.Println("ARP StopHunt failed - not in hunt stage", addr)
+		fmt.Println("arp   : stop hunt failed - not in hunt stage", addr)
 	}
 
+	fmt.Println("arp   : arp stop hunt ok", addr)
 	return packet.StageNormal, nil
 }
 
@@ -76,14 +77,14 @@ func (h *Handler) spoofLoop(addr packet.Addr) {
 	ticker := time.NewTicker(time.Second * 4).C
 	startTime := time.Now()
 	nTimes := 0
-	log.Printf("arp attack start %s time=%v", addr, startTime)
+	fmt.Printf("arp   : hunt start %s time=%v\n", addr, startTime)
 	for {
 		h.arpMutex.Lock()
 		addr, hunting := h.findHuntByIP(addr.IP)
 		h.arpMutex.Unlock()
 
 		if !hunting || h.closed {
-			log.Printf("arp attack end %s repeat=%v duration=%v", addr, nTimes, time.Since(startTime))
+			fmt.Printf("arp   : hunt stop %s repeat=%v duration=%v\n", addr, nTimes, time.Since(startTime))
 			return
 		}
 
@@ -94,7 +95,7 @@ func (h *Handler) spoofLoop(addr packet.Addr) {
 		h.forceSpoof(addr)
 
 		if nTimes%16 == 0 {
-			log.Printf("arp attack %s repeat=%v duration=%v", addr, nTimes, time.Now().Sub(startTime))
+			fmt.Printf("arp   : hunt attack %s repeat=%v duration=%v\n", addr, nTimes, time.Now().Sub(startTime))
 		}
 		nTimes++
 

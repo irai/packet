@@ -409,14 +409,23 @@ func (h *Handler) lockAndSetOnline(host *Host, notify bool) {
 	// in goroutine - cannot access host fields
 	go func() {
 		if captured {
-			// update dhcp stage - dhcp dictates if host is redirected
 			if notification.Addr.IP.To4() != nil {
-				if stage, err := h.HandlerDHCP4.CheckAddr(addr); err == nil {
-					h.lockAndTransitionHuntStage(host, stage, StageNoChange)
+				// In IPv4 dhcp dictates if host is redirected
+				// start hunt if not redirected
+				stage, err := h.HandlerDHCP4.CheckAddr(addr)
+				if err != nil {
+					fmt.Printf("packet: failed to get dhcp hunt status %s error=%s\n", addr, err)
 				}
-			}
-			if err := h.lockAndStartHunt(addr); err != nil {
-				fmt.Println("packet: failed to start hunt error", err)
+				if stage != StageRedirected {
+					if err := h.lockAndStartHunt(addr); err != nil {
+						fmt.Println("packet: failed to start hunt error", err)
+					}
+				}
+			} else {
+				// IPv6 always start hunt
+				if err := h.lockAndStartHunt(addr); err != nil {
+					fmt.Println("packet: failed to start hunt error", err)
+				}
 			}
 		}
 		if h.nameChannel != nil {
@@ -449,7 +458,7 @@ func (h *Handler) lockAndSetOffline(host *Host) {
 
 	host.Row.Unlock()
 
-	h.lockAndStopHunt(host)
+	h.lockAndStopHunt(host, StageNormal)
 
 	if h.nameChannel != nil {
 		h.nameChannel <- notification

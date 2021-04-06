@@ -93,12 +93,10 @@ func (e ICMP6Store) String() string {
 }
 
 // lockAndProcessDHCP4Update updates the DHCP4 store and transition hunt stage
-// The function will lock the row
+//
 func (h *Handler) lockAndProcessDHCP4Update(host *Host, result Result) (notify bool) {
 	if host != nil {
 		host.Row.Lock()
-		defer host.Row.Unlock()
-
 		if host.dhcp4Store.Name != result.Name {
 			host.dhcp4Store.Name = result.Name
 			notify = true
@@ -106,13 +104,26 @@ func (h *Handler) lockAndProcessDHCP4Update(host *Host, result Result) (notify b
 		if result.Addr.IP != nil { // Discover IPOffer?
 			host.MACEntry.IP4Offer = result.Addr.IP
 		}
+		capture := host.MACEntry.Captured
+		addr := Addr{MAC: host.MACEntry.MAC, IP: host.IP}
+		host.Row.Unlock()
+
 		// DHCP stage overides all other stages
-		if result.HuntStage != StageNoChange && result.HuntStage != host.dhcp4Store.HuntStage {
-			host.dhcp4Store.HuntStage = result.HuntStage
-			host.Row.Unlock()
-			h.lockAndTransitionHuntStage(host, result.HuntStage, StageNoChange)
-			host.Row.Lock()
+		if capture && result.HuntStage == StageRedirected {
+			fmt.Printf("packet: dhcp4 redirected %s\n", addr)
+			if err := h.lockAndStopHunt(host, StageRedirected); err != nil {
+				fmt.Printf("packet: failed to stop hunt %s error=\"%s\"", host, err)
+			}
+			return notify
 		}
+		if capture && result.HuntStage == StageNormal {
+			fmt.Printf("packet: dhcp4 not redirected %s\n", addr)
+			if err := h.lockAndStartHunt(addr); err != nil {
+				fmt.Printf("packet: failed to stop hunt %s error=\"%s\"", host, err)
+			}
+			return notify
+		}
+
 		return notify
 	}
 

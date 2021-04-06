@@ -315,7 +315,7 @@ func NewHostEvents(addr packet.Addr, hostInc int, macInc int) []TestEvent {
 			wantHost:      nil, // don't validate host
 			waitTimeAfter: time.Millisecond * 10,
 		},
-		{name: "request-" + addr.MAC.String(), action: "dhcp4Request", hostTableInc: hostInc, macTableInc: 0, responsePos: -1, responseTableInc: -1,
+		{name: "request-" + addr.MAC.String(), action: "dhcp4Request", hostTableInc: hostInc, macTableInc: 0, responsePos: -1, responseTableInc: 1,
 			srcAddr:       packet.Addr{MAC: addr.MAC, IP: net.IPv4zero},
 			wantHost:      &packet.Host{IP: nil, Online: true},
 			waitTimeAfter: time.Millisecond * 20,
@@ -346,7 +346,11 @@ func runAction(t *testing.T, tc *TestContext, tt TestEvent) {
 		tc.Engine.Capture(tt.srcAddr.MAC)
 		sendPacket = false
 	case "dhcp4Request":
-		tt.ether = newDHCP4RequestFrame(tt.srcAddr, HostIP4, tc.IPOffer, []byte(fmt.Sprintf("%d", tc.dhcp4XID)))
+		if tt.srcAddr.IP == nil || tt.srcAddr.IP.Equal(net.IPv4zero) {
+			tt.ether = newDHCP4RequestFrame(tt.srcAddr, HostIP4, tc.IPOffer, []byte(fmt.Sprintf("%d", tc.dhcp4XID)))
+		} else {
+			tt.ether = newDHCP4RequestFrame(tt.srcAddr, HostIP4, tt.srcAddr.IP, []byte(fmt.Sprintf("%d", tc.dhcp4XID)))
+		}
 
 	case "dhcp4Discover":
 		tc.dhcp4XID++
@@ -396,6 +400,7 @@ func runAction(t *testing.T, tc *TestContext, tt TestEvent) {
 	tc.mutex.Lock()
 	if n := len(tc.responseTable) - savedResponseTableCount; tt.responseTableInc > 0 && n != tt.responseTableInc {
 		t.Errorf("%s: invalid response count len want=%v got=%v", tt.name, tt.responseTableInc, n)
+		fmt.Println("responses\n", tc.responseTable)
 	}
 	tc.mutex.Unlock()
 

@@ -108,7 +108,10 @@ func TestHandler_Capture(t *testing.T) {
 				time.Sleep(time.Millisecond * 3)
 			case "transition":
 				host := tc.engine.MustFindIP(tt.addr.IP)
-				tc.engine.lockAndTransitionHuntStage(host, tt.dhcp4Stage, tt.icmp4Stage)
+				if tt.dhcp4Stage == StageRedirected {
+					tc.engine.lockAndStopHunt(host, StageRedirected)
+					// tc.engine.lockAndTransitionHuntStage(host, tt.dhcp4Stage, tt.icmp4Stage)
+				}
 				time.Sleep(time.Millisecond * 3)
 			case "check":
 				// do nothing; just check fields
