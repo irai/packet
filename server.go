@@ -362,7 +362,7 @@ func (h *Handler) lockAndSetOnline(host *Host, notify bool) {
 		} else {
 			if host.IP.IsGlobalUnicast() && !host.IP.Equal(host.MACEntry.IP6GUA) { // changed IP6 global unique address
 				fmt.Printf("packet: host changed ip6 from=%s to=%s\n", host.MACEntry.IP6GUA, host.IP)
-				offlineIP = host.MACEntry.IP6GUA
+				// offlineIP = host.MACEntry.IP6GUA
 			}
 			if host.IP.IsLinkLocalUnicast() && !host.IP.Equal(host.MACEntry.IP6LLA) { // changed IP6 link local address
 				fmt.Printf("packet: host changed ip6LLA from=%s to=%s\n", host.MACEntry.IP6LLA, host.IP)
