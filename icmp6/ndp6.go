@@ -76,7 +76,7 @@ func (h *Handler) SendRouterSolicitation() error {
 		return err
 	}
 
-	return h.sendPacket(packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, packet.IP6AllNodesAddr, mb)
+	return h.sendPacket(packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, packet.IP6AllRoutersAddr, mb)
 }
 
 func (h *Handler) SendNeighborAdvertisement(srcAddr packet.Addr, dstAddr packet.Addr) error {

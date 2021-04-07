@@ -119,6 +119,9 @@ func (h *Handler) Detach() error {
 
 // Start prepares to accept packets
 func (h *Handler) Start() error {
+	if err := h.SendRouterSolicitation(); err != nil {
+		return err
+	}
 	return packet.Ping(packet.IP6AllNodesMulticast) // ping with external cmd tool
 	// return h.SendEchoRequest(packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, packet.IP6AllNodesAddr, 0, 0)
 }
