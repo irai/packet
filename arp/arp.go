@@ -1,6 +1,7 @@
 package arp
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"sync"
@@ -71,9 +72,9 @@ func (h *Handler) End() {
 	// Don't close the socket - it is shared with packet
 }
 
-// Start start background processes
+// Start background processes
 func (h *Handler) Start() error {
-	return nil
+	return h.ScanNetwork(context.Background(), h.engine.NICInfo.HostIP4)
 }
 
 // MinuteTicker implements packet processor interface

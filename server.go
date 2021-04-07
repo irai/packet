@@ -258,7 +258,7 @@ func isUnicastMAC(mac net.HardwareAddr) bool {
 }
 
 func (h *Handler) startPlugins() error {
-	time.Sleep(time.Millisecond * 200) // wait for read to start
+	time.Sleep(time.Second * 1) // wait for reader to start
 
 	if err := h.HandlerIP4.Start(); err != nil {
 		fmt.Println("error: in IP4 start:", err)

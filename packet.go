@@ -40,6 +40,14 @@ const (
 	DHCP4ClientPort = 68
 )
 
+func IPv6SolicitedNode(lla net.IP) Addr {
+	lla = lla.To16()
+	return Addr{
+		IP:  net.IP{0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01, 0xff, lla[13], lla[14], lla[15]}, // prefix: 0xff, 0x02::0x01,0xff + last 3 bytes of mac address
+		MAC: net.HardwareAddr{0x33, 0x33, 0xff, lla[13], lla[14], lla[15]},                        // prefix: 0x33, 0x33 + last 4 bytes of IP address
+	}
+}
+
 var ipv6LinkLocal = func(cidr string) *net.IPNet {
 	_, net, err := net.ParseCIDR(cidr)
 	if err != nil {
