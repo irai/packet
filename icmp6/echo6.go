@@ -93,9 +93,7 @@ func (h *Handler) Ping(srcAddr packet.Addr, dstAddr packet.Addr, timeout time.Du
 
 	// in case of timeout, the entry still exist
 	icmpTable.Lock()
-	if _, ok := icmpTable.table[id]; ok {
-		delete(icmpTable.table, id)
-	}
+	delete(icmpTable.table, id)
 	icmpTable.Unlock()
 
 	if !msg.msgRecv {

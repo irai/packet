@@ -17,11 +17,6 @@ import (
 // Debug packets turn on logging if desirable
 var Debug bool
 
-// Data stores private icmp6 data in host entry
-type Data struct {
-	router *Router
-}
-
 // Router holds a router identification
 type Router struct {
 	MAC             net.HardwareAddr // LLA - Local link address
@@ -224,10 +219,9 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, pack
 		if err := msg.unmarshal(icmp6Frame[4:]); err != nil {
 			return host, packet.Result{}, fmt.Errorf("ndp: failed to unmarshal %s: %w", t, errParseMessage)
 		}
-		if Debug {
-			fmt.Printf("icmp6: neighbor advertisement: %+v\n", msg)
-		}
-		// NS source IP is sometimes ff02::1 multicast, which means the host is nil
+		fmt.Printf("icmp6: neighbor advertisement: %+v\n", msg)
+
+		// Source IP is sometimes ff02::1 multicast, which means the host is nil
 		if host == nil {
 			if packet.IsIP6(msg.TargetAddress) {
 				host, _ = h.engine.FindOrCreateHost(ether.Src(), msg.TargetAddress) // will lock/unlock mutex
@@ -239,15 +233,15 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, pack
 		if err := msg.unmarshal(icmp6Frame[4:]); err != nil {
 			return host, packet.Result{}, fmt.Errorf("ndp: failed to unmarshal %s: %w", t, errParseMessage)
 		}
-		if Debug {
-			fmt.Printf("icmp6: na target=%s options=%+v\n", msg.TargetAddress, msg.Options)
-		}
+
+		fmt.Printf("icmp6: neighbor solicitation target=%s options=%+v\n", msg.TargetAddress, msg.Options)
 
 		// IPv6 Duplicate Address Detection
 		// IP6 src=0x00 dst=solicited-node address (multicast)
 		//
 		if ip6Frame.Src().IsUnspecified() {
 			fmt.Printf("icmp6: dad probe for target=%s srcip=%s srcmac=%s dstip=%s dstmac=%s\n", msg.TargetAddress, ip6Frame.Src(), ether.Src(), ip6Frame.Dst(), ether.Dst())
+			host, _ = h.engine.FindOrCreateHost(ether.Src(), msg.TargetAddress) // will lock/unlock mutex
 		}
 
 	case ipv6.ICMPTypeRouterAdvertisement:

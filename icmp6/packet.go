@@ -12,10 +12,7 @@ type ICMP6 []byte
 // IsValid validates the packet
 // TODO: verify checksum?
 func (p ICMP6) IsValid() bool {
-	if len(p) > 8 {
-		return true
-	}
-	return false
+	return len(p) > 8
 }
 
 func (p ICMP6) Type() uint8      { return uint8(p[0]) }

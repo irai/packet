@@ -49,7 +49,7 @@ func (h *Handler) spoofLoop(srcAddr packet.Addr, dstAddr packet.Addr) {
 		host.Row.RLock()
 		if host.GetICMP6StoreNoLock().HuntStage != packet.StageHunt || h.closed {
 			host.Row.RUnlock()
-			log.Printf("icmp6: attack end ip=%s repeat=%v duration=%v", dstAddr.IP, nTimes, time.Now().Sub(startTime))
+			log.Printf("icmp6: attack end ip=%s repeat=%v duration=%v", dstAddr.IP, nTimes, time.Since(startTime))
 			return
 		}
 		host.Row.RUnlock()
@@ -59,7 +59,7 @@ func (h *Handler) spoofLoop(srcAddr packet.Addr, dstAddr packet.Addr) {
 		}
 
 		if nTimes%16 == 0 {
-			log.Printf("icmp6 attack %s repeat=%v duration=%v", dstAddr, nTimes, time.Now().Sub(startTime))
+			log.Printf("icmp6 attack %s repeat=%v duration=%v", dstAddr, nTimes, time.Since(startTime))
 		}
 		nTimes++
 
