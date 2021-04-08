@@ -84,12 +84,11 @@ var _ packet.PacketProcessor = &Handler{}
 // Handler implements ICMPv6 Neighbor Discovery Protocol
 // see: https://mdlayher.com/blog/network-protocol-breakdown-ndp-and-go/
 type Handler struct {
-	notification chan<- Event
-	Router       Router
-	LANRouters   map[string]*Router
-	engine       *packet.Handler
-	closed       bool
-	closeChan    chan bool
+	Router     Router
+	LANRouters map[string]*Router
+	engine     *packet.Handler
+	closed     bool
+	closeChan  chan bool
 }
 
 // Config define server configuration values
@@ -142,18 +141,6 @@ func (h *Handler) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
 		return packet.StageNoChange, packet.ErrTimeout
 	}
 	return packet.StageNormal, nil
-}
-
-// AddNotificationChannel set the notification channel for ICMP6 messages
-func (h *Handler) AddNotificationChannel(notification chan<- Event) {
-	h.notification = notification
-}
-
-func (h *Handler) autoConfigureRouter(router Router) {
-	if len(h.Router.Prefixes) == 0 {
-		h.Router = router
-
-	}
 }
 
 func (h *Handler) sendPacket(srcAddr packet.Addr, dstAddr packet.Addr, b []byte) error {
@@ -246,22 +233,22 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, pack
 		}
 
 	case ipv6.ICMPTypeRouterAdvertisement:
+
+		frame := ICMP6RouterAdvertisement(icmp6Frame)
+		if !frame.IsValid() {
+			fmt.Println("icmp6 : invalid icmp6 ra msg")
+			return host, packet.Result{}, packet.ErrParseMessage
+		}
+		/***
 		msg := new(RouterAdvertisement)
 		if err := msg.unmarshal(icmp6Frame[4:]); err != nil {
 			return host, packet.Result{}, fmt.Errorf("ndp: failed to unmarshal %s: %w", t, errParseMessage)
 		}
+		***/
 
 		repeat++
 		if repeat%4 != 0 { // skip if too often - home router send RA every 4 sec
 			break
-		}
-
-		if Debug {
-			fmt.Println("ether:", ether)
-			fmt.Println("ip6  :", ip6Frame)
-			fmt.Printf("icmp6: RA managed=%v rpreference=%v other=%v repeated=%d\n",
-				msg.ManagedConfiguration, msg.RouterSelectionPreference, msg.OtherConfiguration, repeat)
-			// fmt.Printf("DEBUG RA %+v\n", msg)
 		}
 
 		// Protect agains nil host
@@ -270,45 +257,48 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, pack
 			return host, packet.Result{}, fmt.Errorf("ra host cannot be nil")
 		}
 		router, _ := h.findOrCreateRouter(host.MACEntry.MAC, host.IP)
-		router.ManagedFlag = msg.ManagedConfiguration
-		router.CurHopLimit = msg.CurrentHopLimit
-		router.DefaultLifetime = msg.RouterLifetime
-		router.Options = msg.Options
+		router.ManagedFlag = frame.ManagedConfiguration()
+		router.CurHopLimit = frame.CurrentHopLimit()
+		router.DefaultLifetime = time.Duration(time.Duration(frame.Lifetime()) * time.Second)
+		router.Options, _ = frame.Options()
 
 		prefixes := []PrefixInformation{}
-		for _, v := range msg.Options {
+		tmp := ""
+		for _, v := range router.Options {
 			switch v.Code() {
 			case optMTU:
 				o := v.(*MTU)
 				router.MTU = uint32(*o)
+				tmp = fmt.Sprintf("%s mtu=%v", tmp, router.MTU)
 			case optPrefixInformation:
 				o := v.(*PrefixInformation)
 				prefixes = append(prefixes, *o)
+				tmp = fmt.Sprintf("%s prefix=%v/%v onlink=%v slaac=%v lifetime=%v", tmp, o.Prefix, o.PrefixLength, o.OnLink, o.AutonomousAddressConfiguration, o.ValidLifetime)
 			case optRDNSS:
 				o := v.(*RecursiveDNSServer)
 				router.RDNSS = o
+				tmp = fmt.Sprintf("%s rdnss=%v lifetime=%v", tmp, router.RDNSS.Servers, router.RDNSS.Lifetime)
 			case optSourceLLA:
 				o := v.(*LinkLayerAddress)
-				if !bytes.Equal(o.Addr, host.MACEntry.MAC) {
+				if host != nil && !bytes.Equal(o.Addr, host.MACEntry.MAC) {
 					log.Printf("error: icmp6 unexpected sourceLLA=%s etherFrame=%s", o.Addr, host.MACEntry.MAC)
+					continue
 				}
+				tmp = fmt.Sprintf("%s lla=%v", tmp, o)
 			}
 		}
+		if Debug {
+			fmt.Println("ether :", ether)
+			fmt.Println("ip6   :", ip6Frame)
+		}
+		fmt.Printf("icmp6 : router advertisement %s %s \n", frame, tmp)
 
 		if len(prefixes) > 0 {
 			router.Prefixes = prefixes
 			if len(prefixes) > 1 {
 				fmt.Printf("error: icmp6 invalid prefix list len=%d list=%v", len(prefixes), prefixes)
 			}
-
-			h.autoConfigureRouter(*router)
 		}
-
-		// update router details in host
-		host.Row.Lock()
-		host.SetICMP6StoreNoLock(packet.ICMP6Store{Router: true})
-		host.Row.Unlock()
-		// h.engine.SetIPv6Router(host, true)
 
 	case ipv6.ICMPTypeRouterSolicitation:
 		msg := new(RouterSolicitation)
@@ -346,10 +336,6 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, pack
 	default:
 		log.Printf("icmp6 not implemented type=%v ip6=%s\n", t, icmp6Frame)
 		return host, packet.Result{}, fmt.Errorf("unrecognized icmp6 type %d: %w", t, errParseMessage)
-	}
-
-	if h.notification != nil {
-		go func() { h.notification <- Event{Type: t} }()
 	}
 
 	return host, packet.Result{}, nil
