@@ -62,17 +62,22 @@ func (p ICMP6RouterAdvertisement) String() string {
 func (p ICMP6RouterAdvertisement) Type() uint8                { return uint8(p[0]) }
 func (p ICMP6RouterAdvertisement) Code() byte                 { return p[1] }
 func (p ICMP6RouterAdvertisement) Checksum() int              { return int(binary.BigEndian.Uint16(p[2:4])) }
-func (p ICMP6RouterAdvertisement) CurrentHopLimit() byte      { return p[5] }
-func (p ICMP6RouterAdvertisement) ManagedConfiguration() bool { return (p[6] & 0x80) != 0 }
-func (p ICMP6RouterAdvertisement) OtherConfiguration() bool   { return (p[6] & 0x40) != 0 }
-func (p ICMP6RouterAdvertisement) HomeAgent() bool            { return (p[6] & 0x20) != 0 } // HomeAgent for mobile IPv6?
-func (p ICMP6RouterAdvertisement) Preference() byte           { return (p[6] & 0x18) >> 3 } // Default route preference: 01 High, 00 medium, 11 low, 10 reserved
-func (p ICMP6RouterAdvertisement) ProxyFlag() bool            { return (p[6] & 0x04) != 0 } // Experimental ND proxy - proxy ARP like???
-func (p ICMP6RouterAdvertisement) Lifetime() (seconds uint16) { return binary.BigEndian.Uint16(p[7:8]) }
+func (p ICMP6RouterAdvertisement) CurrentHopLimit() byte      { return p[4] }
+func (p ICMP6RouterAdvertisement) ManagedConfiguration() bool { return (p[5] & 0x80) != 0 }
+func (p ICMP6RouterAdvertisement) OtherConfiguration() bool   { return (p[5] & 0x40) != 0 }
+func (p ICMP6RouterAdvertisement) HomeAgent() bool            { return (p[5] & 0x20) != 0 } // HomeAgent for mobile IPv6?
+func (p ICMP6RouterAdvertisement) Preference() byte           { return (p[5] & 0x18) >> 3 } // Default route preference: 01 High, 00 medium, 11 low, 10 reserved
+func (p ICMP6RouterAdvertisement) ProxyFlag() bool            { return (p[5] & 0x04) != 0 } // Experimental ND proxy - proxy ARP like???
+func (p ICMP6RouterAdvertisement) Lifetime() (seconds uint16) { return binary.BigEndian.Uint16(p[6:8]) }
 func (p ICMP6RouterAdvertisement) ReachableTime() (milliseconds uint32) {
 	return binary.BigEndian.Uint32(p[8:12])
 }
 func (p ICMP6RouterAdvertisement) RetransmitTimer() (milliseconds uint32) {
 	return binary.BigEndian.Uint32(p[12:16])
 }
-func (p ICMP6RouterAdvertisement) Options() ([]Option, error) { return parseOptions(p[16:]) }
+func (p ICMP6RouterAdvertisement) Options() ([]Option, error) {
+	if len(p) <= 16 {
+		return []Option{}, nil
+	}
+	return parseOptions(p[16:])
+}
