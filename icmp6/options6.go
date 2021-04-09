@@ -398,7 +398,6 @@ func (r *RecursiveDNSServer) marshal() ([]byte, error) {
 }
 
 func (r *RecursiveDNSServer) unmarshal(b []byte) error {
-	l := int(b[1]*8) - 2 // Exclude type and length fields from value's length.
 
 	value := b[2:]
 	// Skip 2 reserved bytes to get lifetime.
@@ -411,7 +410,7 @@ func (r *RecursiveDNSServer) unmarshal(b []byte) error {
 	//
 	// Make sure at least one server is present, and that the IPv6 addresses are
 	// the expected 16 byte length.
-	dividend := l - 1
+	dividend := int(b[1])*8 - 1 // ignore first 8 bytes for header and lifetime
 	if dividend%2 != 0 {
 		return errRDNSSBadServer
 	}
