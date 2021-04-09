@@ -410,12 +410,12 @@ func (r *RecursiveDNSServer) unmarshal(b []byte) error {
 	//
 	// Make sure at least one server is present, and that the IPv6 addresses are
 	// the expected 16 byte length.
-	dividend := int(b[1])*8 - 1 // ignore first 8 bytes for header and lifetime
+	dividend := (int(b[1]) - 1) * 8 // ignore first 8 bytes for header and lifetime
 	if dividend%2 != 0 {
 		return errRDNSSBadServer
 	}
 
-	count := dividend / 2
+	count := dividend / net.IPv6len
 	if count == 0 {
 		return errRDNSSNoServers
 	}
