@@ -31,7 +31,7 @@ type Router struct {
 	DefaultLifetime time.Duration // A value of zero means the router is not to be used as a default router
 	Prefixes        []PrefixInformation
 	RDNSS           *RecursiveDNSServer // Pointer to facilitate comparison
-	Options         []Option
+	Options         NewOptions
 }
 
 // Event represents and ICMP6 event from a host
@@ -262,6 +262,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, pack
 		router.DefaultLifetime = time.Duration(time.Duration(frame.Lifetime()) * time.Second)
 		router.Options, _ = frame.Options()
 
+		/***
 		prefixes := []PrefixInformation{}
 		tmp := ""
 		for _, v := range router.Options {
@@ -280,25 +281,19 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, pack
 				tmp = fmt.Sprintf("%s rdnss=%v lifetime=%v", tmp, router.RDNSS.Servers, router.RDNSS.Lifetime)
 			case optSourceLLA:
 				o := v.(*LinkLayerAddress)
-				if host != nil && !bytes.Equal(o.Addr, host.MACEntry.MAC) {
+				if !bytes.Equal(o.Addr, host.MACEntry.MAC) {
 					log.Printf("error: icmp6 unexpected sourceLLA=%s etherFrame=%s", o.Addr, host.MACEntry.MAC)
 					continue
 				}
 				tmp = fmt.Sprintf("%s lla=%v", tmp, o)
 			}
 		}
+		***/
 		if Debug {
 			fmt.Println("ether :", ether)
 			fmt.Println("ip6   :", ip6Frame)
 		}
-		fmt.Printf("icmp6 : router advertisement %s %s \n", frame, tmp)
-
-		if len(prefixes) > 0 {
-			router.Prefixes = prefixes
-			if len(prefixes) > 1 {
-				fmt.Printf("error: icmp6 invalid prefix list len=%d list=%v", len(prefixes), prefixes)
-			}
-		}
+		fmt.Printf("icmp6 : router advertisement %s %+v \n", frame, router.Options)
 
 	case ipv6.ICMPTypeRouterSolicitation:
 		msg := new(RouterSolicitation)
