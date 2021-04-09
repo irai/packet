@@ -86,7 +86,7 @@ func (p ICMP6RouterAdvertisement) Options() (NewOptions, error) {
 type NewOptions struct {
 	MTU              MTU
 	Prefices         []PrefixInformation
-	RDNSS            []RecursiveDNSServer
+	RDNSS            RecursiveDNSServer
 	SourceLLA        LinkLayerAddress
 	TargetLLA        LinkLayerAddress
 	DNSSearchList    DNSSearchList
@@ -115,41 +115,32 @@ func newParseOptions(b []byte) (NewOptions, error) {
 		// Infer the option from its type value and use it for unmarshaling.
 		switch t {
 		case optSourceLLA:
-			// o = new(LinkLayerAddress)
 			if err := options.SourceLLA.unmarshal(b[i : i+l]); err != nil {
 				return NewOptions{}, err
 			}
 		case optTargetLLA:
-			// o = new(LinkLayerAddress)
 			if err := options.TargetLLA.unmarshal(b[i : i+l]); err != nil {
 				return NewOptions{}, err
 			}
 		case optMTU:
-			// o = new(MTU)
 			if err := options.MTU.unmarshal(b[i : i+l]); err != nil {
 				return NewOptions{}, err
 			}
 		case optPrefixInformation:
-			// o = new(PrefixInformation)
 			p := PrefixInformation{}
 			if err := p.unmarshal(b[i : i+l]); err != nil {
 				return NewOptions{}, err
 			}
 			options.Prefices = append(options.Prefices, p)
 		case optRouteInformation:
-			// o = new(RouteInformation)
 			if err := options.RouteInformation.unmarshal(b[i : i+l]); err != nil {
 				return NewOptions{}, err
 			}
 		case optRDNSS:
-			// o = new(RecursiveDNSServer)
-			p := RecursiveDNSServer{}
-			if err := p.unmarshal(b[i : i+l]); err != nil {
+			if err := options.RDNSS.unmarshal(b[i : i+l]); err != nil {
 				return NewOptions{}, err
 			}
-			options.RDNSS = append(options.RDNSS, p)
 		case optDNSSL:
-			// o = new(DNSSearchList)
 			if err := options.DNSSearchList.unmarshal(b[i : i+l]); err != nil {
 				return NewOptions{}, err
 			}

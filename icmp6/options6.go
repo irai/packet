@@ -13,6 +13,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/irai/packet"
 	"gitlab.com/golang-commonmark/puny"
 )
 
@@ -96,24 +97,19 @@ func (lla *LinkLayerAddress) marshal() ([]byte, error) {
 }
 
 func (lla *LinkLayerAddress) unmarshal(b []byte) error {
-	raw := new(RawOption)
-	if err := raw.unmarshal(b); err != nil {
-		return err
+	t := b[0]
+	l := int(b[1]*8) - 2 // Exclude type and length fields from value's length.
+	if l != 6 {
+		return fmt.Errorf("ndp: unexpected link-layer address option length: %d", l)
 	}
 
-	d := Direction(raw.Type)
+	d := Direction(t)
 	if d != Source && d != Target {
 		return fmt.Errorf("ndp: invalid link-layer address direction: %d", d)
 	}
 
-	if l := raw.Length; l != llaOptLen {
-		return fmt.Errorf("ndp: unexpected link-layer address option length: %d", l)
-	}
-
-	*lla = LinkLayerAddress{
-		Direction: d,
-		Addr:      net.HardwareAddr(raw.Value),
-	}
+	lla.Direction = d
+	copy(lla.Addr, b[2:]) // skip type and len
 
 	return nil
 }
@@ -148,12 +144,13 @@ func (m *MTU) marshal() ([]byte, error) {
 }
 
 func (m *MTU) unmarshal(b []byte) error {
-	raw := new(RawOption)
-	if err := raw.unmarshal(b); err != nil {
-		return err
+	// t := b[0]
+	l := int(b[1]*8) - 2 // Exclude type and length fields from value's length.
+	if l != 6 {
+		return fmt.Errorf("ndp: unexpected mtu option length: %d", l)
 	}
 
-	*m = MTU(binary.BigEndian.Uint32(raw.Value[2:6]))
+	*m = MTU(binary.BigEndian.Uint32(b[2:6]))
 
 	return nil
 }
@@ -215,45 +212,28 @@ func (pi *PrefixInformation) marshal() ([]byte, error) {
 }
 
 func (pi *PrefixInformation) unmarshal(b []byte) error {
-	raw := new(RawOption)
-	if err := raw.unmarshal(b); err != nil {
-		return err
-	}
-
-	// Guard against incorrect option length.
-	if raw.Length != piOptLen {
+	if b[1] != 4 { // 32 bytes long
 		return io.ErrUnexpectedEOF
 	}
+	// l := int(b[1]*8) - 2 // Exclude type and length fields from value's length.
 
-	var (
-		oFlag = (raw.Value[1] & 0x80) != 0
-		aFlag = (raw.Value[1] & 0x40) != 0
-
-		valid     = time.Duration(binary.BigEndian.Uint32(raw.Value[2:6])) * time.Second
-		preferred = time.Duration(binary.BigEndian.Uint32(raw.Value[6:10])) * time.Second
-	)
-
+	value := b[2:]
+	pi.OnLink = (value[1] & 0x80) != 0
+	pi.AutonomousAddressConfiguration = (value[1] & 0x40) != 0
+	pi.ValidLifetime = time.Duration(binary.BigEndian.Uint32(value[2:6])) * time.Second
+	pi.PreferredLifetime = time.Duration(binary.BigEndian.Uint32(value[6:10])) * time.Second
 	// Skip reserved area.
-	addr := net.IP(raw.Value[14:30])
+	addr := packet.CopyIP(net.IP(value[14:30]))
 	if err := checkIPv6(addr); err != nil {
 		return err
 	}
 
 	// Per the RFC, bits in prefix past prefix length are ignored by the
 	// receiver.
-	l := raw.Value[0]
-	mask := net.CIDRMask(int(l), 128)
+	pi.PrefixLength = value[0]
+	mask := net.CIDRMask(int(pi.PrefixLength), 128)
 	addr = addr.Mask(mask)
-
-	*pi = PrefixInformation{
-		PrefixLength:                   l,
-		OnLink:                         oFlag,
-		AutonomousAddressConfiguration: aFlag,
-		ValidLifetime:                  valid,
-		PreferredLifetime:              preferred,
-		// packet.Value is already a copy of b, so just point to the address.
-		Prefix: addr,
-	}
+	pi.Prefix = addr
 
 	return nil
 }
@@ -324,28 +304,25 @@ func (ri *RouteInformation) marshal() ([]byte, error) {
 }
 
 func (ri *RouteInformation) unmarshal(b []byte) error {
-	raw := new(RawOption)
-	if err := raw.unmarshal(b); err != nil {
-		return err
-	}
 
 	// Verify the option's length against prefix length using the rules defined
 	// in the RFC.
-	l := raw.Value[0]
+	pl := b[2]         // prefix len
+	l := int(pl*8) - 2 // Exclude type and length fields from value's length.
 	err := fmt.Errorf("ndp: invalid route information for /%d prefix", l)
 
 	switch {
-	case l == 0:
-		if raw.Length < 1 || raw.Length > 3 {
+	case pl == 0:
+		if l < 1 || l > 3 {
 			return err
 		}
-	case l > 0 && l < 65:
+	case pl > 0 && l < 65:
 		// Some devices will use length 3 anyway for a route that fits in /64.
-		if raw.Length != 2 && raw.Length != 3 {
+		if l != 2 && l != 3 {
 			return err
 		}
-	case l > 64 && l < 129:
-		if raw.Length != 3 {
+	case pl > 64 && l < 129:
+		if l != 3 {
 			return err
 		}
 	default:
@@ -354,24 +331,13 @@ func (ri *RouteInformation) unmarshal(b []byte) error {
 	}
 
 	// Unpack preference (with adjacent reserved bits) and lifetime values.
-	var (
-		pref = Preference((raw.Value[1] & 0x18) >> 3)
-		lt   = time.Duration(binary.BigEndian.Uint32(raw.Value[2:6])) * time.Second
-	)
-
-	if err := checkPreference(pref); err != nil {
+	ri.PrefixLength = pl
+	ri.RouteLifetime = time.Duration(binary.BigEndian.Uint32(b[3:8])) * time.Second
+	ri.Preference = Preference((b[3] & 0x18) >> 3)
+	if err := checkPreference(ri.Preference); err != nil {
 		return err
 	}
-
-	*ri = RouteInformation{
-		PrefixLength:  l,
-		Preference:    pref,
-		RouteLifetime: lt,
-		Prefix:        make(net.IP, net.IPv6len),
-	}
-
-	// Copy up to the specified number of IP bytes into the prefix.
-	copy(ri.Prefix, raw.Value[6:6+(l/8)])
+	ri.Prefix = packet.CopyBytes(b[8 : 8+(pl/8)]) // copy bytes up to prefix len bits
 
 	return nil
 }
@@ -432,14 +398,11 @@ func (r *RecursiveDNSServer) marshal() ([]byte, error) {
 }
 
 func (r *RecursiveDNSServer) unmarshal(b []byte) error {
-	raw := new(RawOption)
-	if err := raw.unmarshal(b); err != nil {
-		return err
-	}
+	l := int(b[1]*8) - 2 // Exclude type and length fields from value's length.
 
+	value := b[2:]
 	// Skip 2 reserved bytes to get lifetime.
-	lt := time.Duration(binary.BigEndian.Uint32(
-		raw.Value[rdnssLifetimeOff:rdnssServersOff])) * time.Second
+	r.Lifetime = time.Duration(binary.BigEndian.Uint32(value[2:6])) * time.Second
 
 	// Determine the number of DNS servers specified using the method described
 	// in the RFC.  Remember, length is specified in units of 8 octets.
@@ -448,7 +411,7 @@ func (r *RecursiveDNSServer) unmarshal(b []byte) error {
 	//
 	// Make sure at least one server is present, and that the IPv6 addresses are
 	// the expected 16 byte length.
-	dividend := (int(raw.Length) - 1)
+	dividend := l - 1
 	if dividend%2 != 0 {
 		return errRDNSSBadServer
 	}
@@ -458,7 +421,6 @@ func (r *RecursiveDNSServer) unmarshal(b []byte) error {
 		return errRDNSSNoServers
 	}
 
-	servers := make([]net.IP, 0, count)
 	for i := 0; i < count; i++ {
 		// Determine the start and end byte offsets for each address,
 		// effectively iterating 16 bytes at a time to fetch an address.
@@ -469,12 +431,7 @@ func (r *RecursiveDNSServer) unmarshal(b []byte) error {
 
 		// The RawOption already made a copy of this data, so convert it
 		// directly to an IPv6 address with no further copying needed.
-		servers = append(servers, net.IP(raw.Value[start:end]))
-	}
-
-	*r = RecursiveDNSServer{
-		Lifetime: lt,
-		Servers:  servers,
+		r.Servers = append(r.Servers, packet.CopyIP(value[start:end]))
 	}
 
 	return nil
