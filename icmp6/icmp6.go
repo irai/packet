@@ -260,7 +260,11 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, pack
 		router.ManagedFlag = frame.ManagedConfiguration()
 		router.CurHopLimit = frame.CurrentHopLimit()
 		router.DefaultLifetime = time.Duration(time.Duration(frame.Lifetime()) * time.Second)
-		router.Options, _ = frame.Options()
+		var err error
+		if router.Options, err = frame.Options(); err != nil {
+			fmt.Printf("icmp6 : invalid options %s\n", err)
+			return host, packet.Result{}, err
+		}
 
 		/***
 		prefixes := []PrefixInformation{}
