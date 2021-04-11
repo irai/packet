@@ -67,9 +67,7 @@ func (h *Handler) GetNotificationChannel() <-chan Notification {
 	h.mutex.RLock()
 	for _, host := range h.LANHosts.Table {
 		host.Row.RLock()
-		if host.dhcp4Store.Name != "" {
-			list = append(list, Notification{Addr: Addr{IP: host.IP, MAC: host.MACEntry.MAC}, Online: host.Online, DHCPName: host.dhcp4Store.Name})
-		}
+		list = append(list, Notification{Addr: Addr{IP: host.IP, MAC: host.MACEntry.MAC}, Online: host.Online, DHCPName: host.dhcp4Store.Name})
 		host.Row.RUnlock()
 	}
 	h.mutex.RUnlock()
