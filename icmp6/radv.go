@@ -70,11 +70,11 @@ func (r *RADVS) Stop() {
 }
 
 func (r *RADVS) SendRA() error {
-	return r.h.SendRouterAdvertisement(r.Router, packet.IP6AllNodesAddr)
+	return r.h.SendRouterAdvertisement(*r.Router, packet.IP6AllNodesAddr)
 }
 
 func (r *RADVS) sendAdvertistementLoop() {
-	r.h.SendRouterAdvertisement(r.Router, packet.IP6AllNodesAddr)
+	r.h.SendRouterAdvertisement(*r.Router, packet.IP6AllNodesAddr)
 	ticker := time.NewTicker(time.Duration(int64(time.Millisecond) * int64(r.Router.RetransTimer))).C
 	for {
 		select {
@@ -82,7 +82,7 @@ func (r *RADVS) sendAdvertistementLoop() {
 			return
 
 		case <-ticker:
-			if err := r.h.SendRouterAdvertisement(r.Router, packet.IP6AllNodesAddr); err != nil {
+			if err := r.h.SendRouterAdvertisement(*r.Router, packet.IP6AllNodesAddr); err != nil {
 				fmt.Printf("icmp6: error in send ra: %s", err)
 			}
 		}

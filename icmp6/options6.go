@@ -660,7 +660,7 @@ func marshalOptions(options []Option) ([]byte, error) {
 
 type NewOptions struct {
 	MTU              MTU
-	Prefices         []PrefixInformation
+	Prefixes         []PrefixInformation
 	RDNSS            RecursiveDNSServer
 	SourceLLA        LinkLayerAddress
 	TargetLLA        LinkLayerAddress
@@ -706,7 +706,7 @@ func newParseOptions(b []byte) (NewOptions, error) {
 			if err := p.unmarshal(b[i : i+l]); err != nil {
 				return NewOptions{}, err
 			}
-			options.Prefices = append(options.Prefices, p)
+			options.Prefixes = append(options.Prefixes, p)
 		case optRouteInformation:
 			if err := options.RouteInformation.unmarshal(b[i : i+l]); err != nil {
 				return NewOptions{}, err
@@ -725,57 +725,6 @@ func newParseOptions(b []byte) (NewOptions, error) {
 
 		// Advance to the next option's type field.
 		i += l
-	}
-
-	return options, nil
-}
-
-func notUsedOldparseOptions(b []byte) ([]Option, error) {
-	var options []Option
-	for i := 0; len(b[i:]) != 0; {
-		// Two bytes: option type and option length.
-		if len(b[i:]) < 2 {
-			return nil, io.ErrUnexpectedEOF
-		}
-
-		// Type processed as-is, but length is stored in units of 8 bytes,
-		// so expand it to the actual byte length.
-		t := b[i]
-		l := int(b[i+1]) * 8
-
-		// Verify that we won't advance beyond the end of the byte slice.
-		if l > len(b[i:]) {
-			return nil, io.ErrUnexpectedEOF
-		}
-
-		// Infer the option from its type value and use it for unmarshaling.
-		var o Option
-		switch t {
-		case optSourceLLA, optTargetLLA:
-			o = new(LinkLayerAddress)
-		case optMTU:
-			o = new(MTU)
-		case optPrefixInformation:
-			o = new(PrefixInformation)
-		case optRouteInformation:
-			o = new(RouteInformation)
-		case optRDNSS:
-			o = new(RecursiveDNSServer)
-		case optDNSSL:
-			o = new(DNSSearchList)
-		default:
-			o = new(RawOption)
-		}
-
-		// Unmarshal at the current offset, up to the expected length.
-		if err := o.unmarshal(b[i : i+l]); err != nil {
-			return nil, err
-		}
-
-		// Advance to the next option's type field.
-		i += l
-
-		options = append(options, o)
 	}
 
 	return options, nil

@@ -163,8 +163,8 @@ func main() {
 		}
 	}()
 
-	handlers.radvs, _ = handlers.icmp6.StartRADVS(false, false, icmp6.MyHomePrefix, icmp6.RDNSSCLoudflare)
-	defer handlers.radvs.Stop()
+	// handlers.radvs, _ = handlers.icmp6.StartRADVS(false, false, icmp6.MyHomePrefix, icmp6.RDNSSCLoudflare)
+	// defer handlers.radvs.Stop()
 
 	time.Sleep(time.Millisecond * 10) // time for all goroutine to start
 

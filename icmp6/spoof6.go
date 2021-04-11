@@ -15,6 +15,14 @@ func (h *Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
 	if Debug {
 		log.Printf("icmp6 force neighbor spoof %s", addr)
 	}
+	h.Lock()
+	if h.huntList.Index(addr.MAC) != -1 {
+		h.Unlock()
+		return packet.StageHunt, nil
+	}
+	h.huntList.Add(addr)
+	h.Unlock()
+
 	ip := net.ParseIP("fe80::ce32:e5ff:fe0e:67f4") // my home router
 	fmt.Println("icmp6 : FIXME ROUTER IP LLA IS HARDCODED")
 	srcAddr := packet.Addr{IP: ip, MAC: h.engine.NICInfo.HostMAC}
@@ -28,6 +36,13 @@ func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
 	if Debug {
 		log.Printf("icmp6 stop neighbor spoof %s", addr)
 	}
+	h.Lock()
+	if h.huntList.Index(addr.MAC) == -1 {
+		return packet.StageNormal, nil
+	}
+	h.huntList.Del(addr)
+	h.Unlock()
+
 	return packet.StageNormal, nil
 }
 
@@ -38,30 +53,31 @@ func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
 //   2. optionally, claim the ownership of the IP to force client to change IP or go offline
 //
 func (h *Handler) spoofLoop(srcAddr packet.Addr, dstAddr packet.Addr) {
-
 	// 4 second re-do seem to be adequate;
 	ticker := time.NewTicker(time.Second * 4).C
 	startTime := time.Now()
 	nTimes := 0
 	log.Printf("icmp6: na attack ip=%s time=%v", dstAddr.IP, startTime)
 	for {
-		host := h.engine.MustFindIP(dstAddr.IP) // will lock/unlock engine
-		host.Row.RLock()
-		if host.GetICMP6StoreNoLock().HuntStage != packet.StageHunt || h.closed {
-			host.Row.RUnlock()
+		h.Lock()
+		if h.huntList.Index(dstAddr.MAC) == -1 || h.closed {
+			h.Unlock()
 			log.Printf("icmp6: attack end ip=%s repeat=%v duration=%v", dstAddr.IP, nTimes, time.Since(startTime))
 			return
 		}
-		host.Row.RUnlock()
+		h.Unlock()
 
-		if err := h.SendNeighborAdvertisement(srcAddr, dstAddr); err != nil {
-			fmt.Println("icmp6: error sending na ", err)
-		}
+		if h.Router.IP != nil {
+			srcAddr.IP = h.Router.IP
+			if err := h.SendNeighborAdvertisement(srcAddr, dstAddr); err != nil {
+				fmt.Println("icmp6: error sending na ", err)
+			}
 
-		if nTimes%16 == 0 {
-			log.Printf("icmp6 attack %s repeat=%v duration=%v", dstAddr, nTimes, time.Since(startTime))
+			if nTimes%16 == 0 {
+				log.Printf("icmp6 attack src %s dst %s repeat=%v duration=%v", srcAddr, dstAddr, nTimes, time.Since(startTime))
+			}
+			nTimes++
 		}
-		nTimes++
 
 		select {
 		case <-h.closeChan:

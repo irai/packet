@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"sync"
 	"syscall"
 	"time"
 
@@ -86,8 +87,10 @@ type Handler struct {
 	Router     Router
 	LANRouters map[string]*Router
 	engine     *packet.Handler
+	huntList   packet.AddrList
 	closed     bool
 	closeChan  chan bool
+	sync.Mutex
 }
 
 // Config define server configuration values

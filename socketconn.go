@@ -6,7 +6,6 @@ package packet
 // as part of the raw package github.com/mdlayher/raw
 
 import (
-	"fmt"
 	"net"
 	"os"
 	"syscall"
@@ -16,29 +15,6 @@ import (
 	"golang.org/x/net/bpf"
 	"golang.org/x/sys/unix"
 )
-
-var _ net.Addr = &Addr{}
-
-// Addr is a network address which can be used to contact other machines, using
-// their hardware addresses.
-type Addr struct {
-	MAC  net.HardwareAddr
-	IP   net.IP
-	Port uint16
-}
-
-// String returns the address's hardware address.
-func (a Addr) String() string {
-	if a.Port == 0 {
-		return fmt.Sprintf("mac=%s ip=%s", a.MAC, a.IP)
-	}
-	return fmt.Sprintf("mac=%s ip=%s port=%d", a.MAC, a.IP, a.Port)
-}
-
-// Network returns the address's network name, "raw".
-func (a Addr) Network() string {
-	return "raw"
-}
 
 // Must implement net.PacketConn at compile-time.
 var _ net.PacketConn = &packetConn{}
