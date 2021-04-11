@@ -56,7 +56,7 @@ func (p ICMPEcho) String() string {
 
 type ICMP6RouterSolicitation []byte
 
-func (p ICMP6RouterSolicitation) IsValid() bool { return len(p) < 8 }
+func (p ICMP6RouterSolicitation) IsValid() bool { return len(p) >= 8 }
 func (p ICMP6RouterSolicitation) String() string {
 	return fmt.Sprintf("type=na code=%d sourceLLA=%s", p.Code(), p.SourceLLA())
 }
@@ -111,7 +111,7 @@ func (p ICMP6RouterAdvertisement) Options() (NewOptions, error) {
 
 type ICMP6NeighborAdvertisement []byte
 
-func (p ICMP6NeighborAdvertisement) IsValid() bool { return len(p) < 24 }
+func (p ICMP6NeighborAdvertisement) IsValid() bool { return len(p) >= 24 }
 func (p ICMP6NeighborAdvertisement) String() string {
 	return fmt.Sprintf("type=na code=%d targetIP=%s targetLLA=%s", p.Code(), p.TargetAddress(), p.TargetLLA())
 }
@@ -148,7 +148,7 @@ func ICMP6NeighborAdvertisementMarshal(router bool, solicited bool, override boo
 
 type ICMP6NeighborSolicitation []byte
 
-func (p ICMP6NeighborSolicitation) IsValid() bool { return len(p) < 24 }
+func (p ICMP6NeighborSolicitation) IsValid() bool { return len(p) >= 24 }
 func (p ICMP6NeighborSolicitation) String() string {
 	return fmt.Sprintf("type=na code=%d targetIP=%s sourceLLA=%s", p.Code(), p.TargetAddress(), p.SourceLLA())
 }
