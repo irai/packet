@@ -54,7 +54,7 @@ func (h *Handler) SendRouterAdvertisement(router *Router, dstAddr packet.Addr) e
 		Options:         options,
 	}
 
-	mb, err := MarshalMessage(ra)
+	mb, err := ra.marshal()
 	if err != nil {
 		return err
 	}
@@ -71,7 +71,7 @@ func (h *Handler) SendRouterSolicitation() error {
 			},
 		},
 	}
-	mb, err := MarshalMessage(m)
+	mb, err := m.marshal()
 	if err != nil {
 		return err
 	}
@@ -80,41 +80,14 @@ func (h *Handler) SendRouterSolicitation() error {
 }
 
 func (h *Handler) SendNeighborAdvertisement(srcAddr packet.Addr, dstAddr packet.Addr) error {
-	m := &NeighborAdvertisement{
-		Router:        true,
-		Solicited:     true,
-		Override:      true,
-		TargetAddress: srcAddr.IP,
-		Options: []Option{
-			&LinkLayerAddress{
-				Direction: Target,
-				Addr:      srcAddr.MAC,
-			},
-		},
-	}
-	mb, err := MarshalMessage(m)
-	if err != nil {
-		return err
-	}
+	p := ICMP6NeighborAdvertisementMarshal(true, false, true, srcAddr.IP, srcAddr.MAC)
 
-	return h.sendPacket(packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, dstAddr, mb)
+	return h.sendPacket(packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, dstAddr, p)
 }
 
 // SendNeighbourSolicitation send an ICMP6 NS packet.
 func (h *Handler) SendNeighbourSolicitation(ip net.IP) error {
-	m := &NeighborSolicitation{
-		TargetAddress: ip,
-		Options: []Option{
-			&LinkLayerAddress{
-				Direction: Source,
-				Addr:      h.engine.NICInfo.HostMAC,
-			},
-		},
-	}
-	mb, err := MarshalMessage(m)
-	if err != nil {
-		return err
-	}
+	p, _ := ICMP6NeighborSolicitationMarshal(ip, h.engine.NICInfo.HostMAC)
 
-	return h.sendPacket(packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, packet.IP6AllNodesAddr, mb)
+	return h.sendPacket(packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, packet.IP6AllNodesAddr, p)
 }

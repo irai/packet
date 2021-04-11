@@ -658,8 +658,79 @@ func marshalOptions(options []Option) ([]byte, error) {
 	return b, nil
 }
 
-// parseOptions parses a slice of Options from a byte slice.
-func parseOptions(b []byte) ([]Option, error) {
+type NewOptions struct {
+	MTU              MTU
+	Prefices         []PrefixInformation
+	RDNSS            RecursiveDNSServer
+	SourceLLA        LinkLayerAddress
+	TargetLLA        LinkLayerAddress
+	DNSSearchList    DNSSearchList
+	RouteInformation RouteInformation
+}
+
+func newParseOptions(b []byte) (NewOptions, error) {
+	var options NewOptions
+
+	for i := 0; len(b[i:]) != 0; {
+		// Two bytes: option type and option length.
+		if len(b[i:]) < 2 {
+			return NewOptions{}, io.ErrUnexpectedEOF
+		}
+
+		// Type processed as-is, but length is stored in units of 8 bytes,
+		// so expand it to the actual byte length.
+		t := b[i]
+		l := int(b[i+1]) * 8
+
+		// Verify that we won't advance beyond the end of the byte slice.
+		if l > len(b[i:]) {
+			return NewOptions{}, io.ErrUnexpectedEOF
+		}
+
+		// Infer the option from its type value and use it for unmarshaling.
+		switch t {
+		case optSourceLLA:
+			if err := options.SourceLLA.unmarshal(b[i : i+l]); err != nil {
+				return NewOptions{}, err
+			}
+		case optTargetLLA:
+			if err := options.TargetLLA.unmarshal(b[i : i+l]); err != nil {
+				return NewOptions{}, err
+			}
+		case optMTU:
+			if err := options.MTU.unmarshal(b[i : i+l]); err != nil {
+				return NewOptions{}, err
+			}
+		case optPrefixInformation:
+			p := PrefixInformation{}
+			if err := p.unmarshal(b[i : i+l]); err != nil {
+				return NewOptions{}, err
+			}
+			options.Prefices = append(options.Prefices, p)
+		case optRouteInformation:
+			if err := options.RouteInformation.unmarshal(b[i : i+l]); err != nil {
+				return NewOptions{}, err
+			}
+		case optRDNSS:
+			if err := options.RDNSS.unmarshal(b[i : i+l]); err != nil {
+				return NewOptions{}, err
+			}
+		case optDNSSL:
+			if err := options.DNSSearchList.unmarshal(b[i : i+l]); err != nil {
+				return NewOptions{}, err
+			}
+		default:
+			fmt.Println("icmp6 : invalid option - ignoring ", t)
+		}
+
+		// Advance to the next option's type field.
+		i += l
+	}
+
+	return options, nil
+}
+
+func notUsedOldparseOptions(b []byte) ([]Option, error) {
 	var options []Option
 	for i := 0; len(b[i:]) != 0; {
 		// Two bytes: option type and option length.

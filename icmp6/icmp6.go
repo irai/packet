@@ -1,7 +1,6 @@
 package icmp6
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"net"
@@ -195,41 +194,41 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, pack
 	if !icmp6Frame.IsValid() {
 		return host, packet.Result{}, fmt.Errorf("invalid icmp msg=%v: %w", icmp6Frame, errParseMessage)
 	}
-	if Debug && ipv6.ICMPType(icmp6Frame.Type()) != ipv6.ICMPTypeRouterAdvertisement {
+
+	t := ipv6.ICMPType(icmp6Frame.Type())
+	if Debug && t != ipv6.ICMPTypeRouterAdvertisement {
 		fmt.Println("ether:", ether)
 		fmt.Println("ip6  :", ip6Frame)
 	}
 
-	t := ipv6.ICMPType(icmp6Frame.Type())
 	switch t {
 	case ipv6.ICMPTypeNeighborAdvertisement:
-		msg := new(NeighborAdvertisement)
-		if err := msg.unmarshal(icmp6Frame[4:]); err != nil {
-			return host, packet.Result{}, fmt.Errorf("ndp: failed to unmarshal %s: %w", t, errParseMessage)
+		frame := ICMP6NeighborAdvertisement(icmp6Frame)
+		if !frame.IsValid() {
+			fmt.Println("icmp6 : invalid NS msg")
+			return host, packet.Result{}, packet.ErrParseMessage
 		}
-		fmt.Printf("icmp6: neighbor advertisement: %+v\n", msg)
+		fmt.Printf("icmp6: neighbor advertisement %s\n", frame)
 
 		// Source IP is sometimes ff02::1 multicast, which means the host is nil
 		if host == nil {
-			if packet.IsIP6(msg.TargetAddress) {
-				host, _ = h.engine.FindOrCreateHost(ether.Src(), msg.TargetAddress) // will lock/unlock mutex
-			}
+			host, _ = h.engine.FindOrCreateHost(ether.Src(), frame.TargetAddress()) // will lock/unlock mutex
 		}
 
 	case ipv6.ICMPTypeNeighborSolicitation:
-		msg := new(NeighborSolicitation)
-		if err := msg.unmarshal(icmp6Frame[4:]); err != nil {
-			return host, packet.Result{}, fmt.Errorf("ndp: failed to unmarshal %s: %w", t, errParseMessage)
+		frame := ICMP6NeighborSolicitation(icmp6Frame)
+		if !frame.IsValid() {
+			fmt.Println("icmp6 : invalid NS msg")
+			return host, packet.Result{}, packet.ErrParseMessage
 		}
-
-		fmt.Printf("icmp6: neighbor solicitation target=%s options=%+v\n", msg.TargetAddress, msg.Options)
+		fmt.Printf("icmp6: neighbor solicitation %s\n", frame)
 
 		// IPv6 Duplicate Address Detection
 		// IP6 src=0x00 dst=solicited-node address (multicast)
 		//
 		if ip6Frame.Src().IsUnspecified() {
-			fmt.Printf("icmp6: dad probe for target=%s srcip=%s srcmac=%s dstip=%s dstmac=%s\n", msg.TargetAddress, ip6Frame.Src(), ether.Src(), ip6Frame.Dst(), ether.Dst())
-			host, _ = h.engine.FindOrCreateHost(ether.Src(), msg.TargetAddress) // will lock/unlock mutex
+			fmt.Printf("icmp6: dad probe for target=%s srcip=%s srcmac=%s dstip=%s dstmac=%s\n", frame.TargetAddress(), ip6Frame.Src(), ether.Src(), ip6Frame.Dst(), ether.Dst())
+			host, _ = h.engine.FindOrCreateHost(ether.Src(), frame.TargetAddress()) // will lock/unlock mutex
 		}
 
 	case ipv6.ICMPTypeRouterAdvertisement:
@@ -239,12 +238,6 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, pack
 			fmt.Println("icmp6 : invalid icmp6 ra msg")
 			return host, packet.Result{}, packet.ErrParseMessage
 		}
-		/***
-		msg := new(RouterAdvertisement)
-		if err := msg.unmarshal(icmp6Frame[4:]); err != nil {
-			return host, packet.Result{}, fmt.Errorf("ndp: failed to unmarshal %s: %w", t, errParseMessage)
-		}
-		***/
 
 		repeat++
 		if repeat%4 != 0 { // skip if too often - home router send RA every 4 sec
@@ -266,33 +259,6 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, pack
 			return host, packet.Result{}, err
 		}
 
-		/***
-		prefixes := []PrefixInformation{}
-		tmp := ""
-		for _, v := range router.Options {
-			switch v.Code() {
-			case optMTU:
-				o := v.(*MTU)
-				router.MTU = uint32(*o)
-				tmp = fmt.Sprintf("%s mtu=%v", tmp, router.MTU)
-			case optPrefixInformation:
-				o := v.(*PrefixInformation)
-				prefixes = append(prefixes, *o)
-				tmp = fmt.Sprintf("%s prefix=%v/%v onlink=%v slaac=%v lifetime=%v", tmp, o.Prefix, o.PrefixLength, o.OnLink, o.AutonomousAddressConfiguration, o.ValidLifetime)
-			case optRDNSS:
-				o := v.(*RecursiveDNSServer)
-				router.RDNSS = o
-				tmp = fmt.Sprintf("%s rdnss=%v lifetime=%v", tmp, router.RDNSS.Servers, router.RDNSS.Lifetime)
-			case optSourceLLA:
-				o := v.(*LinkLayerAddress)
-				if !bytes.Equal(o.Addr, host.MACEntry.MAC) {
-					log.Printf("error: icmp6 unexpected sourceLLA=%s etherFrame=%s", o.Addr, host.MACEntry.MAC)
-					continue
-				}
-				tmp = fmt.Sprintf("%s lla=%v", tmp, o)
-			}
-		}
-		***/
 		if Debug {
 			fmt.Println("ether :", ether)
 			fmt.Println("ip6   :", ip6Frame)
@@ -300,13 +266,14 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, pack
 		fmt.Printf("icmp6 : router advertisement %s %+v \n", frame, router.Options)
 
 	case ipv6.ICMPTypeRouterSolicitation:
-		msg := new(RouterSolicitation)
-		if err := msg.unmarshal(icmp6Frame[4:]); err != nil {
-			return host, packet.Result{}, fmt.Errorf("ndp: failed to unmarshal %s: %w", t, errParseMessage)
+		frame := ICMP6RouterSolicitation(icmp6Frame)
+		if !frame.IsValid() {
+			return host, packet.Result{}, packet.ErrParseMessage
 		}
 		if Debug {
-			fmt.Printf("icmp6 router solicitation: %+v\n", msg)
+			fmt.Printf("icmp6 : router solicitation %s\n", frame)
 		}
+		/**
 		for _, v := range h.LANRouters {
 			if v.enableRADVS {
 				if bytes.Equal(ether.Src(), msg.SourceLLA) {
@@ -315,6 +282,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, pack
 				h.SendRouterAdvertisement(v, packet.Addr{MAC: ether.Src(), IP: ip6Frame.Src()})
 			}
 		}
+		**/
 
 	case ipv6.ICMPTypeEchoReply:
 		echo := packet.ICMPEcho(icmp6Frame)

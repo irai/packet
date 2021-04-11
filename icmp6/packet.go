@@ -3,9 +3,10 @@ package icmp6
 import (
 	"encoding/binary"
 	"fmt"
-	"io"
+	"net"
 
 	"github.com/irai/packet"
+	"golang.org/x/net/ipv6"
 )
 
 type ICMP6 []byte
@@ -53,11 +54,36 @@ func (p ICMPEcho) String() string {
 	return fmt.Sprintf("type=%v code=%v", p.Type(), p.Code())
 }
 
+type ICMP6RouterSolicitation []byte
+
+func (p ICMP6RouterSolicitation) IsValid() bool { return len(p) < 8 }
+func (p ICMP6RouterSolicitation) String() string {
+	return fmt.Sprintf("type=na code=%d sourceLLA=%s", p.Code(), p.SourceLLA())
+}
+func (p ICMP6RouterSolicitation) Type() uint8   { return uint8(p[0]) }
+func (p ICMP6RouterSolicitation) Code() byte    { return p[1] }
+func (p ICMP6RouterSolicitation) Checksum() int { return int(binary.BigEndian.Uint16(p[2:4])) }
+func (p ICMP6RouterSolicitation) SourceLLA() net.HardwareAddr {
+	// RA options may containg a single SourceLLA option
+	// len is therefore: 26 = 4 bytes header + 4 bytes reserved + 18 bytes SourceLLA option
+	if len(p) > 26 && p[8] == 1 && p[9] == 3 { // type == SourceLLA & 24 bytes len (3 * 8bytes)
+		return net.HardwareAddr(p[10 : 10+16])
+	}
+	return nil
+}
+
+func (p ICMP6RouterSolicitation) Options() (NewOptions, error) {
+	if len(p) <= 24 {
+		return NewOptions{}, nil
+	}
+	return newParseOptions(p[24:])
+}
+
 type ICMP6RouterAdvertisement []byte
 
 func (p ICMP6RouterAdvertisement) IsValid() bool { return len(p) >= 16 }
 func (p ICMP6RouterAdvertisement) String() string {
-	return fmt.Sprintf("type=ra code=%v hopLim=%v managed=%v other=%v preference=%v lifetimeSec=%v reacheableMSec=%v retransmitMSec=%v",
+	return fmt.Sprintf("type=ra code=%v hopLim=%d managed=%t other=%t preference=%d lifetimeSec=%d reacheableMSec=%d retransmitMSec=%d",
 		p.Code(), p.CurrentHopLimit(), p.ManagedConfiguration(), p.OtherConfiguration(), p.Preference(), p.Lifetime(), p.ReachableTime(), p.RetransmitTimer())
 }
 func (p ICMP6RouterAdvertisement) Type() uint8                { return uint8(p[0]) }
@@ -83,74 +109,70 @@ func (p ICMP6RouterAdvertisement) Options() (NewOptions, error) {
 	return newParseOptions(p[16:])
 }
 
-type NewOptions struct {
-	MTU              MTU
-	Prefices         []PrefixInformation
-	RDNSS            RecursiveDNSServer
-	SourceLLA        LinkLayerAddress
-	TargetLLA        LinkLayerAddress
-	DNSSearchList    DNSSearchList
-	RouteInformation RouteInformation
+type ICMP6NeighborAdvertisement []byte
+
+func (p ICMP6NeighborAdvertisement) IsValid() bool { return len(p) < 24 }
+func (p ICMP6NeighborAdvertisement) String() string {
+	return fmt.Sprintf("type=na code=%d targetIP=%s targetLLA=%s", p.Code(), p.TargetAddress(), p.TargetLLA())
+}
+func (p ICMP6NeighborAdvertisement) Type() uint8           { return uint8(p[0]) }
+func (p ICMP6NeighborAdvertisement) Code() byte            { return p[1] }
+func (p ICMP6NeighborAdvertisement) Checksum() int         { return int(binary.BigEndian.Uint16(p[2:4])) }
+func (p ICMP6NeighborAdvertisement) TargetAddress() net.IP { return net.IP(p[8:24]) }
+func (p ICMP6NeighborAdvertisement) TargetLLA() net.HardwareAddr {
+	// TargetLLA option
+	if len(p) < 32 || p[24] != 2 || p[25] != 1 { // Option type TargetLLA, len 8 bytes
+		return nil
+	}
+	return net.HardwareAddr(p[26 : 26+6])
 }
 
-func newParseOptions(b []byte) (NewOptions, error) {
-	var options NewOptions
-
-	for i := 0; len(b[i:]) != 0; {
-		// Two bytes: option type and option length.
-		if len(b[i:]) < 2 {
-			return NewOptions{}, io.ErrUnexpectedEOF
-		}
-
-		// Type processed as-is, but length is stored in units of 8 bytes,
-		// so expand it to the actual byte length.
-		t := b[i]
-		l := int(b[i+1]) * 8
-
-		// Verify that we won't advance beyond the end of the byte slice.
-		if l > len(b[i:]) {
-			return NewOptions{}, io.ErrUnexpectedEOF
-		}
-
-		// Infer the option from its type value and use it for unmarshaling.
-		switch t {
-		case optSourceLLA:
-			if err := options.SourceLLA.unmarshal(b[i : i+l]); err != nil {
-				return NewOptions{}, err
-			}
-		case optTargetLLA:
-			if err := options.TargetLLA.unmarshal(b[i : i+l]); err != nil {
-				return NewOptions{}, err
-			}
-		case optMTU:
-			if err := options.MTU.unmarshal(b[i : i+l]); err != nil {
-				return NewOptions{}, err
-			}
-		case optPrefixInformation:
-			p := PrefixInformation{}
-			if err := p.unmarshal(b[i : i+l]); err != nil {
-				return NewOptions{}, err
-			}
-			options.Prefices = append(options.Prefices, p)
-		case optRouteInformation:
-			if err := options.RouteInformation.unmarshal(b[i : i+l]); err != nil {
-				return NewOptions{}, err
-			}
-		case optRDNSS:
-			if err := options.RDNSS.unmarshal(b[i : i+l]); err != nil {
-				return NewOptions{}, err
-			}
-		case optDNSSL:
-			if err := options.DNSSearchList.unmarshal(b[i : i+l]); err != nil {
-				return NewOptions{}, err
-			}
-		default:
-			fmt.Println("icmp6 : invalid option - ignoring ", t)
-		}
-
-		// Advance to the next option's type field.
-		i += l
+func ICMP6NeighborAdvertisementMarshal(router bool, solicited bool, override bool, targetAddr net.IP, targetLLA net.HardwareAddr) []byte {
+	b := make([]byte, 32)
+	b[0] = byte(ipv6.ICMPTypeNeighborAdvertisement)
+	if router {
+		b[4] |= (1 << 7)
 	}
+	if solicited {
+		b[4] |= (1 << 6)
+	}
+	if override {
+		b[4] |= (1 << 5)
+	}
+	copy(b[8:], targetAddr)
+	b[24] = 2
+	b[25] = 1
+	copy(b[26:], targetLLA)
+	return b
+}
 
-	return options, nil
+type ICMP6NeighborSolicitation []byte
+
+func (p ICMP6NeighborSolicitation) IsValid() bool { return len(p) < 24 }
+func (p ICMP6NeighborSolicitation) String() string {
+	return fmt.Sprintf("type=na code=%d targetIP=%s sourceLLA=%s", p.Code(), p.TargetAddress(), p.SourceLLA())
+}
+func (p ICMP6NeighborSolicitation) Type() uint8           { return uint8(p[0]) }
+func (p ICMP6NeighborSolicitation) Code() byte            { return p[1] }
+func (p ICMP6NeighborSolicitation) Checksum() int         { return int(binary.BigEndian.Uint16(p[2:4])) }
+func (p ICMP6NeighborSolicitation) TargetAddress() net.IP { return net.IP(p[8:24]) }
+func (p ICMP6NeighborSolicitation) SourceLLA() net.HardwareAddr {
+	// SourceLLA option
+	if len(p) < 32 || p[24] != 1 || p[25] != 1 { // Option type TargetLLA, len 8 bytes
+		return nil
+	}
+	return net.HardwareAddr(p[26 : 26+6])
+}
+
+func ICMP6NeighborSolicitationMarshal(targetAddr net.IP, sourceLLA net.HardwareAddr) ([]byte, error) {
+	b := make([]byte, 32)                          // 4 header + 28 bytes
+	b[0] = byte(ipv6.ICMPTypeNeighborSolicitation) // NS
+	// skip reserved 4 bytes
+	copy(b[8:], targetAddr)
+
+	// single option: SourceLLA option
+	b[24] = 1 // SourceLLA option
+	b[25] = 1 // len 8 bytes
+	copy(b[26:], sourceLLA)
+	return b, nil
 }

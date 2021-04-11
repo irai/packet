@@ -6,109 +6,22 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"time"
 
-	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv6"
 )
 
 const (
-	// Length of an ICMPv6 header.
-	icmpLen = 4
 
 	// Minimum byte length values for each type of valid Message.
-	naLen = 20
 	nsLen = 20
 	raLen = 12
 	rsLen = 4
 )
 
-// A Message is a Neighbor Discovery Protocol message.
-type Message interface {
-	// Type specifies the ICMPv6 type for a Message.
-	Type() ipv6.ICMPType
-
-	// Called via MarshalMessage and ParseMessage.
-	marshal() ([]byte, error)
-	unmarshal(b []byte) error
-}
-
-func marshalMessage(m Message, psh []byte) ([]byte, error) {
-	mb, err := m.marshal()
-	if err != nil {
-		return nil, err
-	}
-
-	im := icmp.Message{
-		Type: m.Type(),
-		// Always zero.
-		Code: 0,
-		// Calculated by caller or OS.
-		Checksum: 0,
-		Body: &icmp.RawBody{
-			Data: mb,
-		},
-	}
-
-	return im.Marshal(psh)
-}
-
-// MarshalMessage marshals a Message into its binary form and prepends an
-// ICMPv6 message with the correct type.
-//
-// It is assumed that the operating system or caller will calculate and place
-// the ICMPv6 checksum in the result.
-func MarshalMessage(m Message) ([]byte, error) {
-	// Pseudo-header always nil so checksum is calculated by caller or OS.
-	return marshalMessage(m, nil)
-}
-
-// MarshalMessageChecksum marshals a Message into its binary form and prepends
-// an ICMPv6 message with the correct type.
-//
-// The source and destination IP addresses are used to compute an IPv6 pseudo
-// header for checksum calculation.
-func MarshalMessageChecksum(m Message, source, destination net.IP) ([]byte, error) {
-	return marshalMessage(m, icmp.IPv6PseudoHeader(source, destination))
-}
-
 // errParseMessage is a sentinel which indicates an error from ParseMessage.
 var errParseMessage = errors.New("failed to parse message")
-
-// ParseMessage parses a Message from its binary form after determining its
-// type from a leading ICMPv6 message.
-func ParseMessage(b []byte) (Message, error) {
-	if len(b) < icmpLen {
-		return nil, fmt.Errorf("ndp: ICMPv6 message too short: %w", errParseMessage)
-	}
-
-	// TODO(mdlayher): verify checksum?
-
-	var m Message
-	t := ipv6.ICMPType(b[0])
-	switch t {
-	case ipv6.ICMPTypeNeighborAdvertisement:
-		m = new(NeighborAdvertisement)
-	case ipv6.ICMPTypeNeighborSolicitation:
-		m = new(NeighborSolicitation)
-	case ipv6.ICMPTypeRouterAdvertisement:
-		m = new(RouterAdvertisement)
-	case ipv6.ICMPTypeRouterSolicitation:
-		m = new(RouterSolicitation)
-	default:
-		return nil, fmt.Errorf("ndp: unrecognized ICMPv6 type %d: %w", t, errParseMessage)
-	}
-
-	if err := m.unmarshal(b[icmpLen:]); err != nil {
-		return nil, fmt.Errorf("ndp: failed to unmarshal %s: %w", t, errParseMessage)
-	}
-
-	return m, nil
-}
-
-var _ Message = &NeighborAdvertisement{}
 
 // A NeighborAdvertisement is a Neighbor Advertisement message as
 // described in RFC 4861, Section 4.4.
@@ -117,132 +30,9 @@ type NeighborAdvertisement struct {
 	Solicited     bool
 	Override      bool
 	TargetAddress net.IP
-	Options       []Option
+	TargetLLA     net.HardwareAddr // optional - TargetLLA option
 }
 
-// Type implements Message.
-func (na *NeighborAdvertisement) Type() ipv6.ICMPType { return ipv6.ICMPTypeNeighborAdvertisement }
-
-func (na *NeighborAdvertisement) marshal() ([]byte, error) {
-	if err := checkIPv6(na.TargetAddress); err != nil {
-		return nil, err
-	}
-
-	b := make([]byte, naLen)
-
-	if na.Router {
-		b[0] |= (1 << 7)
-	}
-	if na.Solicited {
-		b[0] |= (1 << 6)
-	}
-	if na.Override {
-		b[0] |= (1 << 5)
-	}
-
-	copy(b[4:], na.TargetAddress)
-
-	ob, err := marshalOptions(na.Options)
-	if err != nil {
-		return nil, err
-	}
-
-	b = append(b, ob...)
-
-	return b, nil
-}
-
-func (na *NeighborAdvertisement) unmarshal(b []byte) error {
-	if len(b) < naLen {
-		return io.ErrUnexpectedEOF
-	}
-
-	// Skip flags and reserved area.
-	addr := b[4:naLen]
-	if err := checkIPv6(addr); err != nil {
-		return err
-	}
-
-	options, err := parseOptions(b[naLen:])
-	if err != nil {
-		return err
-	}
-
-	*na = NeighborAdvertisement{
-		Router:    (b[0] & 0x80) != 0,
-		Solicited: (b[0] & 0x40) != 0,
-		Override:  (b[0] & 0x20) != 0,
-
-		TargetAddress: make(net.IP, net.IPv6len),
-
-		Options: options,
-	}
-
-	copy(na.TargetAddress, addr)
-
-	return nil
-}
-
-var _ Message = &NeighborSolicitation{}
-
-// A NeighborSolicitation is a Neighbor Solicitation message as
-// described in RFC 4861, Section 4.3.
-type NeighborSolicitation struct {
-	TargetAddress net.IP
-	Options       []Option
-}
-
-// Type implements Message.
-func (ns *NeighborSolicitation) Type() ipv6.ICMPType { return ipv6.ICMPTypeNeighborSolicitation }
-
-func (ns *NeighborSolicitation) marshal() ([]byte, error) {
-	if err := checkIPv6(ns.TargetAddress); err != nil {
-		return nil, err
-	}
-
-	b := make([]byte, nsLen)
-	copy(b[4:], ns.TargetAddress)
-
-	ob, err := marshalOptions(ns.Options)
-	if err != nil {
-		return nil, err
-	}
-
-	b = append(b, ob...)
-
-	return b, nil
-}
-
-func (ns *NeighborSolicitation) unmarshal(b []byte) error {
-	if len(b) < nsLen {
-		return io.ErrUnexpectedEOF
-	}
-
-	// Skip reserved area.
-	addr := b[4:nsLen]
-	if err := checkIPv6(addr); err != nil {
-		return err
-	}
-
-	options, err := parseOptions(b[nsLen:])
-	if err != nil {
-		return err
-	}
-
-	*ns = NeighborSolicitation{
-		TargetAddress: make(net.IP, net.IPv6len),
-
-		Options: options,
-	}
-
-	copy(ns.TargetAddress, addr)
-
-	return nil
-}
-
-var _ Message = &RouterAdvertisement{}
-
-// A RouterAdvertisement is a Router Advertisement message as
 // described in RFC 4861, Section 4.1.
 type RouterAdvertisement struct {
 	CurrentHopLimit           uint8
@@ -316,6 +106,7 @@ func (ra *RouterAdvertisement) marshal() ([]byte, error) {
 	return b, nil
 }
 
+/**
 func (ra *RouterAdvertisement) unmarshal(b []byte) error {
 	if len(b) < raLen {
 		return io.ErrUnexpectedEOF
@@ -361,8 +152,7 @@ func (ra *RouterAdvertisement) unmarshal(b []byte) error {
 
 	return nil
 }
-
-var _ Message = &RouterSolicitation{}
+**/
 
 // A RouterSolicitation is a Router Solicitation message as
 // described in RFC 4861, Section 4.1.
@@ -388,6 +178,7 @@ func (rs *RouterSolicitation) marshal() ([]byte, error) {
 	return b, nil
 }
 
+/**
 func (rs *RouterSolicitation) unmarshal(b []byte) error {
 	if len(b) < rsLen {
 		return io.ErrUnexpectedEOF
@@ -414,6 +205,7 @@ func (rs *RouterSolicitation) unmarshal(b []byte) error {
 
 	return nil
 }
+***/
 
 // checkIPv6 verifies that ip is an IPv6 address.
 func checkIPv6(ip net.IP) error {
