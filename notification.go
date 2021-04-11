@@ -1,6 +1,7 @@
 package packet
 
 import (
+	"fmt"
 	"net"
 	"time"
 )
@@ -10,6 +11,10 @@ type Notification struct {
 	Online   bool
 	DHCPName string
 	MDNSName string
+}
+
+func (n Notification) String() string {
+	return fmt.Sprintf("%s online=%t dhcp4name=%s mdnsname=%s", n.Addr, n.Online, n.DHCPName, n.MDNSName)
 }
 
 // purge is called each minute by the minute goroutine
