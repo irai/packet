@@ -65,10 +65,14 @@ func (h *Handler) spoofLoop(srcAddr packet.Addr, dstAddr packet.Addr) {
 			log.Printf("icmp6: attack end ip=%s repeat=%v duration=%v", dstAddr.IP, nTimes, time.Since(startTime))
 			return
 		}
+		list := []packet.Addr{}
+		for _, router := range h.LANRouters {
+			list = append(list, router.Addr)
+		}
 		h.Unlock()
 
-		if h.Router.IP != nil {
-			srcAddr.IP = h.Router.IP
+		for _, addr := range list {
+			srcAddr.IP = addr.IP
 			if err := h.SendNeighborAdvertisement(srcAddr, dstAddr); err != nil {
 				fmt.Println("icmp6: error sending na ", err)
 			}

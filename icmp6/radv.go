@@ -35,6 +35,33 @@ var (
 	}
 )
 
+// Router holds a router identification
+type Router struct {
+	Addr            packet.Addr
+	enableRADVS     bool // if true, we respond for this server
+	ManagedFlag     bool // if true, hosts should get IP from DHCP, if false, use SLAAC IP
+	OtherCondigFlag bool // if true, hosts should get other info from DHCP
+	Preference      byte
+	MTU             uint32
+	ReacheableTime  int // Must be no greater than 3,600,000 milliseconds (1hour)
+	RetransTimer    int //
+	CurHopLimit     uint8
+	DefaultLifetime time.Duration // A value of zero means the router is not to be used as a default router
+	Prefixes        []PrefixInformation
+	RDNSS           *RecursiveDNSServer // Pointer to facilitate comparison
+	Options         NewOptions
+}
+
+func (h *Handler) findOrCreateRouter(mac net.HardwareAddr, ip net.IP) (router *Router, found bool) {
+	r, found := h.LANRouters[string(ip)]
+	if found {
+		return r, true
+	}
+	router = &Router{Addr: packet.Addr{MAC: packet.CopyMAC(mac), IP: packet.CopyIP(ip)}}
+	h.LANRouters[string(ip)] = router
+	return router, false
+}
+
 type RADVS struct {
 	h           *Handler
 	Router      *Router

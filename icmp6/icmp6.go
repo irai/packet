@@ -17,23 +17,6 @@ import (
 // Debug packets turn on logging if desirable
 var Debug bool
 
-// Router holds a router identification
-type Router struct {
-	MAC             net.HardwareAddr // LLA - Local link address
-	IP              net.IP
-	enableRADVS     bool // if true, we respond for this server
-	ManagedFlag     bool // if true, hosts should get IP from DHCP, if false, use SLAAC IP
-	OtherCondigFlag bool // if true, hosts should get other info from DHCP
-	MTU             uint32
-	ReacheableTime  int // Must be no greater than 3,600,000 milliseconds (1hour)
-	RetransTimer    int //
-	CurHopLimit     uint8
-	DefaultLifetime time.Duration // A value of zero means the router is not to be used as a default router
-	Prefixes        []PrefixInformation
-	RDNSS           *RecursiveDNSServer // Pointer to facilitate comparison
-	Options         NewOptions
-}
-
 // Event represents and ICMP6 event from a host
 type Event struct {
 	Type ipv6.ICMPType
@@ -64,19 +47,9 @@ func (h *Handler) PrintTable() {
 			if v.OtherCondigFlag {
 				flags = flags + "O"
 			}
-			fmt.Printf("mac=%s ip=%v flags=%s prefixes=%v rdnss=%+v options=%+v\n", v.MAC, v.IP, flags, v.Prefixes, v.RDNSS, v.Options)
+			fmt.Printf("%s flags=%s prefixes=%v rdnss=%+v options=%+v\n", v.Addr, flags, v.Prefixes, v.RDNSS, v.Options)
 		}
 	}
-}
-
-func (h *Handler) findOrCreateRouter(mac net.HardwareAddr, ip net.IP) (router *Router, found bool) {
-	r, found := h.LANRouters[string(ip)]
-	if found {
-		return r, true
-	}
-	router = &Router{MAC: packet.CopyMAC(mac), IP: packet.CopyIP(ip)}
-	h.LANRouters[string(ip)] = router
-	return router, false
 }
 
 var _ packet.PacketProcessor = &Handler{}
@@ -252,15 +225,22 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, pack
 		if host == nil {
 			return host, packet.Result{}, fmt.Errorf("ra host cannot be nil")
 		}
-		router, _ := h.findOrCreateRouter(host.MACEntry.MAC, host.IP)
-		router.ManagedFlag = frame.ManagedConfiguration()
-		router.CurHopLimit = frame.CurrentHopLimit()
-		router.DefaultLifetime = time.Duration(time.Duration(frame.Lifetime()) * time.Second)
-		var err error
-		if router.Options, err = frame.Options(); err != nil {
+		options, err := frame.Options()
+		if err != nil {
 			fmt.Printf("icmp6 : invalid options %s\n", err)
 			return host, packet.Result{}, err
 		}
+		h.Lock()
+		router, _ := h.findOrCreateRouter(options.SourceLLA.Addr, ip6Frame.Src())
+		router.ManagedFlag = frame.ManagedConfiguration()
+		router.OtherCondigFlag = frame.OtherConfiguration()
+		router.Preference = frame.Preference()
+		router.CurHopLimit = frame.CurrentHopLimit()
+		router.DefaultLifetime = time.Duration(time.Duration(frame.Lifetime()) * time.Second)
+		router.ReacheableTime = int(frame.ReachableTime())
+		router.RetransTimer = int(frame.RetransmitTimer())
+		router.Options = options
+		h.Unlock()
 
 		if Debug {
 			fmt.Println("ether :", ether)
