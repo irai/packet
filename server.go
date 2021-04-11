@@ -357,7 +357,9 @@ func (h *Handler) lockAndSetOnline(host *Host, notify bool) {
 		if host.IP.To4() != nil {
 			if !host.IP.Equal(host.MACEntry.IP4) { // changed IP4
 				fmt.Printf("packet: host changed ip4 from=%s to=%s\n", host.MACEntry.IP4, host.IP)
-				offlineIP = host.MACEntry.IP4 // last IP
+				if !host.MACEntry.IP4.Equal(net.IPv4zero) { // first time?
+					offlineIP = host.MACEntry.IP4 // last IP
+				}
 			}
 		} else {
 			if host.IP.IsGlobalUnicast() && !host.IP.Equal(host.MACEntry.IP6GUA) { // changed IP6 global unique address
