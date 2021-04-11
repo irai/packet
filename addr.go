@@ -6,15 +6,15 @@ import (
 	"net"
 )
 
-var _ net.Addr = &Addr{}
-
-// Addr is a network address which can be used to contact other machines, using
-// their hardware addresses.
+// Addr is a common type to hold the IP and MAC pair
 type Addr struct {
 	MAC  net.HardwareAddr
 	IP   net.IP
 	Port uint16
 }
+
+// Addr must implement net.Addr
+var _ net.Addr = &Addr{}
 
 // String returns the address's hardware address.
 func (a Addr) String() string {
