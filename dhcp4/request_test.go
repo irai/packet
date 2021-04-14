@@ -59,7 +59,7 @@ func Test_requestSimple(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			newDHCPHost(t, tc, tt.srcAddr.MAC)
-			time.Sleep(time.Millisecond * 10)
+			time.Sleep(time.Millisecond * 100)
 
 			if n := len(tc.h.table); n != tt.tableLen {
 				tc.h.printTable()
@@ -73,8 +73,8 @@ func Test_requestSimple(t *testing.T) {
 	}
 
 	t.Run("notification count", func(t *testing.T) {
-		if notificationCount != 2 {
-			t.Errorf("Invalid notification count want=%d got=%d", 2, notificationCount)
+		if notificationCount != 3 {
+			t.Errorf("Invalid notification count want=%d got=%d", 3, notificationCount)
 		}
 	})
 }
@@ -105,8 +105,8 @@ func Test_requestExhaust(t *testing.T) {
 	}()
 	time.Sleep(time.Second * 3) // WARNING: it takes about 2 seconds to read all 254 notifications
 	t.Run("notification count", func(t *testing.T) {
-		if notificationCount != 254 { // limited to maximum channel capacity; will lose some notifications
-			t.Errorf("Invalid notification count want=%d got=%d", 254, notificationCount)
+		if notificationCount != 255 {
+			t.Errorf("Invalid notification count want=%d got=%d", 255, notificationCount)
 		}
 	})
 

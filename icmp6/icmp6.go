@@ -199,7 +199,14 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, pack
 		}
 		fmt.Printf("icmp6: neighbor solicitation %s\n", frame)
 
-		// IPv6 Duplicate Address Detection
+		// Source address:
+		//   - Either an address assigned to the interface from which this message was sent or
+		//     the unspecified address (if duplicated address detection in progress).
+		// Destination address:
+		//   - Either the solicited-node multicast address (ff02::1..) corresponding to the target address, or
+		//     the target address.
+		//
+		//IPv6 Duplicate Address Detection
 		// IP6 src=0x00 dst=solicited-node address (multicast)
 		//
 		if ip6Frame.Src().IsUnspecified() {
@@ -256,6 +263,13 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, pack
 		if Debug {
 			fmt.Printf("icmp6 : router solicitation %s\n", frame)
 		}
+
+		// Source address:
+		//    - usually the unspecified IPv6 address (0:0:0:0:0:0:0:0) or
+		//      configured unicast address of the interface.
+		// Destination address:
+		//    - the all-routers multicast address (FF02::2) with the link-local scope.
+
 		/**
 		for _, v := range h.LANRouters {
 			if v.enableRADVS {
