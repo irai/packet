@@ -76,6 +76,23 @@ func printResponseTable(tc *TestContext) {
 	}
 }
 
+var waitingResponse int // incremented when a goroutine is awaiting a response
+var waitChannel = make(chan string, 10)
+
+func waitResponse(tc *TestContext, action Action) error {
+	tc.mutex.Lock()
+	waitingResponse++
+	fmt.Println("test  : waiting response", action)
+	tc.mutex.Unlock()
+	select {
+	case s := <-waitChannel:
+		fmt.Println("test  : got response", s)
+	case <-time.After(time.Second * 10):
+		return packet.ErrTimeout
+	}
+	return nil
+}
+
 func readResponse(ctx context.Context, tc *TestContext) error {
 	buffer := make([]byte, 2000)
 	for {
@@ -99,9 +116,10 @@ func readResponse(ctx context.Context, tc *TestContext) error {
 
 		// used for debuging - disable to avoid verbose logging
 		if false {
-			fmt.Printf("test  : got client test response=%s\n", ether)
+			fmt.Printf("test  : got test response=%s\n", ether)
 		}
 
+		notify := ""
 		if ether.EtherType() == syscall.ETH_P_IP { // IP4?
 			ip4 := packet.IP4(ether.Payload())
 			if !ip4.IsValid() {
@@ -109,9 +127,7 @@ func readResponse(ctx context.Context, tc *TestContext) error {
 				continue
 			}
 			if ip4.Protocol() == syscall.IPPROTO_UDP { // UDP?
-				// fmt.Printf("raw: got buffere ip=%s\n", ip4)
 				if udp := packet.UDP(ip4.Payload()); udp.DstPort() == packet.DHCP4ClientPort { // DHCP client port?
-					// fmt.Printf("raw: got buffere udp=%s\n", udp)
 					dhcp4Frame := dhcp4.DHCP4(udp.Payload())
 					options := dhcp4Frame.ParseOptions()
 					var reqType dhcp4.MessageType
@@ -126,7 +142,15 @@ func readResponse(ctx context.Context, tc *TestContext) error {
 							panic("ip is nil")
 						}
 						tc.IPOffer = ip
-						fmt.Printf("raw: received dhcp offer=%s\n", ip)
+						// fmt.Printf("raw: received dhcp offer=%s\n", ip)
+					}
+
+					// notify if required
+					switch reqType {
+					case dhcp4.Offer:
+						notify = "dhcp4Discover"
+					case dhcp4.ACK, dhcp4.NAK:
+						notify = "dhcp4Request"
 					}
 				}
 			}
@@ -137,6 +161,11 @@ func readResponse(ctx context.Context, tc *TestContext) error {
 
 		tc.mutex.Lock()
 		tc.responseTable = append(tc.responseTable, tmp)
+		if notify != "" {
+			// fmt.Println("test  : notification response", notify)
+			waitChannel <- notify
+			waitingResponse = waitingResponse - 1
+		}
 		tc.mutex.Unlock()
 	}
 }
@@ -401,9 +430,20 @@ func runAction(t *testing.T, tc *TestContext, tt TestEvent) {
 			panic(err.Error())
 		}
 	}
-	time.Sleep(tt.waitTimeAfter)
 
-	if n := len(tc.Engine.LANHosts.Table) - savedHostTableCount; n != tt.hostTableInc {
+	switch tt.action {
+	case "dhcp4Request", "dhcp4Discover":
+		// wait for response if DHCP packet
+		// CAUTION: must wait always for DHCP response because the response will be written to the channel
+		if err := waitResponse(tc, tt.action); err != nil {
+			t.Fatalf("%s: error waiting for response for=%s %s", tt.name, tt.action, err)
+		}
+		time.Sleep(time.Millisecond * 5) // give time to update online/offline entries
+	default:
+		time.Sleep(tt.waitTimeAfter)
+	}
+
+	if n := len(tc.Engine.LANHosts.Table) - savedHostTableCount; tt.hostTableInc > 0 && n != tt.hostTableInc {
 		t.Errorf("%s: invalid host table len want=%v got=%v", tt.name, tt.hostTableInc, n)
 		tc.Engine.PrintTable()
 	}
