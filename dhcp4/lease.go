@@ -90,7 +90,7 @@ func (h *Handler) findOrCreate(clientID []byte, mac net.HardwareAddr, name strin
 			bytes.Equal(lease.Addr.MAC, mac) {
 			return lease
 		}
-		fmt.Printf("dhcp4 : client changed subnet from=%v to=%v\n", lease.subnet.LAN, subnet.LAN)
+		fmt.Printf("dhcp4 : client changed subnet clientID=%v from=%v to=%v\n", lease.ClientID, lease.subnet.LAN, subnet.LAN)
 	}
 
 	lease = &Lease{}
