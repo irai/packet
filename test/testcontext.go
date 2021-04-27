@@ -69,6 +69,13 @@ type TestContext struct {
 	// savedIP       net.IP // save the returned IP for use by subsequent calls
 }
 
+func printResponseTable(tc *TestContext) {
+	fmt.Println("Response table len=", len(tc.responseTable))
+	for i, v := range tc.responseTable {
+		fmt.Printf("  entry=%d etherType=%x\n", i, packet.Ether(v).EtherType())
+	}
+}
+
 func readResponse(ctx context.Context, tc *TestContext) error {
 	buffer := make([]byte, 2000)
 	for {
@@ -119,6 +126,7 @@ func readResponse(ctx context.Context, tc *TestContext) error {
 							panic("ip is nil")
 						}
 						tc.IPOffer = ip
+						fmt.Printf("raw: received dhcp offer=%s\n", ip)
 					}
 				}
 			}
@@ -315,10 +323,10 @@ func NewHostEvents(addr packet.Addr, hostInc int, macInc int) []TestEvent {
 			wantHost:      nil, // don't validate host
 			waitTimeAfter: time.Millisecond * 10,
 		},
-		{name: "request-" + addr.MAC.String(), action: "dhcp4Request", hostTableInc: hostInc, macTableInc: 0, responsePos: -1, responseTableInc: 1,
+		{name: "request-" + addr.MAC.String(), action: "dhcp4Request", hostTableInc: hostInc, macTableInc: 0, responsePos: -1, responseTableInc: -1,
 			srcAddr:       packet.Addr{MAC: addr.MAC, IP: net.IPv4zero},
 			wantHost:      &packet.Host{IP: nil, Online: true},
-			waitTimeAfter: time.Millisecond * 20,
+			waitTimeAfter: time.Millisecond * 50,
 		},
 		{name: "arp-probe-" + addr.MAC.String(), action: "arpProbe", hostTableInc: 0, macTableInc: 0, responsePos: -1, responseTableInc: 0,
 			srcAddr:       packet.Addr{MAC: addr.MAC, IP: net.IPv4zero},
@@ -340,12 +348,15 @@ func runAction(t *testing.T, tc *TestContext, tt TestEvent) {
 
 	switch tt.action {
 	case "capture":
+		t.Log("send capture ")
 		tc.Engine.Capture(tt.srcAddr.MAC)
 		sendPacket = false
 	case "release":
+		t.Log("send release ")
 		tc.Engine.Capture(tt.srcAddr.MAC)
 		sendPacket = false
 	case "dhcp4Request":
+		t.Log("send dhcp4Request ")
 		if tt.srcAddr.IP == nil || tt.srcAddr.IP.Equal(net.IPv4zero) {
 			tt.ether = newDHCP4RequestFrame(tt.srcAddr, HostIP4, tc.IPOffer, []byte(fmt.Sprintf("%d", tc.dhcp4XID)))
 		} else {
@@ -353,16 +364,19 @@ func runAction(t *testing.T, tc *TestContext, tt TestEvent) {
 		}
 
 	case "dhcp4Discover":
+		t.Log("send dhcp4Discover ")
 		tc.dhcp4XID++
 		tt.ether = newDHCP4DiscoverFrame(tt.srcAddr, []byte(fmt.Sprintf("%d", tc.dhcp4XID)))
 
 	case "arpProbe":
+		t.Log("send arpProbe ")
 		if tc.IPOffer == nil {
 			panic("invalid IPOffer")
 		}
 		tt.ether = newARPFrame(tt.srcAddr, packet.Addr{MAC: arp.EthernetBroadcast, IP: tc.IPOffer}, arp.OperationRequest)
 
 	case "arpAnnouncement":
+		t.Log("send arpAnnouncement ")
 		if tt.srcAddr.IP == nil {
 			if tc.IPOffer == nil {
 				panic("invalid IPOffer")
@@ -400,12 +414,12 @@ func runAction(t *testing.T, tc *TestContext, tt TestEvent) {
 	tc.mutex.Lock()
 	if n := len(tc.responseTable) - savedResponseTableCount; tt.responseTableInc > 0 && n != tt.responseTableInc {
 		t.Errorf("%s: invalid response count len want=%v got=%v", tt.name, tt.responseTableInc, n)
-		fmt.Println("responses\n", tc.responseTable)
+		printResponseTable(tc)
 	}
 	tc.mutex.Unlock()
 
 	if false && savedResponseTableCount > 0 {
-		fmt.Println("Response table ", len(tc.responseTable), packet.Ether(tc.responseTable[len(tc.responseTable)-1]))
+		printResponseTable(tc)
 	}
 
 	if tt.wantHost != nil {
