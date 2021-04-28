@@ -259,20 +259,26 @@ type TestEvent struct {
 	responsePos      int // position of response in responseTable -1 is the last entry
 	srcAddr          packet.Addr
 	dstAddr          packet.Addr
+	dhcpHostName     string // dhcp host name
 	ether            packet.Ether
 	wantHost         *packet.Host
 }
 
-func newDHCP4DiscoverFrame(src packet.Addr, xid []byte) packet.Ether {
+func newDHCP4DiscoverFrame(src packet.Addr, xid []byte, hostName string) packet.Ether {
 	options := []dhcp4.Option{}
 	oDNS := dhcp4.Option{Code: dhcp4.OptionDomainNameServer, Value: []byte{}}
+	options = append(options, oDNS)
+	if hostName != "" {
+		oName := dhcp4.Option{Code: dhcp4.OptionHostName, Value: []byte(hostName)}
+		options = append(options, oName)
+	}
 
 	var err error
 	ether := packet.Ether(make([]byte, packet.EthMaxSize))
 	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IP, src.MAC, arp.EthernetBroadcast)
 	ip4 := packet.IP4MarshalBinary(ether.Payload(), 50, src.IP, net.IPv4zero)
 	udp := packet.UDPMarshalBinary(ip4.Payload(), packet.DHCP4ClientPort, packet.DHCP4ServerPort)
-	dhcp4Frame := dhcp4.RequestPacket(dhcp4.Discover, src.MAC, src.IP, xid, false, append(options, oDNS))
+	dhcp4Frame := dhcp4.RequestPacket(dhcp4.Discover, src.MAC, src.IP, xid, false, options)
 	udp, err = udp.AppendPayload(dhcp4Frame)
 	ip4 = ip4.SetPayload(udp, syscall.IPPROTO_UDP)
 	if ether, err = ether.SetPayload(ip4); err != nil {
@@ -281,7 +287,7 @@ func newDHCP4DiscoverFrame(src packet.Addr, xid []byte) packet.Ether {
 	return ether
 }
 
-func newDHCP4RequestFrame(src packet.Addr, serverID net.IP, requestedIP net.IP, xid []byte) packet.Ether {
+func newDHCP4RequestFrame(src packet.Addr, serverID net.IP, requestedIP net.IP, xid []byte, hostName string) packet.Ether {
 	options := []dhcp4.Option{}
 	oDNS := dhcp4.Option{Code: dhcp4.OptionDomainNameServer, Value: []byte{}}
 	oReqIP := dhcp4.Option{Code: dhcp4.OptionRequestedIPAddress, Value: requestedIP}
@@ -289,6 +295,10 @@ func newDHCP4RequestFrame(src packet.Addr, serverID net.IP, requestedIP net.IP, 
 	options = append(options, oDNS)
 	options = append(options, oReqIP)
 	options = append(options, oServerID)
+	if hostName != "" {
+		oName := dhcp4.Option{Code: dhcp4.OptionHostName, Value: []byte(hostName)}
+		options = append(options, oName)
+	}
 
 	var err error
 	ether := packet.Ether(make([]byte, packet.EthMaxSize))
@@ -337,23 +347,25 @@ const (
 	ActionARPAnnouncement Action = "arpAnnouncement"
 )
 
-func NewHost(t *testing.T, tc *TestContext, addr packet.Addr, hostInc int, macInc int) error {
-	events := NewHostEvents(addr, hostInc, macInc)
+func NewHost(t *testing.T, tc *TestContext, addr packet.Addr, hostName string, hostInc int, macInc int) error {
+	events := NewHostEvents(addr, hostName, hostInc, macInc)
 	for _, v := range events {
 		runAction(t, tc, v)
 	}
 	return nil
 }
 
-func NewHostEvents(addr packet.Addr, hostInc int, macInc int) []TestEvent {
+func NewHostEvents(addr packet.Addr, hostName string, hostInc int, macInc int) []TestEvent {
 	return []TestEvent{
 		{name: "discover-" + addr.MAC.String(), action: "dhcp4Discover", hostTableInc: 0, macTableInc: macInc, responsePos: -1, responseTableInc: -1,
 			srcAddr:       packet.Addr{MAC: addr.MAC, IP: net.IPv4zero},
+			dhcpHostName:  hostName,
 			wantHost:      nil, // don't validate host
 			waitTimeAfter: time.Millisecond * 10,
 		},
 		{name: "request-" + addr.MAC.String(), action: "dhcp4Request", hostTableInc: hostInc, macTableInc: 0, responsePos: -1, responseTableInc: -1,
 			srcAddr:       packet.Addr{MAC: addr.MAC, IP: net.IPv4zero},
+			dhcpHostName:  hostName,
 			wantHost:      &packet.Host{IP: nil, Online: true},
 			waitTimeAfter: time.Millisecond * 50,
 		},
@@ -387,15 +399,15 @@ func runAction(t *testing.T, tc *TestContext, tt TestEvent) {
 	case "dhcp4Request":
 		t.Log("send dhcp4Request ")
 		if tt.srcAddr.IP == nil || tt.srcAddr.IP.Equal(net.IPv4zero) {
-			tt.ether = newDHCP4RequestFrame(tt.srcAddr, HostIP4, tc.IPOffer, []byte(fmt.Sprintf("%d", tc.dhcp4XID)))
+			tt.ether = newDHCP4RequestFrame(tt.srcAddr, HostIP4, tc.IPOffer, []byte(fmt.Sprintf("%d", tc.dhcp4XID)), tt.dhcpHostName)
 		} else {
-			tt.ether = newDHCP4RequestFrame(tt.srcAddr, HostIP4, tt.srcAddr.IP, []byte(fmt.Sprintf("%d", tc.dhcp4XID)))
+			tt.ether = newDHCP4RequestFrame(tt.srcAddr, HostIP4, tt.srcAddr.IP, []byte(fmt.Sprintf("%d", tc.dhcp4XID)), tt.dhcpHostName)
 		}
 
 	case "dhcp4Discover":
 		t.Log("send dhcp4Discover ")
 		tc.dhcp4XID++
-		tt.ether = newDHCP4DiscoverFrame(tt.srcAddr, []byte(fmt.Sprintf("%d", tc.dhcp4XID)))
+		tt.ether = newDHCP4DiscoverFrame(tt.srcAddr, []byte(fmt.Sprintf("%d", tc.dhcp4XID)), tt.dhcpHostName)
 
 	case "arpProbe":
 		t.Log("send arpProbe ")
