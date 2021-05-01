@@ -203,7 +203,7 @@ func GetIP4DefaultGatewayAddr(nic string) (addr Addr, err error) {
 	arpList := []Addr{}
 	for i := 0; i < 3; i++ {
 		Ping(addr.IP) // ping to populate arp table
-		time.Sleep(time.Millisecond * 5)
+		time.Sleep(time.Millisecond * 15)
 		arpList, err = LoadLinuxARPTable(nic)
 		if err == nil {
 			// search in table; if the arp entry is not yeet complete, the mac will be zero or wont exist
@@ -312,7 +312,7 @@ func locateFreeIP(nic string, hostIP net.IP, ip net.IP, start uint8, end uint8) 
 
 // Ping execute /usr/bin/ping
 // This is usefuel when engine is not yet running
-func Ping(ip net.IP) error {
+func Ping(ip net.IP) (err error) {
 	// -w deadline - wait 1 second
 	// -i frequency - one request each 0,2 seconds
 	// -c count - how many replies to receive before returning (in conjuction with -w)
@@ -320,14 +320,12 @@ func Ping(ip net.IP) error {
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
+	if err = cmd.Run(); err != nil {
 		fmt.Printf("packet: failed to ping ip=%s error=%s\n", ip, err)
 	}
-	if true { // set to true to check the output
-		fmt.Printf("out: %q\n", stdout.String())
-		fmt.Printf("errs: %q\n", stderr.String())
-	}
-	return nil
+	fmt.Printf("ping: %q\n", stdout.String())
+	// fmt.Printf("errs: %q\n", stderr.String())
+	return err
 }
 
 func LinuxConfigureInterface(nic string, ip *net.IPNet, gw *net.IPNet) error {
