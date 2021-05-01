@@ -129,6 +129,7 @@ func (h *Handler) Release(mac net.HardwareAddr) error {
 // host could be in one of two states:
 //  - StageHunt       - an active hunt is in progress
 //  - StageRedirected - the host is redirected; typically called when host went offline
+//                      or routing is no longer OK
 //
 func (h *Handler) lockAndStopHunt(host *Host, stage HuntStage) (err error) {
 	host.Row.Lock()
@@ -209,6 +210,10 @@ func (h *Handler) lockAndMonitorRoute(now time.Time) (err error) {
 			_, err := h.HandlerICMP4.CheckAddr(addr) // ping host
 			if errors.Is(err, ErrNotRedirected) {
 				fmt.Printf("packet: ip4 routing NOK %s\n", host)
+				// Call stop hunt first to update stage to normal
+				if err := h.lockAndStopHunt(host, StageNormal); err != nil {
+					fmt.Printf("packet: failed to stop hunt %s error=\"%s\"\n", host, err)
+				}
 				if err := h.lockAndStartHunt(addr); err != nil {
 					fmt.Printf("packet: failed to start hunt %s error=\"%s\"\n", host, err)
 				}
