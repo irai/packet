@@ -18,6 +18,7 @@ type MACEntry struct {
 	IP6LLA   net.IP           // keep current ip6 local link address
 	IP6Offer net.IP           // keep ip6 GUA offer
 	Online   bool             // true is mac is online
+	isRouter bool             // Set to true if this is a router
 	HostList []*Host          // IPs associated with this mac
 	LastSeen time.Time
 }

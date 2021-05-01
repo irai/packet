@@ -15,6 +15,10 @@ func (h *Handler) Capture(mac net.HardwareAddr) error {
 		h.mutex.Unlock()
 		return nil
 	}
+	if macEntry.isRouter {
+		h.mutex.Unlock()
+		return ErrIsRouter
+	}
 	macEntry.Captured = true
 
 	list := []Addr{}

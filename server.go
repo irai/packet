@@ -162,6 +162,11 @@ func (config Config) NewEngine(nic string) (*Handler, error) {
 	host.LastSeen = time.Now().Add(time.Hour * 24 * 365) // never expire
 	host.Online = true
 
+	// create the router entry manually and set router flag
+	host, _ = h.findOrCreateHost(h.NICInfo.RouterMAC, h.NICInfo.RouterIP4.IP)
+	host.MACEntry.isRouter = true
+	host.Online = true
+
 	return h, nil
 }
 
@@ -302,10 +307,10 @@ func (h *Handler) stopPlugins() error {
 }
 
 func (h *Handler) minuteLoop() {
-	ticker := time.Tick(time.Minute)
+	ticker := time.NewTicker(time.Minute)
 	for {
 		select {
-		case <-ticker:
+		case <-ticker.C:
 			h.minuteChecker(time.Now())
 
 		case <-h.closeChan:

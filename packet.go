@@ -104,6 +104,7 @@ var (
 	ErrNotFound      = errors.New("not found")
 	ErrTimeout       = errors.New("timeout")
 	ErrNotRedirected = errors.New("not redirected")
+	ErrIsRouter      = errors.New("host is router")
 )
 
 // CopyIP simply copies the IP to a new buffer
