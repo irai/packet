@@ -354,18 +354,18 @@ func (h *Handler) lockAndSetOnline(host *Host, notify bool) {
 	if !host.Online {
 		if host.IP.To4() != nil {
 			if !host.IP.Equal(host.MACEntry.IP4) { // changed IP4
-				fmt.Printf("packet: host changed ip4 from=%s to=%s\n", host.MACEntry.IP4, host.IP)
+				fmt.Printf("packet: host changed ip4 mac=%s from=%s to=%s\n", host.MACEntry.MAC, host.MACEntry.IP4, host.IP)
 				if !host.MACEntry.IP4.Equal(net.IPv4zero) { // first time?
 					offlineIP = host.MACEntry.IP4 // last IP
 				}
 			}
 		} else {
 			if host.IP.IsGlobalUnicast() && !host.IP.Equal(host.MACEntry.IP6GUA) { // changed IP6 global unique address
-				fmt.Printf("packet: host changed ip6 from=%s to=%s\n", host.MACEntry.IP6GUA, host.IP)
+				fmt.Printf("packet: host changed ip6 mac=%s from=%s to=%s\n", host.MACEntry.MAC, host.MACEntry.IP6GUA, host.IP)
 				// offlineIP = host.MACEntry.IP6GUA
 			}
 			if host.IP.IsLinkLocalUnicast() && !host.IP.Equal(host.MACEntry.IP6LLA) { // changed IP6 link local address
-				fmt.Printf("packet: host changed ip6LLA from=%s to=%s\n", host.MACEntry.IP6LLA, host.IP)
+				fmt.Printf("packet: host changed ip6LLA mac=%s from=%s to=%s\n", host.MACEntry.MAC, host.MACEntry.IP6LLA, host.IP)
 				// don't set offline IP as we don't target LLA
 			}
 		}
