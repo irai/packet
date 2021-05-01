@@ -80,7 +80,7 @@ func (h *Handler) spoofLoop(addr packet.Addr) {
 	fmt.Printf("arp   : hunt loop start %s time=%v\n", addr, startTime)
 	for {
 		h.arpMutex.Lock()
-		addr, hunting := h.findHuntByIP(addr.IP)
+		targetAddr, hunting := h.findHuntByIP(addr.IP)
 		h.arpMutex.Unlock()
 
 		if !hunting || h.closed {
@@ -92,10 +92,10 @@ func (h *Handler) spoofLoop(addr packet.Addr) {
 		// i.e. tell target I am 192.168.0.1
 		//
 		// Use virtual IP as it is guaranteed to not change.
-		h.forceSpoof(addr)
+		h.forceSpoof(targetAddr)
 
 		if nTimes%16 == 0 {
-			fmt.Printf("arp   : hunt loop attack %s repeat=%v duration=%v\n", addr, nTimes, time.Now().Sub(startTime))
+			fmt.Printf("arp   : hunt loop attack %s repeat=%v duration=%v\n", targetAddr, nTimes, time.Now().Sub(startTime))
 		}
 		nTimes++
 
