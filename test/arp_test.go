@@ -42,6 +42,6 @@ func TestHandler_arpcapture(t *testing.T) {
 		})
 
 	}
-	checkOnlineCount(t, tc, 2, 0)
+	checkOnlineCount(t, tc, 3, 0)
 	checkCaptureCount(t, tc, 1, 1)
 }

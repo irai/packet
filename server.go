@@ -180,7 +180,9 @@ func (h *Handler) Close() error {
 		close(h.nameChannel)
 	}
 	close(h.closeChan) // will terminate goroutines
-	h.conn.Close()
+	if h.conn != nil {
+		h.conn.Close()
+	}
 	return nil
 }
 

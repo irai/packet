@@ -165,18 +165,6 @@ func (config Config) Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsSe
 	// Add static and classless route options
 	h.net2.appendRouteOptions(h.net1.DefaultGW, h.net1.LAN.Mask, h.net2.DefaultGW)
 
-	// Client port 68: used by dhcp client to listen for dhcp packets
-	// Accept incoming both broadcast and localaddr packets
-	/**
-	h.clientConn = config.ClientConn
-	if h.clientConn == nil {
-		h.clientConn, err = net.ListenPacket("udp4", ":68")
-		if err != nil {
-			return nil, fmt.Errorf("port 68 listen error: %w ", err)
-		}
-	}
-	*/
-
 	if debugging() {
 		log.WithFields(log.Fields{"netfilterLAN": h.net2.LAN.String(), "netfilterGW": h.net2.DefaultGW, "firstIP": h.net2.FirstIP,
 			"lastIP": h.net2.LastIP}).Debug("dhcp4: Server Config")

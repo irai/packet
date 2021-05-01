@@ -1,11 +1,7 @@
 package packet
 
 import (
-	"context"
-	"fmt"
 	"net"
-	"sync"
-	"time"
 )
 
 var (
@@ -42,6 +38,7 @@ var (
 	dnsIP4 = net.IPv4(8, 8, 8, 8)
 )
 
+/**
 type testContext struct {
 	inConn        net.PacketConn
 	outConn       net.PacketConn
@@ -133,3 +130,5 @@ func (tc *testContext) Close() {
 	tc.cancel()
 	tc.wg.Wait()
 }
+
+***/

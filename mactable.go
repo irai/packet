@@ -106,7 +106,7 @@ func (s *MACTable) delete(mac net.HardwareAddr) error {
 }
 **/
 
-// FindMACEntryNoLock returns pointer to macEntry or nil if not found
+// FindMACEntry returns pointer to macEntry or nil if not found
 func (h *Handler) FindMACEntry(mac net.HardwareAddr) *MACEntry {
 	h.mutex.RLock()
 	defer h.mutex.RUnlock()

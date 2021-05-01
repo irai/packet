@@ -51,7 +51,7 @@ func TestHandler_capture(t *testing.T) {
 		})
 
 	}
-	checkOnlineCount(t, tc, 3, 1)
+	checkOnlineCount(t, tc, 4, 1)
 	checkCaptureCount(t, tc, 3, 2)
 }
 
@@ -101,6 +101,6 @@ func TestHandler_captureDHCP(t *testing.T) {
 		})
 
 	}
-	checkOnlineCount(t, tc, 2, 2)
+	checkOnlineCount(t, tc, 3, 2)
 	checkCaptureCount(t, tc, 3, 1)
 }
