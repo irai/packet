@@ -82,8 +82,9 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (result packet.Result
 
 	if lease.IPOffer == nil {
 		if err := h.allocIPOffer(lease, reqIP); err != nil {
-			fmt.Printf("dhcp4 : error all ips allocated, failing silently")
-			return result, nil
+			fmt.Printf("dhcp4 : error all ips allocated, failing silently: %s", err)
+			h.delete(lease)
+			return packet.Result{}, nil
 		}
 	}
 
