@@ -588,7 +588,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 					continue
 				}
 				l4Proto = header.NextHeader()
-				l4Payload = l4Payload[header.Len()+2:]
+				l4Payload = l4Payload[header.Len():]
 			}
 
 		case syscall.ETH_P_ARP: // 0x806
