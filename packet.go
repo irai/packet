@@ -50,14 +50,6 @@ func IPv6SolicitedNode(lla net.IP) Addr {
 	}
 }
 
-var ipv6LinkLocal = func(cidr string) *net.IPNet {
-	_, net, err := net.ParseCIDR(cidr)
-	if err != nil {
-		panic(err)
-	}
-	return net
-}("fe80::/10")
-
 // GenerateULA creates a universal local address
 // Usefule to create a IPv6 prefix when there is no global IPv6 routing
 func GenerateULA(mac net.HardwareAddr, subnet uint16) (*net.IPNet, error) {
@@ -149,10 +141,7 @@ type Ether []byte
 
 func (p Ether) IsValid() bool {
 	// Minimum len to contain two hardware address and EtherType (2 bytes)
-	if len(p) < 14 {
-		return false
-	}
-	return true
+	return len(p) >= 14
 }
 
 func (p Ether) Dst() net.HardwareAddr { return net.HardwareAddr(p[:6]) }
@@ -382,10 +371,7 @@ func (p IP6) AppendPayload(b []byte, nextHeader uint8) (IP6, error) {
 type ICMP4 []byte
 
 func (p ICMP4) IsValid() bool {
-	if len(p) > 8 {
-		return true
-	}
-	return false
+	return len(p) > 8
 }
 
 func (p ICMP4) Type() uint8          { return uint8(p[0]) }
@@ -454,10 +440,7 @@ func (p UDP) Checksum() uint16 { return binary.BigEndian.Uint16(p[6:8]) }
 func (p UDP) Payload() []byte  { return p[8:] }
 
 func (p UDP) IsValid() bool {
-	if len(p) < 8 { // 8 bytes UDP header
-		return false
-	}
-	return true
+	return len(p) >= 8 // 8 bytes UDP header
 }
 
 func UDPMarshalBinary(p []byte, srcPort uint16, dstPort uint16) UDP {

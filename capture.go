@@ -217,7 +217,12 @@ func (h *Handler) lockAndMonitorRoute(now time.Time) (err error) {
 				if err := h.lockAndStartHunt(addr); err != nil {
 					fmt.Printf("packet: failed to start hunt %s error=\"%s\"\n", host, err)
 				}
+			} else {
+				if Debug {
+					fmt.Printf("packet: ip4 routing OK %s\n", host)
+				}
 			}
+			// lock again before loop
 			host.Row.RLock()
 		}
 		host.Row.RUnlock()

@@ -586,7 +586,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			}
 		case syscall.IPPROTO_ICMPV6: // 0x03a
 			if host, result, err = h.HandlerICMP6.ProcessPacket(host, ether); err != nil {
-				fmt.Printf("packet: error processing icmp6: %s\n", err)
+				fmt.Printf("packet: error processing icmp6 : %s\n", err)
 			}
 		case syscall.IPPROTO_IGMP:
 			// Internet Group Management Protocol - Ipv4 multicast groups

@@ -57,12 +57,12 @@ func (h *Handler) spoofLoop(srcAddr packet.Addr, dstAddr packet.Addr) {
 	ticker := time.NewTicker(time.Second * 4).C
 	startTime := time.Now()
 	nTimes := 0
-	log.Printf("icmp6: na attack ip=%s time=%v", dstAddr.IP, startTime)
+	log.Printf("icmp6 : na attack ip=%s time=%v", dstAddr.IP, startTime)
 	for {
 		h.Lock()
 		if h.huntList.Index(dstAddr.MAC) == -1 || h.closed {
 			h.Unlock()
-			log.Printf("icmp6: attack end ip=%s repeat=%v duration=%v", dstAddr.IP, nTimes, time.Since(startTime))
+			log.Printf("icmp6 : attack end ip=%s repeat=%v duration=%v", dstAddr.IP, nTimes, time.Since(startTime))
 			return
 		}
 		list := []packet.Addr{}
@@ -74,7 +74,7 @@ func (h *Handler) spoofLoop(srcAddr packet.Addr, dstAddr packet.Addr) {
 		for _, addr := range list {
 			srcAddr.IP = addr.IP
 			if err := h.SendNeighborAdvertisement(srcAddr, dstAddr); err != nil {
-				fmt.Println("icmp6: error sending na ", err)
+				fmt.Println("icmp6 : error sending na ", err)
 			}
 
 			if nTimes%16 == 0 {

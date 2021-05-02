@@ -110,7 +110,7 @@ func (r *RADVS) sendAdvertistementLoop() {
 
 		case <-ticker:
 			if err := r.h.SendRouterAdvertisement(*r.Router, packet.IP6AllNodesAddr); err != nil {
-				fmt.Printf("icmp6: error in send ra: %s", err)
+				fmt.Printf("icmp6 : error in send ra: %s", err)
 			}
 		}
 	}

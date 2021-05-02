@@ -46,7 +46,7 @@ func (h *Handler) SendEchoRequest(srcAddr packet.Addr, dstAddr packet.Addr, id u
 	}
 
 	if Debug {
-		fmt.Printf("icmp6: echo request %s\n", packet.ICMPEcho(p))
+		fmt.Printf("icmp6 : echo request %s\n", packet.ICMPEcho(p))
 	}
 	return h.sendPacket(srcAddr, dstAddr, p)
 }

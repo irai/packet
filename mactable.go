@@ -122,15 +122,6 @@ func (s *MACTable) findMAC(mac net.HardwareAddr) *MACEntry {
 	return nil
 }
 
-func (s *MACTable) index(mac net.HardwareAddr) int {
-	for i := range s.Table {
-		if bytes.Equal(s.Table[i].MAC, mac) {
-			return i
-		}
-	}
-	return -1
-}
-
 // macTableUpsertIPOffer insert of update mac IP4. Set by dhcp discovery.
 func (h *Handler) macTableUpsertIPOffer(addr Addr) {
 	if h.NICInfo.HostIP4.Contains(addr.IP) {

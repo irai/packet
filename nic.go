@@ -200,7 +200,7 @@ func GetIP4DefaultGatewayAddr(nic string) (addr Addr, err error) {
 
 	// Try 3 times to read arp table
 	// This is required if we just reset the interface and the arp table is nil
-	arpList := []Addr{}
+	var arpList []Addr
 	for i := 0; i < 3; i++ {
 		Ping(addr.IP) // ping to populate arp table
 		time.Sleep(time.Millisecond * 15)
@@ -340,7 +340,8 @@ func LinuxConfigureInterface(nic string, ip *net.IPNet, gw *net.IPNet) error {
 	// network with a 255.255.255.0 mask.
 	ipConfig := &netlink.Addr{IPNet: ip}
 	if err = netlink.AddrAdd(localInterface, ipConfig); err != nil {
-		// handle error
+		fmt.Printf("nic: error configuring netlink error=%s\n", err)
+		return err
 	}
 
 	if gw != nil {

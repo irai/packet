@@ -184,7 +184,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, pack
 			fmt.Println("icmp6 : invalid NS msg")
 			return host, packet.Result{}, packet.ErrParseMessage
 		}
-		fmt.Printf("icmp6: neighbor advertisement %s\n", frame)
+		fmt.Printf("icmp6 : neighbor advertisement %s\n", frame)
 
 		// Source IP is sometimes ff02::1 multicast, which means the host is nil
 		if host == nil {
@@ -197,7 +197,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, pack
 			fmt.Println("icmp6 : invalid NS msg")
 			return host, packet.Result{}, packet.ErrParseMessage
 		}
-		fmt.Printf("icmp6: neighbor solicitation %s\n", frame)
+		fmt.Printf("icmp6 : neighbor solicitation %s\n", frame)
 
 		// Source address:
 		//   - Either an address assigned to the interface from which this message was sent or
@@ -210,7 +210,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, pack
 		// IP6 src=0x00 dst=solicited-node address (multicast)
 		//
 		if ip6Frame.Src().IsUnspecified() {
-			fmt.Printf("icmp6: dad probe for target=%s srcip=%s srcmac=%s dstip=%s dstmac=%s\n", frame.TargetAddress(), ip6Frame.Src(), ether.Src(), ip6Frame.Dst(), ether.Dst())
+			fmt.Printf("icmp6 : dad probe for target=%s srcip=%s srcmac=%s dstip=%s dstmac=%s\n", frame.TargetAddress(), ip6Frame.Src(), ether.Src(), ip6Frame.Dst(), ether.Dst())
 			host, _ = h.engine.FindOrCreateHost(ether.Src(), frame.TargetAddress()) // will lock/unlock mutex
 		}
 
@@ -287,14 +287,14 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, pack
 			return host, packet.Result{}, fmt.Errorf("invalid icmp echo msg len=%d", len(icmp6Frame))
 		}
 		if Debug {
-			fmt.Printf("icmp6: echo reply rcvd %s\n", echo)
+			fmt.Printf("icmp6 : echo reply rcvd %s\n", echo)
 		}
 		echoNotify(echo.EchoID()) // unblock ping if waiting
 
 	case ipv6.ICMPTypeEchoRequest:
 		echo := packet.ICMPEcho(icmp6Frame)
 		if Debug {
-			fmt.Printf("icmp6: echo request rcvd%s\n", echo)
+			fmt.Printf("icmp6 : echo request rcvd%s\n", echo)
 		}
 
 	default:
