@@ -123,6 +123,8 @@ func (h *Handler) ProcessIP6HopByHopExtension(host *Host, b []byte) (n int, err 
 			}
 
 		case 194: // jumbo payload
+		default:
+			fmt.Printf("ip6   : unexpected hop by hop option type=%d", ip6Option.Type())
 		}
 		optionLen = optionLen + ip6Option.Len()
 		ip6Option = ip6Option[ip6Option.Len():]

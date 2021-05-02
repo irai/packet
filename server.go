@@ -574,7 +574,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			// IPv6 Hop by Hop extension - always the first header if present
 			if l4Proto == syscall.IPPROTO_HOPOPTS {
 				var n int
-				if n, err = h.ProcessIP6HopByHopExtension(host, ether); err != nil {
+				if n, err = h.ProcessIP6HopByHopExtension(host, ether); err != nil || n <= 0 {
 					fmt.Printf("packet: error processing hop by hop extension : %s\n", err)
 					continue
 				}
