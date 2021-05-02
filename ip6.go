@@ -98,7 +98,7 @@ func (h *Handler) ProcessIP6HopByHopExtension(host *Host, b []byte) (n int, err 
 	for i := 0; ; i++ {
 		buffer := data[pos:]
 		if len(buffer) < 1 {
-			fmt.Printf("ip6   : error in extension len=%d", len(buffer))
+			fmt.Printf("ip6   : error in extension len=%d\n", len(buffer))
 			return 0, ErrParseMessage
 		}
 
@@ -108,7 +108,7 @@ func (h *Handler) ProcessIP6HopByHopExtension(host *Host, b []byte) (n int, err 
 			pos = pos + 1
 		case 1: // pad N
 			if len(buffer) < 2 {
-				fmt.Printf("ip6   : error in extension pad N len=%d", len(buffer))
+				fmt.Printf("ip6   : error in extension pad N len=%d\n", len(buffer))
 				return 0, ErrParseMessage
 			}
 			// for n bytes of padding, len contains n - 2 (i.e. it discounts type and len bytes)
@@ -116,7 +116,7 @@ func (h *Handler) ProcessIP6HopByHopExtension(host *Host, b []byte) (n int, err 
 		case 5: // router alert
 			// See https://tools.ietf.org/html/rfc2711
 			if len(buffer) < 4 {
-				fmt.Printf("ip6   : error in router alert option len=%d", n)
+				fmt.Printf("ip6   : error in router alert option len=%d\n", n)
 				return 0, ErrParseMessage
 			}
 			value := binary.BigEndian.Uint16(buffer[2 : 2+2])
