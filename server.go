@@ -530,6 +530,8 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		var l4Proto int
 		var l4Payload []byte
 		var host *Host
+		var result Result
+
 		switch ether.EtherType() {
 		case syscall.ETH_P_IP: // 0x0800
 			ip4Frame = IP4(ether.Payload())
@@ -569,6 +571,21 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				host, _ = h.FindOrCreateHost(ether.Src(), ip6Frame.Src()) // will lock/unlock
 			}
 
+			// IPv6 Hop by Hop extension - always the first header if present
+			if l4Proto == syscall.IPPROTO_HOPOPTS {
+				var n int
+				if n, err = h.ProcessIP6HopByHopExtension(host, ether); err != nil {
+					fmt.Printf("packet: error processing hop by hop extension : %s\n", err)
+					continue
+				}
+				if len(l4Payload) <= n+1 {
+					fmt.Printf("packet: error invalid next header payload=%d ext=%d\n", len(l4Payload), n)
+					continue
+				}
+				l4Proto = int(l4Payload[n]) // first byte contains the next header
+				l4Payload = l4Payload[n+1:] // Skip hop by hop data and next header
+			}
+
 		case syscall.ETH_P_ARP: // 0x806
 			l4Proto = syscall.ETH_P_ARP // treat arp as l4 proto; similar to IP6 ICMP NDP
 
@@ -578,7 +595,6 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		}
 		d1 = time.Since(startTime)
 
-		var result Result
 		switch l4Proto {
 		case syscall.IPPROTO_ICMP:
 			if host, result, err = h.HandlerICMP4.ProcessPacket(host, l4Payload); err != nil {
@@ -591,6 +607,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		case syscall.IPPROTO_IGMP:
 			// Internet Group Management Protocol - Ipv4 multicast groups
 			// do nothing
+			fmt.Printf("packet: ipv4 igmp packet %s\n", ether)
 		case syscall.IPPROTO_TCP:
 			// skip tcp
 		case syscall.IPPROTO_UDP:
