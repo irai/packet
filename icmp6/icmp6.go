@@ -185,7 +185,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (*pa
 			fmt.Println("icmp6 : invalid NS msg")
 			return host, packet.Result{}, packet.ErrParseMessage
 		}
-		fmt.Printf("icmp6 : neighbor advertisement %s\n", frame)
+		fmt.Printf("icmp6 : neighbor advertisement from ip=%s %s\n", ip6Frame.Src(), frame)
 
 		// Source IP is sometimes ff02::1 multicast, which means the host is nil
 		if host == nil {
@@ -198,7 +198,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (*pa
 			fmt.Println("icmp6 : invalid NS msg")
 			return host, packet.Result{}, packet.ErrParseMessage
 		}
-		fmt.Printf("icmp6 : neighbor solicitation %s\n", frame)
+		fmt.Printf("icmp6 : neighbor solicitation from ip=%s %s\n", ip6Frame.Src(), frame)
 
 		// Source address:
 		//   - Either an address assigned to the interface from which this message was sent or
@@ -254,7 +254,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (*pa
 			fmt.Println("ether :", ether)
 			fmt.Println("ip6   :", ip6Frame)
 		}
-		fmt.Printf("icmp6 : router advertisement %s %+v \n", frame, router.Options)
+		fmt.Printf("icmp6 : router advertisement from ip=%s %s %+v \n", ip6Frame.Src(), frame, router.Options)
 
 	case ipv6.ICMPTypeRouterSolicitation:
 		frame := ICMP6RouterSolicitation(icmp6Frame)
@@ -262,7 +262,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (*pa
 			return host, packet.Result{}, packet.ErrParseMessage
 		}
 		if Debug {
-			fmt.Printf("icmp6 : router solicitation %s\n", frame)
+			fmt.Printf("icmp6 : router solicitation from ip=%s %s\n", ip6Frame.Src(), frame)
 		}
 
 		// Source address:
@@ -288,21 +288,18 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (*pa
 			return host, packet.Result{}, fmt.Errorf("invalid icmp echo msg len=%d", len(icmp6Frame))
 		}
 		if Debug {
-			fmt.Printf("icmp6 : echo reply rcvd %s\n", echo)
+			fmt.Printf("icmp6 : echo reply from ip=%s %s\n", ip6Frame.Src(), echo)
 		}
 		echoNotify(echo.EchoID()) // unblock ping if waiting
 
 	case ipv6.ICMPTypeEchoRequest: // 0x80
 		echo := packet.ICMPEcho(icmp6Frame)
 		if Debug {
-			fmt.Printf("icmp6 : echo request rcvd%s\n", echo)
+			fmt.Printf("icmp6 : echo request from ip=%s %s\n", ip6Frame.Src(), echo)
 		}
 
 	default:
-		log.Printf("icmp6 not implemented type=%v\n", t)
-		if Debug {
-			fmt.Println("icmp6 :", icmp6Frame)
-		}
+		log.Printf("icmp6 : type not implemented from ip=%s type=%v\n", ip6Frame.Src(), t)
 		return host, packet.Result{}, fmt.Errorf("unrecognized icmp6 type=%d: %w", t, errParseMessage)
 	}
 
