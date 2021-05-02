@@ -82,8 +82,8 @@ func (p HopByHopExtensionHeader) IsValid() bool {
 }
 
 func (p HopByHopExtensionHeader) NextHeader() int { return int(p[0]) }
-func (p HopByHopExtensionHeader) Len() int        { return int(p[1])*8 + 8 } // packet len does not include firs 8 octets
-func (p HopByHopExtensionHeader) Data() []byte    { return p[2 : 2+p.Len()] }
+func (p HopByHopExtensionHeader) Len() int        { return int(p[1])*8 + 8 } // whole packet len - min 8 bytes (i.e p[1] does not include first 8 octets)
+func (p HopByHopExtensionHeader) Data() []byte    { return p[2:p.Len()] }    //
 
 // ProcessPacket handles icmp6 packets
 func (h *Handler) ProcessIP6HopByHopExtension(host *Host, b []byte, header []byte) (n int, err error) {
@@ -104,6 +104,7 @@ func (h *Handler) ProcessIP6HopByHopExtension(host *Host, b []byte, header []byt
 			return 0, ErrParseMessage
 		}
 
+		// for IANA option types: see https://www.iana.org/assignments/ipv6-parameters/ipv6-parameters.xhtml
 		t := buffer[0] & 0b00011111 // last 5 bits contain type
 		switch t {
 		case 0: // padding 1
