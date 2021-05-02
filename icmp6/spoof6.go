@@ -5,15 +5,13 @@ import (
 	"net"
 	"time"
 
-	"log"
-
 	"github.com/irai/packet"
 )
 
 // StartHunt implements packet processor interface
 func (h *Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
 	if Debug {
-		log.Printf("icmp6 force neighbor spoof %s", addr)
+		fmt.Printf("icmp6 : force neighbor spoof %s", addr)
 	}
 	h.Lock()
 	if h.huntList.Index(addr.MAC) != -1 {
@@ -34,7 +32,7 @@ func (h *Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
 // StopHunt implements PacketProcessor interface
 func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
 	if Debug {
-		log.Printf("icmp6 stop neighbor spoof %s", addr)
+		fmt.Printf("icmp6 : stop neighbor spoof %s", addr)
 	}
 	h.Lock()
 	if h.huntList.Index(addr.MAC) == -1 {
@@ -57,12 +55,12 @@ func (h *Handler) spoofLoop(srcAddr packet.Addr, dstAddr packet.Addr) {
 	ticker := time.NewTicker(time.Second * 4).C
 	startTime := time.Now()
 	nTimes := 0
-	log.Printf("icmp6 : na attack ip=%s time=%v", dstAddr.IP, startTime)
+	fmt.Printf("icmp6 : na attack ip=%s time=%v", dstAddr.IP, startTime)
 	for {
 		h.Lock()
 		if h.huntList.Index(dstAddr.MAC) == -1 || h.closed {
 			h.Unlock()
-			log.Printf("icmp6 : attack end ip=%s repeat=%v duration=%v", dstAddr.IP, nTimes, time.Since(startTime))
+			fmt.Printf("icmp6 : attack end ip=%s repeat=%v duration=%v", dstAddr.IP, nTimes, time.Since(startTime))
 			return
 		}
 		list := []packet.Addr{}
@@ -78,7 +76,7 @@ func (h *Handler) spoofLoop(srcAddr packet.Addr, dstAddr packet.Addr) {
 			}
 
 			if nTimes%16 == 0 {
-				log.Printf("icmp6 attack src %s dst %s repeat=%v duration=%v", srcAddr, dstAddr, nTimes, time.Since(startTime))
+				fmt.Printf("icmp6 attack src %s dst %s repeat=%v duration=%v", srcAddr, dstAddr, nTimes, time.Since(startTime))
 			}
 			nTimes++
 		}

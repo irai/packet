@@ -175,7 +175,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (*pa
 	if Debug && t != ipv6.ICMPTypeRouterAdvertisement {
 		fmt.Println("ether:", ether)
 		fmt.Println("ip6  :", ip6Frame)
-		fmt.Println("icmp6:", icmp6Frame, t)
+		fmt.Println("icmp6:", icmp6Frame)
 	}
 
 	switch t {
@@ -297,6 +297,15 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (*pa
 		if Debug {
 			fmt.Printf("icmp6 : echo request from ip=%s %s\n", ip6Frame.Src(), echo)
 		}
+
+	case ipv6.ICMPTypeMulticastListenerReport:
+		fmt.Printf("icmp6 : multicast listener report from ip=%s \n", ip6Frame.Src())
+
+	case ipv6.ICMPTypeVersion2MulticastListenerReport:
+		fmt.Printf("icmp6 : multicast listener report V2 from ip=%s \n", ip6Frame.Src())
+
+	case ipv6.ICMPTypeMulticastListenerQuery:
+		fmt.Printf("icmp6 : multicast listener query from ip=%s \n", ip6Frame.Src())
 
 	default:
 		log.Printf("icmp6 : type not implemented from ip=%s type=%v\n", ip6Frame.Src(), t)
