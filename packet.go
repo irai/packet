@@ -415,3 +415,10 @@ func (p UDP) AppendPayload(b []byte) (UDP, error) {
 // For future usage: See tcp header
 // https://github.com/grahamking/latency
 type TCP []byte
+
+func (p TCP) IsValid() bool {
+	return len(p) >= 20
+}
+
+func (p TCP) SrcPort() uint16 { return binary.BigEndian.Uint16(p[0:2]) }
+func (p TCP) DstPort() uint16 { return binary.BigEndian.Uint16(p[2:4]) }

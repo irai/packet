@@ -109,13 +109,11 @@ func (h *Handler) ProcessIP6HopByHopExtension(host *Host, b []byte, header []byt
 		switch t {
 		case 0: // padding 1
 			pos = pos + 1
-			fmt.Println("TRACE got single padding")
 		case 1: // pad N
 			if len(buffer) < 2 {
 				fmt.Printf("ip6   : error in extension pad N len=%d\n", len(buffer))
 				return 0, ErrParseMessage
 			}
-			fmt.Println("TRACE got pad N padding", int(buffer[1]))
 
 			// for n bytes of padding, len contains n - 2 (i.e. it discounts type and len bytes)
 			pos = pos + int(buffer[1]) + 2

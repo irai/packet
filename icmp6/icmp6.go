@@ -175,10 +175,11 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (*pa
 	if Debug && t != ipv6.ICMPTypeRouterAdvertisement {
 		fmt.Println("ether:", ether)
 		fmt.Println("ip6  :", ip6Frame)
+		fmt.Println("icmp6:", icmp6Frame, t)
 	}
 
 	switch t {
-	case ipv6.ICMPTypeNeighborAdvertisement:
+	case ipv6.ICMPTypeNeighborAdvertisement: // 0x88
 		frame := ICMP6NeighborAdvertisement(icmp6Frame)
 		if !frame.IsValid() {
 			fmt.Println("icmp6 : invalid NS msg")
@@ -191,7 +192,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (*pa
 			host, _ = h.engine.FindOrCreateHost(ether.Src(), frame.TargetAddress()) // will lock/unlock mutex
 		}
 
-	case ipv6.ICMPTypeNeighborSolicitation:
+	case ipv6.ICMPTypeNeighborSolicitation: // 0x87
 		frame := ICMP6NeighborSolicitation(icmp6Frame)
 		if !frame.IsValid() {
 			fmt.Println("icmp6 : invalid NS msg")
@@ -214,7 +215,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (*pa
 			host, _ = h.engine.FindOrCreateHost(ether.Src(), frame.TargetAddress()) // will lock/unlock mutex
 		}
 
-	case ipv6.ICMPTypeRouterAdvertisement:
+	case ipv6.ICMPTypeRouterAdvertisement: // 0x86
 
 		frame := ICMP6RouterAdvertisement(icmp6Frame)
 		if !frame.IsValid() {
@@ -281,7 +282,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (*pa
 		}
 		**/
 
-	case ipv6.ICMPTypeEchoReply:
+	case ipv6.ICMPTypeEchoReply: // 0x81
 		echo := packet.ICMPEcho(icmp6Frame)
 		if !echo.IsValid() {
 			return host, packet.Result{}, fmt.Errorf("invalid icmp echo msg len=%d", len(icmp6Frame))
@@ -291,7 +292,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (*pa
 		}
 		echoNotify(echo.EchoID()) // unblock ping if waiting
 
-	case ipv6.ICMPTypeEchoRequest:
+	case ipv6.ICMPTypeEchoRequest: // 0x80
 		echo := packet.ICMPEcho(icmp6Frame)
 		if Debug {
 			fmt.Printf("icmp6 : echo request rcvd%s\n", echo)
@@ -300,8 +301,6 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (*pa
 	default:
 		log.Printf("icmp6 not implemented type=%v\n", t)
 		if Debug {
-			fmt.Println("ether :", ether)
-			fmt.Println("ip6   :", ip6Frame)
 			fmt.Println("icmp6 :", icmp6Frame)
 		}
 		return host, packet.Result{}, fmt.Errorf("unrecognized icmp6 type=%d: %w", t, errParseMessage)
