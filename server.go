@@ -573,17 +573,21 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 			// IPv6 Hop by Hop extension - always the first header if present
 			if l4Proto == syscall.IPPROTO_HOPOPTS {
-				var n int
+				header := HopByHopExtensionHeader(l4Payload)
+				if !header.IsValid() {
+					fmt.Printf("packet: error invalid next header payload=%d ext=%d\n", len(l4Payload), n)
+					continue
+				}
 				if n, err = h.ProcessIP6HopByHopExtension(host, ether); err != nil || n <= 0 {
 					fmt.Printf("packet: error processing hop by hop extension : %s\n", err)
 					continue
 				}
-				if len(l4Payload) <= n+1 {
-					fmt.Printf("packet: error invalid next header payload=%d ext=%d\n", len(l4Payload), n)
+				if len(l4Payload) <= header.Len()+2+1 {
+					fmt.Printf("packet: error invalid next header payload=%d ext=%d\n", len(l4Payload), header.Len()+2)
 					continue
 				}
-				l4Proto = int(l4Payload[n]) // first byte contains the next header
-				l4Payload = l4Payload[n+1:] // Skip hop by hop data and next header
+				l4Proto = header.NextHeader()
+				l4Payload = l4Payload[header.Len()+2:]
 			}
 
 		case syscall.ETH_P_ARP: // 0x806

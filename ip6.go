@@ -67,50 +67,61 @@ func (p IP6) AppendPayload(b []byte, nextHeader uint8) (IP6, error) {
 	return p, nil
 }
 
-type HopByHopExtension []byte
+type HopByHopExtensionHeader []byte
 
-func (p HopByHopExtension) IsValid() bool {
+func (p HopByHopExtensionHeader) IsValid() bool {
 	if len(p) < 2 {
 		return false
 	}
 	if len(p) < p.Len()+2 {
 		return false
-
 	}
-
 	return true
 }
 
-func (p HopByHopExtension) Action() uint8 { return p[0] >> 6 }
-func (p HopByHopExtension) Change() uint8 { return (p[0] & 0b00111111) >> 5 }
-func (p HopByHopExtension) Type() uint8   { return p[0] & 0b00011111 }
-func (p HopByHopExtension) Len() int      { return int(p[1]) }
-func (p HopByHopExtension) Data() []byte  { return p[2 : p.Len()+2] }
+func (p HopByHopExtensionHeader) NextHeader() int { return int(p[0]) }
+func (p HopByHopExtensionHeader) Len() int        { return int(p[1]) * 8 }
+func (p HopByHopExtensionHeader) Data() []byte    { return p[2 : p.Len()+2] }
 
 // ProcessPacket handles icmp6 packets
 func (h *Handler) ProcessIP6HopByHopExtension(host *Host, b []byte) (n int, err error) {
 
 	ether := Ether(b)
 	ip6Frame := IP6(ether.Payload())
-	ip6Option := HopByHopExtension(ip6Frame.Payload())
+	ip6HopExtensionHeader := HopByHopExtensionHeader(ip6Frame.Payload())
+	if !ip6HopExtensionHeader.IsValid() {
+		return 0, ErrParseMessage
+	}
 
-	var optionLen int
-	for i := 0; len(ip6Option) > 0; i++ {
-		if !ip6Option.IsValid() {
-			return 0, fmt.Errorf("invalid ipv6 hop by hop option pos=%d msg=%v: %w", i, ip6Frame, ErrParseMessage)
+	data := ip6HopExtensionHeader.Data()
+	pos := 0
+	for i := 0; ; i++ {
+		buffer := data[pos:]
+		if len(buffer) < 1 {
+			fmt.Printf("ip6   : error in extension len=%d", len(buffer))
+			return 0, ErrParseMessage
 		}
 
-		data := ip6Option.Data()
-		switch ip6Option.Type() {
-		case 0: // padding
+		t := buffer[0] & 0b00011111 // last 5 bits contain type
+		switch t {
+		case 0: // padding 1
+			pos = pos + 1
 		case 1: // pad N
+			if len(buffer) < 2 {
+				fmt.Printf("ip6   : error in extension pad N len=%d", len(buffer))
+				return 0, ErrParseMessage
+			}
+			// for n bytes of padding, len contains n - 2 (i.e. it discounts type and len bytes)
+			pos = pos + int(buffer[1]) + 2
 		case 5: // router alert
 			// See https://tools.ietf.org/html/rfc2711
-			if n := len(data); n != 2 {
+			if len(buffer) < 4 {
 				fmt.Printf("ip6   : error in router alert option len=%d", n)
 				return 0, ErrParseMessage
 			}
-			value := binary.BigEndian.Uint16(data[2 : 2+2])
+			value := binary.BigEndian.Uint16(buffer[2 : 2+2])
+			pos = pos + 4 // fixed len 4
+
 			if Debug {
 				fmt.Printf("ip6   : hop by hop option router alert value=%d\n", value)
 			}
@@ -123,12 +134,20 @@ func (h *Handler) ProcessIP6HopByHopExtension(host *Host, b []byte) (n int, err 
 			}
 
 		case 194: // jumbo payload
+			pos = pos + 4
 		default:
-			fmt.Printf("ip6   : unexpected hop by hop option type=%d", ip6Option.Type())
+			fmt.Printf("ip6   : unexpected hop by hop option type=%d\n", t)
+			if len(buffer) < 2 {
+				fmt.Printf("ip6   : error in unexpected extension len=%d", len(buffer))
+				return 0, ErrParseMessage
+			}
+			pos = pos + int(buffer[1]) + 2
 		}
-		optionLen = optionLen + ip6Option.Len()
-		ip6Option = ip6Option[ip6Option.Len():]
+
+		if pos >= len(data) {
+			break
+		}
 	}
 
-	return optionLen, nil
+	return pos, nil
 }
