@@ -583,7 +583,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				if n, err = h.ProcessIP6HopByHopExtension(host, ether, l4Payload); err != nil || n <= 0 {
 					fmt.Printf("packet: error processing hop by hop extension : %s\n", err)
 				}
-				if len(l4Payload) <= header.Len()+2+1 {
+				if len(l4Payload) <= header.Len()+1 {
 					fmt.Printf("packet: error invalid next header payload=%d ext=%d\n", len(l4Payload), header.Len()+2)
 					continue
 				}
