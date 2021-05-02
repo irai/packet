@@ -98,7 +98,7 @@ func (h *Handler) ProcessIP6HopByHopExtension(host *Host, b []byte) (n int, err 
 	for i := 0; ; i++ {
 		buffer := data[pos:]
 		if len(buffer) < 1 {
-			fmt.Printf("ip6   : error in extension len=%d\n", len(buffer))
+			fmt.Printf("ip6   : error in extension index=%d pos=%d len=%d data=\"% x\"\n", i, pos, len(buffer), ip6HopExtensionHeader.Data())
 			return 0, ErrParseMessage
 		}
 

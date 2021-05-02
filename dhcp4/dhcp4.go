@@ -256,7 +256,7 @@ func (h *Handler) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
 }
 
 // ProcessPacket implements PacketProcessor interface
-func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, packet.Result, error) {
+func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (*packet.Host, packet.Result, error) {
 	ether := packet.Ether(b)
 	ip4 := packet.IP4(ether.Payload())
 	if !ip4.IsValid() {

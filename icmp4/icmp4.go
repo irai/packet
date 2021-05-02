@@ -58,9 +58,9 @@ func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
 	return packet.StageNormal, nil
 }
 
-func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, packet.Result, error) {
+func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (*packet.Host, packet.Result, error) {
 
-	icmpFrame := packet.ICMP4(b)
+	icmpFrame := packet.ICMP4(header)
 
 	switch icmpFrame.Type() {
 	case packet.ICMPTypeEchoReply:

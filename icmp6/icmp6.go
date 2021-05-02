@@ -161,11 +161,11 @@ func (h *Handler) sendPacket(srcAddr packet.Addr, dstAddr packet.Addr, b []byte)
 var repeat int = -1
 
 // ProcessPacket handles icmp6 packets
-func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, packet.Result, error) {
+func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (*packet.Host, packet.Result, error) {
 
-	ether := packet.Ether(b)
+	ether := packet.Ether(p)
 	ip6Frame := packet.IP6(ether.Payload())
-	icmp6Frame := ICMP6(ip6Frame.Payload())
+	icmp6Frame := ICMP6(header)
 
 	if !icmp6Frame.IsValid() {
 		return host, packet.Result{}, fmt.Errorf("invalid icmp msg=%v: %w", icmp6Frame, errParseMessage)

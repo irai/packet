@@ -89,12 +89,14 @@ type PacketNOOP struct{}
 
 var _ PacketProcessor = PacketNOOP{}
 
-func (p PacketNOOP) Start() error                                       { return nil }
-func (p PacketNOOP) Stop() error                                        { return nil }
-func (p PacketNOOP) ProcessPacket(*Host, []byte) (*Host, Result, error) { return nil, Result{}, nil }
-func (p PacketNOOP) StartHunt(addr Addr) (HuntStage, error)             { return StageNoChange, nil }
-func (p PacketNOOP) StopHunt(addr Addr) (HuntStage, error)              { return StageNoChange, nil }
-func (p PacketNOOP) CheckAddr(addr Addr) (HuntStage, error)             { return StageNoChange, nil }
+func (p PacketNOOP) Start() error { return nil }
+func (p PacketNOOP) Stop() error  { return nil }
+func (p PacketNOOP) ProcessPacket(*Host, []byte, []byte) (*Host, Result, error) {
+	return nil, Result{}, nil
+}
+func (p PacketNOOP) StartHunt(addr Addr) (HuntStage, error) { return StageNoChange, nil }
+func (p PacketNOOP) StopHunt(addr Addr) (HuntStage, error)  { return StageNoChange, nil }
+func (p PacketNOOP) CheckAddr(addr Addr) (HuntStage, error) { return StageNoChange, nil }
 
 // func (p PacketNOOP) HuntStage(addr Addr) HuntStage              { return StageNormal }
 func (p PacketNOOP) MinuteTicker(now time.Time) error { return nil }
@@ -600,11 +602,11 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 		switch l4Proto {
 		case syscall.IPPROTO_ICMP:
-			if host, result, err = h.HandlerICMP4.ProcessPacket(host, l4Payload); err != nil {
+			if host, result, err = h.HandlerICMP4.ProcessPacket(host, ether, l4Payload); err != nil {
 				fmt.Printf("packet: error processing icmp4: %s\n", err)
 			}
 		case syscall.IPPROTO_ICMPV6: // 0x03a
-			if host, result, err = h.HandlerICMP6.ProcessPacket(host, ether); err != nil {
+			if host, result, err = h.HandlerICMP6.ProcessPacket(host, ether, l4Payload); err != nil {
 				fmt.Printf("packet: error processing icmp6 : %s\n", err)
 			}
 		case syscall.IPPROTO_IGMP:
@@ -628,7 +630,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 				// DHCP4 packet?
 				if udp.DstPort() == DHCP4ServerPort || udp.DstPort() == DHCP4ClientPort {
-					if host, result, err = h.HandlerDHCP4.ProcessPacket(host, ether); err != nil {
+					if host, result, err = h.HandlerDHCP4.ProcessPacket(host, ether, udp.Payload()); err != nil {
 						fmt.Printf("packet: error processing dhcp4: %s\n", err)
 					}
 					if result.Update {
@@ -645,7 +647,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			}
 
 		case syscall.ETH_P_ARP: // skip ARP - 0x0806
-			if host, result, err = h.HandlerARP.ProcessPacket(host, ether); err != nil {
+			if host, result, err = h.HandlerARP.ProcessPacket(host, ether, ether.Payload()); err != nil {
 				fmt.Printf("packet: error processing arp: %s\n", err)
 			}
 

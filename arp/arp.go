@@ -137,10 +137,10 @@ const (
 // | ACD probe  | 1 | broadcast | clientMAC | clientMAC  | 0x00       | 00:00:00:00:00:00 |  targetIP |
 // | ACD announ | 1 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  clientIP |
 // +============+===+===========+===========+============+============+===================+===========+
-func (h *Handler) ProcessPacket(host *packet.Host, b []byte) (*packet.Host, packet.Result, error) {
+func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (*packet.Host, packet.Result, error) {
 
 	ether := packet.Ether(b)
-	frame := ARP(ether.Payload())
+	frame := ARP(header)
 	if !frame.IsValid() {
 		return host, packet.Result{}, packet.ErrParseMessage
 	}
