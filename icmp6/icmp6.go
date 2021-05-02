@@ -298,8 +298,13 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (*pa
 		}
 
 	default:
-		log.Printf("icmp6 not implemented type=%v ip6=%s\n", t, icmp6Frame)
-		return host, packet.Result{}, fmt.Errorf("unrecognized icmp6 type %d: %w", t, errParseMessage)
+		log.Printf("icmp6 not implemented type=%v\n", t)
+		if Debug {
+			fmt.Println("ether :", ether)
+			fmt.Println("ip6   :", ip6Frame)
+			fmt.Println("icmp6 :", icmp6Frame)
+		}
+		return host, packet.Result{}, fmt.Errorf("unrecognized icmp6 type=%d: %w", t, errParseMessage)
 	}
 
 	return host, packet.Result{}, nil

@@ -67,28 +67,30 @@ func (p IP6) AppendPayload(b []byte, nextHeader uint8) (IP6, error) {
 	return p, nil
 }
 
+// HopByHopExtensionHeader describes and IPv6 hop by hop extension
+// see https://tools.ietf.org/html/rfc2460
 type HopByHopExtensionHeader []byte
 
 func (p HopByHopExtensionHeader) IsValid() bool {
 	if len(p) < 2 {
 		return false
 	}
-	if len(p) < p.Len()+2 {
+	if len(p) < p.Len()+2 { // include 1 byte nextHeader + 1 byte len
 		return false
 	}
 	return true
 }
 
 func (p HopByHopExtensionHeader) NextHeader() int { return int(p[0]) }
-func (p HopByHopExtensionHeader) Len() int        { return int(p[1]) * 8 }
-func (p HopByHopExtensionHeader) Data() []byte    { return p[2 : p.Len()+2] }
+func (p HopByHopExtensionHeader) Len() int        { return int(p[1])*8 + 8 } // packet len does not include firs 8 octets
+func (p HopByHopExtensionHeader) Data() []byte    { return p[2 : 2+p.Len()] }
 
 // ProcessPacket handles icmp6 packets
-func (h *Handler) ProcessIP6HopByHopExtension(host *Host, b []byte) (n int, err error) {
+func (h *Handler) ProcessIP6HopByHopExtension(host *Host, b []byte, header []byte) (n int, err error) {
 
-	ether := Ether(b)
-	ip6Frame := IP6(ether.Payload())
-	ip6HopExtensionHeader := HopByHopExtensionHeader(ip6Frame.Payload())
+	// ether := Ether(b)
+	// ip6Frame := IP6(ether.Payload())
+	ip6HopExtensionHeader := HopByHopExtensionHeader(header)
 	if !ip6HopExtensionHeader.IsValid() {
 		return 0, ErrParseMessage
 	}
