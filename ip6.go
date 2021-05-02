@@ -68,7 +68,7 @@ func (p IP6) AppendPayload(b []byte, nextHeader uint8) (IP6, error) {
 }
 
 // HopByHopExtensionHeader describes and IPv6 hop by hop extension
-// see https://tools.ietf.org/html/rfc2460
+// see https://tools.ietf.org/html/rfc8200
 type HopByHopExtensionHeader []byte
 
 func (p HopByHopExtensionHeader) IsValid() bool {
@@ -108,11 +108,14 @@ func (h *Handler) ProcessIP6HopByHopExtension(host *Host, b []byte, header []byt
 		switch t {
 		case 0: // padding 1
 			pos = pos + 1
+			fmt.Println("TRACE got single padding")
 		case 1: // pad N
 			if len(buffer) < 2 {
 				fmt.Printf("ip6   : error in extension pad N len=%d\n", len(buffer))
 				return 0, ErrParseMessage
 			}
+			fmt.Println("TRACE got pad N padding", int(buffer[1]))
+
 			// for n bytes of padding, len contains n - 2 (i.e. it discounts type and len bytes)
 			pos = pos + int(buffer[1]) + 2
 		case 5: // router alert
@@ -138,7 +141,7 @@ func (h *Handler) ProcessIP6HopByHopExtension(host *Host, b []byte, header []byt
 		case 194: // jumbo payload
 			pos = pos + 4
 		default:
-			fmt.Printf("ip6   : unexpected hop by hop option type=%d\n", t)
+			fmt.Printf("ip6   : unexpected hop by hop option type=%d data=\"% x\"\n", t, ip6HopExtensionHeader.Data())
 			if len(buffer) < 2 {
 				fmt.Printf("ip6   : error in unexpected extension len=%d", len(buffer))
 				return 0, ErrParseMessage
