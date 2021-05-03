@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"strings"
 	"time"
 )
 
@@ -28,6 +29,32 @@ func (p DHCP4) IsValid() bool {
 		return false
 	}
 	return true
+}
+
+func (p DHCP4) LogString(clientID []byte, reqIP net.IP, name string, serverIP net.IP) string {
+	var b strings.Builder
+	b.Grow(80)
+	b.WriteString("xid=\"")
+	fmt.Fprintf(&b, "% x", p.XId())
+	b.WriteString("\" clientid=\"")
+	fmt.Fprintf(&b, "% x", clientID)
+	b.WriteString("\" name=\"")
+	b.WriteString(name)
+	b.WriteString("\" reqIP=")
+	b.WriteString(reqIP.String())
+	b.WriteString(" chaddr=")
+	b.WriteString(p.CHAddr().String())
+	if serverIP != nil {
+		b.WriteString(" serverIP=")
+		b.WriteString(serverIP.String())
+	}
+	if Debug {
+		b.WriteString(" ciaddr=")
+		b.WriteString(p.CIAddr().String())
+		b.WriteString(" brd=")
+		fmt.Fprintf(&b, "%v", p.Broadcast())
+	}
+	return b.String()
 }
 
 func (p DHCP4) String() string {

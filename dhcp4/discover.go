@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/irai/packet"
-	log "github.com/sirupsen/logrus"
 )
 
 // HandleDiscover respond with a DHCP offer packet
@@ -37,16 +36,8 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (result packet.Result
 	reqIP := net.IP(options[OptionRequestedIPAddress]).To4()
 	name := string(options[OptionHostName])
 
-	fields := log.Fields{"clientid": clientID, "name": name, "xid": p.XId()}
-	log.WithFields(fields).Info("dhcp4: discover rcvd")
-
-	if debugging() {
-		t := dupFields(fields)
-		t["brd"] = p.Broadcast()
-		t["ip"] = reqIP
-		t["mac"] = p.CHAddr()
-		log.WithFields(t).Debug("dhcp4: discover parameters")
-	}
+	fields := p.LogString(clientID, reqIP, name, nil)
+	fmt.Printf("dhcp4 : discover rcvd %s\n", fields)
 
 	lease := h.findOrCreate(clientID, p.CHAddr(), name)
 	// fmt.Println("DEBUG lease ", lease)
@@ -56,7 +47,7 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (result packet.Result
 		// Always attack: new mode 4 April 21 ;
 		// To fix forever discovery loop where client always get the IP from router but is rejected by our ARP
 		// if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && lease.subnet.Stage == packet.StageRedirected) {
-		log.WithFields(fields).Info("dhcp4: discover - send 256 discover packets")
+		fmt.Printf("dhcp4 : discover - send 256 discover packets %s\n", fields)
 		h.attackDHCPServer(options)
 	}
 
@@ -96,11 +87,8 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (result packet.Result
 	opts := lease.subnet.options.SelectOrderOrAll(options[OptionParameterRequestList])
 	ret := ReplyPacket(p, Offer, lease.subnet.DHCPServer, lease.IPOffer, lease.subnet.Duration, opts)
 
-	if debugging() {
-		t := dupFields(fields)
-		t["optsrecv"] = options
-		t["optssent"] = ret.ParseOptions()
-		log.WithFields(t).Debug("dhcp4: offer - options")
+	if Debug {
+		fmt.Printf("dhcp4 : offer - options %s options=%v optsent=%v\n", fields, options, ret.ParseOptions())
 	}
 
 	//Attemp to disrupt the lan DHCP handshake
@@ -113,14 +101,12 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (result packet.Result
 		}
 	}
 
-	fields["ip"] = lease.IPOffer
-
 	// set the IP4 to be later checked in ARP ACD
 	result.Update = true
 	result.Addr = packet.Addr{MAC: lease.Addr.MAC, IP: lease.IPOffer}
 	// result.IPOffer = lease.IPOffer
 	// h.engine.MACTableUpsertIP4Offer(packet.Addr{MAC: lease.Addr.MAC, IP: lease.IPOffer})
 
-	log.WithFields(fields).Info("dhcp4: offer OK")
+	fmt.Printf("dhcp4 : offer OK ip=%s %s\n", lease.IPOffer, fields)
 	return result, ret
 }

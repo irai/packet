@@ -2,11 +2,11 @@ package dhcp4
 
 import (
 	"bytes"
+	"fmt"
 	"net"
 	"time"
 
 	"github.com/irai/packet"
-	log "github.com/sirupsen/logrus"
 )
 
 // HandleRequest process client DHCPREQUEST message to servers
@@ -65,14 +65,10 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 		}
 	}
 
-	fields := log.Fields{"clientid": clientID, "ip": reqIP, "xid": p.XId(), "name": name}
-	if debugging() {
-		t := dupFields(fields)
-		t["mac"] = p.CHAddr()
-		t["ciaddr"] = p.CIAddr()
-		t["serverid"] = serverIP
-		t["brd"] = p.Broadcast()
-		log.WithFields(t).Debug("dhcp4: request")
+	// fields := log.Fields{"clientid": clientID, "ip": reqIP, "xid": p.XId(), "name": name}
+	fields := p.LogString(clientID, reqIP, name, serverIP)
+	if Debug {
+		fmt.Printf("dhcp4 : request fields %s\n", fields)
 	}
 
 	// ---------------------------------------------------------------------
@@ -108,14 +104,11 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 		operation = rebooting
 	}
 
-	fields["ip"] = reqIP
-	log.WithFields(fields).Info("dhcp4: request rcvd")
+	fmt.Printf("dhcp4 : request rcvd ip=%s %s\n", reqIP, fields)
 
 	// reqIP must always be filled in
 	if reqIP.Equal(net.IPv4zero) {
-		fields["optionIP"] = string(options[OptionRequestedIPAddress])
-		fields["ciaddr"] = p.CIAddr()
-		log.WithFields(fields).Error("dhcp4: request - invalid IP")
+		fmt.Printf("dhcp4 : error in request - invalid IP %s optionIP=%s ciaddr=%s\n", fields, string(options[OptionRequestedIPAddress]), p.CIAddr())
 		return host, result, nil
 	}
 
@@ -141,24 +134,21 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 			if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && captured) {
 				// The client is attempting to confirm an offer with another server
 				// Send a nack to client
-				fields["serverid"] = serverIP
-				log.WithFields(fields).Info("dhcp4: request NACK - select is for another server")
+				fmt.Printf("dhcp4 : request NACK - select is for another server %s\n", fields)
 				return host, result, ReplyPacket(p, NAK, subnet.DHCPServer, net.IPv4zero, 0, nil)
 			}
 
-			log.WithFields(fields).Info("dhcp4: ignore select for another server")
+			fmt.Printf("dhcp4 : ignore select for another server %s\n", fields)
 			return host, result, nil // request not for us - silently discard packet
 		}
 
 		if !bytes.Equal(lease.Addr.MAC, p.CHAddr()) || // invalid hardware
 			(lease.State == StateDiscover && (!bytes.Equal(lease.XID, p.XId()) || !lease.IPOffer.Equal(reqIP))) || // invalid discover request
 			(lease.State == StateAllocated && !lease.Addr.IP.Equal(reqIP)) { // invalid request - iphone send duplicate select packets - let it pass
-			fields["lxid"] = lease.XID
-			fields["lip"] = lease.Addr.IP
-			log.WithFields(fields).Info("dhcp4: request NACK - select invalid parameters")
+			fmt.Printf("dhcp4 : request NACK - select invalid parameters %s lxid=%v leaseIP=%s\n", fields, lease.XID, lease.Addr.IP)
 			return host, result, ReplyPacket(p, NAK, subnet.DHCPServer, net.IPv4zero, 0, nil)
 		}
-		log.WithFields(fields).Info("dhcp4: request ACK - select")
+		fmt.Printf("dhcp4 : request ACK - select %s\n", fields)
 
 	case renewing:
 		// If renewing then this packet was unicast to us and the client
@@ -166,17 +156,14 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 		if lease.State != StateAllocated ||
 			!lease.Addr.IP.Equal(reqIP) || !bytes.Equal(lease.Addr.MAC, p.CHAddr()) ||
 			lease.DHCPExpiry.Before(time.Now()) {
-			if lease != nil && debugging() {
-				fields["state"] = lease.State
-				fields["gw"] = subnet.DefaultGW
-			}
-			log.WithFields(fields).Info("dhcp4: request NACK - renew invalid or expired lease")
+			fmt.Printf("dhcp4 : request NACK - renew invalid or expired lease %s gw=%s\n", fields, subnet.DefaultGW)
+
 			// freeLease(lease)
 
 			return host, result, ReplyPacket(p, NAK, subnet.DHCPServer, net.IPv4zero, 0, nil)
 		}
 
-		log.WithFields(fields).Info("dhcp4: request ACK - renewing")
+		fmt.Printf("dhcp4 : request ACK - renewing %s\n", fields)
 		// return host, h.ackPacket(subnet, p, options, lease)
 
 	case rebooting, rebinding:
@@ -186,7 +173,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 		//  - client has not sent discover packet
 
 		if lease.State == StateFree {
-			log.WithFields(fields).Info("dhcp4: request NACK - rebooting for another server")
+			fmt.Printf("dhcp4 : request NACK - rebooting for another server %s\n", fields)
 
 			if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && captured) {
 
@@ -207,8 +194,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 		if lease.State != StateAllocated ||
 			!lease.Addr.IP.Equal(reqIP) || !bytes.Equal(lease.Addr.MAC, p.CHAddr()) ||
 			!subnet.LAN.Contains(lease.Addr.IP) {
-			fields["lan"] = subnet.LAN
-			log.WithFields(fields).Info("dhcp4: request NACK - rebooting")
+			fmt.Printf("dhcp4 : request NACK - rebooting %s lan=%s\n", fields, subnet.LAN)
 
 			if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && captured) {
 				// Attempt to force other dhcp server to release the IP
@@ -223,13 +209,14 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 		}
 
 		if operation == rebooting {
-			log.WithFields(fields).Info("dhcp4: request ACK - rebooting")
+			fmt.Printf("dhcp4 : request ACK - rebooting %s\n", fields)
 		} else {
-			log.WithFields(fields).Info("dhcp4: request ACK - rebinding")
+			fmt.Printf("dhcp4 : request ACK - rebinding %s\n", fields)
 		}
 
 	default:
-		log.WithFields(log.Fields{"clientid": clientID, "mac": lease.Addr.MAC.String(), "ip": reqIP}).Error("dhcp4: request - ignore invalid state")
+		// log.WithFields(log.Fields{"clientid": clientID, "mac": lease.Addr.MAC.String(), "ip": reqIP}).Error("dhcp4: request - ignore invalid state")
+		fmt.Printf("dhcp4 : error in request - ignore invalid operation %s operation=%v\n", fields, operation)
 		return host, result, nil
 	}
 
@@ -249,9 +236,9 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 	opts := lease.subnet.options.SelectOrderOrAll(options[OptionParameterRequestList])
 	ret := ReplyPacket(p, ACK, lease.subnet.DHCPServer, lease.Addr.IP, lease.subnet.Duration, opts)
 
-	if tracing() {
-		log.WithFields(log.Fields{"clientid": lease.ClientID}).Tracef("dhcp4: request ack options recv %+v", options[OptionParameterRequestList])
-		log.WithFields(log.Fields{"clientid": lease.ClientID}).Tracef("dhcp4: request ack options sent %+v", opts)
+	if Debug {
+		fmt.Printf("dhcp4 : request ack options recv %s %+v", fields, options[OptionParameterRequestList])
+		fmt.Printf("dhcp4 : request ack options sent %s %+v", fields, opts)
 	}
 
 	h.saveConfig(h.filename)
