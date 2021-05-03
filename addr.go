@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"net"
+	"strings"
 )
 
 // Addr is a common type to hold the IP and MAC pair
@@ -18,10 +19,17 @@ var _ net.Addr = &Addr{}
 
 // String returns the address's hardware address.
 func (a Addr) String() string {
-	if a.Port == 0 {
-		return fmt.Sprintf("mac=%s ip=%s", a.MAC, a.IP)
+	var b strings.Builder
+	b.Grow(64)
+	b.WriteString("mac=")
+	b.WriteString(a.MAC.String())
+	b.WriteString(" ip=")
+	b.WriteString(a.IP.String())
+	if a.Port != 0 {
+		b.WriteString(" port=")
+		fmt.Fprintf(&b, "%d", a.Port)
 	}
-	return fmt.Sprintf("mac=%s ip=%s port=%d", a.MAC, a.IP, a.Port)
+	return b.String()
 }
 
 // Network returns the address's network name, "raw".
