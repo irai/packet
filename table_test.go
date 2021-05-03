@@ -91,6 +91,7 @@ func TestHandler_findOrCreateHostDupIP(t *testing.T) {
 	host1, _ := engine.findOrCreateHost(mac1, ip3)
 	engine.lockAndSetOnline(host1, true)
 	host1, _ = engine.findOrCreateHost(mac1, ip2)
+	host1.dhcp4Store.Name = "mac1" // test that name will clear - this was a bug in past
 	engine.lockAndSetOnline(host1, true)
 	engine.lockAndSetOnline(host1, false)
 	if err := engine.Capture(mac1); err != nil {
@@ -101,9 +102,12 @@ func TestHandler_findOrCreateHostDupIP(t *testing.T) {
 	}
 
 	// new mac, same IP
-	host2, _ := engine.findOrCreateHost(mac2, ip3)
+	host2, _ := engine.findOrCreateHost(mac2, ip2)
 	if host2.MACEntry.Captured { // mac should not be captured
 		t.Fatal("host not capture")
+	}
+	if host2.dhcp4Store.Name != "" {
+		t.Fatal("invalid host name")
 	}
 
 	// there must be two macs

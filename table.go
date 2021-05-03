@@ -197,14 +197,17 @@ func (h *Handler) findOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host,
 		if !bytes.Equal(host.MACEntry.MAC, mac) {
 			fmt.Println("packet: error mac address differ - duplicated IP???", host.MACEntry.MAC, mac, ipNew)
 			h.printHostTable()
-			// link host to new macEntry
-			mac := CopyMAC(mac)
-			host.MACEntry.unlink(host) // remove IP from existing mac
+			// TODO: previous host is offline then???
+			//       should we send notification?
+
+			// Remove IP from existing mac and link host to new macEntry
+			mac := CopyMAC(mac) // copy from frame
+			host.MACEntry.unlink(host)
 			macEntry := h.MACTable.findOrCreate(mac)
 			macEntry.link(host)
 			host.MACEntry = macEntry
-			host.huntStage = StageNormal
-			host.dhcp4Store.Name = "" // clear name from previous host
+			host.huntStage = StageNormal // reset stage
+			host.dhcp4Store.Name = ""    // clear name from previous host
 		}
 		host.LastSeen = now
 		host.MACEntry.LastSeen = now
