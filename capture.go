@@ -218,7 +218,7 @@ func (h *Handler) lockAndMonitorRoute(now time.Time) (err error) {
 					fmt.Printf("packet: failed to start hunt %s error=\"%s\"\n", host, err)
 				}
 			} else {
-				if Debug {
+				if err == nil && Debug {
 					fmt.Printf("packet: ip4 routing OK %s\n", host)
 				}
 			}
