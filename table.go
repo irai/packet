@@ -204,6 +204,7 @@ func (h *Handler) findOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host,
 			macEntry.link(host)
 			host.MACEntry = macEntry
 			host.huntStage = StageNormal
+			host.dhcp4Store.Name = "" // clear name from previous host
 		}
 		host.LastSeen = now
 		host.MACEntry.LastSeen = now
