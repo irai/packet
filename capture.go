@@ -94,6 +94,12 @@ func (h *Handler) lockAndStartHunt(addr Addr) (err error) {
 
 	// IP6 handlers
 	go func() {
+		// IP6 hunts local link layer IP, not Global Unique Address IP
+		if host.MACEntry.IP6LLA == nil {
+			fmt.Printf("packet: invalid LLA - failed to hunt %s host %s\n", addr, host)
+			return
+		}
+		addr.IP = host.MACEntry.IP6LLA
 		if _, err = h.HandlerICMP6.StartHunt(addr); err != nil {
 			fmt.Printf("packet: failed to start icmp6 hunt: %s", err.Error())
 		}
