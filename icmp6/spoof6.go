@@ -82,7 +82,10 @@ func (h *Handler) spoofLoop(dstAddr packet.Addr) {
 			}
 		} else {
 			h.Unlock()
-			fmt.Printf("icmp6 : na attack failed - missing router LLA %s\n", dstAddr)
+			if nTimes%16 == 0 {
+				fmt.Printf("icmp6 : na attack failed - missing router LLA %s\n", dstAddr)
+			}
+			nTimes++
 		}
 
 		select {
