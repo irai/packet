@@ -24,6 +24,20 @@ type Event struct {
 	Host packet.Host
 }
 
+var _ packet.PacketProcessor = &ICMP6Handler{}
+
+// ICMP6Handler implements ICMPv6 Neighbor Discovery Protocol
+// see: https://mdlayher.com/blog/network-protocol-breakdown-ndp-and-go/
+type ICMP6Handler struct {
+	Router     *Router
+	LANRouters map[netaddr.IP]*Router
+	engine     *packet.Handler
+	huntList   packet.AddrList
+	closed     bool
+	closeChan  chan bool
+	sync.Mutex
+}
+
 // PrintTable logs ICMP6 tables to standard out
 func (h *ICMP6Handler) PrintTable() {
 	table := h.engine.GetHosts()
@@ -51,20 +65,6 @@ func (h *ICMP6Handler) PrintTable() {
 			fmt.Printf("%s flags=%s prefixes=%v rdnss=%+v options=%+v\n", v.Addr, flags, v.Prefixes, v.RDNSS, v.Options)
 		}
 	}
-}
-
-var _ packet.PacketProcessor = &ICMP6Handler{}
-
-// ICMP6Handler implements ICMPv6 Neighbor Discovery Protocol
-// see: https://mdlayher.com/blog/network-protocol-breakdown-ndp-and-go/
-type ICMP6Handler struct {
-	Router     *Router
-	LANRouters map[netaddr.IP]*Router
-	engine     *packet.Handler
-	huntList   packet.AddrList
-	closed     bool
-	closeChan  chan bool
-	sync.Mutex
 }
 
 // Config define server configuration values
