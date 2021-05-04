@@ -2,7 +2,6 @@ package icmp6
 
 import (
 	"fmt"
-	"net"
 	"time"
 
 	"github.com/irai/packet"
@@ -21,10 +20,7 @@ func (h *Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
 	h.huntList.Add(addr)
 	h.Unlock()
 
-	ip := net.ParseIP("fe80::ce32:e5ff:fe0e:67f4") // my home router
-	fmt.Println("icmp6 : FIXME ROUTER IP LLA IS HARDCODED")
-	srcAddr := packet.Addr{IP: ip, MAC: h.engine.NICInfo.HostMAC}
-	go h.spoofLoop(srcAddr, addr)
+	go h.spoofLoop(addr)
 
 	return packet.StageHunt, nil
 }
@@ -50,7 +46,7 @@ func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
 //   1. spoof the client arp table to send router packets to us
 //   2. optionally, claim the ownership of the IP to force client to change IP or go offline
 //
-func (h *Handler) spoofLoop(srcAddr packet.Addr, dstAddr packet.Addr) {
+func (h *Handler) spoofLoop(dstAddr packet.Addr) {
 	// 4 second re-do seem to be adequate;
 	ticker := time.NewTicker(time.Second * 4).C
 	startTime := time.Now()
@@ -58,27 +54,35 @@ func (h *Handler) spoofLoop(srcAddr packet.Addr, dstAddr packet.Addr) {
 	fmt.Printf("icmp6 : na attack ip=%s time=%v", dstAddr.IP, startTime)
 	for {
 		h.Lock()
-		if h.huntList.Index(dstAddr.MAC) == -1 || h.closed {
+
+		// Attack when we have the router LLA only
+		if h.engine.NICInfo.RouterLLA.IP != nil {
+			srcAddr := packet.Addr{IP: h.engine.NICInfo.RouterLLA.IP, MAC: h.engine.NICInfo.HostMAC}
+			if h.huntList.Index(dstAddr.MAC) == -1 || h.closed {
+				h.Unlock()
+				fmt.Printf("icmp6 : attack end ip=%s repeat=%v duration=%v", dstAddr.IP, nTimes, time.Since(startTime))
+				return
+			}
+			list := []packet.Addr{}
+			for _, router := range h.LANRouters {
+				list = append(list, router.Addr)
+			}
+
 			h.Unlock()
-			fmt.Printf("icmp6 : attack end ip=%s repeat=%v duration=%v", dstAddr.IP, nTimes, time.Since(startTime))
-			return
-		}
-		list := []packet.Addr{}
-		for _, router := range h.LANRouters {
-			list = append(list, router.Addr)
-		}
-		h.Unlock()
 
-		for _, addr := range list {
-			srcAddr.IP = addr.IP
-			if err := h.SendNeighborAdvertisement(srcAddr, dstAddr); err != nil {
-				fmt.Println("icmp6 : error sending na ", err)
+			for _, addr := range list {
+				srcAddr.IP = addr.IP
+				if err := h.SendNeighborAdvertisement(srcAddr, dstAddr); err != nil {
+					fmt.Println("icmp6 : error sending na ", err)
+				}
+				if nTimes%16 == 0 {
+					fmt.Printf("icmp6 : attack src %s dst %s repeat=%v duration=%v", srcAddr, dstAddr, nTimes, time.Since(startTime))
+				}
+				nTimes++
 			}
-
-			if nTimes%16 == 0 {
-				fmt.Printf("icmp6 attack src %s dst %s repeat=%v duration=%v", srcAddr, dstAddr, nTimes, time.Since(startTime))
-			}
-			nTimes++
+		} else {
+			h.Unlock()
+			fmt.Printf("icmp6 : na attack failed - missing router LLA %s\n", dstAddr)
 		}
 
 		select {

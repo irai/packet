@@ -238,8 +238,15 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (*pa
 			fmt.Printf("icmp6 : invalid options %s\n", err)
 			return host, packet.Result{}, err
 		}
+
+		//
 		h.Lock()
 		router, _ := h.findOrCreateRouter(options.SourceLLA.Addr, ip6Frame.Src())
+		if h.engine.NICInfo.RouterLLA.IP == nil || !h.engine.NICInfo.RouterLLA.IP.Equal(ip6Frame.Src()) {
+			ip := packet.CopyIP(ip6Frame.Src())
+			h.engine.NICInfo.RouterLLA.IP = ip
+			fmt.Printf("icmp6 : setting router lla=%s\n", &h.engine.NICInfo.RouterLLA)
+		}
 		router.ManagedFlag = frame.ManagedConfiguration()
 		router.OtherCondigFlag = frame.OtherConfiguration()
 		router.Preference = frame.Preference()
