@@ -25,7 +25,7 @@ type Event struct {
 }
 
 // PrintTable logs ICMP6 tables to standard out
-func (h *Handler) PrintTable() {
+func (h *ICMP6Handler) PrintTable() {
 	table := h.engine.GetHosts()
 	if len(table) > 0 {
 		fmt.Printf("icmp6 hosts table len=%v\n", len(table))
@@ -53,11 +53,11 @@ func (h *Handler) PrintTable() {
 	}
 }
 
-var _ packet.PacketProcessor = &Handler{}
+var _ packet.PacketProcessor = &ICMP6Handler{}
 
-// Handler implements ICMPv6 Neighbor Discovery Protocol
+// ICMP6Handler implements ICMPv6 Neighbor Discovery Protocol
 // see: https://mdlayher.com/blog/network-protocol-breakdown-ndp-and-go/
-type Handler struct {
+type ICMP6Handler struct {
 	Router     *Router
 	LANRouters map[netaddr.IP]*Router
 	engine     *packet.Handler
@@ -75,9 +75,9 @@ type Config struct {
 }
 
 // Attach creates an ICMP6 handler and attach to the engine
-func Attach(engine *packet.Handler) (*Handler, error) {
+func Attach(engine *packet.Handler) (*ICMP6Handler, error) {
 
-	h := &Handler{LANRouters: make(map[netaddr.IP]*Router), closeChan: make(chan bool)}
+	h := &ICMP6Handler{LANRouters: make(map[netaddr.IP]*Router), closeChan: make(chan bool)}
 	h.engine = engine
 	engine.HandlerICMP6 = h
 
@@ -85,7 +85,7 @@ func Attach(engine *packet.Handler) (*Handler, error) {
 }
 
 // Detach removes the plugin from the engine
-func (h *Handler) Detach() error {
+func (h *ICMP6Handler) Detach() error {
 	h.closed = true
 	close(h.closeChan)
 	h.engine.HandlerICMP6 = packet.PacketNOOP{}
@@ -93,7 +93,7 @@ func (h *Handler) Detach() error {
 }
 
 // Start prepares to accept packets
-func (h *Handler) Start() error {
+func (h *ICMP6Handler) Start() error {
 	if err := h.SendRouterSolicitation(); err != nil {
 		return err
 	}
@@ -102,24 +102,24 @@ func (h *Handler) Start() error {
 }
 
 // Stop implements PacketProcessor interface
-func (h *Handler) Stop() error {
+func (h *ICMP6Handler) Stop() error {
 	return nil
 }
 
 // MinuteTicker implements packet processor interface
-func (h *Handler) MinuteTicker(now time.Time) error {
+func (h *ICMP6Handler) MinuteTicker(now time.Time) error {
 	return nil
 }
 
 // HuntStage implements PacketProcessor interface
-func (h *Handler) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
+func (h *ICMP6Handler) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
 	if err := h.Ping(packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, addr, time.Second*2); err != nil {
 		return packet.StageNoChange, packet.ErrTimeout
 	}
 	return packet.StageNormal, nil
 }
 
-func (h *Handler) sendPacket(srcAddr packet.Addr, dstAddr packet.Addr, b []byte) error {
+func (h *ICMP6Handler) sendPacket(srcAddr packet.Addr, dstAddr packet.Addr, b []byte) error {
 	ether := packet.Ether(make([]byte, packet.EthMaxSize)) // Ping is called many times concurrently by client
 
 	hopLimit := uint8(64)
@@ -162,7 +162,7 @@ func (h *Handler) sendPacket(srcAddr packet.Addr, dstAddr packet.Addr, b []byte)
 var repeat int = -1
 
 // ProcessPacket handles icmp6 packets
-func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (*packet.Host, packet.Result, error) {
+func (h *ICMP6Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (*packet.Host, packet.Result, error) {
 
 	ether := packet.Ether(p)
 	ip6Frame := packet.IP6(ether.Payload())

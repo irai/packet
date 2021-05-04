@@ -31,7 +31,7 @@ type handlers struct {
 	engine      *packet.Handler
 	icmp4       *icmp4.Handler
 	arp         *arp.Handler
-	icmp6       *icmp6.Handler
+	icmp6       *icmp6.ICMP6Handler
 	dhcp4       *dhcp4.Handler
 	radvs       *icmp6.RADVS
 	netfilterIP net.IPNet

@@ -7,7 +7,7 @@ import (
 	"github.com/irai/packet"
 )
 
-func (h *Handler) SendRouterAdvertisement(router Router, dstAddr packet.Addr) error {
+func (h *ICMP6Handler) SendRouterAdvertisement(router Router, dstAddr packet.Addr) error {
 	// h.mutex.Lock()
 	// defer h.mutex.Unlock()
 	if len(router.Prefixes) == 0 {
@@ -62,7 +62,7 @@ func (h *Handler) SendRouterAdvertisement(router Router, dstAddr packet.Addr) er
 	return h.sendPacket(packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, dstAddr, mb)
 }
 
-func (h *Handler) SendRouterSolicitation() error {
+func (h *ICMP6Handler) SendRouterSolicitation() error {
 	m := &RouterSolicitation{
 		Options: []Option{
 			&LinkLayerAddress{
@@ -79,14 +79,14 @@ func (h *Handler) SendRouterSolicitation() error {
 	return h.sendPacket(packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, packet.IP6AllRoutersAddr, mb)
 }
 
-func (h *Handler) SendNeighborAdvertisement(srcAddr packet.Addr, dstAddr packet.Addr) error {
+func (h *ICMP6Handler) SendNeighborAdvertisement(srcAddr packet.Addr, dstAddr packet.Addr) error {
 	p := ICMP6NeighborAdvertisementMarshal(true, false, true, srcAddr.IP, srcAddr.MAC)
 
 	return h.sendPacket(packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, dstAddr, p)
 }
 
 // SendNeighbourSolicitation send an ICMP6 NS packet.
-func (h *Handler) SendNeighbourSolicitation(ip net.IP) error {
+func (h *ICMP6Handler) SendNeighbourSolicitation(ip net.IP) error {
 	p, _ := ICMP6NeighborSolicitationMarshal(ip, h.engine.NICInfo.HostMAC)
 
 	return h.sendPacket(packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, packet.IP6AllNodesAddr, p)

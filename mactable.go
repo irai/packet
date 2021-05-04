@@ -52,7 +52,6 @@ func (e *MACEntry) updateIP(ip net.IP) {
 	if ip.To4() != nil {
 		e.IP4 = ip
 	} else {
-		// TODO: do we need to capture LLA as well?
 		if ip.IsGlobalUnicast() {
 			e.IP6GUA = ip
 		}
