@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/irai/packet"
+	"inet.af/netaddr"
 )
 
 // Cloudflare DNS IP6: 2606:4700:4700::1111 or 2606:4700:4700::1001
@@ -52,13 +53,21 @@ type Router struct {
 	Options         NewOptions
 }
 
+func (r *Router) String() string {
+	return fmt.Sprintf("%s preference=%v prefix=%v\n", r.Addr, r.Preference, r.Prefixes)
+}
+
 func (h *Handler) findOrCreateRouter(mac net.HardwareAddr, ip net.IP) (router *Router, found bool) {
-	r, found := h.LANRouters[string(ip)]
+	// using netaddr IP
+	ipNew, _ := netaddr.FromStdIP(ip)
+	r, found := h.LANRouters[ipNew]
 	if found {
 		return r, true
 	}
 	router = &Router{Addr: packet.Addr{MAC: packet.CopyMAC(mac), IP: packet.CopyIP(ip)}}
-	h.LANRouters[string(ip)] = router
+	h.LANRouters[ipNew] = router
+	h.Router = router // make this the default ipv6 router - used in na attack
+	fmt.Printf("icmp6 : new ipv6 ra router %s\n", router)
 	return router, false
 }
 

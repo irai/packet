@@ -10,6 +10,7 @@ import (
 
 	"github.com/irai/packet"
 	log "github.com/sirupsen/logrus"
+	"inet.af/netaddr"
 
 	"golang.org/x/net/ipv6"
 )
@@ -57,8 +58,8 @@ var _ packet.PacketProcessor = &Handler{}
 // Handler implements ICMPv6 Neighbor Discovery Protocol
 // see: https://mdlayher.com/blog/network-protocol-breakdown-ndp-and-go/
 type Handler struct {
-	Router     Router
-	LANRouters map[string]*Router
+	Router     *Router
+	LANRouters map[netaddr.IP]*Router
 	engine     *packet.Handler
 	huntList   packet.AddrList
 	closed     bool
@@ -76,7 +77,7 @@ type Config struct {
 // Attach creates an ICMP6 handler and attach to the engine
 func Attach(engine *packet.Handler) (*Handler, error) {
 
-	h := &Handler{LANRouters: make(map[string]*Router), closeChan: make(chan bool)}
+	h := &Handler{LANRouters: make(map[netaddr.IP]*Router), closeChan: make(chan bool)}
 	h.engine = engine
 	engine.HandlerICMP6 = h
 
@@ -242,11 +243,6 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (*pa
 		//
 		h.Lock()
 		router, _ := h.findOrCreateRouter(options.SourceLLA.Addr, ip6Frame.Src())
-		if h.engine.NICInfo.RouterLLA.IP == nil || !h.engine.NICInfo.RouterLLA.IP.Equal(ip6Frame.Src()) {
-			ip := packet.CopyIP(ip6Frame.Src())
-			h.engine.NICInfo.RouterLLA.IP = ip
-			fmt.Printf("icmp6 : setting router lla=%s\n", &h.engine.NICInfo.RouterLLA)
-		}
 		router.ManagedFlag = frame.ManagedConfiguration()
 		router.OtherCondigFlag = frame.OtherConfiguration()
 		router.Preference = frame.Preference()
