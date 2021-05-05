@@ -169,7 +169,7 @@ func (h *Handler) sendDHCPPacket(srcAddr model.Addr, dstAddr model.Addr, packet 
 }
 ***/
 
-func (h *Handler) processClientPacket(host *packet.Host, req DHCP4) error {
+func (h *Handler) processClientPacket(host *model.Host, req DHCP4) error {
 	// req := DHCP4(buffer[:n])
 	if !req.IsValid() {
 		fmt.Println("dhcp4: clientLoop invalid packet len")

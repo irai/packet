@@ -178,14 +178,14 @@ type testEvent struct {
 	packetEvent   packet.Notification
 	waitTimeAfter time.Duration
 	wantCapture   bool
-	wantStage     packet.HuntStage
+	wantStage     model.HuntStage
 	wantOnline    bool
 	hostTableLen  int
 	macTableLen   int
 	srcAddr       model.Addr
 	dstAddr       model.Addr
 	ether         packet.Ether
-	wantHost      packet.Host
+	wantHost      model.Host
 }
 
 func newDHCP4DeclineFrame(src model.Addr, declineIP net.IP, serverIP net.IP, xid []byte) DHCP4 {

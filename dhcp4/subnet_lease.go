@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/model"
 	log "github.com/sirupsen/logrus"
 	yaml "gopkg.in/yaml.v2"
 )
@@ -18,14 +19,14 @@ import (
 // example: lan 192.168.0.0/24, gw 192.168.0.1
 //          lan 192.168.0.128/25, gw 192.168.0.129
 type SubnetConfig struct {
-	LAN        net.IPNet        // lan address & netmask
-	DefaultGW  net.IP           // Default Gateway for subnet
-	DHCPServer net.IP           // DHCP server ID
-	DNSServer  net.IP           // DNS server IP
-	FirstIP    net.IP           // First IP in range
-	LastIP     net.IP           // Last IP in range
-	Duration   time.Duration    // lease duration
-	Stage      packet.HuntStage // Default stage for subnet
+	LAN        net.IPNet       // lan address & netmask
+	DefaultGW  net.IP          // Default Gateway for subnet
+	DHCPServer net.IP          // DHCP server ID
+	DNSServer  net.IP          // DNS server IP
+	FirstIP    net.IP          // First IP in range
+	LastIP     net.IP          // Last IP in range
+	Duration   time.Duration   // lease duration
+	Stage      model.HuntStage // Default stage for subnet
 }
 
 // dhcpSubnet hold the 256 lease array for subnet
@@ -67,7 +68,7 @@ func newSubnet(config SubnetConfig) (*dhcpSubnet, error) {
 		subnet.Duration = 4 * time.Hour
 	}
 	subnet.Stage = config.Stage
-	if subnet.Stage != packet.StageNormal && subnet.Stage != packet.StageRedirected {
+	if subnet.Stage != model.StageNormal && subnet.Stage != model.StageRedirected {
 		return nil, fmt.Errorf("invalid subnet stage")
 	}
 

@@ -120,25 +120,25 @@ func (h *Handler) Ping(srcAddr model.Addr, dstAddr model.Addr, timeout time.Dura
 //
 // Note: the reply will also come to us if the client is undergoing
 // an arp attack (hunt).
-func (h *Handler) CheckAddr(addr model.Addr) (packet.HuntStage, error) {
+func (h *Handler) CheckAddr(addr model.Addr) (model.HuntStage, error) {
 	// Test if client is online first
 	// If client does not respond to echo, there is little we can test
 	if err := h.Ping(model.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostIP4.IP}, addr, time.Second*2); err != nil {
 		fmt.Printf("icmp4 : not responding to ping ip=%s mac=%s\n", addr.IP, addr.MAC)
-		return packet.StageNormal, packet.ErrTimeout
+		return model.StageNormal, packet.ErrTimeout
 	}
 
 	// first attempt
 	err := h.Ping(model.Addr{MAC: h.engine.NICInfo.RouterMAC, IP: h.engine.NICInfo.RouterIP4.IP}, addr, time.Second*2)
 	if err == nil {
-		return packet.StageRedirected, nil
+		return model.StageRedirected, nil
 	}
 
 	// second attempt
 	err = h.Ping(model.Addr{MAC: h.engine.NICInfo.RouterMAC, IP: h.engine.NICInfo.RouterIP4.IP}, addr, time.Second*2)
 	if err == nil {
-		return packet.StageRedirected, nil
+		return model.StageRedirected, nil
 	}
 
-	return packet.StageHunt, packet.ErrNotRedirected
+	return model.StageHunt, packet.ErrNotRedirected
 }

@@ -56,6 +56,7 @@ type Handler struct {
 	closeChan               chan bool     // close goroutines channel
 	mutex                   sync.RWMutex
 	nameChannel             chan Notification
+	session                 *model.Session
 }
 
 func (h *Handler) GetNotificationChannel() <-chan Notification {
@@ -84,23 +85,6 @@ func (h *Handler) GetNotificationChannel() <-chan Notification {
 
 	return h.nameChannel
 }
-
-// PacketNOOP is a no op packet processor
-type PacketNOOP struct{}
-
-var _ PacketProcessor = PacketNOOP{}
-
-func (p PacketNOOP) Start() error { return nil }
-func (p PacketNOOP) Stop() error  { return nil }
-func (p PacketNOOP) ProcessPacket(*Host, []byte, []byte) (*Host, Result, error) {
-	return nil, Result{}, nil
-}
-func (p PacketNOOP) StartHunt(addr model.Addr) (HuntStage, error) { return StageNoChange, nil }
-func (p PacketNOOP) StopHunt(addr model.Addr) (HuntStage, error)  { return StageNoChange, nil }
-func (p PacketNOOP) CheckAddr(addr model.Addr) (HuntStage, error) { return StageNoChange, nil }
-
-// func (p PacketNOOP) HuntStage(addr Addr) HuntStage              { return StageNormal }
-func (p PacketNOOP) MinuteTicker(now time.Time) error { return nil }
 
 // New creates an ICMPv6 handler with default values
 func NewEngine(nic string) (*Handler, error) {
@@ -152,13 +136,18 @@ func (config Config) NewEngine(nic string) (*Handler, error) {
 	}
 
 	// no plugins to start
-	h.HandlerARP = PacketNOOP{}
-	h.HandlerIP4 = PacketNOOP{}
-	h.HandlerIP6 = PacketNOOP{}
-	h.HandlerARP = PacketNOOP{}
-	h.HandlerICMP4 = PacketNOOP{}
-	h.HandlerICMP6 = PacketNOOP{}
-	h.HandlerDHCP4 = PacketNOOP{}
+	h.HandlerARP = model.PacketNOOP{}
+	h.HandlerIP4 = model.PacketNOOP{}
+	h.HandlerIP6 = model.PacketNOOP{}
+	h.HandlerARP = model.PacketNOOP{}
+	h.HandlerICMP4 = model.PacketNOOP{}
+	h.HandlerICMP6 = model.PacketNOOP{}
+	h.HandlerDHCP4 = model.PacketNOOP{}
+
+	h.session = new(model.Session)
+	h.session.Conn = h.conn
+	h.session.NICInfo = *h.NICInfo
+	h.session.HostTable = "a"
 
 	// create the host entry manually because we don't process host packets
 	host, _ := h.findOrCreateHost(h.NICInfo.HostMAC, h.NICInfo.HostIP4.IP)
@@ -171,6 +160,10 @@ func (config Config) NewEngine(nic string) (*Handler, error) {
 	host.Online = true
 
 	return h, nil
+}
+
+func (h *Handler) Session() *model.Session {
+	return h.session
 }
 
 // Close closes the underlying sockets
@@ -339,6 +332,48 @@ func (h *Handler) minuteChecker(now time.Time) {
 	h.lockAndMonitorRoute(now)
 	h.purge(now, h.ProbeInterval, h.OfflineDeadline, h.PurgeDeadline)
 
+}
+
+// lockAndProcessDHCP4Update updates the DHCP4 store and transition hunt stage
+//
+func (h *Handler) lockAndProcessDHCP4Update(host *Host, result Result) (notify bool) {
+	if host != nil {
+		host.Row.Lock()
+		if host.dhcp4Store.Name != result.Name {
+			host.dhcp4Store.Name = result.Name
+			notify = true
+		}
+		if result.Addr.IP != nil { // Discover IPOffer?
+			host.MACEntry.IP4Offer = result.Addr.IP
+		}
+		capture := host.MACEntry.Captured
+		addr := model.Addr{MAC: host.MACEntry.MAC, IP: host.IP}
+		host.Row.Unlock()
+
+		// DHCP stage overides all other stages
+		if capture && result.HuntStage == StageRedirected {
+			fmt.Printf("packet: dhcp4 redirected %s\n", addr)
+			if err := h.lockAndStopHunt(host, StageRedirected); err != nil {
+				fmt.Printf("packet: failed to stop hunt %s error=\"%s\"", host, err)
+			}
+			return notify
+		}
+		if capture && result.HuntStage == StageNormal {
+			fmt.Printf("packet: dhcp4 not redirected %s\n", addr)
+			if err := h.lockAndStartHunt(addr); err != nil {
+				fmt.Printf("packet: failed to stop hunt %s error=\"%s\"", host, err)
+			}
+			return notify
+		}
+
+		return notify
+	}
+
+	// First dhcp discovery has no host entry
+	if result.Addr.IP != nil { // Discover IPOffer?
+		h.macTableUpsertIPOffer(result.Addr)
+	}
+	return false
 }
 
 // lockAndSetOnline will ensure this host is marked as online and that an

@@ -4,41 +4,40 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/irai/packet"
 	"github.com/irai/packet/model"
 )
 
 // StartHunt implements packet processor interface
-func (h *ICMP6Handler) StartHunt(addr model.Addr) (packet.HuntStage, error) {
+func (h *ICMP6Handler) StartHunt(addr model.Addr) (model.HuntStage, error) {
 	if Debug {
 		fmt.Printf("icmp6 : force neighbor spoof %s", addr)
 	}
 	h.Lock()
 	if h.huntList.Index(addr.MAC) != -1 {
 		h.Unlock()
-		return packet.StageHunt, nil
+		return model.StageHunt, nil
 	}
 	h.huntList.Add(addr)
 	h.Unlock()
 
 	go h.spoofLoop(addr)
 
-	return packet.StageHunt, nil
+	return model.StageHunt, nil
 }
 
 // StopHunt implements PacketProcessor interface
-func (h *ICMP6Handler) StopHunt(addr model.Addr) (packet.HuntStage, error) {
+func (h *ICMP6Handler) StopHunt(addr model.Addr) (model.HuntStage, error) {
 	if Debug {
 		fmt.Printf("icmp6 : stop neighbor spoof %s", addr)
 	}
 	h.Lock()
 	if h.huntList.Index(addr.MAC) == -1 {
-		return packet.StageNormal, nil
+		return model.StageNormal, nil
 	}
 	h.huntList.Del(addr)
 	h.Unlock()
 
-	return packet.StageNormal, nil
+	return model.StageNormal, nil
 }
 
 // spoofLoop attacks the client with ARP attacks

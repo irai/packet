@@ -1,4 +1,4 @@
-package packet
+package model
 
 import (
 	"bytes"
@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/irai/packet/model"
 	"inet.af/netaddr"
 )
 
@@ -64,10 +63,10 @@ func (s HuntStage) String() string {
 
 // Result keeps dhcp4 specific settings
 type Result struct {
-	Update    bool       // Set to true if update is required
-	HuntStage HuntStage  // DHCP4 hunt stage
-	Name      string     // DHCP4 host name
-	Addr      model.Addr // IP and MAC
+	Update    bool      // Set to true if update is required
+	HuntStage HuntStage // DHCP4 hunt stage
+	Name      string    // DHCP4 host name
+	Addr      Addr      // IP and MAC
 	// IPOffer   net.IP    // DCHCP discover offer
 }
 
@@ -91,48 +90,6 @@ type ICMP6Store struct {
 
 func (e ICMP6Store) String() string {
 	return fmt.Sprintf("icmp6stage=%s router=%v", e.HuntStage, e.Router)
-}
-
-// lockAndProcessDHCP4Update updates the DHCP4 store and transition hunt stage
-//
-func (h *Handler) lockAndProcessDHCP4Update(host *Host, result Result) (notify bool) {
-	if host != nil {
-		host.Row.Lock()
-		if host.dhcp4Store.Name != result.Name {
-			host.dhcp4Store.Name = result.Name
-			notify = true
-		}
-		if result.Addr.IP != nil { // Discover IPOffer?
-			host.MACEntry.IP4Offer = result.Addr.IP
-		}
-		capture := host.MACEntry.Captured
-		addr := model.Addr{MAC: host.MACEntry.MAC, IP: host.IP}
-		host.Row.Unlock()
-
-		// DHCP stage overides all other stages
-		if capture && result.HuntStage == StageRedirected {
-			fmt.Printf("packet: dhcp4 redirected %s\n", addr)
-			if err := h.lockAndStopHunt(host, StageRedirected); err != nil {
-				fmt.Printf("packet: failed to stop hunt %s error=\"%s\"", host, err)
-			}
-			return notify
-		}
-		if capture && result.HuntStage == StageNormal {
-			fmt.Printf("packet: dhcp4 not redirected %s\n", addr)
-			if err := h.lockAndStartHunt(addr); err != nil {
-				fmt.Printf("packet: failed to stop hunt %s error=\"%s\"", host, err)
-			}
-			return notify
-		}
-
-		return notify
-	}
-
-	// First dhcp discovery has no host entry
-	if result.Addr.IP != nil { // Discover IPOffer?
-		h.macTableUpsertIPOffer(result.Addr)
-	}
-	return false
 }
 
 func (host *Host) SetICMP6StoreNoLock(store ICMP6Store) {
@@ -265,12 +222,12 @@ func (h *Handler) findIP(ip net.IP) *Host {
 }
 
 // FindByMAC return a list of IP addresses for mac
-func (h *Handler) FindByMAC(mac net.HardwareAddr) (list []model.Addr) {
+func (h *Handler) FindByMAC(mac net.HardwareAddr) (list []Addr) {
 	h.mutex.RLock()
 	defer h.mutex.RUnlock()
 	for _, v := range h.LANHosts.Table {
 		if bytes.Equal(v.MACEntry.MAC, mac) {
-			list = append(list, model.Addr{MAC: v.MACEntry.MAC, IP: v.IP})
+			list = append(list, Addr{MAC: v.MACEntry.MAC, IP: v.IP})
 		}
 	}
 	return list

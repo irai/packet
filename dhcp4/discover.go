@@ -31,7 +31,7 @@ import (
 //    addresses; the address is selected based on the subnet from which
 //    the message was received (if 'giaddr' is 0) or on the address of
 //    the relay agent that forwarded the message ('giaddr' when not 0).
-func (h *Handler) handleDiscover(p DHCP4, options Options) (result packet.Result, d DHCP4) {
+func (h *Handler) handleDiscover(p DHCP4, options Options) (result model.Result, d DHCP4) {
 
 	clientID := getClientID(p, options)
 	reqIP := net.IP(options[OptionRequestedIPAddress]).To4()
@@ -47,7 +47,7 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (result packet.Result
 	if true {
 		// Always attack: new mode 4 April 21 ;
 		// To fix forever discovery loop where client always get the IP from router but is rejected by our ARP
-		// if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && lease.subnet.Stage == packet.StageRedirected) {
+		// if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && lease.subnet.Stage == model.StageRedirected) {
 		fmt.Printf("dhcp4 : discover - send 256 discover packets %s\n", fields)
 		h.attackDHCPServer(options)
 	}
@@ -76,7 +76,7 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (result packet.Result
 		if err := h.allocIPOffer(lease, reqIP); err != nil {
 			fmt.Printf("dhcp4 : error all ips allocated, failing silently: %s", err)
 			h.delete(lease)
-			return packet.Result{}, nil
+			return model.Result{}, nil
 		}
 	}
 
@@ -96,7 +96,7 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (result packet.Result
 	//  The server is likely to send offer before us, so send a kill packet
 	//  assuming the other server offered the requested IP - guess
 	//
-	if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && lease.subnet.Stage == packet.StageRedirected) {
+	if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && lease.subnet.Stage == model.StageRedirected) {
 		if reqIP != nil && !reqIP.IsUnspecified() {
 			h.forceDecline(lease.ClientID, h.net1.DefaultGW, lease.Addr.MAC, reqIP, p.XId())
 		}

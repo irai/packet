@@ -100,14 +100,14 @@ func (h *Handler) MinuteTicker(now time.Time) error {
 // CheckAddr implements the PacketProcessor interface
 //
 // The ARP handler sends a ARP Request packet
-func (h *Handler) CheckAddr(addr model.Addr) (packet.HuntStage, error) {
+func (h *Handler) CheckAddr(addr model.Addr) (model.HuntStage, error) {
 	err := h.request(h.session.NICInfo.HostMAC, h.session.NICInfo.HostIP4.IP, EthernetBroadcast, addr.IP)
 	h.arpMutex.Lock()
 	defer h.arpMutex.Unlock()
 	if _, found := h.huntList[string(addr.MAC)]; found {
-		return packet.StageHunt, err
+		return model.StageHunt, err
 	}
-	return packet.StageNormal, err
+	return model.StageNormal, err
 }
 
 const (
@@ -136,12 +136,12 @@ const (
 // | ACD probe  | 1 | broadcast | clientMAC | clientMAC  | 0x00       | 00:00:00:00:00:00 |  targetIP |
 // | ACD announ | 1 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  clientIP |
 // +============+===+===========+===========+============+============+===================+===========+
-func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (*packet.Host, packet.Result, error) {
+func (h *Handler) ProcessPacket(host *model.Host, b []byte, header []byte) (*model.Host, model.Result, error) {
 
 	ether := packet.Ether(b)
 	frame := ARP(header)
 	if !frame.IsValid() {
-		return host, packet.Result{}, packet.ErrParseMessage
+		return host, model.Result{}, packet.ErrParseMessage
 	}
 
 	// skip link local packets
@@ -149,7 +149,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (*pa
 		if Debug {
 			log.Printf("arp skipping link local packet smac=%v sip=%v tmac=%v tip=%v", frame.SrcMAC(), frame.SrcIP(), frame.DstMAC(), frame.DstIP())
 		}
-		return host, packet.Result{}, nil
+		return host, model.Result{}, nil
 	}
 
 	var operation int
@@ -167,7 +167,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (*pa
 		}
 	default:
 		log.Printf("arp invalid operation: %s", frame)
-		return host, packet.Result{}, nil
+		return host, model.Result{}, nil
 	}
 
 	switch operation {
@@ -191,7 +191,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (*pa
 				log.Printf("arp: router spoofing - send reply i am ip=%s", frame.DstIP())
 			}
 			h.reply(frame.SrcMAC(), h.session.NICInfo.HostMAC, frame.DstIP(), frame.SrcMAC(), frame.SrcIP())
-			return host, packet.Result{}, nil
+			return host, model.Result{}, nil
 		}
 
 	case probe:
@@ -222,11 +222,11 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (*pa
 				fmt.Printf("arp  : probe reject for ip=%s from mac=%s macentry=%s\n", frame.DstIP(), frame.SrcMAC(), macEntry)
 				h.reply(frame.SrcMAC(), h.session.NICInfo.HostMAC, frame.DstIP(), frame.SrcMAC(), net.IP(EthernetBroadcast))
 			}
-			return host, packet.Result{}, nil
+			return host, model.Result{}, nil
 		}
 
 		// don't continue
-		return host, packet.Result{}, nil
+		return host, model.Result{}, nil
 
 	case announcement:
 		// +============+===+===========+===========+============+============+===================+===========+
@@ -254,8 +254,8 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (*pa
 
 	// If new client, then create a MACEntry in table
 	if host == nil && h.session.NICInfo.HostIP4.Contains(frame.SrcIP()) {
-		return host, packet.Result{Update: true, Addr: model.Addr{MAC: frame.SrcMAC(), IP: frame.SrcIP()}}, nil
+		return host, model.Result{Update: true, Addr: model.Addr{MAC: frame.SrcMAC(), IP: frame.SrcIP()}}, nil
 		// host, _ = h.session.FindOrCreateHost(frame.SrcMAC(), frame.SrcIP())
 	}
-	return host, packet.Result{}, nil
+	return host, model.Result{}, nil
 }

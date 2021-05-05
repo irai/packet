@@ -202,7 +202,7 @@ func NewTestContext() *TestContext {
 		fmt.Println("nicinfo: ", tc.Engine.NICInfo)
 	}
 
-	tc.ARPHandler, err = arp.Attach(tc.Engine)
+	tc.ARPHandler, err = arp.Attach(tc.Engine.Session())
 	if err != nil {
 		panic(err)
 	}
@@ -252,7 +252,7 @@ type TestEvent struct {
 	packetEvent      packet.Notification
 	waitTimeAfter    time.Duration
 	wantCapture      bool
-	wantStage        packet.HuntStage
+	wantStage        model.HuntStage
 	wantOnline       bool
 	hostTableInc     int // expected increment
 	macTableInc      int // expected increment
@@ -262,7 +262,7 @@ type TestEvent struct {
 	dstAddr          model.Addr
 	dhcpHostName     string // dhcp host name
 	ether            packet.Ether
-	wantHost         *packet.Host
+	wantHost         *model.Host
 }
 
 func newDHCP4DiscoverFrame(src model.Addr, xid []byte, hostName string) packet.Ether {
@@ -330,7 +330,7 @@ func newArpAnnoucementEvent(addr model.Addr, hostInc int, macInc int) []TestEven
 	return []TestEvent{
 		{name: "arp-announcement-" + addr.MAC.String(), action: "arpAnnouncement", hostTableInc: hostInc, macTableInc: macInc, responsePos: -1, responseTableInc: 0,
 			srcAddr:       addr,
-			wantHost:      &packet.Host{IP: addr.IP, Online: true},
+			wantHost:      &model.Host{IP: addr.IP, Online: true},
 			waitTimeAfter: time.Millisecond * 10,
 		},
 	}
@@ -367,17 +367,17 @@ func NewHostEvents(addr model.Addr, hostName string, hostInc int, macInc int) []
 		{name: "request-" + addr.MAC.String(), action: "dhcp4Request", hostTableInc: hostInc, macTableInc: 0, responsePos: -1, responseTableInc: -1,
 			srcAddr:       model.Addr{MAC: addr.MAC, IP: net.IPv4zero},
 			dhcpHostName:  hostName,
-			wantHost:      &packet.Host{IP: nil, Online: true},
+			wantHost:      &model.Host{IP: nil, Online: true},
 			waitTimeAfter: time.Millisecond * 50,
 		},
 		{name: "arp-probe-" + addr.MAC.String(), action: "arpProbe", hostTableInc: 0, macTableInc: 0, responsePos: -1, responseTableInc: 0,
 			srcAddr:       model.Addr{MAC: addr.MAC, IP: net.IPv4zero},
-			wantHost:      &packet.Host{IP: nil, Online: true},
+			wantHost:      &model.Host{IP: nil, Online: true},
 			waitTimeAfter: time.Millisecond * 10,
 		},
 		{name: "arp-announcement-" + addr.MAC.String(), action: "arpAnnouncement", hostTableInc: 0, macTableInc: 0, responsePos: -1, responseTableInc: 0,
 			srcAddr:       model.Addr{MAC: addr.MAC, IP: nil}, // set IP to zero to use savedIP
-			wantHost:      &packet.Host{IP: nil, Online: true},
+			wantHost:      &model.Host{IP: nil, Online: true},
 			waitTimeAfter: time.Millisecond * 10,
 		},
 	}

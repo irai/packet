@@ -117,7 +117,7 @@ func main() {
 	fmt.Println("nic info  :", handlers.engine.NICInfo)
 
 	// ARP
-	handlers.arp, err = arp.Attach(handlers.engine)
+	handlers.arp, err = arp.Attach(handlers.engine.Session())
 	if err != nil {
 		log.Fatalf("Failed to create arp handler nic=%s handler: %s", *nic, err)
 	}
@@ -199,7 +199,7 @@ func doEngine(h *handlers, tokens []string) {
 				fmt.Println("error arp is already attached")
 				return
 			}
-			h.arp, err = arp.Attach(h.engine)
+			h.arp, err = arp.Attach(h.engine.Session())
 		case "icmp4":
 			if h.icmp4 != nil {
 				fmt.Println("error icmp4 is already attached")

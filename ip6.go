@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+
+	"github.com/irai/packet/model"
 )
 
 // IP6 structure: see https://github.com/golang/net/blob/master/ipv6/header.go
@@ -86,7 +88,7 @@ func (p HopByHopExtensionHeader) Len() int        { return int(p[1])*8 + 8 } // 
 func (p HopByHopExtensionHeader) Data() []byte    { return p[2:p.Len()] }    //
 
 // ProcessPacket handles icmp6 packets
-func (h *Handler) ProcessIP6HopByHopExtension(host *Host, b []byte, header []byte) (n int, err error) {
+func (h *Handler) ProcessIP6HopByHopExtension(host *model.Host, b []byte, header []byte) (n int, err error) {
 
 	// ether := Ether(b)
 	// ip6Frame := IP6(ether.Payload())

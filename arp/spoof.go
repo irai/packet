@@ -31,26 +31,26 @@ func (h *Handler) findHuntByIP(ip net.IP) (model.Addr, bool) {
 //  1. add addr to "hunt" list
 //  2. start spoof goroutine to which will continuously spoof the client ARP table
 //
-func (h *Handler) StartHunt(addr model.Addr) (packet.HuntStage, error) {
+func (h *Handler) StartHunt(addr model.Addr) (model.HuntStage, error) {
 	if addr.MAC == nil || addr.IP.To4() == nil {
 		fmt.Println("arp: invalid call to startHuntIP", addr)
-		return packet.StageNoChange, packet.ErrInvalidIP
+		return model.StageNoChange, packet.ErrInvalidIP
 	}
 
 	h.arpMutex.Lock()
 	defer h.arpMutex.Unlock()
 	if _, found := h.huntList[string(addr.MAC)]; found {
-		return packet.StageHunt, nil
+		return model.StageHunt, nil
 	}
 	h.huntList[string(addr.MAC)] = addr
 
 	go h.spoofLoop(addr)
-	return packet.StageHunt, nil
+	return model.StageHunt, nil
 }
 
 // StopHunt implements PacketProcessor interface
 // ARP StopHunt will remove the addr from the hunt list which will terminate the hunting goroutine
-func (h *Handler) StopHunt(addr model.Addr) (packet.HuntStage, error) {
+func (h *Handler) StopHunt(addr model.Addr) (model.HuntStage, error) {
 	h.arpMutex.Lock()
 	_, hunting := h.huntList[string(addr.MAC)]
 	if hunting {
@@ -62,7 +62,7 @@ func (h *Handler) StopHunt(addr model.Addr) (packet.HuntStage, error) {
 	}
 
 	fmt.Println("arp   : hunt stop ok", addr)
-	return packet.StageNormal, nil
+	return model.StageNormal, nil
 }
 
 // spoofLoop attacks the client with ARP attacks
