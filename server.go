@@ -39,14 +39,14 @@ type Config struct {
 type Handler struct {
 	NICInfo      *model.NICInfo
 	conn         net.PacketConn
-	LANHosts     HostTable // store IP list - one for each host
-	MACTable     MACTable  // store mac list
-	HandlerIP4   PacketProcessor
-	HandlerIP6   PacketProcessor
-	HandlerICMP4 PacketProcessor
-	HandlerICMP6 PacketProcessor
-	HandlerDHCP4 PacketProcessor
-	HandlerARP   PacketProcessor
+	LANHosts     model.HostTable // store IP list - one for each host
+	MACTable     model.MACTable  // store mac list
+	HandlerIP4   model.PacketProcessor
+	HandlerIP6   model.PacketProcessor
+	HandlerICMP4 model.PacketProcessor
+	HandlerICMP6 model.PacketProcessor
+	HandlerDHCP4 model.PacketProcessor
+	HandlerARP   model.PacketProcessor
 	// callback                []func(Notification) error
 	FullNetworkScanInterval time.Duration // Set it to -1 if no scan required
 	ProbeInterval           time.Duration // how often to probe if IP is online
@@ -147,7 +147,7 @@ func (config Config) NewEngine(nic string) (*Handler, error) {
 	h.session = new(model.Session)
 	h.session.Conn = h.conn
 	h.session.NICInfo = *h.NICInfo
-	h.session.HostTable = "a"
+	h.session.HostTable = h.LANHosts
 
 	// create the host entry manually because we don't process host packets
 	host, _ := h.findOrCreateHost(h.NICInfo.HostMAC, h.NICInfo.HostIP4.IP)
@@ -238,12 +238,7 @@ func (h *Handler) setupConn() (conn net.PacketConn, err error) {
 
 // PrintTable logs the table to standard out
 func (h *Handler) PrintTable() {
-	h.mutex.RLock()
-	defer h.mutex.RUnlock()
-	fmt.Printf("mac table len=%d\n", len(h.MACTable.Table))
-	h.printMACTable()
-	fmt.Printf("hosts table len=%v\n", len(h.LANHosts.Table))
-	h.printHostTable()
+	h.session.PrintTable()
 }
 
 // isUnicastMAC return true if the mac address is unicast
@@ -336,7 +331,7 @@ func (h *Handler) minuteChecker(now time.Time) {
 
 // lockAndProcessDHCP4Update updates the DHCP4 store and transition hunt stage
 //
-func (h *Handler) lockAndProcessDHCP4Update(host *Host, result Result) (notify bool) {
+func (h *Handler) lockAndProcessDHCP4Update(host *model.Host, result model.Result) (notify bool) {
 	if host != nil {
 		host.Row.Lock()
 		if host.dhcp4Store.Name != result.Name {
@@ -351,14 +346,14 @@ func (h *Handler) lockAndProcessDHCP4Update(host *Host, result Result) (notify b
 		host.Row.Unlock()
 
 		// DHCP stage overides all other stages
-		if capture && result.HuntStage == StageRedirected {
+		if capture && result.HuntStage == model.StageRedirected {
 			fmt.Printf("packet: dhcp4 redirected %s\n", addr)
-			if err := h.lockAndStopHunt(host, StageRedirected); err != nil {
+			if err := h.lockAndStopHunt(host, model.StageRedirected); err != nil {
 				fmt.Printf("packet: failed to stop hunt %s error=\"%s\"", host, err)
 			}
 			return notify
 		}
-		if capture && result.HuntStage == StageNormal {
+		if capture && result.HuntStage == model.StageNormal {
 			fmt.Printf("packet: dhcp4 not redirected %s\n", addr)
 			if err := h.lockAndStartHunt(addr); err != nil {
 				fmt.Printf("packet: failed to stop hunt %s error=\"%s\"", host, err)
@@ -382,7 +377,7 @@ func (h *Handler) lockAndProcessDHCP4Update(host *Host, result Result) (notify b
 // This funcion will also mark the previous IP4 host as offline
 //  Parameters:
 //     notify: force a notification as another parameter (likely name) has changed
-func (h *Handler) lockAndSetOnline(host *Host, notify bool) {
+func (h *Handler) lockAndSetOnline(host *model.Host, notify bool) {
 	now := time.Now()
 
 	host.Row.RLock()
@@ -419,7 +414,7 @@ func (h *Handler) lockAndSetOnline(host *Host, notify bool) {
 
 	// set previous IP to offline, start hunt and notify of new IP
 	if offlineIP != nil {
-		previousHost := h.FindIP(offlineIP) // will lock the engine; we cannot have Row lock
+		previousHost := h.session.FindIP(offlineIP) // will lock the engine; we cannot have Row lock
 		if previousHost != nil {
 			h.lockAndSetOffline(previousHost)
 		}
@@ -461,7 +456,7 @@ func (h *Handler) lockAndSetOnline(host *Host, notify bool) {
 				if err != nil {
 					fmt.Printf("packet: failed to get dhcp hunt status %s error=%s\n", addr, err)
 				}
-				if stage != StageRedirected {
+				if stage != model.StageRedirected {
 					if err := h.lockAndStartHunt(addr); err != nil {
 						fmt.Println("packet: failed to start hunt error", err)
 					}
@@ -479,7 +474,7 @@ func (h *Handler) lockAndSetOnline(host *Host, notify bool) {
 	}()
 }
 
-func (h *Handler) lockAndSetOffline(host *Host) {
+func (h *Handler) lockAndSetOffline(host *model.Host) {
 	host.Row.Lock()
 	if !host.Online {
 		host.Row.Unlock()
@@ -503,7 +498,7 @@ func (h *Handler) lockAndSetOffline(host *Host) {
 
 	host.Row.Unlock()
 
-	h.lockAndStopHunt(host, StageNormal)
+	h.lockAndStopHunt(host, model.StageNormal)
 
 	if h.nameChannel != nil {
 		h.nameChannel <- notification
@@ -567,8 +562,8 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		var ip6Frame IP6
 		var l4Proto int
 		var l4Payload []byte
-		var host *Host
-		var result Result
+		var host *model.Host
+		var result model.Result
 
 		switch ether.EtherType() {
 		case syscall.ETH_P_IP: // 0x0800
@@ -585,7 +580,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			// Only lookup host on same subnet
 			// Note: DHCP request for previous discover have zero src IP; therefore wont't create host entry here.
 			if h.NICInfo.HostIP4.Contains(ip4Frame.Src()) {
-				host, _ = h.FindOrCreateHost(ether.Src(), ip4Frame.Src()) // will lock/unlock
+				host, _ = h.session.FindOrCreateHost(ether.Src(), ip4Frame.Src()) // will lock/unlock
 			}
 			l4Proto = ip4Frame.Protocol()
 			l4Payload = ip4Frame.Payload()
@@ -606,7 +601,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 			// lookup host only if unicast
 			if ip6Frame.Src().IsLinkLocalUnicast() || ip6Frame.Src().IsGlobalUnicast() {
-				host, _ = h.FindOrCreateHost(ether.Src(), ip6Frame.Src()) // will lock/unlock
+				host, _ = h.session.FindOrCreateHost(ether.Src(), ip6Frame.Src()) // will lock/unlock
 			}
 
 			// IPv6 Hop by Hop extension - always the first header if present
@@ -687,7 +682,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				fmt.Printf("packet: error processing arp: %s\n", err)
 			}
 			if result.Update {
-				host, _ = h.FindOrCreateHost(result.Addr.MAC, result.Addr.IP)
+				host, _ = h.session.FindOrCreateHost(result.Addr.MAC, result.Addr.IP)
 			}
 
 		default:

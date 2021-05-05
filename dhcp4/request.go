@@ -112,7 +112,7 @@ func (h *Handler) handleRequest(host *model.Host, p DHCP4, options Options, send
 		return host, result, nil
 	}
 
-	captured := h.engine.IsCaptured(p.CHAddr())
+	captured := h.session.IsCaptured(p.CHAddr())
 	subnet := h.net1
 	if captured {
 		subnet = h.net2
@@ -243,7 +243,7 @@ func (h *Handler) handleRequest(host *model.Host, p DHCP4, options Options, send
 
 	h.saveConfig(h.filename)
 
-	host, _ = h.engine.FindOrCreateHost(lease.Addr.MAC, lease.Addr.IP)
+	host, _ = h.session.FindOrCreateHost(lease.Addr.MAC, lease.Addr.IP)
 	result.Update = true
 	result.HuntStage = lease.subnet.Stage
 	result.Name = lease.Name

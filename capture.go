@@ -24,7 +24,7 @@ func (h *Handler) Capture(mac net.HardwareAddr) error {
 	macEntry.Captured = true
 
 	list := []model.Addr{}
-	// Mark all known entries as StageHunt
+	// Mark all known entries as model.StageHunt
 	for _, host := range macEntry.HostList {
 		list = append(list, model.Addr{IP: host.IP, MAC: host.MACEntry.MAC})
 	}
@@ -55,7 +55,7 @@ func (h *Handler) lockAndStartHunt(addr model.Addr) (err error) {
 	}
 
 	host.Row.Lock()
-	if host.huntStage == StageRedirected {
+	if host.huntStage == model.StageRedirected {
 		fmt.Printf("packet: host successfully redirected %s\n", host)
 		host.Row.Unlock()
 		return nil
@@ -64,15 +64,15 @@ func (h *Handler) lockAndStartHunt(addr model.Addr) (err error) {
 		host.Row.Unlock()
 		return nil
 	}
-	if host.huntStage == StageHunt {
+	if host.huntStage == model.StageHunt {
 		host.Row.Unlock()
 		return nil
 	}
 
-	host.huntStage = StageHunt
-	host.icmp4Store.HuntStage = StageHunt
-	host.dhcp4Store.HuntStage = StageHunt
-	host.icmp6Store.HuntStage = StageHunt
+	host.huntStage = model.StageHunt
+	host.icmp4Store.model.HuntStage = model.StageHunt
+	host.dhcp4Store.model.HuntStage = model.StageHunt
+	host.icmp6Store.model.HuntStage = model.StageHunt
 	if Debug {
 		fmt.Printf("packet: start hunt for %s\n", host)
 	}
@@ -118,14 +118,14 @@ func (h *Handler) Release(mac net.HardwareAddr) error {
 		h.mutex.Unlock()
 		return nil
 	}
-	list := []*Host{}
+	list := []*model.Host{}
 	list = append(list, macEntry.HostList...)
 	macEntry.Captured = false
 
 	h.mutex.Unlock()
 
 	for _, host := range list {
-		if err := h.lockAndStopHunt(host, StageNormal); err != nil {
+		if err := h.lockAndStopHunt(host, model.StageNormal); err != nil {
 			return err
 		}
 	}
@@ -135,17 +135,17 @@ func (h *Handler) Release(mac net.HardwareAddr) error {
 // lockAndStopHunt will stop hunting for all modules
 //
 // host could be in one of two states:
-//  - StageHunt       - an active hunt is in progress
-//  - StageRedirected - the host is redirected; typically called when host went offline
+//  - model.StageHunt       - an active hunt is in progress
+//  - model.StageRedirected - the host is redirected; typically called when host went offline
 //                      or routing is no longer OK
 //
-func (h *Handler) lockAndStopHunt(host *Host, stage HuntStage) (err error) {
+func (h *Handler) lockAndStopHunt(host *model.Host, stage model.HuntStage) (err error) {
 	host.Row.Lock()
 	switch host.huntStage {
-	case StageNormal:
+	case model.StageNormal:
 		host.Row.Unlock()
 		return nil
-	case StageRedirected:
+	case model.StageRedirected:
 		host.huntStage = stage
 		if Debug {
 			fmt.Printf("packet: stop hunt for %s\n", host)
@@ -159,14 +159,14 @@ func (h *Handler) lockAndStopHunt(host *Host, stage HuntStage) (err error) {
 		fmt.Printf("packet: stop hunt for %s\n", host)
 	}
 
-	if host.icmp4Store.HuntStage == StageHunt {
-		host.icmp4Store.HuntStage = StageNormal
+	if host.icmp4Store.model.HuntStage == model.StageHunt {
+		host.icmp4Store.model.HuntStage = model.StageNormal
 	}
-	if host.dhcp4Store.HuntStage == StageHunt {
-		host.dhcp4Store.HuntStage = StageNormal
+	if host.dhcp4Store.model.HuntStage == model.StageHunt {
+		host.dhcp4Store.model.HuntStage = model.StageNormal
 	}
-	if host.icmp6Store.HuntStage == StageHunt {
-		host.icmp6Store.HuntStage = StageNormal
+	if host.icmp6Store.model.HuntStage == model.StageHunt {
+		host.icmp6Store.model.HuntStage = model.StageNormal
 	}
 	addr := model.Addr{MAC: host.MACEntry.MAC, IP: host.IP}
 	host.Row.Unlock()
@@ -197,29 +197,19 @@ func (h *Handler) lockAndStopHunt(host *Host, stage HuntStage) (err error) {
 	return nil
 }
 
-// IsCaptured return true is mac is in capture mode
-func (h *Handler) IsCaptured(mac net.HardwareAddr) bool {
-	h.mutex.RLock()
-	defer h.mutex.RUnlock()
-	if e := h.MACTable.findMAC(mac); e != nil && e.Captured {
-		return true
-	}
-	return false
-}
-
 // lockAndMonitorRoute monitors the default gateway is still pointing to us
 func (h *Handler) lockAndMonitorRoute(now time.Time) (err error) {
-	table := h.GetHosts()
+	table := h.session.GetHosts()
 	for _, host := range table {
 		host.Row.RLock()
-		if host.huntStage == StageRedirected && host.IP.To4() != nil {
+		if host.huntStage == model.StageRedirected && host.IP.To4() != nil {
 			addr := model.Addr{MAC: host.MACEntry.MAC, IP: host.IP}
 			host.Row.RUnlock()
 			_, err := h.HandlerICMP4.CheckAddr(addr) // ping host
 			if errors.Is(err, ErrNotRedirected) {
 				fmt.Printf("packet: ip4 routing NOK %s\n", host)
 				// Call stop hunt first to update stage to normal
-				if err := h.lockAndStopHunt(host, StageNormal); err != nil {
+				if err := h.lockAndStopHunt(host, model.StageNormal); err != nil {
 					fmt.Printf("packet: failed to stop hunt %s error=\"%s\"\n", host, err)
 				}
 				if err := h.lockAndStartHunt(addr); err != nil {

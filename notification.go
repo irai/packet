@@ -27,7 +27,7 @@ func (h *Handler) purge(now time.Time, probeDur time.Duration, offlineDur time.D
 	deleteCutoff := now.Add(purgeDur * -1)    // Delete entries that have not responded in last hour
 
 	purge := make([]net.IP, 0, 16)
-	offline := make([]*Host, 0, 16)
+	offline := make([]*model.Host, 0, 16)
 
 	h.mutex.RLock()
 	for _, e := range h.LANHosts.Table {

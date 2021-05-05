@@ -260,7 +260,7 @@ func SegmentLAN(nic string, hostIP net.IPNet, routerIP net.IPNet) (netfilterIP n
 }
 
 func locateFreeIP(nic string, hostIP net.IP, ip net.IP, start uint8, end uint8) (newIP net.IP, err error) {
-	newIP = CopyIP(ip).To4()
+	newIP = model.CopyIP(ip).To4()
 	for i := start; i <= end; i++ {
 		newIP[3] = i // save to variable
 

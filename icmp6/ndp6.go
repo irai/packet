@@ -42,10 +42,10 @@ func (h *ICMP6Handler) SendRouterAdvertisement(router Router, dstAddr model.Addr
 			// TODO: single source of truth for search domain name
 			DomainNames: []string{"lan"},
 		},
-		NewMTU(uint32(h.engine.NICInfo.IFI.MTU)),
+		NewMTU(uint32(h.session.NICInfo.IFI.MTU)),
 		&LinkLayerAddress{
 			Direction: Source,
-			Addr:      h.engine.NICInfo.HostMAC,
+			Addr:      h.session.NICInfo.HostMAC,
 		},
 	)
 
@@ -60,7 +60,7 @@ func (h *ICMP6Handler) SendRouterAdvertisement(router Router, dstAddr model.Addr
 		return err
 	}
 
-	return h.sendPacket(model.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, dstAddr, mb)
+	return h.sendPacket(model.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostLLA.IP}, dstAddr, mb)
 }
 
 func (h *ICMP6Handler) SendRouterSolicitation() error {
@@ -68,7 +68,7 @@ func (h *ICMP6Handler) SendRouterSolicitation() error {
 		Options: []Option{
 			&LinkLayerAddress{
 				Direction: Source,
-				Addr:      h.engine.NICInfo.HostMAC,
+				Addr:      h.session.NICInfo.HostMAC,
 			},
 		},
 	}
@@ -77,18 +77,18 @@ func (h *ICMP6Handler) SendRouterSolicitation() error {
 		return err
 	}
 
-	return h.sendPacket(model.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, packet.IP6AllRoutersAddr, mb)
+	return h.sendPacket(model.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostLLA.IP}, packet.IP6AllRoutersAddr, mb)
 }
 
 func (h *ICMP6Handler) SendNeighborAdvertisement(srcAddr model.Addr, dstAddr model.Addr) error {
 	p := ICMP6NeighborAdvertisementMarshal(true, false, true, srcAddr.IP, srcAddr.MAC)
 
-	return h.sendPacket(model.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, dstAddr, p)
+	return h.sendPacket(model.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostLLA.IP}, dstAddr, p)
 }
 
 // SendNeighbourSolicitation send an ICMP6 NS packet.
 func (h *ICMP6Handler) SendNeighbourSolicitation(ip net.IP) error {
-	p, _ := ICMP6NeighborSolicitationMarshal(ip, h.engine.NICInfo.HostMAC)
+	p, _ := ICMP6NeighborSolicitationMarshal(ip, h.session.NICInfo.HostMAC)
 
-	return h.sendPacket(model.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, packet.IP6AllNodesAddr, p)
+	return h.sendPacket(model.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostLLA.IP}, packet.IP6AllNodesAddr, p)
 }

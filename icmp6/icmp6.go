@@ -25,14 +25,14 @@ type Event struct {
 	Host model.Host
 }
 
-var _ packet.PacketProcessor = &ICMP6Handler{}
+var _ model.PacketProcessor = &ICMP6Handler{}
 
 // ICMP6Handler implements ICMPv6 Neighbor Discovery Protocol
 // see: https://mdlayher.com/blog/network-protocol-breakdown-ndp-and-go/
 type ICMP6Handler struct {
 	Router     *Router
 	LANRouters map[netaddr.IP]*Router
-	engine     *packet.Handler
+	session    *model.Session
 	huntList   model.AddrList
 	closed     bool
 	closeChan  chan bool
@@ -41,7 +41,7 @@ type ICMP6Handler struct {
 
 // PrintTable logs ICMP6 tables to standard out
 func (h *ICMP6Handler) PrintTable() {
-	table := h.engine.GetHosts()
+	table := h.session.GetHosts()
 	if len(table) > 0 {
 		fmt.Printf("icmp6 hosts table len=%v\n", len(table))
 		for _, host := range table {
@@ -76,11 +76,11 @@ type Config struct {
 }
 
 // Attach creates an ICMP6 handler and attach to the engine
-func Attach(engine *packet.Handler) (*ICMP6Handler, error) {
+func Attach(session *model.Session) (*ICMP6Handler, error) {
 
 	h := &ICMP6Handler{LANRouters: make(map[netaddr.IP]*Router), closeChan: make(chan bool)}
-	h.engine = engine
-	engine.HandlerICMP6 = h
+	h.session = session
+	// engine.HandlerICMP6 = h
 
 	return h, nil
 }
@@ -89,7 +89,7 @@ func Attach(engine *packet.Handler) (*ICMP6Handler, error) {
 func (h *ICMP6Handler) Detach() error {
 	h.closed = true
 	close(h.closeChan)
-	h.engine.HandlerICMP6 = packet.PacketNOOP{}
+	// h.engine.HandlerICMP6 = model.PacketNOOP{}
 	return nil
 }
 
@@ -114,7 +114,7 @@ func (h *ICMP6Handler) MinuteTicker(now time.Time) error {
 
 // HuntStage implements PacketProcessor interface
 func (h *ICMP6Handler) CheckAddr(addr model.Addr) (model.HuntStage, error) {
-	if err := h.Ping(model.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, addr, time.Second*2); err != nil {
+	if err := h.Ping(model.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostLLA.IP}, addr, time.Second*2); err != nil {
 		return model.StageNoChange, packet.ErrTimeout
 	}
 	return model.StageNormal, nil
@@ -152,7 +152,7 @@ func (h *ICMP6Handler) sendPacket(srcAddr model.Addr, dstAddr model.Addr, b []by
 	// icmp6 := ICMP6(packet.IP6(ether.Payload()).Payload())
 	// fmt.Println("DEBUG icmp :", icmp6, len(icmp6))
 	// fmt.Println("DEBUG ether:", ether, len(ether), len(b))
-	if _, err := h.engine.Conn().WriteTo(ether, &model.Addr{MAC: dstAddr.MAC}); err != nil {
+	if _, err := h.session.Conn.WriteTo(ether, &model.Addr{MAC: dstAddr.MAC}); err != nil {
 		log.Error("icmp failed to write ", err)
 		return err
 	}
@@ -191,7 +191,7 @@ func (h *ICMP6Handler) ProcessPacket(host *model.Host, p []byte, header []byte) 
 
 		// Source IP is sometimes ff02::1 multicast, which means the host is nil
 		if host == nil {
-			host, _ = h.engine.FindOrCreateHost(ether.Src(), frame.TargetAddress()) // will lock/unlock mutex
+			host, _ = h.session.FindOrCreateHost(ether.Src(), frame.TargetAddress()) // will lock/unlock mutex
 		}
 
 	case ipv6.ICMPTypeNeighborSolicitation: // 0x87
@@ -214,7 +214,7 @@ func (h *ICMP6Handler) ProcessPacket(host *model.Host, p []byte, header []byte) 
 		//
 		if ip6Frame.Src().IsUnspecified() {
 			fmt.Printf("icmp6 : dad probe for target=%s srcip=%s srcmac=%s dstip=%s dstmac=%s\n", frame.TargetAddress(), ip6Frame.Src(), ether.Src(), ip6Frame.Dst(), ether.Dst())
-			host, _ = h.engine.FindOrCreateHost(ether.Src(), frame.TargetAddress()) // will lock/unlock mutex
+			host, _ = h.session.FindOrCreateHost(ether.Src(), frame.TargetAddress()) // will lock/unlock mutex
 		}
 
 	case ipv6.ICMPTypeRouterAdvertisement: // 0x86

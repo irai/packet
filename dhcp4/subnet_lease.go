@@ -7,7 +7,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/irai/packet"
 	"github.com/irai/packet/model"
 	log "github.com/sirupsen/logrus"
 	yaml "gopkg.in/yaml.v2"
@@ -47,20 +46,20 @@ func newSubnet(config SubnetConfig) (*dhcpSubnet, error) {
 	subnet.LAN = net.IPNet{IP: config.LAN.IP.Mask(config.LAN.Mask).To4(), Mask: config.LAN.Mask}
 
 	// get broadcast addr
-	subnet.broadcast = packet.CopyIP(subnet.LAN.IP).To4()
+	subnet.broadcast = model.CopyIP(subnet.LAN.IP).To4()
 	for i := range subnet.broadcast { // range over the 4 bytes
 		subnet.broadcast[i] = subnet.broadcast[i] | ^subnet.LAN.Mask[i]
 	}
 
 	// default values for first and last IPs
-	config.FirstIP = packet.CopyIP(config.FirstIP).To4() // must copy, we are updating the array
+	config.FirstIP = model.CopyIP(config.FirstIP).To4() // must copy, we are updating the array
 	if config.FirstIP == nil || config.FirstIP.Equal(net.IPv4zero) || config.FirstIP[3] <= subnet.LAN.IP[3] {
-		config.FirstIP = packet.CopyIP(subnet.LAN.IP).To4()
+		config.FirstIP = model.CopyIP(subnet.LAN.IP).To4()
 		config.FirstIP[3] = config.FirstIP[3] + 1
 	}
-	config.LastIP = packet.CopyIP(config.LastIP).To4() // must copy, we are updating the array
+	config.LastIP = model.CopyIP(config.LastIP).To4() // must copy, we are updating the array
 	if config.LastIP == nil || config.LastIP.Equal(net.IPv4zero) || config.LastIP[3] > subnet.broadcast[3] {
-		config.LastIP = packet.CopyIP(subnet.broadcast).To4()
+		config.LastIP = model.CopyIP(subnet.broadcast).To4()
 		config.LastIP[3] = config.LastIP[3] - 1
 	}
 	subnet.Duration = config.Duration

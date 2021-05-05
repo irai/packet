@@ -13,7 +13,7 @@ import (
 // Debug packets turn on logging if desirable
 var Debug bool
 
-var _ packet.PacketProcessor = &Handler{}
+var _ model.PacketProcessor = &Handler{}
 
 // Handler maintains the underlying socket connection
 type Handler struct {
@@ -32,7 +32,7 @@ func Attach(engine *packet.Handler) (h *Handler, err error) {
 
 // Detach remove the plugin from the engine
 func (h *Handler) Detach() error {
-	h.engine.HandlerICMP4 = packet.PacketNOOP{}
+	h.engine.HandlerICMP4 = model.PacketNOOP{}
 	return nil
 }
 

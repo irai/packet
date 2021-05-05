@@ -103,9 +103,9 @@ func (h *Handler) SendDiscoverPacket(chAddr net.HardwareAddr, cIAddr net.IP, xID
 		log.Tracef("dhcp4: send discover packet from %s ciAddr=%v xID=%v", chAddr, cIAddr, xID)
 	}
 	p := RequestPacket(Discover, chAddr, cIAddr, xID, false, options.SelectOrderOrAll(nil))
-	srcAddr := model.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostIP4.IP, Port: packet.DHCP4ClientPort}
-	dstAddr := model.Addr{MAC: h.engine.NICInfo.RouterMAC, IP: h.engine.NICInfo.RouterIP4.IP, Port: packet.DHCP4ServerPort}
-	err = sendDHCP4Packet(h.engine.Conn(), srcAddr, dstAddr, p)
+	srcAddr := model.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostIP4.IP, Port: packet.DHCP4ClientPort}
+	dstAddr := model.Addr{MAC: h.session.NICInfo.RouterMAC, IP: h.session.NICInfo.RouterIP4.IP, Port: packet.DHCP4ServerPort}
+	err = sendDHCP4Packet(h.session.Conn, srcAddr, dstAddr, p)
 	return err
 }
 
@@ -149,9 +149,9 @@ func (h *Handler) sendDeclineReleasePacket(msgType MessageType, clientID []byte,
 		p.AddOption(k, v)
 	}
 	p.PadToMinSize()
-	srcAddr := model.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostIP4.IP, Port: packet.DHCP4ClientPort}
-	dstAddr := model.Addr{MAC: h.engine.NICInfo.RouterMAC, IP: h.engine.NICInfo.RouterIP4.IP, Port: packet.DHCP4ServerPort}
-	err = sendDHCP4Packet(h.engine.Conn(), srcAddr, dstAddr, p)
+	srcAddr := model.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostIP4.IP, Port: packet.DHCP4ClientPort}
+	dstAddr := model.Addr{MAC: h.session.NICInfo.RouterMAC, IP: h.session.NICInfo.RouterIP4.IP, Port: packet.DHCP4ServerPort}
+	err = sendDHCP4Packet(h.session.Conn, srcAddr, dstAddr, p)
 	// err = h.sendDHCPPacket(serverIP, packet)
 	return err
 }
@@ -222,7 +222,7 @@ func (h *Handler) processClientPacket(host *model.Host, req DHCP4) error {
 	log.WithFields(fields).Info("dhcp4: client offer from another dhcp server")
 
 	// Force dhcp server to release the IP
-	if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && h.engine.IsCaptured(req.CHAddr())) {
+	if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && h.session.IsCaptured(req.CHAddr())) {
 		h.forceDecline(clientID, serverIP, req.CHAddr(), req.YIAddr(), req.XId())
 	}
 	return nil

@@ -13,7 +13,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/irai/packet"
+	"github.com/irai/packet/model"
 	"gitlab.com/golang-commonmark/puny"
 )
 
@@ -223,7 +223,7 @@ func (pi *PrefixInformation) unmarshal(b []byte) error {
 	pi.ValidLifetime = time.Duration(binary.BigEndian.Uint32(value[2:6])) * time.Second
 	pi.PreferredLifetime = time.Duration(binary.BigEndian.Uint32(value[6:10])) * time.Second
 	// Skip reserved area.
-	addr := packet.CopyIP(net.IP(value[14:30]))
+	addr := model.CopyIP(net.IP(value[14:30]))
 	if err := checkIPv6(addr); err != nil {
 		return err
 	}
@@ -337,7 +337,7 @@ func (ri *RouteInformation) unmarshal(b []byte) error {
 	if err := checkPreference(ri.Preference); err != nil {
 		return err
 	}
-	ri.Prefix = packet.CopyBytes(b[8 : 8+(pl/8)]) // copy bytes up to prefix len bits
+	ri.Prefix = model.CopyBytes(b[8 : 8+(pl/8)]) // copy bytes up to prefix len bits
 
 	return nil
 }
@@ -430,7 +430,7 @@ func (r *RecursiveDNSServer) unmarshal(b []byte) error {
 
 		// The RawOption already made a copy of this data, so convert it
 		// directly to an IPv6 address with no further copying needed.
-		r.Servers = append(r.Servers, packet.CopyIP(value[start:end]))
+		r.Servers = append(r.Servers, model.CopyIP(value[start:end]))
 	}
 
 	return nil

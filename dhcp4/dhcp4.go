@@ -53,7 +53,7 @@ type Config struct {
 	ClientConn net.PacketConn
 }
 
-var _ packet.PacketProcessor = &Handler{}
+var _ model.PacketProcessor = &Handler{}
 
 // Start implements PacketProcessor interface
 func (h *Handler) Start() error {
@@ -88,7 +88,7 @@ func configChanged(config SubnetConfig, current SubnetConfig) bool {
 
 // Handler is the main dhcp4 handler
 type Handler struct {
-	engine *packet.Handler // engine handler
+	session *model.Session // engine handler
 	// clientConn net.PacketConn  // Listen DHCP client port
 	mode      Mode        // if true, force decline and release packets to homeDHCPServer
 	filename  string      // leases filename
@@ -102,15 +102,15 @@ type Handler struct {
 
 // Attach return a dhcp handler with two internal subnets.
 // func New(home SubnetConfig, netfilter SubnetConfig, filename string) (handler *DHCPHandler, err error) {
-func Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsServer net.IP, filename string) (handler *Handler, err error) {
-	return Config{}.Attach(engine, netfilterIP, dnsServer, filename)
+func Attach(session *model.Session, netfilterIP net.IPNet, dnsServer net.IP, filename string) (handler *Handler, err error) {
+	return Config{}.Attach(session, netfilterIP, dnsServer, filename)
 }
 
 // Attach accepts a configuration structure and return a dhcp handler
-func (config Config) Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsServer net.IP, filename string) (h *Handler, err error) {
+func (config Config) Attach(session *model.Session, netfilterIP net.IPNet, dnsServer net.IP, filename string) (h *Handler, err error) {
 
 	// validate networks
-	if !engine.NICInfo.HomeLAN4.Contains(netfilterIP.IP) || netfilterIP.Contains(engine.NICInfo.HomeLAN4.IP) {
+	if !session.NICInfo.HomeLAN4.Contains(netfilterIP.IP) || netfilterIP.Contains(session.NICInfo.HomeLAN4.IP) {
 		return nil, packet.ErrInvalidIP
 	}
 
@@ -121,13 +121,13 @@ func (config Config) Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsSe
 	h.closeChan = make(chan bool) // goroutines listen on this for closure
 
 	if dnsServer == nil {
-		dnsServer = engine.NICInfo.RouterIP4.IP
+		dnsServer = session.NICInfo.RouterIP4.IP
 	}
 	// Segment network
 	homeSubnet := SubnetConfig{
-		LAN:        engine.NICInfo.HomeLAN4,
-		DefaultGW:  engine.NICInfo.RouterIP4.IP.To4(),
-		DHCPServer: engine.NICInfo.HostIP4.IP.To4(),
+		LAN:        session.NICInfo.HomeLAN4,
+		DefaultGW:  session.NICInfo.RouterIP4.IP.To4(),
+		DHCPServer: session.NICInfo.HostIP4.IP.To4(),
 		DNSServer:  dnsServer.To4(),
 		Stage:      model.StageNormal,
 		// FirstIP:    net.ParseIP("192.168.0.10"),
@@ -136,7 +136,7 @@ func (config Config) Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsSe
 	netfilterSubnet := SubnetConfig{
 		LAN:        net.IPNet{IP: netfilterIP.IP.Mask(netfilterIP.Mask), Mask: netfilterIP.Mask},
 		DefaultGW:  netfilterIP.IP.To4(),
-		DHCPServer: engine.NICInfo.HostIP4.IP,
+		DHCPServer: session.NICInfo.HostIP4.IP,
 		DNSServer:  CloudFlareFamilyDNS1,
 		Stage:      model.StageRedirected,
 		// FirstIP:    net.ParseIP("192.168.0.10"),
@@ -171,8 +171,8 @@ func (config Config) Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsSe
 			"lastIP": h.net2.LastIP}).Debug("dhcp4: Server Config")
 	}
 
-	h.engine = engine
-	engine.HandlerDHCP4 = h
+	h.session = session
+	// session.HandlerDHCP4 = h
 
 	h.saveConfig(h.filename)
 	return h, nil
@@ -180,7 +180,7 @@ func (config Config) Attach(engine *packet.Handler, netfilterIP net.IPNet, dnsSe
 
 // Detach implements the PacketProcessor interface
 func (h *Handler) Detach() error {
-	h.engine.HandlerDHCP4 = packet.PacketNOOP{}
+	// h.session.HandlerDHCP4 = model.PacketNOOP{}
 	h.closed = true
 	close(h.closeChan)
 	// if h.clientConn != nil {
@@ -216,7 +216,7 @@ func (h *Handler) printTable() {
 
 // StartHunt will start the process to capture the client MAC
 func (h *Handler) StartHunt(addr model.Addr) (model.HuntStage, error) {
-	host := h.engine.MustFindIP(addr.IP)
+	host := h.session.MustFindIP(addr.IP)
 	if Debug {
 		fmt.Printf("dhcp4: start hunt %s\n", host)
 	}
@@ -342,8 +342,8 @@ func (h *Handler) ProcessPacket(host *model.Host, b []byte, header []byte) (*mod
 			log.Trace("dhcp4: send reply to ", dstAddr)
 		}
 
-		srcAddr := model.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostIP4.IP, Port: packet.DHCP4ServerPort}
-		if err := sendDHCP4Packet(h.engine.Conn(), srcAddr, dstAddr, response); err != nil {
+		srcAddr := model.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostIP4.IP, Port: packet.DHCP4ServerPort}
+		if err := sendDHCP4Packet(h.session.Conn, srcAddr, dstAddr, response); err != nil {
 			fmt.Printf("dhcp4: failed sending packet error=%s", err)
 			return host, model.Result{}, err
 		}

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 	"syscall"
-	"time"
 
 	"github.com/irai/packet/model"
 	"github.com/mdlayher/netx/rfc4193"
@@ -61,17 +60,6 @@ func GenerateULA(mac net.HardwareAddr, subnet uint16) (*net.IPNet, error) {
 	return prefix.Subnet(subnet).IPNet(), nil
 }
 
-// PacketProcessor defines the interface for packet processing modules
-type PacketProcessor interface {
-	Start() error
-	Stop() error
-	ProcessPacket(host *Host, p []byte, header []byte) (*Host, Result, error)
-	StartHunt(model.Addr) (HuntStage, error)
-	StopHunt(model.Addr) (HuntStage, error)
-	CheckAddr(model.Addr) (HuntStage, error)
-	MinuteTicker(time.Time) error
-}
-
 // Ethernet packet types - ETHER_TYPE
 const (
 	EthType8021AD = 0x88a8 // VLAN 802.1ad
@@ -99,31 +87,6 @@ var (
 	ErrNotRedirected = errors.New("not redirected")
 	ErrIsRouter      = errors.New("host is router")
 )
-
-// CopyIP simply copies the IP to a new buffer
-// Always return len 16 - using go internal 16 bytes for ipv4
-func CopyIP(srcIP net.IP) net.IP {
-	if len(srcIP) == 4 {
-		return srcIP.To16() // this will copy to a new 16 len buffer
-	}
-	ip := make(net.IP, len(srcIP))
-	copy(ip, srcIP)
-	return ip
-}
-
-// CopyMAC simply copies a mac address to a new buffer with the same len
-func CopyMAC(srcMAC net.HardwareAddr) net.HardwareAddr {
-	mac := make(net.HardwareAddr, len(srcMAC))
-	copy(mac, srcMAC)
-	return mac
-}
-
-// CopyBytes simply copies a mac address to a new buffer with the same len
-func CopyBytes(b []byte) []byte {
-	bb := make([]byte, len(b))
-	copy(bb, b)
-	return bb
-}
 
 // Ether provide access to ethernet fields without copying the structure
 // see: https://medium.com/@mdlayher/network-protocol-breakdown-ethernet-and-go-de985d726cc1

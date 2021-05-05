@@ -65,7 +65,7 @@ func (h *ICMP6Handler) findOrCreateRouter(mac net.HardwareAddr, ip net.IP) (rout
 	if found {
 		return r, true
 	}
-	router = &Router{Addr: model.Addr{MAC: packet.CopyMAC(mac), IP: packet.CopyIP(ip)}}
+	router = &Router{Addr: model.Addr{MAC: model.CopyMAC(mac), IP: model.CopyIP(ip)}}
 	h.LANRouters[ipNew] = router
 	h.Router = router // make this the default ipv6 router - used in na attack
 	fmt.Printf("icmp6 : new ipv6 ra router %s\n", router)
@@ -84,11 +84,11 @@ func (h *ICMP6Handler) StartRADVS(managed bool, other bool, prefixes []PrefixInf
 
 func (h *ICMP6Handler) startRADVS(managed bool, other bool, prefixes []PrefixInformation, rdnss *RecursiveDNSServer) (radvs *RADVS, err error) {
 	radvs = &RADVS{stopChannel: make(chan bool, 1)}
-	radvs.Router, _ = h.findOrCreateRouter(h.engine.NICInfo.HostMAC, h.engine.NICInfo.HostLLA.IP)
+	radvs.Router, _ = h.findOrCreateRouter(h.session.NICInfo.HostMAC, h.session.NICInfo.HostLLA.IP)
 	radvs.Router.enableRADVS = true
 	radvs.Router.ManagedFlag = managed
 	radvs.Router.OtherCondigFlag = other
-	radvs.Router.MTU = uint32(h.engine.NICInfo.IFI.MTU)
+	radvs.Router.MTU = uint32(h.session.NICInfo.IFI.MTU)
 	radvs.Router.ReacheableTime = int((time.Minute * 10).Milliseconds()) // Must be no greater than 3,600,000 milliseconds (1hour)
 	radvs.Router.RetransTimer = int((time.Minute * 2).Milliseconds())
 	radvs.Router.CurHopLimit = 1

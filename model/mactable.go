@@ -66,12 +66,12 @@ type MACTable struct {
 	Table []*MACEntry
 }
 
-func newMACTable(engine *Handler) MACTable {
+func newMACTable(engine *Session) MACTable {
 	return MACTable{Table: []*MACEntry{}}
 }
 
 // PrintTable prints the table to stdout
-func (h *Handler) printMACTable() {
+func (h *Session) printMACTable() {
 	for _, v := range h.MACTable.Table {
 		fmt.Println("mac  :", v)
 	}
@@ -106,7 +106,7 @@ func (s *MACTable) delete(mac net.HardwareAddr) error {
 **/
 
 // FindMACEntry returns pointer to macEntry or nil if not found
-func (h *Handler) FindMACEntry(mac net.HardwareAddr) *MACEntry {
+func (h *Session) FindMACEntry(mac net.HardwareAddr) *MACEntry {
 	h.mutex.RLock()
 	defer h.mutex.RUnlock()
 	return h.MACTable.findMAC(mac)
@@ -122,7 +122,7 @@ func (s *MACTable) findMAC(mac net.HardwareAddr) *MACEntry {
 }
 
 // macTableUpsertIPOffer insert of update mac IP4. Set by dhcp discovery.
-func (h *Handler) macTableUpsertIPOffer(addr Addr) {
+func (h *Session) macTableUpsertIPOffer(addr Addr) {
 	if h.NICInfo.HostIP4.Contains(addr.IP) {
 		entry := h.MACTable.findOrCreate(addr.MAC)
 		entry.IP4Offer = addr.IP

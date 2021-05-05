@@ -214,7 +214,7 @@ func NewTestContext() *TestContext {
 	if err != nil {
 		panic(err)
 	}
-	tc.DHCP4Handler, err = dhcp4.Config{ClientConn: tc.clientInConn}.Attach(tc.Engine, netfilterIP, DNSGoogleIP4, "")
+	tc.DHCP4Handler, err = dhcp4.Config{ClientConn: tc.clientInConn}.Attach(tc.Engine.Session(), netfilterIP, DNSGoogleIP4, "")
 	if err != nil {
 		panic("cannot create handler" + err.Error())
 	}
@@ -480,7 +480,7 @@ func runAction(t *testing.T, tc *TestContext, tt TestEvent) {
 		if ip == nil {
 			ip = tc.IPOffer
 		}
-		host := tc.Engine.FindIP(ip)
+		host := tc.Engine.Session().FindIP(ip)
 		if host == nil {
 			t.Errorf("%s: host not found in table ip=%s ", tt.name, ip)
 			tc.Engine.PrintTable()

@@ -6,7 +6,6 @@ import (
 	"net"
 	"time"
 
-	"github.com/irai/packet"
 	"github.com/irai/packet/model"
 )
 
@@ -77,7 +76,7 @@ func (h *Handler) findByIP(ip net.IP) *Lease {
 func (h *Handler) findOrCreate(clientID []byte, mac net.HardwareAddr, name string) *Lease {
 	var captured bool
 	subnet := h.net1
-	if captured = h.engine.IsCaptured(mac); captured {
+	if captured = h.session.IsCaptured(mac); captured {
 		subnet = h.net2
 	}
 
@@ -95,10 +94,10 @@ func (h *Handler) findOrCreate(clientID []byte, mac net.HardwareAddr, name strin
 	}
 
 	lease = &Lease{}
-	lease.ClientID = packet.CopyBytes(clientID)
+	lease.ClientID = model.CopyBytes(clientID)
 	lease.State = StateFree
 	lease.IPOffer = nil
-	lease.Addr.MAC = packet.CopyMAC(mac)
+	lease.Addr.MAC = model.CopyMAC(mac)
 	lease.Addr.IP = nil
 	lease.subnet = subnet
 	lease.Name = name
@@ -117,8 +116,8 @@ func (h *Handler) delete(lease *Lease) {
 func (h *Handler) allocIPOffer(lease *Lease, reqIP net.IP) error {
 	if reqIP != nil {
 		if l := h.findByIP(reqIP); l == nil || l.State == StateFree || bytes.Equal(l.ClientID, lease.ClientID) {
-			if h.engine.FindIP(reqIP) == nil {
-				lease.IPOffer = packet.CopyIP(reqIP).To4()
+			if h.session.FindIP(reqIP) == nil {
+				lease.IPOffer = model.CopyIP(reqIP).To4()
 				if Debug {
 					fmt.Printf("dhcp4 : offer ip=%s\n", lease.IPOffer)
 				}
@@ -136,7 +135,7 @@ func (h *Handler) allocIPOffer(lease *Lease, reqIP net.IP) error {
 		tmpIP[3] = byte(lease.subnet.nextIP)
 		lease.subnet.nextIP = lease.subnet.nextIP + 1
 		if l := h.findByIP(tmpIP); l == nil || l.State == StateFree {
-			if h.engine.FindIP(tmpIP) == nil {
+			if h.session.FindIP(tmpIP) == nil {
 				ip = tmpIP
 				break
 			}
@@ -153,7 +152,7 @@ func (h *Handler) allocIPOffer(lease *Lease, reqIP net.IP) error {
 		tmpIP[3] = byte(lease.subnet.nextIP)
 		lease.subnet.nextIP = lease.subnet.nextIP + 1
 		if l := h.findByIP(tmpIP); l == nil || l.State == StateFree {
-			if h.engine.FindIP(tmpIP) == nil {
+			if h.session.FindIP(tmpIP) == nil {
 				ip = tmpIP
 				break
 			}

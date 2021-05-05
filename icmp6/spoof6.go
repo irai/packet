@@ -57,7 +57,7 @@ func (h *ICMP6Handler) spoofLoop(dstAddr model.Addr) {
 
 		// Attack when we have the router LLA only
 		if h.Router != nil {
-			srcAddr := model.Addr{IP: h.Router.Addr.IP, MAC: h.engine.NICInfo.HostMAC}
+			srcAddr := model.Addr{IP: h.Router.Addr.IP, MAC: h.session.NICInfo.HostMAC}
 			if h.huntList.Index(dstAddr.MAC) == -1 || h.closed {
 				h.Unlock()
 				fmt.Printf("icmp6 : attack end ip=%s repeat=%v duration=%v", dstAddr.IP, nTimes, time.Since(startTime))

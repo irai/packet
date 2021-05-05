@@ -14,7 +14,7 @@ import (
 )
 
 // must implement interface
-var _ packet.PacketProcessor = &Handler{}
+var _ model.PacketProcessor = &Handler{}
 
 // Handler stores instance variables
 type Handler struct {

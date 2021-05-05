@@ -6,7 +6,6 @@ import (
 	"net"
 	"time"
 
-	"github.com/irai/packet"
 	"github.com/irai/packet/model"
 )
 
@@ -83,7 +82,7 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (result model.Result,
 	// Client can send another discovery after the entry expiry
 	// Free the entry so that a new IP is generated.
 	lease.State = StateDiscover
-	lease.XID = packet.CopyBytes(p.XId())
+	lease.XID = model.CopyBytes(p.XId())
 	lease.OfferExpiry = now.Add(time.Second * 5)
 	opts := lease.subnet.options.SelectOrderOrAll(options[OptionParameterRequestList])
 	ret := ReplyPacket(p, Offer, lease.subnet.DHCPServer, lease.IPOffer, lease.subnet.Duration, opts)
