@@ -75,7 +75,7 @@ func setupTestHandler(t *testing.T) *testContext {
 		panic(err)
 	}
 	if Debug {
-		fmt.Println("nicinfo: ", tc.packet.NICInfo)
+		fmt.Println("nicinfo: ", tc.packet.Session().NICInfo)
 	}
 
 	tc.arp, err = Attach(tc.packet.Session())

@@ -9,7 +9,7 @@ import (
 
 type Session struct {
 	Conn      net.PacketConn
-	NICInfo   NICInfo
+	NICInfo   *NICInfo
 	HostTable HostTable // store IP list - one for each host
 	MACTable  MACTable  // store mac list
 	mutex     sync.RWMutex

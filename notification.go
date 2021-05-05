@@ -30,7 +30,7 @@ func (h *Handler) purge(now time.Time, probeDur time.Duration, offlineDur time.D
 	offline := make([]*model.Host, 0, 16)
 
 	h.mutex.RLock()
-	for _, e := range h.LANHosts.Table {
+	for _, e := range h.session.HostTable.Table {
 		e.Row.RLock()
 
 		// Delete from table if the device is offline and was not seen for the last hour

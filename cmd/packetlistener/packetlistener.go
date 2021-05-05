@@ -114,7 +114,7 @@ func main() {
 		}
 		return
 	}
-	fmt.Println("nic info  :", handlers.engine.NICInfo)
+	fmt.Println("nic info  :", handlers.engine.Session().NICInfo)
 
 	// ARP
 	handlers.arp, err = arp.Attach(handlers.engine.Session())
@@ -123,7 +123,7 @@ func main() {
 	}
 
 	// ICMPv4
-	handlers.icmp4, err = icmp4.Attach(handlers.engine)
+	handlers.icmp4, err = icmp4.Attach(handlers.engine.Session())
 	if err != nil {
 		log.Fatalf("Failed to create icmp nic=%s handler: %s", *nic, err)
 	}
@@ -205,7 +205,7 @@ func doEngine(h *handlers, tokens []string) {
 				fmt.Println("error icmp4 is already attached")
 				return
 			}
-			h.icmp4, err = icmp4.Attach(h.engine)
+			h.icmp4, err = icmp4.Attach(h.engine.Session())
 		case "icmp6":
 			if h.icmp6 != nil {
 				fmt.Println("error icmp6 is already attached")
@@ -290,7 +290,7 @@ func doARP(h *handlers, tokens []string) {
 			fmt.Println("error arp is detached")
 			return
 		}
-		if err := h.arp.ScanNetwork(context.Background(), h.engine.NICInfo.HostIP4); err != nil {
+		if err := h.arp.ScanNetwork(context.Background(), h.engine.Session().NICInfo.HostIP4); err != nil {
 			fmt.Println("failed scan: ", err)
 		}
 	default:
@@ -456,7 +456,7 @@ func cmd(h *handlers) {
 				}
 				// if err := h.SendEchoRequest(model.Addr{MAC: packet.Eth4AllNodesMulticast, IP: ip}, 2, 2); err != nil {
 				if err := h.icmp4.Ping(
-					model.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostIP4.IP},
+					model.Addr{MAC: h.engine.Session().NICInfo.HostMAC, IP: h.engine.Session().NICInfo.HostIP4.IP},
 					model.Addr{MAC: packet.Eth4AllNodesMulticast, IP: ip}, time.Second*2); err != nil {
 					if errors.Is(err, packet.ErrTimeout) {
 						fmt.Println("ping timeout ")
@@ -473,7 +473,7 @@ func cmd(h *handlers) {
 					continue
 				}
 				if err := h.icmp6.Ping(
-					model.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP},
+					model.Addr{MAC: h.engine.Session().NICInfo.HostMAC, IP: h.engine.Session().NICInfo.HostLLA.IP},
 					model.Addr{MAC: packet.Eth6AllNodesMulticast, IP: ip}, time.Second*2); err != nil {
 					// if err := h6.Ping(h6.LLA().IP, ip, time.Second*2); err != nil {
 					fmt.Println("icmp6 echo error ", err)

@@ -18,7 +18,7 @@ type MACEntry struct {
 	IP6LLA   net.IP           // keep current ip6 local link address
 	IP6Offer net.IP           // keep ip6 GUA offer
 	Online   bool             // true is mac is online
-	isRouter bool             // Set to true if this is a router
+	IsRouter bool             // Set to true if this is a router
 	HostList []*Host          // IPs associated with this mac
 	LastSeen time.Time
 }
@@ -48,7 +48,7 @@ func (e *MACEntry) unlink(host *Host) {
 	}
 }
 
-func (e *MACEntry) updateIP(ip net.IP) {
+func (e *MACEntry) UpdateIPNoLock(ip net.IP) {
 	if ip.To4() != nil {
 		e.IP4 = ip
 	} else {
@@ -66,7 +66,7 @@ type MACTable struct {
 	Table []*MACEntry
 }
 
-func newMACTable(engine *Session) MACTable {
+func NewMACTable() MACTable {
 	return MACTable{Table: []*MACEntry{}}
 }
 
@@ -77,9 +77,9 @@ func (h *Session) printMACTable() {
 	}
 }
 
-// Add adds a mac to set
-func (s *MACTable) findOrCreate(mac net.HardwareAddr) *MACEntry {
-	if e := s.findMAC(mac); e != nil {
+// FindOrCreateNoLock adds a mac to set
+func (s *MACTable) FindOrCreateNoLock(mac net.HardwareAddr) *MACEntry {
+	if e := s.FindMACNoLock(mac); e != nil {
 		return e
 	}
 	e := &MACEntry{MAC: mac, IP4: net.IPv4zero, IP6GUA: net.IPv6zero, IP6LLA: net.IPv6zero, IP4Offer: net.IPv4zero}
@@ -109,10 +109,10 @@ func (s *MACTable) delete(mac net.HardwareAddr) error {
 func (h *Session) FindMACEntry(mac net.HardwareAddr) *MACEntry {
 	h.mutex.RLock()
 	defer h.mutex.RUnlock()
-	return h.MACTable.findMAC(mac)
+	return h.MACTable.FindMACNoLock(mac)
 }
 
-func (s *MACTable) findMAC(mac net.HardwareAddr) *MACEntry {
+func (s *MACTable) FindMACNoLock(mac net.HardwareAddr) *MACEntry {
 	for _, v := range s.Table {
 		if bytes.Equal(v.MAC, mac) {
 			return v
@@ -124,7 +124,7 @@ func (s *MACTable) findMAC(mac net.HardwareAddr) *MACEntry {
 // macTableUpsertIPOffer insert of update mac IP4. Set by dhcp discovery.
 func (h *Session) macTableUpsertIPOffer(addr Addr) {
 	if h.NICInfo.HostIP4.Contains(addr.IP) {
-		entry := h.MACTable.findOrCreate(addr.MAC)
+		entry := h.MACTable.FindOrCreateNoLock(addr.MAC)
 		entry.IP4Offer = addr.IP
 	}
 }

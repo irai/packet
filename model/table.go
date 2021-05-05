@@ -22,19 +22,19 @@ type HostTable struct {
 // Host has a RWMutex used to sync access to the record. This must be read locked to access fields or write locked for updating
 // When locking the engine, you must lock the engine first then row lock to avoid deadlocks
 type Host struct {
-	IP         net.IP       // either IP6 or ip4
-	MACEntry   *MACEntry    // pointer to mac entry
-	Online     bool         // keep host online / offline state
-	huntStage  HuntStage    // keep host overall huntStage
-	LastSeen   time.Time    // keep last packet time
-	icmp4Store ICMP4Store   // ICMP4 private store
-	icmp6Store ICMP6Store   // ICMP6 private store
+	IP        net.IP    // either IP6 or ip4
+	MACEntry  *MACEntry // pointer to mac entry
+	Online    bool      // keep host online / offline state
+	HuntStage HuntStage // keep host overall huntStage
+	LastSeen  time.Time // keep last packet time
+	// icmp4Store ICMP4Store   // ICMP4 private store
+	// icmp6Store ICMP6Store   // ICMP6 private store
 	dhcp4Store Result       // DHCP4 private store
 	Row        sync.RWMutex // Row level mutex
 }
 
 func (e *Host) String() string {
-	return fmt.Sprintf("mac=%s ip=%v online=%v capture=%v stage4=%s lastSeen=%s", e.MACEntry.MAC, e.IP, e.Online, e.MACEntry.Captured, e.huntStage, time.Since(e.LastSeen))
+	return fmt.Sprintf("mac=%s ip=%v online=%v capture=%v stage4=%s lastSeen=%s", e.MACEntry.MAC, e.IP, e.Online, e.MACEntry.Captured, e.HuntStage, time.Since(e.LastSeen))
 }
 
 // HuntStage holds the host hunt stage
@@ -102,7 +102,7 @@ func (host *Host) GetICMP6StoreNoLock() (store ICMP6Store) {
 }
 
 // newHostTable returns a HostTable Session
-func newHostTable() HostTable {
+func NewHostTable() HostTable {
 	return HostTable{Table: make(map[netaddr.IP]*Host, 64)}
 }
 
@@ -161,10 +161,10 @@ func (h *Session) findOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host,
 			// Remove IP from existing mac and link host to new macEntry
 			mac := CopyMAC(mac) // copy from frame
 			host.MACEntry.unlink(host)
-			macEntry := h.MACTable.findOrCreate(mac)
+			macEntry := h.MACTable.FindOrCreateNoLock(mac)
 			macEntry.link(host)
 			host.MACEntry = macEntry
-			host.huntStage = StageNormal // reset stage
+			host.HuntStage = StageNormal // reset stage
 			host.dhcp4Store.Name = ""    // clear name from previous host
 		}
 		host.LastSeen = now
@@ -173,10 +173,10 @@ func (h *Session) findOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host,
 		return host, true
 	}
 	mac = CopyMAC(mac) // copy from frame
-	macEntry := h.MACTable.findOrCreate(mac)
+	macEntry := h.MACTable.FindOrCreateNoLock(mac)
 	host = &Host{IP: CopyIP(ip), MACEntry: macEntry, Online: false} // set Online to false to trigger Online transition
 	host.LastSeen = now
-	host.huntStage = StageNormal
+	host.HuntStage = StageNormal
 	host.MACEntry.LastSeen = now
 	// host.MACEntry.updateIP(host.IP)
 	h.HostTable.Table[ipNew] = host
@@ -186,7 +186,7 @@ func (h *Session) findOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host,
 	return host, false
 }
 
-func (h *Session) deleteHostWithLock(ip net.IP) {
+func (h *Session) DeleteHostWithLock(ip net.IP) {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 
@@ -218,7 +218,7 @@ func (h *Session) MustFindIP(ip net.IP) *Host {
 func (h *Session) IsCaptured(mac net.HardwareAddr) bool {
 	h.mutex.RLock()
 	defer h.mutex.RUnlock()
-	if e := h.MACTable.findMAC(mac); e != nil && e.Captured {
+	if e := h.MACTable.FindMACNoLock(mac); e != nil && e.Captured {
 		return true
 	}
 	return false

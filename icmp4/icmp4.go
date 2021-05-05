@@ -19,20 +19,20 @@ var _ model.PacketProcessor = &Handler{}
 type Handler struct {
 	// NICInfo *model.NICInfo
 	// conn    net.PacketConn
-	engine *packet.Handler
+	session *model.Session
 }
 
 // Attach create a ICMPv4 handler and attach to the engine
-func Attach(engine *packet.Handler) (h *Handler, err error) {
-	h = &Handler{engine: engine}
-	h.engine.HandlerICMP4 = h
+func Attach(engine *model.Session) (h *Handler, err error) {
+	h = &Handler{session: engine}
+	// h.engine.HandlerICMP4 = h
 
 	return h, nil
 }
 
 // Detach remove the plugin from the engine
 func (h *Handler) Detach() error {
-	h.engine.HandlerICMP4 = model.PacketNOOP{}
+	// h.engine.HandlerICMP4 = model.PacketNOOP{}
 	return nil
 }
 

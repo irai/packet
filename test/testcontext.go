@@ -199,7 +199,7 @@ func NewTestContext() *TestContext {
 		panic(err)
 	}
 	if packet.Debug {
-		fmt.Println("nicinfo: ", tc.Engine.NICInfo)
+		fmt.Println("nicinfo: ", tc.Engine.Session().NICInfo)
 	}
 
 	tc.ARPHandler, err = arp.Attach(tc.Engine.Session())
@@ -435,8 +435,8 @@ func runAction(t *testing.T, tc *TestContext, tt TestEvent) {
 	tc.mutex.Lock()
 	savedResponseTableCount := len(tc.responseTable)
 	tc.mutex.Unlock()
-	savedHostTableCount := len(tc.Engine.LANHosts.Table)
-	savedMACTableCount := len(tc.Engine.MACTable.Table)
+	savedHostTableCount := len(tc.Engine.Session().HostTable.Table)
+	savedMACTableCount := len(tc.Engine.Session().MACTable.Table)
 
 	if sendPacket {
 		if _, err := tc.outConn.WriteTo(tt.ether, &model.Addr{MAC: tt.ether.Dst()}); err != nil {
@@ -456,11 +456,11 @@ func runAction(t *testing.T, tc *TestContext, tt TestEvent) {
 		time.Sleep(tt.waitTimeAfter)
 	}
 
-	if n := len(tc.Engine.LANHosts.Table) - savedHostTableCount; tt.hostTableInc > 0 && n != tt.hostTableInc {
+	if n := len(tc.Engine.Session().HostTable.Table) - savedHostTableCount; tt.hostTableInc > 0 && n != tt.hostTableInc {
 		t.Errorf("%s: invalid host table len want=%v got=%v", tt.name, tt.hostTableInc, n)
 		tc.Engine.PrintTable()
 	}
-	if n := len(tc.Engine.MACTable.Table) - savedMACTableCount; n != tt.macTableInc {
+	if n := len(tc.Engine.Session().MACTable.Table) - savedMACTableCount; n != tt.macTableInc {
 		t.Errorf("%s: invalid mac table len want=%v got=%v", tt.name, tt.macTableInc, n)
 		tc.Engine.PrintTable()
 	}
@@ -495,7 +495,7 @@ func runAction(t *testing.T, tc *TestContext, tt TestEvent) {
 func checkOnlineCount(t *testing.T, tc *TestContext, online int, offline int) {
 	countOnline, countOffline := 0, 0
 	n := 0
-	for _, v := range tc.Engine.LANHosts.Table {
+	for _, v := range tc.Engine.Session().HostTable.Table {
 		if v.Online {
 			countOnline++
 		} else {
@@ -521,7 +521,7 @@ func checkOnlineCount(t *testing.T, tc *TestContext, online int, offline int) {
 func checkCaptureCount(t *testing.T, tc *TestContext, nHosts int, nMACs int) {
 	countHosts, countMacs := 0, 0
 	n := 0
-	for _, v := range tc.Engine.MACTable.Table {
+	for _, v := range tc.Engine.Session().MACTable.Table {
 		if v.Captured {
 			countMacs++
 		}

@@ -77,10 +77,10 @@ func setupTestHandler() *testContext {
 		panic(err)
 	}
 	if Debug {
-		fmt.Println("nicinfo: ", tc.packet.NICInfo)
+		fmt.Println("nicinfo: ", tc.packet.Session().NICInfo)
 	}
 
-	tc.h, err = Attach(tc.packet)
+	tc.h, err = Attach(tc.packet.Session())
 
 	go func() {
 		if err := tc.packet.ListenAndServe(tc.ctx); err != nil {

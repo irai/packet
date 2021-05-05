@@ -137,7 +137,7 @@ func setupTestHandler() *testContext {
 		panic(err)
 	}
 	if Debug {
-		fmt.Println("nicinfo: ", tc.engine.NICInfo)
+		fmt.Println("nicinfo: ", tc.engine.Session().NICInfo)
 	}
 
 	// Default dhcp engine

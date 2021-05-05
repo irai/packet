@@ -7,13 +7,47 @@ import (
 	"testing"
 )
 
-func setupTestHandler() *Handler {
-	h := &Handler{LANHosts: newHostTable(), closeChan: make(chan bool)}
-	h.MACTable = newMACTable(h)
-	h.HandlerDHCP4 = PacketNOOP{}
-	h.HandlerARP = PacketNOOP{}
-	h.HandlerICMP4 = PacketNOOP{}
-	h.HandlerICMP6 = PacketNOOP{}
+var (
+	zeroMAC = net.HardwareAddr{0, 0, 0, 0, 0, 0}
+	ip1     = net.IPv4(192, 168, 0, 1)
+	ip2     = net.IPv4(192, 168, 0, 2)
+	ip3     = net.IPv4(192, 168, 0, 3)
+	ip4     = net.IPv4(192, 168, 0, 4)
+	ip5     = net.IPv4(192, 168, 0, 5)
+
+	hostMAC   = net.HardwareAddr{0x00, 0x55, 0x55, 0x55, 0x55, 0x55}
+	hostIP4   = net.IPv4(192, 168, 0, 129).To4()
+	routerMAC = net.HardwareAddr{0x00, 0x66, 0x66, 0x66, 0x66, 0x66}
+	routerIP4 = net.IPv4(192, 168, 0, 11).To4()
+	homeLAN   = net.IPNet{IP: net.IPv4(192, 168, 0, 0), Mask: net.IPv4Mask(255, 255, 255, 0)}
+
+	mac1 = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x01}
+	mac2 = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x02}
+	mac3 = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x03}
+	mac4 = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x04}
+	mac5 = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x05}
+
+	ip6LLARouter = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}
+	ip6LLAHost   = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x10, 0x10}
+	ip6LLA1      = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}
+	ip6LLA2      = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02}
+	ip6LLA3      = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x03}
+	ip6LLA4      = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x04}
+	ip6LLA5      = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x05}
+
+	hostAddr   = Addr{MAC: hostMAC, IP: hostIP4}
+	routerAddr = Addr{MAC: routerMAC, IP: routerIP4}
+
+	dnsIP4 = net.IPv4(8, 8, 8, 8)
+)
+
+func setupTestHandler() *Session {
+	h := &Session{HostTable: NewHostTable()}
+	h.MACTable = NewMACTable()
+	// h.HandlerDHCP4 = PacketNOOP{}
+	// h.HandlerARP = PacketNOOP{}
+	// h.HandlerICMP4 = PacketNOOP{}
+	// h.HandlerICMP6 = PacketNOOP{}
 	return h
 }
 
@@ -25,10 +59,10 @@ func TestHandler_findOrCreateHostTestCopyIPMAC(t *testing.T) {
 	mac := net.HardwareAddr{1, 1, 1, 2, 2, 2}
 
 	engine := setupTestHandler()
-	defer engine.Close()
+	// defer engine.Close()
 
 	host, _ := engine.findOrCreateHost(net.HardwareAddr(bufMAC), net.IP(bufIP))
-	engine.lockAndSetOnline(host, false)
+	// engine.lockAndSetOnline(host, false)
 
 	bufIP[0] = 0xff
 	bufMAC[0] = 0x00
@@ -46,7 +80,7 @@ func TestHandler_findOrCreateHostTestCopyIPMAC(t *testing.T) {
 	ip6 := net.IP{0x20, 0x01, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}
 
 	host, _ = engine.findOrCreateHost(net.HardwareAddr(bufMAC), net.IP(bufIP6))
-	engine.lockAndSetOnline(host, false)
+	// engine.lockAndSetOnline(host, false)
 	bufIP6[8] = 0xff
 	bufMAC[0] = 0x00
 	if !host.IP.Equal(ip6) || !host.MACEntry.IP6GUA.Equal(ip6) {
@@ -56,7 +90,7 @@ func TestHandler_findOrCreateHostTestCopyIPMAC(t *testing.T) {
 		t.Error("findOrCreateHost wrong MAC", host, host.MACEntry)
 	}
 
-	if n := len(engine.LANHosts.Table); n != 2 {
+	if n := len(engine.HostTable.Table); n != 2 {
 		engine.printHostTable()
 		t.Errorf("findOrCreateHost invalid len=%d want=%d ", n, 3)
 	}
@@ -64,7 +98,7 @@ func TestHandler_findOrCreateHostTestCopyIPMAC(t *testing.T) {
 
 func Benchmark_findOrCreateHost(b *testing.B) {
 	engine := setupTestHandler()
-	defer engine.Close()
+	// defer engine.Close()
 
 	// March 2021 - running benchmark on WSL 2 - 64 hosts
 	// Benchmark_findOrCreateHost-8   	 7318504	       145 ns/op	       0 B/op	       0 allocs/op
@@ -83,7 +117,7 @@ func Benchmark_findOrCreateHost(b *testing.B) {
 
 func TestHandler_findOrCreateHostDupIP(t *testing.T) {
 	engine := setupTestHandler()
-	defer engine.Close()
+	// defer engine.Close()
 
 	Debug = true
 
@@ -117,7 +151,7 @@ func TestHandler_findOrCreateHostDupIP(t *testing.T) {
 	}
 
 	// The must only be two hosts for IP2
-	if n := len(engine.LANHosts.Table); n != 2 {
+	if n := len(engine.HostTable.Table); n != 2 {
 		engine.PrintTable()
 		t.Fatal(fmt.Sprintf("invalid host table len=%d ", n))
 	}

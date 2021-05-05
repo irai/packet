@@ -37,10 +37,11 @@ type Config struct {
 // Handler implements ICMPv6 Neighbor Discovery Protocol
 // see: https://mdlayher.com/blog/network-protocol-breakdown-ndp-and-go/
 type Handler struct {
-	NICInfo      *model.NICInfo
-	conn         net.PacketConn
-	LANHosts     model.HostTable // store IP list - one for each host
-	MACTable     model.MACTable  // store mac list
+	// NICInfo *model.NICInfo
+	// conn    net.PacketConn
+	// LANHosts     model.HostTable // store IP list - one for each host
+	// MACTable     model.MACTable  // store mac list
+	session      *model.Session
 	HandlerIP4   model.PacketProcessor
 	HandlerIP6   model.PacketProcessor
 	HandlerICMP4 model.PacketProcessor
@@ -56,7 +57,6 @@ type Handler struct {
 	closeChan               chan bool     // close goroutines channel
 	mutex                   sync.RWMutex
 	nameChannel             chan Notification
-	session                 *model.Session
 }
 
 func (h *Handler) GetNotificationChannel() <-chan Notification {
@@ -67,7 +67,7 @@ func (h *Handler) GetNotificationChannel() <-chan Notification {
 	// Notify of all existing hosts
 	list := []Notification{}
 	h.mutex.RLock()
-	for _, host := range h.LANHosts.Table {
+	for _, host := range h.session.HostTable.Table {
 		host.Row.RLock()
 		list = append(list, Notification{Addr: model.Addr{IP: host.IP, MAC: host.MACEntry.MAC}, Online: host.Online, DHCPName: host.dhcp4Store.Name})
 		host.Row.RUnlock()
@@ -98,12 +98,16 @@ func (config Config) NewEngine(nic string) (*Handler, error) {
 
 	var err error
 
-	h := &Handler{LANHosts: newHostTable(), closeChan: make(chan bool)}
-	h.MACTable = newMACTable(h)
+	h := &Handler{closeChan: make(chan bool)}
 
-	h.NICInfo = config.NICInfo
-	if h.NICInfo == nil {
-		h.NICInfo, err = GetNICInfo(nic)
+	// session holds shared data for all plugins
+	h.session = new(model.Session)
+	h.session.MACTable = model.NewMACTable()
+	h.session.HostTable = model.NewHostTable()
+
+	h.session.NICInfo = config.NICInfo
+	if h.session.NICInfo == nil {
+		h.session.NICInfo, err = GetNICInfo(nic)
 		if err != nil {
 			return nil, fmt.Errorf("interface not found nic=%s: %w", nic, err)
 		}
@@ -127,9 +131,9 @@ func (config Config) NewEngine(nic string) (*Handler, error) {
 	}
 
 	// Skip if conn is overriden
-	h.conn = config.Conn
-	if h.conn == nil {
-		h.conn, err = h.setupConn()
+	h.session.Conn = config.Conn
+	if h.session.Conn == nil {
+		h.session.Conn, err = h.setupConn()
 		if err != nil {
 			return nil, err
 		}
@@ -144,19 +148,14 @@ func (config Config) NewEngine(nic string) (*Handler, error) {
 	h.HandlerICMP6 = model.PacketNOOP{}
 	h.HandlerDHCP4 = model.PacketNOOP{}
 
-	h.session = new(model.Session)
-	h.session.Conn = h.conn
-	h.session.NICInfo = *h.NICInfo
-	h.session.HostTable = h.LANHosts
-
 	// create the host entry manually because we don't process host packets
-	host, _ := h.findOrCreateHost(h.NICInfo.HostMAC, h.NICInfo.HostIP4.IP)
+	host, _ := h.session.FindOrCreateHost(h.session.NICInfo.HostMAC, h.session.NICInfo.HostIP4.IP)
 	host.LastSeen = time.Now().Add(time.Hour * 24 * 365) // never expire
 	host.Online = true
 
 	// create the router entry manually and set router flag
-	host, _ = h.findOrCreateHost(h.NICInfo.RouterMAC, h.NICInfo.RouterIP4.IP)
-	host.MACEntry.isRouter = true
+	host, _ = h.session.FindOrCreateHost(h.session.NICInfo.RouterMAC, h.session.NICInfo.RouterIP4.IP)
+	host.MACEntry.IsRouter = true
 	host.Online = true
 
 	return h, nil
@@ -176,15 +175,10 @@ func (h *Handler) Close() error {
 		close(h.nameChannel)
 	}
 	close(h.closeChan) // will terminate goroutines
-	if h.conn != nil {
-		h.conn.Close()
+	if h.session.Conn != nil {
+		h.session.Conn.Close()
 	}
 	return nil
-}
-
-// Conn return the underlying raw socket conn
-func (h *Handler) Conn() net.PacketConn {
-	return h.conn
 }
 
 func (h *Handler) setupConn() (conn net.PacketConn, err error) {
@@ -223,7 +217,7 @@ func (h *Handler) setupConn() (conn net.PacketConn, err error) {
 	}
 
 	// see: https://www.man7.org/linux/man-pages/man7/packet.7.html
-	conn, err = NewServerConn(h.NICInfo.IFI, syscall.ETH_P_ALL, SocketConfig{Filter: bpf})
+	conn, err = NewServerConn(h.session.NICInfo.IFI, syscall.ETH_P_ALL, SocketConfig{Filter: bpf})
 	if err != nil {
 		return nil, fmt.Errorf("packet.ListenPacket error: %w", err)
 	}
@@ -518,14 +512,14 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 	var startTime time.Time
 	buf := make([]byte, EthMaxSize)
 	for {
-		if err = h.conn.SetReadDeadline(time.Now().Add(time.Second * 2)); err != nil {
+		if err = h.session.Conn.SetReadDeadline(time.Now().Add(time.Second * 2)); err != nil {
 			if h.closed { // closed by call to h.Close()?
 				return nil
 			}
 			return fmt.Errorf("setReadDeadline error: %w", err)
 		}
 
-		n, _, err := h.conn.ReadFrom(buf)
+		n, _, err := h.session.Conn.ReadFrom(buf)
 		if err != nil {
 			if err, ok := err.(net.Error); ok && err.Temporary() {
 				continue
@@ -547,7 +541,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		// If we don't have this, then we received all forward packets with client IPs but our mac
 		//
 		// TODO: should this be in the bpf rules?
-		if bytes.Equal(ether.Src(), h.NICInfo.HostMAC) {
+		if bytes.Equal(ether.Src(), h.session.NICInfo.HostMAC) {
 			continue
 		}
 		// fmt.Println("DEBUG ether ", ether)
@@ -579,7 +573,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 			// Only lookup host on same subnet
 			// Note: DHCP request for previous discover have zero src IP; therefore wont't create host entry here.
-			if h.NICInfo.HostIP4.Contains(ip4Frame.Src()) {
+			if h.session.NICInfo.HostIP4.Contains(ip4Frame.Src()) {
 				host, _ = h.session.FindOrCreateHost(ether.Src(), ip4Frame.Src()) // will lock/unlock
 			}
 			l4Proto = ip4Frame.Protocol()

@@ -27,7 +27,7 @@ func (h *Handler) sendPacket(srcAddr model.Addr, dstAddr model.Addr, p packet.IC
 	if Debug {
 		fmt.Printf("icmp4: send %s\n", p)
 	}
-	if _, err := h.engine.Conn().WriteTo(ether, &dstAddr); err != nil {
+	if _, err := h.session.Conn.WriteTo(ether, &dstAddr); err != nil {
 		fmt.Println("icmp failed to write ", err)
 		return err
 	}
