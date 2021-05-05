@@ -78,7 +78,7 @@ func setupTestHandler(t *testing.T) *testContext {
 		fmt.Println("nicinfo: ", tc.packet.Session().NICInfo)
 	}
 
-	tc.arp, err = Attach(tc.packet.Session())
+	tc.arp, err = New(tc.packet.Session())
 	tc.packet.HandlerARP = tc.arp
 
 	go func() {

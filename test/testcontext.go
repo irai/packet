@@ -202,7 +202,7 @@ func NewTestContext() *TestContext {
 		fmt.Println("nicinfo: ", tc.Engine.Session().NICInfo)
 	}
 
-	tc.ARPHandler, err = arp.Attach(tc.Engine.Session())
+	tc.ARPHandler, err = arp.New(tc.Engine.Session())
 	if err != nil {
 		panic(err)
 	}

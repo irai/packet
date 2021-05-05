@@ -47,7 +47,7 @@ func (h *ICMP6Handler) PrintTable() {
 		for _, host := range table {
 			host.Row.RLock()
 			if packet.IsIP6(host.IP) {
-				fmt.Printf("mac=%s ip=%v online=%v IP6router=%v\n", host.MACEntry.MAC, host.IP, host.Online, host.GetICMP6StoreNoLock())
+				fmt.Printf("mac=%s ip=%v online=%v \n", host.MACEntry.MAC, host.IP, host.Online)
 			}
 			host.Row.RUnlock()
 		}

@@ -18,11 +18,16 @@ var _ model.PacketProcessor = &Handler{}
 
 // Handler stores instance variables
 type Handler struct {
-	arpMutex  sync.RWMutex
-	session   *model.Session
-	huntList  map[string]model.Addr
-	closed    bool
-	closeChan chan bool
+	arpMutex      sync.RWMutex
+	session       *model.Session
+	probeInterval time.Duration // how often to probe if IP is online
+	huntList      map[string]model.Addr
+	closed        bool
+	closeChan     chan bool
+}
+
+type Config struct {
+	ProbeInterval time.Duration
 }
 
 var (
@@ -30,8 +35,12 @@ var (
 	Debug bool
 )
 
-// Attach creates the ARP handler and attach to the engine
-func Attach(session *model.Session) (h *Handler, err error) {
+// New creates the ARP handler and attach to the engine
+func New(session *model.Session) (h *Handler, err error) {
+	return Config{ProbeInterval: time.Minute * 5}.newARP(session)
+}
+
+func (config Config) newARP(session *model.Session) (h *Handler, err error) {
 	h = &Handler{session: session, huntList: make(map[string]model.Addr, 6), closeChan: make(chan bool)}
 	// h.table, _ = loadARPProcTable() // load linux proc table
 	if h.session.NICInfo.HostIP4.IP.To4() == nil {
@@ -41,6 +50,7 @@ func Attach(session *model.Session) (h *Handler, err error) {
 	if h.session.NICInfo.HomeLAN4.IP.To4() == nil || h.session.NICInfo.HomeLAN4.IP.IsUnspecified() {
 		return nil, packet.ErrInvalidIP
 	}
+	h.probeInterval = config.ProbeInterval
 
 	return h, nil
 }
@@ -81,7 +91,7 @@ func (h *Handler) Start() error {
 // ARP handler will send who is packet if IP has not been seen
 func (h *Handler) MinuteTicker(now time.Time) error {
 	arpAddrs := []model.Addr{}
-	now.Add(h.session.ProbeInterval * -1) //
+	now.Add(h.probeInterval * -1) //
 
 	for _, host := range h.session.GetHosts() {
 		host.Row.RLock()

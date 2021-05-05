@@ -29,8 +29,9 @@ type Host struct {
 	LastSeen  time.Time // keep last packet time
 	// icmp4Store ICMP4Store   // ICMP4 private store
 	// icmp6Store ICMP6Store   // ICMP6 private store
-	dhcp4Store Result       // DHCP4 private store
-	Row        sync.RWMutex // Row level mutex
+	// dhcp4Store Result       // DHCP4 private store
+	DHCP4Name string
+	Row       sync.RWMutex // Row level mutex
 }
 
 func (e *Host) String() string {
@@ -92,6 +93,7 @@ func (e ICMP6Store) String() string {
 	return fmt.Sprintf("icmp6stage=%s router=%v", e.HuntStage, e.Router)
 }
 
+/**
 func (host *Host) SetICMP6StoreNoLock(store ICMP6Store) {
 	host.icmp6Store.Router = store.Router
 	host.icmp6Store.HuntStage = store.HuntStage
@@ -100,6 +102,7 @@ func (host *Host) SetICMP6StoreNoLock(store ICMP6Store) {
 func (host *Host) GetICMP6StoreNoLock() (store ICMP6Store) {
 	return host.icmp6Store
 }
+***/
 
 // newHostTable returns a HostTable Session
 func NewHostTable() HostTable {
@@ -165,7 +168,7 @@ func (h *Session) findOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host,
 			macEntry.link(host)
 			host.MACEntry = macEntry
 			host.HuntStage = StageNormal // reset stage
-			host.dhcp4Store.Name = ""    // clear name from previous host
+			host.DHCP4Name = ""          // clear name from previous host
 		}
 		host.LastSeen = now
 		host.MACEntry.LastSeen = now
@@ -186,7 +189,7 @@ func (h *Session) findOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host,
 	return host, false
 }
 
-func (h *Session) DeleteHostWithLock(ip net.IP) {
+func (h *Session) DeleteHost(ip net.IP) {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 

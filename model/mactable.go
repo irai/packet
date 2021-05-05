@@ -121,6 +121,7 @@ func (s *MACTable) FindMACNoLock(mac net.HardwareAddr) *MACEntry {
 	return nil
 }
 
+/***
 // macTableUpsertIPOffer insert of update mac IP4. Set by dhcp discovery.
 func (h *Session) macTableUpsertIPOffer(addr Addr) {
 	if h.NICInfo.HostIP4.Contains(addr.IP) {
@@ -128,3 +129,4 @@ func (h *Session) macTableUpsertIPOffer(addr Addr) {
 		entry.IP4Offer = addr.IP
 	}
 }
+***/

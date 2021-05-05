@@ -123,19 +123,19 @@ func (h *Handler) Ping(srcAddr model.Addr, dstAddr model.Addr, timeout time.Dura
 func (h *Handler) CheckAddr(addr model.Addr) (model.HuntStage, error) {
 	// Test if client is online first
 	// If client does not respond to echo, there is little we can test
-	if err := h.Ping(model.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostIP4.IP}, addr, time.Second*2); err != nil {
+	if err := h.Ping(model.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostIP4.IP}, addr, time.Second*2); err != nil {
 		fmt.Printf("icmp4 : not responding to ping ip=%s mac=%s\n", addr.IP, addr.MAC)
 		return model.StageNormal, packet.ErrTimeout
 	}
 
 	// first attempt
-	err := h.Ping(model.Addr{MAC: h.engine.NICInfo.RouterMAC, IP: h.engine.NICInfo.RouterIP4.IP}, addr, time.Second*2)
+	err := h.Ping(model.Addr{MAC: h.session.NICInfo.RouterMAC, IP: h.session.NICInfo.RouterIP4.IP}, addr, time.Second*2)
 	if err == nil {
 		return model.StageRedirected, nil
 	}
 
 	// second attempt
-	err = h.Ping(model.Addr{MAC: h.engine.NICInfo.RouterMAC, IP: h.engine.NICInfo.RouterIP4.IP}, addr, time.Second*2)
+	err = h.Ping(model.Addr{MAC: h.session.NICInfo.RouterMAC, IP: h.session.NICInfo.RouterIP4.IP}, addr, time.Second*2)
 	if err == nil {
 		return model.StageRedirected, nil
 	}

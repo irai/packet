@@ -64,7 +64,7 @@ func (h *Handler) purge(now time.Time, probeDur time.Duration, offlineDur time.D
 	// delete after loop because this will change the table
 	if len(purge) > 0 {
 		for _, v := range purge {
-			h.deleteHostWithLock(v)
+			h.session.DeleteHost(v)
 		}
 	}
 

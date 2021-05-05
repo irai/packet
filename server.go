@@ -69,7 +69,7 @@ func (h *Handler) GetNotificationChannel() <-chan Notification {
 	h.mutex.RLock()
 	for _, host := range h.session.HostTable.Table {
 		host.Row.RLock()
-		list = append(list, Notification{Addr: model.Addr{IP: host.IP, MAC: host.MACEntry.MAC}, Online: host.Online, DHCPName: host.dhcp4Store.Name})
+		list = append(list, Notification{Addr: model.Addr{IP: host.IP, MAC: host.MACEntry.MAC}, Online: host.Online, DHCPName: host.DHCP4Name})
 		host.Row.RUnlock()
 	}
 	h.mutex.RUnlock()
@@ -179,6 +179,33 @@ func (h *Handler) Close() error {
 		h.session.Conn.Close()
 	}
 	return nil
+}
+
+func (h *Handler) AttachARP(p model.PacketProcessor) {
+	h.HandlerARP = p
+}
+func (h *Handler) DetachARP() {
+	h.HandlerARP = model.PacketNOOP{}
+}
+
+func (h *Handler) AttachICMP4(p model.PacketProcessor) {
+	h.HandlerICMP4 = p
+}
+func (h *Handler) DetachICMP4() {
+	h.HandlerICMP4 = model.PacketNOOP{}
+}
+
+func (h *Handler) AttachICMP6(p model.PacketProcessor) {
+	h.HandlerICMP6 = p
+}
+func (h *Handler) DetachICMP6() {
+	h.HandlerICMP6 = model.PacketNOOP{}
+}
+func (h *Handler) AttachDHCP4(p model.PacketProcessor) {
+	h.HandlerDHCP4 = p
+}
+func (h *Handler) DetachDHCP4() {
+	h.HandlerDHCP4 = model.PacketNOOP{}
 }
 
 func (h *Handler) setupConn() (conn net.PacketConn, err error) {
@@ -328,8 +355,8 @@ func (h *Handler) minuteChecker(now time.Time) {
 func (h *Handler) lockAndProcessDHCP4Update(host *model.Host, result model.Result) (notify bool) {
 	if host != nil {
 		host.Row.Lock()
-		if host.dhcp4Store.Name != result.Name {
-			host.dhcp4Store.Name = result.Name
+		if host.DHCP4Name != result.Name {
+			host.DHCP4Name = result.Name
 			notify = true
 		}
 		if result.Addr.IP != nil { // Discover IPOffer?
@@ -359,8 +386,10 @@ func (h *Handler) lockAndProcessDHCP4Update(host *model.Host, result model.Resul
 	}
 
 	// First dhcp discovery has no host entry
-	if result.Addr.IP != nil { // Discover IPOffer?
-		h.macTableUpsertIPOffer(result.Addr)
+	// h.macTableUpsertIPOffer(result.Addr)
+	if result.Addr.IP != nil && h.session.NICInfo.HostIP4.Contains(result.Addr.IP) { // Discover IPOffer?
+		entry := h.session.MACTable.FindOrCreateNoLock(result.Addr.MAC)
+		entry.IP4Offer = result.Addr.IP
 	}
 	return false
 }
@@ -421,7 +450,7 @@ func (h *Handler) lockAndSetOnline(host *model.Host, notify bool) {
 	// update LastSeen and current mac IP
 	host.MACEntry.LastSeen = now
 	host.LastSeen = now
-	host.MACEntry.updateIP(host.IP)
+	host.MACEntry.UpdateIPNoLock(host.IP)
 
 	// return immediately if host already online and not notification
 	if host.Online && !notify {
@@ -434,7 +463,7 @@ func (h *Handler) lockAndSetOnline(host *model.Host, notify bool) {
 	host.MACEntry.Online = true
 	host.Online = true
 	addr := model.Addr{IP: host.IP, MAC: host.MACEntry.MAC}
-	notification := Notification{Addr: addr, Online: true, DHCPName: host.dhcp4Store.Name}
+	notification := Notification{Addr: addr, Online: true, DHCPName: host.DHCP4Name}
 
 	if Debug {
 		fmt.Printf("packet: IP is online %s\n", host)
