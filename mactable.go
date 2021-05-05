@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net"
 	"time"
+
+	"github.com/irai/packet/model"
 )
 
 // MACEntry stores mac details
@@ -122,7 +124,7 @@ func (s *MACTable) findMAC(mac net.HardwareAddr) *MACEntry {
 }
 
 // macTableUpsertIPOffer insert of update mac IP4. Set by dhcp discovery.
-func (h *Handler) macTableUpsertIPOffer(addr Addr) {
+func (h *Handler) macTableUpsertIPOffer(addr model.Addr) {
 	if h.NICInfo.HostIP4.Contains(addr.IP) {
 		entry := h.MACTable.findOrCreate(addr.MAC)
 		entry.IP4Offer = addr.IP

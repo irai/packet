@@ -6,9 +6,10 @@ import (
 	"syscall"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/model"
 )
 
-func sendDHCP4Packet(conn net.PacketConn, srcAddr packet.Addr, dstAddr packet.Addr, p DHCP4) (err error) {
+func sendDHCP4Packet(conn net.PacketConn, srcAddr model.Addr, dstAddr model.Addr, p DHCP4) (err error) {
 	ether := packet.Ether(make([]byte, packet.EthMaxSize)) // Ping is called many times concurrently by client
 
 	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IP, srcAddr.MAC, dstAddr.MAC)
@@ -36,7 +37,7 @@ func sendDHCP4Packet(conn net.PacketConn, srcAddr packet.Addr, dstAddr packet.Ad
 
 /***
 // PING send a standalone echo packet in a new connection
-func PING(dstAddr packet.Addr) error {
+func PING(dstAddr model.Addr) error {
 
 	c, err := net.ListenPacket("ip4:1", "0.0.0.0") // ICMP for IPv4
 	if err != nil {

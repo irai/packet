@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/model"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -40,8 +41,8 @@ var (
 	ip6LLA4      = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x04}
 	ip6LLA5      = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x05}
 
-	hostAddr   = packet.Addr{MAC: hostMAC, IP: hostIP4}
-	routerAddr = packet.Addr{MAC: routerMAC, IP: routerIP4}
+	hostAddr   = model.Addr{MAC: hostMAC, IP: hostIP4}
+	routerAddr = model.Addr{MAC: routerMAC, IP: routerIP4}
 
 	dnsIP4 = net.IPv4(8, 8, 8, 8)
 )
@@ -181,13 +182,13 @@ type testEvent struct {
 	wantOnline    bool
 	hostTableLen  int
 	macTableLen   int
-	srcAddr       packet.Addr
-	dstAddr       packet.Addr
+	srcAddr       model.Addr
+	dstAddr       model.Addr
 	ether         packet.Ether
 	wantHost      packet.Host
 }
 
-func newDHCP4DeclineFrame(src packet.Addr, declineIP net.IP, serverIP net.IP, xid []byte) DHCP4 {
+func newDHCP4DeclineFrame(src model.Addr, declineIP net.IP, serverIP net.IP, xid []byte) DHCP4 {
 	options := []Option{}
 	// oDNS := Option{Code: OptionDomainNameServer, Value: []byte{}}
 	options = append(options, Option{Code: OptionServerIdentifier, Value: serverIP.To4()})
@@ -197,7 +198,7 @@ func newDHCP4DeclineFrame(src packet.Addr, declineIP net.IP, serverIP net.IP, xi
 	// p.AddOption(OptionMessage, []byte("netfilter decline"))
 	return RequestPacket(Decline, src.MAC, src.IP, xid, false, options)
 }
-func newDHCP4DiscoverFrame(src packet.Addr, name string, xid []byte) DHCP4 {
+func newDHCP4DiscoverFrame(src model.Addr, name string, xid []byte) DHCP4 {
 	options := []Option{}
 	opt := Option{Code: OptionDomainNameServer, Value: []byte{}}
 	options = append(options, opt)
@@ -206,7 +207,7 @@ func newDHCP4DiscoverFrame(src packet.Addr, name string, xid []byte) DHCP4 {
 	return RequestPacket(Discover, src.MAC, src.IP, xid, false, options)
 }
 
-func newDHCP4RequestFrame(src packet.Addr, name string, serverID net.IP, requestedIP net.IP, xid []byte) DHCP4 {
+func newDHCP4RequestFrame(src model.Addr, name string, serverID net.IP, requestedIP net.IP, xid []byte) DHCP4 {
 	options := []Option{}
 	opt := Option{Code: OptionDomainNameServer, Value: []byte{}}
 	options = append(options, opt)

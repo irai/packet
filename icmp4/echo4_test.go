@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/model"
 )
 
 func Benchmark_Ping256(b *testing.B) {
@@ -24,7 +25,7 @@ func ping256(tc *testContext) {
 		ip := packet.CopyIP(srcIP).To4() // new buffer, we are sending this in the channel
 		ip[3] = uint8(i)
 		go func(ip net.IP) {
-			if tc.h.Ping(hostAddr, packet.Addr{IP: ip}, time.Second*2) != nil {
+			if tc.h.Ping(hostAddr, model.Addr{IP: ip}, time.Second*2) != nil {
 				channel <- net.IPv4zero
 				return
 			}

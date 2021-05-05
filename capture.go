@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net"
 	"time"
+
+	"github.com/irai/packet/model"
 )
 
 // Capture places the mac in capture mode
@@ -21,10 +23,10 @@ func (h *Handler) Capture(mac net.HardwareAddr) error {
 	}
 	macEntry.Captured = true
 
-	list := []Addr{}
+	list := []model.Addr{}
 	// Mark all known entries as StageHunt
 	for _, host := range macEntry.HostList {
-		list = append(list, Addr{IP: host.IP, MAC: host.MACEntry.MAC})
+		list = append(list, model.Addr{IP: host.IP, MAC: host.MACEntry.MAC})
 	}
 	h.mutex.Unlock()
 
@@ -44,7 +46,7 @@ func (h *Handler) Capture(mac net.HardwareAddr) error {
 //   - capture command issued by user
 //   - host has come online
 //   - icmp ping no longer redirected
-func (h *Handler) lockAndStartHunt(addr Addr) (err error) {
+func (h *Handler) lockAndStartHunt(addr model.Addr) (err error) {
 
 	host := h.FindIP(addr.IP)
 	if host == nil {
@@ -166,7 +168,7 @@ func (h *Handler) lockAndStopHunt(host *Host, stage HuntStage) (err error) {
 	if host.icmp6Store.HuntStage == StageHunt {
 		host.icmp6Store.HuntStage = StageNormal
 	}
-	addr := Addr{MAC: host.MACEntry.MAC, IP: host.IP}
+	addr := model.Addr{MAC: host.MACEntry.MAC, IP: host.IP}
 	host.Row.Unlock()
 
 	// IP4 handlers
@@ -211,7 +213,7 @@ func (h *Handler) lockAndMonitorRoute(now time.Time) (err error) {
 	for _, host := range table {
 		host.Row.RLock()
 		if host.huntStage == StageRedirected && host.IP.To4() != nil {
-			addr := Addr{MAC: host.MACEntry.MAC, IP: host.IP}
+			addr := model.Addr{MAC: host.MACEntry.MAC, IP: host.IP}
 			host.Row.RUnlock()
 			_, err := h.HandlerICMP4.CheckAddr(addr) // ping host
 			if errors.Is(err, ErrNotRedirected) {

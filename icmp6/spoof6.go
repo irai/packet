@@ -5,10 +5,11 @@ import (
 	"time"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/model"
 )
 
 // StartHunt implements packet processor interface
-func (h *ICMP6Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
+func (h *ICMP6Handler) StartHunt(addr model.Addr) (packet.HuntStage, error) {
 	if Debug {
 		fmt.Printf("icmp6 : force neighbor spoof %s", addr)
 	}
@@ -26,7 +27,7 @@ func (h *ICMP6Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
 }
 
 // StopHunt implements PacketProcessor interface
-func (h *ICMP6Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
+func (h *ICMP6Handler) StopHunt(addr model.Addr) (packet.HuntStage, error) {
 	if Debug {
 		fmt.Printf("icmp6 : stop neighbor spoof %s", addr)
 	}
@@ -46,7 +47,7 @@ func (h *ICMP6Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
 //   1. spoof the client arp table to send router packets to us
 //   2. optionally, claim the ownership of the IP to force client to change IP or go offline
 //
-func (h *ICMP6Handler) spoofLoop(dstAddr packet.Addr) {
+func (h *ICMP6Handler) spoofLoop(dstAddr model.Addr) {
 	// 4 second re-do seem to be adequate;
 	ticker := time.NewTicker(time.Second * 4).C
 	startTime := time.Now()
@@ -57,13 +58,13 @@ func (h *ICMP6Handler) spoofLoop(dstAddr packet.Addr) {
 
 		// Attack when we have the router LLA only
 		if h.Router != nil {
-			srcAddr := packet.Addr{IP: h.Router.Addr.IP, MAC: h.engine.NICInfo.HostMAC}
+			srcAddr := model.Addr{IP: h.Router.Addr.IP, MAC: h.engine.NICInfo.HostMAC}
 			if h.huntList.Index(dstAddr.MAC) == -1 || h.closed {
 				h.Unlock()
 				fmt.Printf("icmp6 : attack end ip=%s repeat=%v duration=%v", dstAddr.IP, nTimes, time.Since(startTime))
 				return
 			}
-			list := []packet.Addr{}
+			list := []model.Addr{}
 			for _, router := range h.LANRouters {
 				list = append(list, router.Addr)
 			}

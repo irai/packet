@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"net"
 	"time"
+
+	"github.com/irai/packet/model"
 )
 
 type Notification struct {
-	Addr     Addr
+	Addr     model.Addr
 	Online   bool
 	DHCPName string
 	MDNSName string
@@ -41,9 +43,9 @@ func (h *Handler) purge(now time.Time, probeDur time.Duration, offlineDur time.D
 		// Probe if device not seen recently
 		if e.Online && e.LastSeen.Before(probeCutoff) {
 			if ip := e.IP.To4(); ip != nil {
-				h.HandlerARP.CheckAddr(Addr{MAC: e.MACEntry.MAC, IP: ip})
+				h.HandlerARP.CheckAddr(model.Addr{MAC: e.MACEntry.MAC, IP: ip})
 			} else {
-				h.HandlerICMP6.CheckAddr(Addr{MAC: e.MACEntry.MAC, IP: e.IP})
+				h.HandlerICMP6.CheckAddr(model.Addr{MAC: e.MACEntry.MAC, IP: e.IP})
 			}
 		}
 

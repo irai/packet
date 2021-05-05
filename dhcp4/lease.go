@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/model"
 )
 
 // State defines type for lease state
@@ -35,7 +36,7 @@ type leaseTable map[string]*Lease
 type Lease struct {
 	ClientID    []byte `yaml:",omitempty"`
 	State       State
-	Addr        packet.Addr
+	Addr        model.Addr
 	IPOffer     net.IP    `yaml:",omitempty"`
 	OfferExpiry time.Time `yaml:",omitempty"`
 	XID         []byte    `yaml:",omitempty"`

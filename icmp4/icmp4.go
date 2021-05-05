@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/model"
 	"golang.org/x/net/ipv4"
 )
 
@@ -51,12 +52,12 @@ func (h *Handler) MinuteTicker(now time.Time) error {
 }
 
 // StartHunt implements PacketProcessor interface
-func (h *Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
+func (h *Handler) StartHunt(addr model.Addr) (packet.HuntStage, error) {
 	return packet.StageHunt, nil
 }
 
 // StopHunt implements PacketProcessor interface
-func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
+func (h *Handler) StopHunt(addr model.Addr) (packet.HuntStage, error) {
 	return packet.StageNormal, nil
 }
 

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/model"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -214,7 +215,7 @@ func (h *Handler) printTable() {
 }
 
 // StartHunt will start the process to capture the client MAC
-func (h *Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
+func (h *Handler) StartHunt(addr model.Addr) (packet.HuntStage, error) {
 	host := h.engine.MustFindIP(addr.IP)
 	if Debug {
 		fmt.Printf("dhcp4: start hunt %s\n", host)
@@ -234,7 +235,7 @@ func (h *Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
 }
 
 // StopHunt will end the capture process
-func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
+func (h *Handler) StopHunt(addr model.Addr) (packet.HuntStage, error) {
 	if Debug {
 		fmt.Printf("dhcp4: stop hunt %s\n", addr)
 	}
@@ -243,7 +244,7 @@ func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
 
 // HuntStage returns StageHunt if mac and ip are valid DHCP entry in the capture state.
 // Otherwise returns false.
-func (h *Handler) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
+func (h *Handler) CheckAddr(addr model.Addr) (packet.HuntStage, error) {
 	h.Lock()
 	defer h.Unlock()
 
@@ -330,18 +331,18 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (*pa
 	if response != nil {
 		// If IP not available, broadcast
 
-		var dstAddr packet.Addr
+		var dstAddr model.Addr
 		if ip4.Src().Equal(net.IPv4zero) || dhcpFrame.Broadcast() {
-			dstAddr = packet.Addr{MAC: packet.EthBroadcast, IP: net.IPv4bcast, Port: packet.DHCP4ClientPort}
+			dstAddr = model.Addr{MAC: packet.EthBroadcast, IP: net.IPv4bcast, Port: packet.DHCP4ClientPort}
 		} else {
-			dstAddr = packet.Addr{MAC: ether.Src(), IP: ip4.Src(), Port: packet.DHCP4ClientPort}
+			dstAddr = model.Addr{MAC: ether.Src(), IP: ip4.Src(), Port: packet.DHCP4ClientPort}
 		}
 
 		if debugging() {
 			log.Trace("dhcp4: send reply to ", dstAddr)
 		}
 
-		srcAddr := packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostIP4.IP, Port: packet.DHCP4ServerPort}
+		srcAddr := model.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostIP4.IP, Port: packet.DHCP4ServerPort}
 		if err := sendDHCP4Packet(h.engine.Conn(), srcAddr, dstAddr, response); err != nil {
 			fmt.Printf("dhcp4: failed sending packet error=%s", err)
 			return host, packet.Result{}, err

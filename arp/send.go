@@ -11,6 +11,7 @@ import (
 	"log"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/model"
 )
 
 var (
@@ -71,7 +72,7 @@ func (h *Handler) requestWithDstEthernet(dstEther net.HardwareAddr, srcHwAddr ne
 		return err
 	}
 
-	_, err = h.engine.Conn().WriteTo(ether, &packet.Addr{MAC: dstEther})
+	_, err = h.engine.Conn().WriteTo(ether, &model.Addr{MAC: dstEther})
 	return err
 }
 
@@ -101,7 +102,7 @@ func (h *Handler) reply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, s
 		return err
 	}
 
-	_, err = h.engine.Conn().WriteTo(ether, &packet.Addr{MAC: dstEther})
+	_, err = h.engine.Conn().WriteTo(ether, &model.Addr{MAC: dstEther})
 	return err
 }
 
@@ -159,14 +160,14 @@ func (h *Handler) announce(dstEther net.HardwareAddr, mac net.HardwareAddr, ip n
 
 // WhoIs will send a request packet to get the MAC address for the IP. Retry 3 times.
 //
-func (h *Handler) WhoIs(ip net.IP) (packet.Addr, error) {
+func (h *Handler) WhoIs(ip net.IP) (model.Addr, error) {
 
 	for i := 0; i < 3; i++ {
 		if host := h.engine.FindIP(ip); host != nil {
-			return packet.Addr{IP: host.IP, MAC: host.MACEntry.MAC}, nil
+			return model.Addr{IP: host.IP, MAC: host.MACEntry.MAC}, nil
 		}
 		if err := h.Request(h.engine.NICInfo.HostMAC, h.engine.NICInfo.HostIP4.IP, EthernetBroadcast, ip); err != nil {
-			return packet.Addr{}, fmt.Errorf("arp WhoIs error: %w", err)
+			return model.Addr{}, fmt.Errorf("arp WhoIs error: %w", err)
 		}
 		time.Sleep(time.Millisecond * 50)
 	}
@@ -175,5 +176,5 @@ func (h *Handler) WhoIs(ip net.IP) (packet.Addr, error) {
 		log.Printf("arp ip=%s whois not found", ip)
 		h.engine.PrintTable()
 	}
-	return packet.Addr{}, ErrNotFound
+	return model.Addr{}, ErrNotFound
 }

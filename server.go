@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/irai/packet/model"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/bpf"
 )
@@ -67,7 +68,7 @@ func (h *Handler) GetNotificationChannel() <-chan Notification {
 	h.mutex.RLock()
 	for _, host := range h.LANHosts.Table {
 		host.Row.RLock()
-		list = append(list, Notification{Addr: Addr{IP: host.IP, MAC: host.MACEntry.MAC}, Online: host.Online, DHCPName: host.dhcp4Store.Name})
+		list = append(list, Notification{Addr: model.Addr{IP: host.IP, MAC: host.MACEntry.MAC}, Online: host.Online, DHCPName: host.dhcp4Store.Name})
 		host.Row.RUnlock()
 	}
 	h.mutex.RUnlock()
@@ -94,9 +95,9 @@ func (p PacketNOOP) Stop() error  { return nil }
 func (p PacketNOOP) ProcessPacket(*Host, []byte, []byte) (*Host, Result, error) {
 	return nil, Result{}, nil
 }
-func (p PacketNOOP) StartHunt(addr Addr) (HuntStage, error) { return StageNoChange, nil }
-func (p PacketNOOP) StopHunt(addr Addr) (HuntStage, error)  { return StageNoChange, nil }
-func (p PacketNOOP) CheckAddr(addr Addr) (HuntStage, error) { return StageNoChange, nil }
+func (p PacketNOOP) StartHunt(addr model.Addr) (HuntStage, error) { return StageNoChange, nil }
+func (p PacketNOOP) StopHunt(addr model.Addr) (HuntStage, error)  { return StageNoChange, nil }
+func (p PacketNOOP) CheckAddr(addr model.Addr) (HuntStage, error) { return StageNoChange, nil }
 
 // func (p PacketNOOP) HuntStage(addr Addr) HuntStage              { return StageNormal }
 func (p PacketNOOP) MinuteTicker(now time.Time) error { return nil }
@@ -408,7 +409,7 @@ func (h *Handler) lockAndSetOnline(host *Host, notify bool) {
 
 	host.MACEntry.Online = true
 	host.Online = true
-	addr := Addr{IP: host.IP, MAC: host.MACEntry.MAC}
+	addr := model.Addr{IP: host.IP, MAC: host.MACEntry.MAC}
 	notification := Notification{Addr: addr, Online: true, DHCPName: host.dhcp4Store.Name}
 
 	if Debug {
@@ -453,7 +454,7 @@ func (h *Handler) lockAndSetOffline(host *Host) {
 		fmt.Printf("packet: IP is offline %s\n", host)
 	}
 	host.Online = false
-	notification := Notification{Addr: Addr{MAC: host.MACEntry.MAC, IP: host.IP}, Online: false}
+	notification := Notification{Addr: model.Addr{MAC: host.MACEntry.MAC, IP: host.IP}, Online: false}
 
 	// Update mac online status if all hosts are offline
 	macOnline := false

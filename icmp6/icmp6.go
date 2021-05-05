@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/model"
 	log "github.com/sirupsen/logrus"
 	"inet.af/netaddr"
 
@@ -32,7 +33,7 @@ type ICMP6Handler struct {
 	Router     *Router
 	LANRouters map[netaddr.IP]*Router
 	engine     *packet.Handler
-	huntList   packet.AddrList
+	huntList   model.AddrList
 	closed     bool
 	closeChan  chan bool
 	sync.Mutex
@@ -98,7 +99,7 @@ func (h *ICMP6Handler) Start() error {
 		return err
 	}
 	return packet.Ping(packet.IP6AllNodesMulticast) // ping with external cmd tool
-	// return h.SendEchoRequest(packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, packet.IP6AllNodesAddr, 0, 0)
+	// return h.SendEchoRequest(model.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, packet.IP6AllNodesAddr, 0, 0)
 }
 
 // Stop implements PacketProcessor interface
@@ -112,14 +113,14 @@ func (h *ICMP6Handler) MinuteTicker(now time.Time) error {
 }
 
 // HuntStage implements PacketProcessor interface
-func (h *ICMP6Handler) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
-	if err := h.Ping(packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, addr, time.Second*2); err != nil {
+func (h *ICMP6Handler) CheckAddr(addr model.Addr) (packet.HuntStage, error) {
+	if err := h.Ping(model.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, addr, time.Second*2); err != nil {
 		return packet.StageNoChange, packet.ErrTimeout
 	}
 	return packet.StageNormal, nil
 }
 
-func (h *ICMP6Handler) sendPacket(srcAddr packet.Addr, dstAddr packet.Addr, b []byte) error {
+func (h *ICMP6Handler) sendPacket(srcAddr model.Addr, dstAddr model.Addr, b []byte) error {
 	ether := packet.Ether(make([]byte, packet.EthMaxSize)) // Ping is called many times concurrently by client
 
 	hopLimit := uint8(64)
@@ -151,7 +152,7 @@ func (h *ICMP6Handler) sendPacket(srcAddr packet.Addr, dstAddr packet.Addr, b []
 	// icmp6 := ICMP6(packet.IP6(ether.Payload()).Payload())
 	// fmt.Println("DEBUG icmp :", icmp6, len(icmp6))
 	// fmt.Println("DEBUG ether:", ether, len(ether), len(b))
-	if _, err := h.engine.Conn().WriteTo(ether, &packet.Addr{MAC: dstAddr.MAC}); err != nil {
+	if _, err := h.engine.Conn().WriteTo(ether, &model.Addr{MAC: dstAddr.MAC}); err != nil {
 		log.Error("icmp failed to write ", err)
 		return err
 	}
@@ -280,7 +281,7 @@ func (h *ICMP6Handler) ProcessPacket(host *packet.Host, p []byte, header []byte)
 				if bytes.Equal(ether.Src(), msg.SourceLLA) {
 					fmt.Printf("icmp6 error: source link address differ: ether=%s rs=%s\n", ether.Src(), ip6Frame.Src())
 				}
-				h.SendRouterAdvertisement(v, packet.Addr{MAC: ether.Src(), IP: ip6Frame.Src()})
+				h.SendRouterAdvertisement(v, model.Addr{MAC: ether.Src(), IP: ip6Frame.Src()})
 			}
 		}
 		**/

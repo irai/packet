@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/model"
 )
 
 var (
@@ -38,8 +39,8 @@ var (
 	ip6LLA4      = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x04}
 	ip6LLA5      = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x05}
 
-	hostAddr   = packet.Addr{MAC: hostMAC, IP: hostIP4}
-	routerAddr = packet.Addr{MAC: routerMAC, IP: routerIP4}
+	hostAddr   = model.Addr{MAC: hostMAC, IP: hostIP4}
+	routerAddr = model.Addr{MAC: routerMAC, IP: routerIP4}
 )
 
 type testContext struct {

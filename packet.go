@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/irai/packet/model"
 	"github.com/mdlayher/netx/rfc4193"
 	"golang.org/x/net/ipv4"
 )
@@ -23,15 +24,15 @@ var (
 
 	Eth4RoutersMulticast   = net.HardwareAddr{0x01, 0x00, 0x5e, 0, 0, 0x02}
 	IP4AllRoutersMulticast = net.IPv4(224, 0, 0, 2)
-	IP4AllNodesAddr        = Addr{MAC: Eth4AllNodesMulticast, IP: IP4AllNodesMulticast}
+	IP4AllNodesAddr        = model.Addr{MAC: Eth4AllNodesMulticast, IP: IP4AllNodesMulticast}
 
 	Eth6AllNodesMulticast = net.HardwareAddr{0x33, 0x33, 0, 0, 0, 0x01}
 	IP6AllNodesMulticast  = net.IP{0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}
-	IP6AllNodesAddr       = Addr{MAC: Eth6AllNodesMulticast, IP: IP6AllNodesMulticast}
+	IP6AllNodesAddr       = model.Addr{MAC: Eth6AllNodesMulticast, IP: IP6AllNodesMulticast}
 
 	Eth6AllRoutersMulticast = net.HardwareAddr{0x33, 0x33, 0, 0, 0, 0x02}
 	IP6AllRoutersMulticast  = net.IP{0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}
-	IP6AllRoutersAddr       = Addr{MAC: Eth6AllRoutersMulticast, IP: IP6AllRoutersMulticast}
+	IP6AllRoutersAddr       = model.Addr{MAC: Eth6AllRoutersMulticast, IP: IP6AllRoutersMulticast}
 
 	IP6DefaultRouter = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}
 )
@@ -42,9 +43,9 @@ const (
 	DHCP4ClientPort = 68
 )
 
-func IPv6SolicitedNode(lla net.IP) Addr {
+func IPv6SolicitedNode(lla net.IP) model.Addr {
 	lla = lla.To16()
-	return Addr{
+	return model.Addr{
 		IP:  net.IP{0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01, 0xff, lla[13], lla[14], lla[15]}, // prefix: 0xff, 0x02::0x01,0xff + last 3 bytes of mac address
 		MAC: net.HardwareAddr{0x33, 0x33, 0xff, lla[13], lla[14], lla[15]},                        // prefix: 0x33, 0x33 + last 4 bytes of IP address
 	}
@@ -65,9 +66,9 @@ type PacketProcessor interface {
 	Start() error
 	Stop() error
 	ProcessPacket(host *Host, p []byte, header []byte) (*Host, Result, error)
-	StartHunt(Addr) (HuntStage, error)
-	StopHunt(Addr) (HuntStage, error)
-	CheckAddr(Addr) (HuntStage, error)
+	StartHunt(model.Addr) (HuntStage, error)
+	StopHunt(model.Addr) (HuntStage, error)
+	CheckAddr(model.Addr) (HuntStage, error)
 	MinuteTicker(time.Time) error
 }
 

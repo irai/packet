@@ -5,9 +5,10 @@ import (
 	"time"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/model"
 )
 
-func (h *ICMP6Handler) SendRouterAdvertisement(router Router, dstAddr packet.Addr) error {
+func (h *ICMP6Handler) SendRouterAdvertisement(router Router, dstAddr model.Addr) error {
 	// h.mutex.Lock()
 	// defer h.mutex.Unlock()
 	if len(router.Prefixes) == 0 {
@@ -59,7 +60,7 @@ func (h *ICMP6Handler) SendRouterAdvertisement(router Router, dstAddr packet.Add
 		return err
 	}
 
-	return h.sendPacket(packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, dstAddr, mb)
+	return h.sendPacket(model.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, dstAddr, mb)
 }
 
 func (h *ICMP6Handler) SendRouterSolicitation() error {
@@ -76,18 +77,18 @@ func (h *ICMP6Handler) SendRouterSolicitation() error {
 		return err
 	}
 
-	return h.sendPacket(packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, packet.IP6AllRoutersAddr, mb)
+	return h.sendPacket(model.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, packet.IP6AllRoutersAddr, mb)
 }
 
-func (h *ICMP6Handler) SendNeighborAdvertisement(srcAddr packet.Addr, dstAddr packet.Addr) error {
+func (h *ICMP6Handler) SendNeighborAdvertisement(srcAddr model.Addr, dstAddr model.Addr) error {
 	p := ICMP6NeighborAdvertisementMarshal(true, false, true, srcAddr.IP, srcAddr.MAC)
 
-	return h.sendPacket(packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, dstAddr, p)
+	return h.sendPacket(model.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, dstAddr, p)
 }
 
 // SendNeighbourSolicitation send an ICMP6 NS packet.
 func (h *ICMP6Handler) SendNeighbourSolicitation(ip net.IP) error {
 	p, _ := ICMP6NeighborSolicitationMarshal(ip, h.engine.NICInfo.HostMAC)
 
-	return h.sendPacket(packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, packet.IP6AllNodesAddr, p)
+	return h.sendPacket(model.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, packet.IP6AllNodesAddr, p)
 }

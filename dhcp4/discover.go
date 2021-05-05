@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/model"
 )
 
 // HandleDiscover respond with a DHCP offer packet
@@ -103,9 +104,9 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (result packet.Result
 
 	// set the IP4 to be later checked in ARP ACD
 	result.Update = true
-	result.Addr = packet.Addr{MAC: lease.Addr.MAC, IP: lease.IPOffer}
+	result.Addr = model.Addr{MAC: lease.Addr.MAC, IP: lease.IPOffer}
 	// result.IPOffer = lease.IPOffer
-	// h.engine.MACTableUpsertIP4Offer(packet.Addr{MAC: lease.Addr.MAC, IP: lease.IPOffer})
+	// h.engine.MACTableUpsertIP4Offer(model.Addr{MAC: lease.Addr.MAC, IP: lease.IPOffer})
 
 	fmt.Printf("dhcp4 : offer OK ip=%s %s\n", lease.IPOffer, fields)
 	return result, ret

@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/irai/packet/model"
 	"inet.af/netaddr"
 )
 
@@ -63,10 +64,10 @@ func (s HuntStage) String() string {
 
 // Result keeps dhcp4 specific settings
 type Result struct {
-	Update    bool      // Set to true if update is required
-	HuntStage HuntStage // DHCP4 hunt stage
-	Name      string    // DHCP4 host name
-	Addr      Addr      // IP and MAC
+	Update    bool       // Set to true if update is required
+	HuntStage HuntStage  // DHCP4 hunt stage
+	Name      string     // DHCP4 host name
+	Addr      model.Addr // IP and MAC
 	// IPOffer   net.IP    // DCHCP discover offer
 }
 
@@ -105,7 +106,7 @@ func (h *Handler) lockAndProcessDHCP4Update(host *Host, result Result) (notify b
 			host.MACEntry.IP4Offer = result.Addr.IP
 		}
 		capture := host.MACEntry.Captured
-		addr := Addr{MAC: host.MACEntry.MAC, IP: host.IP}
+		addr := model.Addr{MAC: host.MACEntry.MAC, IP: host.IP}
 		host.Row.Unlock()
 
 		// DHCP stage overides all other stages
@@ -264,12 +265,12 @@ func (h *Handler) findIP(ip net.IP) *Host {
 }
 
 // FindByMAC return a list of IP addresses for mac
-func (h *Handler) FindByMAC(mac net.HardwareAddr) (list []Addr) {
+func (h *Handler) FindByMAC(mac net.HardwareAddr) (list []model.Addr) {
 	h.mutex.RLock()
 	defer h.mutex.RUnlock()
 	for _, v := range h.LANHosts.Table {
 		if bytes.Equal(v.MACEntry.MAC, mac) {
-			list = append(list, Addr{MAC: v.MACEntry.MAC, IP: v.IP})
+			list = append(list, model.Addr{MAC: v.MACEntry.MAC, IP: v.IP})
 		}
 	}
 	return list

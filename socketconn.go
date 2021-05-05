@@ -12,6 +12,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/irai/packet/model"
 	"golang.org/x/net/bpf"
 	"golang.org/x/sys/unix"
 )
@@ -183,7 +184,7 @@ func (p *packetConn) ReadFrom(b []byte) (int, net.Addr, error) {
 	//   information.
 	// TODO(mdlayher): determine if similar fields exist and are useful on
 	// non-Linux platforms
-	return n, &Addr{
+	return n, &model.Addr{
 		MAC: mac,
 	}, nil
 }
@@ -191,7 +192,7 @@ func (p *packetConn) ReadFrom(b []byte) (int, net.Addr, error) {
 // WriteTo implements the net.PacketConn.WriteTo method.
 func (p *packetConn) WriteTo(b []byte, addr net.Addr) (int, error) {
 	// Ensure correct Addr type.
-	a, ok := addr.(*Addr)
+	a, ok := addr.(*model.Addr)
 	if !ok || a.MAC == nil {
 		return 0, unix.EINVAL
 	}
@@ -222,7 +223,7 @@ func (p *packetConn) Close() error {
 
 // LocalAddr returns the local network address.
 func (p *packetConn) LocalAddr() net.Addr {
-	return &Addr{
+	return &model.Addr{
 		MAC: p.ifi.HardwareAddr,
 	}
 }

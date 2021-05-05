@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/model"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -102,8 +103,8 @@ func (h *Handler) SendDiscoverPacket(chAddr net.HardwareAddr, cIAddr net.IP, xID
 		log.Tracef("dhcp4: send discover packet from %s ciAddr=%v xID=%v", chAddr, cIAddr, xID)
 	}
 	p := RequestPacket(Discover, chAddr, cIAddr, xID, false, options.SelectOrderOrAll(nil))
-	srcAddr := packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostIP4.IP, Port: packet.DHCP4ClientPort}
-	dstAddr := packet.Addr{MAC: h.engine.NICInfo.RouterMAC, IP: h.engine.NICInfo.RouterIP4.IP, Port: packet.DHCP4ServerPort}
+	srcAddr := model.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostIP4.IP, Port: packet.DHCP4ClientPort}
+	dstAddr := model.Addr{MAC: h.engine.NICInfo.RouterMAC, IP: h.engine.NICInfo.RouterIP4.IP, Port: packet.DHCP4ServerPort}
 	err = sendDHCP4Packet(h.engine.Conn(), srcAddr, dstAddr, p)
 	return err
 }
@@ -148,16 +149,16 @@ func (h *Handler) sendDeclineReleasePacket(msgType MessageType, clientID []byte,
 		p.AddOption(k, v)
 	}
 	p.PadToMinSize()
-	srcAddr := packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostIP4.IP, Port: packet.DHCP4ClientPort}
-	dstAddr := packet.Addr{MAC: h.engine.NICInfo.RouterMAC, IP: h.engine.NICInfo.RouterIP4.IP, Port: packet.DHCP4ServerPort}
+	srcAddr := model.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostIP4.IP, Port: packet.DHCP4ClientPort}
+	dstAddr := model.Addr{MAC: h.engine.NICInfo.RouterMAC, IP: h.engine.NICInfo.RouterIP4.IP, Port: packet.DHCP4ServerPort}
 	err = sendDHCP4Packet(h.engine.Conn(), srcAddr, dstAddr, p)
 	// err = h.sendDHCPPacket(serverIP, packet)
 	return err
 }
 
 /***
-func (h *Handler) sendDHCPPacket(srcAddr packet.Addr, dstAddr packet.Addr, packet DHCP4) (err error) {
-	// dstAddr := packet.Addr{MAC: h.engine.NICInfo.RouterMAC, IP: h.engine.NICInfo.RouterIP4, Port: 67}
+func (h *Handler) sendDHCPPacket(srcAddr model.Addr, dstAddr model.Addr, packet DHCP4) (err error) {
+	// dstAddr := model.Addr{MAC: h.engine.NICInfo.RouterMAC, IP: h.engine.NICInfo.RouterIP4, Port: 67}
 	// _, err = h.clientConn.WriteTo(packet, &dstAddr)
 	sendPacket(h.clientConn, srcAddr, dstAddr, packet)
 	if err != nil {

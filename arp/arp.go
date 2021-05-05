@@ -10,6 +10,7 @@ import (
 	"log"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/model"
 )
 
 // must implement interface
@@ -19,7 +20,7 @@ var _ packet.PacketProcessor = &Handler{}
 type Handler struct {
 	arpMutex  sync.RWMutex
 	engine    *packet.Handler
-	huntList  map[string]packet.Addr
+	huntList  map[string]model.Addr
 	closed    bool
 	closeChan chan bool
 }
@@ -31,7 +32,7 @@ var (
 
 // Attach creates the ARP handler and attach to the engine
 func Attach(engine *packet.Handler) (h *Handler, err error) {
-	h = &Handler{engine: engine, huntList: make(map[string]packet.Addr, 6), closeChan: make(chan bool)}
+	h = &Handler{engine: engine, huntList: make(map[string]model.Addr, 6), closeChan: make(chan bool)}
 	// h.table, _ = loadARPProcTable() // load linux proc table
 	if h.engine.NICInfo.HostIP4.IP.To4() == nil {
 		return nil, packet.ErrInvalidIP
@@ -81,13 +82,13 @@ func (h *Handler) Start() error {
 //
 // ARP handler will send who is packet if IP has not been seen
 func (h *Handler) MinuteTicker(now time.Time) error {
-	arpAddrs := []packet.Addr{}
+	arpAddrs := []model.Addr{}
 	now.Add(h.engine.ProbeInterval * -1) //
 
 	for _, host := range h.engine.GetHosts() {
 		host.Row.RLock()
 		if host.Online && host.LastSeen.Before(now) && host.IP.To4() != nil {
-			arpAddrs = append(arpAddrs, packet.Addr{MAC: host.MACEntry.MAC, IP: host.IP})
+			arpAddrs = append(arpAddrs, model.Addr{MAC: host.MACEntry.MAC, IP: host.IP})
 		}
 		host.Row.RUnlock()
 	}
@@ -101,7 +102,7 @@ func (h *Handler) MinuteTicker(now time.Time) error {
 // CheckAddr implements the PacketProcessor interface
 //
 // The ARP handler sends a ARP Request packet
-func (h *Handler) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
+func (h *Handler) CheckAddr(addr model.Addr) (packet.HuntStage, error) {
 	err := h.request(h.engine.NICInfo.HostMAC, h.engine.NICInfo.HostIP4.IP, EthernetBroadcast, addr.IP)
 	h.arpMutex.Lock()
 	defer h.arpMutex.Unlock()

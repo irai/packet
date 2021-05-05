@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/irai/packet/model"
 	"github.com/vishvananda/netlink"
 )
 
@@ -152,7 +153,7 @@ func GetLinuxDefaultGateway() (gw net.IP, err error) {
 //   192.168.0.4      0x1         0x2         4c:bb:58:f4:b2:d7     *        eth0
 //   192.168.0.5      0x1         0x2         84:b1:53:ea:1f:40     *        eth0
 //
-func LoadLinuxARPTable(nic string) (list []Addr, err error) {
+func LoadLinuxARPTable(nic string) (list []model.Addr, err error) {
 	const name = "/proc/net/arp"
 
 	file, err := os.Open(name)
@@ -183,24 +184,24 @@ func LoadLinuxARPTable(nic string) (list []Addr, err error) {
 			fmt.Println("raw: error in loadARPProcTable - invalid MAC", tokens)
 			continue
 		}
-		list = append(list, Addr{MAC: mac, IP: ip})
+		list = append(list, model.Addr{MAC: mac, IP: ip})
 	}
 
 	return list, nil
 }
 
 // GetIP4DefaultGatewayAddr return the IP4 default gatewy for nic
-func GetIP4DefaultGatewayAddr(nic string) (addr Addr, err error) {
+func GetIP4DefaultGatewayAddr(nic string) (addr model.Addr, err error) {
 
 	if addr.IP, err = GetLinuxDefaultGateway(); err != nil {
 		fmt.Println("error getting router ", err)
-		return Addr{}, ErrInvalidIP
+		return model.Addr{}, ErrInvalidIP
 	}
 	addr.IP = addr.IP.To4()
 
 	// Try 3 times to read arp table
 	// This is required if we just reset the interface and the arp table is nil
-	var arpList []Addr
+	var arpList []model.Addr
 	for i := 0; i < 3; i++ {
 		Ping(addr.IP) // ping to populate arp table
 		time.Sleep(time.Millisecond * 15)
@@ -216,7 +217,7 @@ func GetIP4DefaultGatewayAddr(nic string) (addr Addr, err error) {
 		}
 	}
 	if addr.MAC == nil {
-		return Addr{}, fmt.Errorf("default gw mac not found on interface")
+		return model.Addr{}, fmt.Errorf("default gw mac not found on interface")
 	}
 
 	return addr, nil

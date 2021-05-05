@@ -18,6 +18,7 @@ import (
 	"github.com/irai/packet/dhcp4"
 	"github.com/irai/packet/icmp4"
 	"github.com/irai/packet/icmp6"
+	"github.com/irai/packet/model"
 )
 
 var (
@@ -270,7 +271,7 @@ func doARP(h *handlers, tokens []string) {
 			return
 		}
 		if ip := getIP4(tokens, 2); ip != nil {
-			if _, err := h.arp.StartHunt(packet.Addr{IP: ip}); err != nil {
+			if _, err := h.arp.StartHunt(model.Addr{IP: ip}); err != nil {
 				fmt.Println("error in start hunt ", err)
 			}
 		}
@@ -280,7 +281,7 @@ func doARP(h *handlers, tokens []string) {
 			return
 		}
 		if ip := getIP4(tokens, 2); ip != nil {
-			if _, err := h.arp.StopHunt(packet.Addr{IP: ip}); err != nil {
+			if _, err := h.arp.StopHunt(model.Addr{IP: ip}); err != nil {
 				fmt.Println("error in start hunt ", err)
 			}
 		}
@@ -317,13 +318,13 @@ func doICMP6(h *handlers, tokens []string) {
 		}
 	case "hunt":
 		if ip := getIP6(tokens, 2); ip != nil {
-			if _, err := h.icmp6.StartHunt(packet.Addr{IP: ip}); err != nil {
+			if _, err := h.icmp6.StartHunt(model.Addr{IP: ip}); err != nil {
 				fmt.Println("error in start hunt ", err)
 			}
 		}
 	case "release":
 		if ip := getIP6(tokens, 2); ip != nil {
-			if _, err := h.icmp6.StopHunt(packet.Addr{IP: ip}); err != nil {
+			if _, err := h.icmp6.StopHunt(model.Addr{IP: ip}); err != nil {
 				fmt.Println("error in start hunt ", err)
 			}
 		}
@@ -453,10 +454,10 @@ func cmd(h *handlers) {
 					fmt.Println("error icmp4 is detached")
 					continue
 				}
-				// if err := h.SendEchoRequest(packet.Addr{MAC: packet.Eth4AllNodesMulticast, IP: ip}, 2, 2); err != nil {
+				// if err := h.SendEchoRequest(model.Addr{MAC: packet.Eth4AllNodesMulticast, IP: ip}, 2, 2); err != nil {
 				if err := h.icmp4.Ping(
-					packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostIP4.IP},
-					packet.Addr{MAC: packet.Eth4AllNodesMulticast, IP: ip}, time.Second*2); err != nil {
+					model.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostIP4.IP},
+					model.Addr{MAC: packet.Eth4AllNodesMulticast, IP: ip}, time.Second*2); err != nil {
 					if errors.Is(err, packet.ErrTimeout) {
 						fmt.Println("ping timeout ")
 					} else {
@@ -472,8 +473,8 @@ func cmd(h *handlers) {
 					continue
 				}
 				if err := h.icmp6.Ping(
-					packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP},
-					packet.Addr{MAC: packet.Eth6AllNodesMulticast, IP: ip}, time.Second*2); err != nil {
+					model.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP},
+					model.Addr{MAC: packet.Eth6AllNodesMulticast, IP: ip}, time.Second*2); err != nil {
 					// if err := h6.Ping(h6.LLA().IP, ip, time.Second*2); err != nil {
 					fmt.Println("icmp6 echo error ", err)
 					continue

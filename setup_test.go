@@ -2,6 +2,8 @@ package packet
 
 import (
 	"net"
+
+	"github.com/irai/packet/model"
 )
 
 var (
@@ -32,8 +34,8 @@ var (
 	ip6LLA4      = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x04}
 	ip6LLA5      = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x05}
 
-	hostAddr   = Addr{MAC: hostMAC, IP: hostIP4}
-	routerAddr = Addr{MAC: routerMAC, IP: routerIP4}
+	hostAddr   = model.Addr{MAC: hostMAC, IP: hostIP4}
+	routerAddr = model.Addr{MAC: routerMAC, IP: routerIP4}
 
 	dnsIP4 = net.IPv4(8, 8, 8, 8)
 )

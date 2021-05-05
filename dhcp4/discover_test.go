@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/model"
 )
 
 func TestDHCPHandler_handleDiscover(t *testing.T) {
@@ -25,29 +26,29 @@ func TestDHCPHandler_handleDiscover(t *testing.T) {
 		wantResponse  bool
 		tableLen      int
 		responseCount int
-		srcAddr       packet.Addr
-		dstAddr       packet.Addr
+		srcAddr       model.Addr
+		dstAddr       model.Addr
 	}{
 		{name: "discover-mac1", wantResponse: true, responseCount: 1,
 			packet: RequestPacket(Discover, mac1, ip1, []byte{0x01}, false, append(options, oDNS)), tableLen: 1,
-			srcAddr: packet.Addr{MAC: routerMAC, IP: routerIP4, Port: packet.DHCP4ClientPort},
-			dstAddr: packet.Addr{MAC: mac1, IP: ip1, Port: packet.DHCP4ServerPort}},
+			srcAddr: model.Addr{MAC: routerMAC, IP: routerIP4, Port: packet.DHCP4ClientPort},
+			dstAddr: model.Addr{MAC: mac1, IP: ip1, Port: packet.DHCP4ServerPort}},
 		{name: "discover-mac1", wantResponse: true, responseCount: 2,
 			packet: RequestPacket(Discover, mac1, ip1, []byte{0x01}, false, append(options, oDNS)), tableLen: 1,
-			srcAddr: packet.Addr{MAC: routerMAC, IP: routerIP4, Port: packet.DHCP4ClientPort},
-			dstAddr: packet.Addr{MAC: mac1, IP: ip1, Port: packet.DHCP4ServerPort}},
+			srcAddr: model.Addr{MAC: routerMAC, IP: routerIP4, Port: packet.DHCP4ClientPort},
+			dstAddr: model.Addr{MAC: mac1, IP: ip1, Port: packet.DHCP4ServerPort}},
 		{name: "discover-mac1", wantResponse: true, responseCount: 3,
 			packet: RequestPacket(Discover, mac1, ip1, []byte{0x02}, false, append(options, oDNS)), tableLen: 1,
-			srcAddr: packet.Addr{MAC: routerMAC, IP: routerIP4, Port: packet.DHCP4ClientPort},
-			dstAddr: packet.Addr{MAC: mac1, IP: ip1, Port: packet.DHCP4ServerPort}},
+			srcAddr: model.Addr{MAC: routerMAC, IP: routerIP4, Port: packet.DHCP4ClientPort},
+			dstAddr: model.Addr{MAC: mac1, IP: ip1, Port: packet.DHCP4ServerPort}},
 		{name: "discover-mac1", wantResponse: true, responseCount: 4,
 			packet: RequestPacket(Discover, mac1, ip1, []byte{0x03}, false, append(options, oDNS)), tableLen: 1,
-			srcAddr: packet.Addr{MAC: routerMAC, IP: routerIP4, Port: packet.DHCP4ClientPort},
-			dstAddr: packet.Addr{MAC: mac1, IP: ip1, Port: packet.DHCP4ServerPort}},
+			srcAddr: model.Addr{MAC: routerMAC, IP: routerIP4, Port: packet.DHCP4ClientPort},
+			dstAddr: model.Addr{MAC: mac1, IP: ip1, Port: packet.DHCP4ServerPort}},
 		{name: "discover-mac2", wantResponse: true, responseCount: 5,
 			packet: RequestPacket(Discover, mac2, ip2, []byte{0x01}, false, append(options, oDNS)), tableLen: 2,
-			srcAddr: packet.Addr{MAC: routerMAC, IP: routerIP4, Port: packet.DHCP4ClientPort},
-			dstAddr: packet.Addr{MAC: mac2, IP: ip2, Port: packet.DHCP4ServerPort}},
+			srcAddr: model.Addr{MAC: routerMAC, IP: routerIP4, Port: packet.DHCP4ClientPort},
+			dstAddr: model.Addr{MAC: mac2, IP: ip2, Port: packet.DHCP4ServerPort}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -85,13 +86,13 @@ func TestDHCPHandler_exhaust(t *testing.T) {
 		wantResponse  bool
 		tableLen      int
 		responseCount int
-		srcAddr       packet.Addr
-		dstAddr       packet.Addr
+		srcAddr       model.Addr
+		dstAddr       model.Addr
 	}{
 		{name: "discover-mac1", wantResponse: true, responseCount: 260,
 			packet: RequestPacket(Discover, mac1, ip1, []byte{0x01}, false, append(options, oDNS)), tableLen: 256, // maximum unique macs
-			srcAddr: packet.Addr{MAC: routerMAC, IP: routerIP4, Port: packet.DHCP4ClientPort},
-			dstAddr: packet.Addr{MAC: mac1, IP: ip1, Port: packet.DHCP4ServerPort}},
+			srcAddr: model.Addr{MAC: routerMAC, IP: routerIP4, Port: packet.DHCP4ClientPort},
+			dstAddr: model.Addr{MAC: mac1, IP: ip1, Port: packet.DHCP4ServerPort}},
 	}
 
 	for _, tt := range tests {

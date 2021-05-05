@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/model"
 	"inet.af/netaddr"
 )
 
@@ -38,7 +39,7 @@ var (
 
 // Router holds a router identification
 type Router struct {
-	Addr            packet.Addr
+	Addr            model.Addr
 	enableRADVS     bool // if true, we respond for this server
 	ManagedFlag     bool // if true, hosts should get IP from DHCP, if false, use SLAAC IP
 	OtherCondigFlag bool // if true, hosts should get other info from DHCP
@@ -64,7 +65,7 @@ func (h *ICMP6Handler) findOrCreateRouter(mac net.HardwareAddr, ip net.IP) (rout
 	if found {
 		return r, true
 	}
-	router = &Router{Addr: packet.Addr{MAC: packet.CopyMAC(mac), IP: packet.CopyIP(ip)}}
+	router = &Router{Addr: model.Addr{MAC: packet.CopyMAC(mac), IP: packet.CopyIP(ip)}}
 	h.LANRouters[ipNew] = router
 	h.Router = router // make this the default ipv6 router - used in na attack
 	fmt.Printf("icmp6 : new ipv6 ra router %s\n", router)
