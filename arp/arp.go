@@ -19,7 +19,7 @@ var _ packet.PacketProcessor = &Handler{}
 // Handler stores instance variables
 type Handler struct {
 	arpMutex  sync.RWMutex
-	engine    *packet.Handler
+	session   *model.Session
 	huntList  map[string]model.Addr
 	closed    bool
 	closeChan chan bool
@@ -31,17 +31,16 @@ var (
 )
 
 // Attach creates the ARP handler and attach to the engine
-func Attach(engine *packet.Handler) (h *Handler, err error) {
-	h = &Handler{engine: engine, huntList: make(map[string]model.Addr, 6), closeChan: make(chan bool)}
+func Attach(session *model.Session) (h *Handler, err error) {
+	h = &Handler{session: session, huntList: make(map[string]model.Addr, 6), closeChan: make(chan bool)}
 	// h.table, _ = loadARPProcTable() // load linux proc table
-	if h.engine.NICInfo.HostIP4.IP.To4() == nil {
+	if h.session.NICInfo.HostIP4.IP.To4() == nil {
 		return nil, packet.ErrInvalidIP
 	}
 
-	if h.engine.NICInfo.HomeLAN4.IP.To4() == nil || h.engine.NICInfo.HomeLAN4.IP.IsUnspecified() {
+	if h.session.NICInfo.HomeLAN4.IP.To4() == nil || h.session.NICInfo.HomeLAN4.IP.IsUnspecified() {
 		return nil, packet.ErrInvalidIP
 	}
-	h.engine.HandlerARP = h
 
 	return h, nil
 }
@@ -50,7 +49,6 @@ func Attach(engine *packet.Handler) (h *Handler, err error) {
 func (h *Handler) Detach() error {
 	h.closed = true
 	close(h.closeChan) // this will exit all background goroutines
-	h.engine.HandlerARP = packet.PacketNOOP{}
 	return nil
 }
 
@@ -75,7 +73,7 @@ func (h *Handler) End() {
 
 // Start background processes
 func (h *Handler) Start() error {
-	return h.ScanNetwork(context.Background(), h.engine.NICInfo.HostIP4)
+	return h.ScanNetwork(context.Background(), h.session.NICInfo.HostIP4)
 }
 
 // MinuteTicker implements packet processor interface
@@ -83,9 +81,9 @@ func (h *Handler) Start() error {
 // ARP handler will send who is packet if IP has not been seen
 func (h *Handler) MinuteTicker(now time.Time) error {
 	arpAddrs := []model.Addr{}
-	now.Add(h.engine.ProbeInterval * -1) //
+	now.Add(h.session.ProbeInterval * -1) //
 
-	for _, host := range h.engine.GetHosts() {
+	for _, host := range h.session.GetHosts() {
 		host.Row.RLock()
 		if host.Online && host.LastSeen.Before(now) && host.IP.To4() != nil {
 			arpAddrs = append(arpAddrs, model.Addr{MAC: host.MACEntry.MAC, IP: host.IP})
@@ -94,7 +92,7 @@ func (h *Handler) MinuteTicker(now time.Time) error {
 	}
 
 	for _, addr := range arpAddrs {
-		h.Request(h.engine.NICInfo.HostMAC, h.engine.NICInfo.HostIP4.IP, addr.MAC, addr.IP.To4())
+		h.Request(h.session.NICInfo.HostMAC, h.session.NICInfo.HostIP4.IP, addr.MAC, addr.IP.To4())
 	}
 	return nil
 }
@@ -103,7 +101,7 @@ func (h *Handler) MinuteTicker(now time.Time) error {
 //
 // The ARP handler sends a ARP Request packet
 func (h *Handler) CheckAddr(addr model.Addr) (packet.HuntStage, error) {
-	err := h.request(h.engine.NICInfo.HostMAC, h.engine.NICInfo.HostIP4.IP, EthernetBroadcast, addr.IP)
+	err := h.request(h.session.NICInfo.HostMAC, h.session.NICInfo.HostIP4.IP, EthernetBroadcast, addr.IP)
 	h.arpMutex.Lock()
 	defer h.arpMutex.Unlock()
 	if _, found := h.huntList[string(addr.MAC)]; found {
@@ -188,11 +186,11 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (*pa
 		h.arpMutex.Lock()
 		_, hunting := h.huntList[string(frame.SrcMAC())]
 		h.arpMutex.Unlock()
-		if hunting && frame.DstIP().Equal(h.engine.NICInfo.RouterIP4.IP) {
+		if hunting && frame.DstIP().Equal(h.session.NICInfo.RouterIP4.IP) {
 			if Debug {
 				log.Printf("arp: router spoofing - send reply i am ip=%s", frame.DstIP())
 			}
-			h.reply(frame.SrcMAC(), h.engine.NICInfo.HostMAC, frame.DstIP(), frame.SrcMAC(), frame.SrcIP())
+			h.reply(frame.SrcMAC(), h.session.NICInfo.HostMAC, frame.DstIP(), frame.SrcMAC(), frame.SrcIP())
 			return host, packet.Result{}, nil
 		}
 
@@ -212,7 +210,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (*pa
 
 		// reject any other ip
 		// TODO: move lock to mac entry
-		macEntry := h.engine.FindMACEntry(frame.SrcMAC())
+		macEntry := h.session.FindMACEntry(frame.SrcMAC())
 		if macEntry == nil || !macEntry.IP4Offer.Equal(frame.DstIP()) {
 			// fmt.Printf("DEBUG arp  : probe reject for ip=%s from mac=%s\n", frame.DstIP(), frame.SrcMAC())
 
@@ -220,9 +218,9 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (*pa
 			//
 			// Note: detected one situation where android probed external DNS IP. Not sure if this occur in other clients.
 			//     arp  : probe reject for ip=8.8.8.8 from mac=84:11:9e:03:89:c0 (android phone) - 10 March 2021
-			if h.engine.NICInfo.HomeLAN4.Contains(frame.DstIP()) {
+			if h.session.NICInfo.HomeLAN4.Contains(frame.DstIP()) {
 				fmt.Printf("arp  : probe reject for ip=%s from mac=%s macentry=%s\n", frame.DstIP(), frame.SrcMAC(), macEntry)
-				h.reply(frame.SrcMAC(), h.engine.NICInfo.HostMAC, frame.DstIP(), frame.SrcMAC(), net.IP(EthernetBroadcast))
+				h.reply(frame.SrcMAC(), h.session.NICInfo.HostMAC, frame.DstIP(), frame.SrcMAC(), net.IP(EthernetBroadcast))
 			}
 			return host, packet.Result{}, nil
 		}
@@ -255,8 +253,9 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (*pa
 	}
 
 	// If new client, then create a MACEntry in table
-	if host == nil && h.engine.NICInfo.HostIP4.Contains(frame.SrcIP()) {
-		host, _ = h.engine.FindOrCreateHost(frame.SrcMAC(), frame.SrcIP())
+	if host == nil && h.session.NICInfo.HostIP4.Contains(frame.SrcIP()) {
+		return host, packet.Result{Update: true, Addr: model.Addr{MAC: frame.SrcMAC(), IP: frame.SrcIP()}}, nil
+		// host, _ = h.session.FindOrCreateHost(frame.SrcMAC(), frame.SrcIP())
 	}
 	return host, packet.Result{}, nil
 }

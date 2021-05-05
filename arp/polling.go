@@ -15,7 +15,7 @@ import (
 // Send ARP request to all 255 IP addresses first time then send ARP request every so many minutes.
 func (h *Handler) scanLoop(ctx context.Context, interval time.Duration) error {
 	// first scan
-	if err := h.ScanNetwork(ctx, h.engine.NICInfo.HomeLAN4); err != nil {
+	if err := h.ScanNetwork(ctx, h.session.NICInfo.HomeLAN4); err != nil {
 		return err
 	}
 	ticker := time.NewTicker(interval).C
@@ -25,7 +25,7 @@ func (h *Handler) scanLoop(ctx context.Context, interval time.Duration) error {
 			return nil
 
 		case <-ticker:
-			if err := h.ScanNetwork(ctx, h.engine.NICInfo.HomeLAN4); err != nil {
+			if err := h.ScanNetwork(ctx, h.session.NICInfo.HomeLAN4); err != nil {
 				return err
 			}
 		}
@@ -87,11 +87,11 @@ func (h *Handler) ScanNetwork(ctx context.Context, lan net.IPNet) error {
 		ip[3] = byte(host)
 
 		// Don't scan router and host
-		if bytes.Equal(ip, h.engine.NICInfo.RouterIP4.IP) || bytes.Equal(ip, h.engine.NICInfo.HostIP4.IP) {
+		if bytes.Equal(ip, h.session.NICInfo.RouterIP4.IP) || bytes.Equal(ip, h.session.NICInfo.HostIP4.IP) {
 			continue
 		}
 
-		err := h.request(h.engine.NICInfo.HostMAC, h.engine.NICInfo.HostIP4.IP, EthernetBroadcast, ip)
+		err := h.request(h.session.NICInfo.HostMAC, h.session.NICInfo.HostIP4.IP, EthernetBroadcast, ip)
 		if ctx.Err() == context.Canceled {
 			return nil
 		}

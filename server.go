@@ -651,6 +651,9 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			if host, result, err = h.HandlerARP.ProcessPacket(host, ether, ether.Payload()); err != nil {
 				fmt.Printf("packet: error processing arp: %s\n", err)
 			}
+			if result.Update {
+				host, _ = h.FindOrCreateHost(result.Addr.MAC, result.Addr.IP)
+			}
 
 		default:
 			fmt.Println("packet: unsupported level 4 header", l4Proto, ether)

@@ -154,9 +154,9 @@ func Test_Handler_CaptureEnterOffline(t *testing.T) {
 			}
 			time.Sleep(time.Millisecond * 10)
 
-			if len(tc.arp.engine.GetHosts()) != tt.wantLen {
-				t.Errorf("Test_Requests:%s table len = %v, wantLen %v", tt.name, len(tc.arp.engine.GetHosts()), tt.wantLen)
-				tc.arp.engine.PrintTable()
+			if len(tc.arp.session.GetHosts()) != tt.wantLen {
+				t.Errorf("Test_Requests:%s table len = %v, wantLen %v", tt.name, len(tc.arp.session.GetHosts()), tt.wantLen)
+				tc.arp.session.PrintTable()
 			}
 		})
 	}

@@ -72,7 +72,7 @@ func (h *Handler) requestWithDstEthernet(dstEther net.HardwareAddr, srcHwAddr ne
 		return err
 	}
 
-	_, err = h.engine.Conn().WriteTo(ether, &model.Addr{MAC: dstEther})
+	_, err = h.session.Conn.WriteTo(ether, &model.Addr{MAC: dstEther})
 	return err
 }
 
@@ -102,7 +102,7 @@ func (h *Handler) reply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, s
 		return err
 	}
 
-	_, err = h.engine.Conn().WriteTo(ether, &model.Addr{MAC: dstEther})
+	_, err = h.session.Conn.WriteTo(ether, &model.Addr{MAC: dstEther})
 	return err
 }
 
@@ -116,12 +116,12 @@ func (h *Handler) reply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, s
 // An ARP Probe conveys both a question ("Is anyone using this address?") and an
 // implied statement ("This is the address I hope to use.").
 func (h *Handler) Probe(ip net.IP) error {
-	return h.Request(h.engine.NICInfo.HostMAC, net.IPv4zero, EthernetBroadcast, ip)
+	return h.Request(h.session.NICInfo.HostMAC, net.IPv4zero, EthernetBroadcast, ip)
 }
 
 // probeUnicast is used to validate the client is still online; same as ARP probe but unicast to target
 func (h *Handler) probeUnicast(mac net.HardwareAddr, ip net.IP) error {
-	return h.Request(h.engine.NICInfo.HostMAC, net.IPv4zero, mac, ip)
+	return h.Request(h.session.NICInfo.HostMAC, net.IPv4zero, mac, ip)
 }
 
 // announce sends arp announcement packet
@@ -163,10 +163,10 @@ func (h *Handler) announce(dstEther net.HardwareAddr, mac net.HardwareAddr, ip n
 func (h *Handler) WhoIs(ip net.IP) (model.Addr, error) {
 
 	for i := 0; i < 3; i++ {
-		if host := h.engine.FindIP(ip); host != nil {
+		if host := h.session.FindIP(ip); host != nil {
 			return model.Addr{IP: host.IP, MAC: host.MACEntry.MAC}, nil
 		}
-		if err := h.Request(h.engine.NICInfo.HostMAC, h.engine.NICInfo.HostIP4.IP, EthernetBroadcast, ip); err != nil {
+		if err := h.Request(h.session.NICInfo.HostMAC, h.session.NICInfo.HostIP4.IP, EthernetBroadcast, ip); err != nil {
 			return model.Addr{}, fmt.Errorf("arp WhoIs error: %w", err)
 		}
 		time.Sleep(time.Millisecond * 50)
@@ -174,7 +174,7 @@ func (h *Handler) WhoIs(ip net.IP) (model.Addr, error) {
 
 	if Debug {
 		log.Printf("arp ip=%s whois not found", ip)
-		h.engine.PrintTable()
+		h.session.PrintTable()
 	}
 	return model.Addr{}, ErrNotFound
 }

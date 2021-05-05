@@ -119,7 +119,7 @@ func (h *Handler) forceSpoof(addr model.Addr) error {
 
 	// Announce to target that we own the router IP
 	// This will update the target arp table with our mac
-	err := h.announce(addr.MAC, h.engine.NICInfo.HostMAC, h.engine.NICInfo.RouterIP4.IP, EthernetBroadcast, 2)
+	err := h.announce(addr.MAC, h.session.NICInfo.HostMAC, h.session.NICInfo.RouterIP4.IP, EthernetBroadcast, 2)
 	if err != nil {
 		log.Printf("arp error send announcement packet %s: %s", addr, err)
 		return err
@@ -127,7 +127,7 @@ func (h *Handler) forceSpoof(addr model.Addr) error {
 
 	// Send 3 unsolicited ARP reply; clients may discard this
 	for i := 0; i < 2; i++ {
-		err = h.reply(addr.MAC, h.engine.NICInfo.HostMAC, h.engine.NICInfo.RouterIP4.IP, addr.MAC, addr.IP)
+		err = h.reply(addr.MAC, h.session.NICInfo.HostMAC, h.session.NICInfo.RouterIP4.IP, addr.MAC, addr.IP)
 		if err != nil {
 			log.Printf("arp error spoof client %s: %s", addr, err)
 			return err
