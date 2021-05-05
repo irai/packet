@@ -27,7 +27,7 @@ type Config struct {
 	// Conn enables the client to override the connection with a another packet conn
 	// useful for testing
 	Conn                    net.PacketConn // listen connectinon
-	NICInfo                 *NICInfo       // override nic information
+	NICInfo                 *model.NICInfo // override nic information
 	FullNetworkScanInterval time.Duration  // Set it to zero if no scan required
 	ProbeInterval           time.Duration  // how often to probe if IP is online
 	OfflineDeadline         time.Duration  // mark offline if more than OfflineInte
@@ -37,7 +37,7 @@ type Config struct {
 // Handler implements ICMPv6 Neighbor Discovery Protocol
 // see: https://mdlayher.com/blog/network-protocol-breakdown-ndp-and-go/
 type Handler struct {
-	NICInfo      *NICInfo
+	NICInfo      *model.NICInfo
 	conn         net.PacketConn
 	LANHosts     HostTable // store IP list - one for each host
 	MACTable     MACTable  // store mac list

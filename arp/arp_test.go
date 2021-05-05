@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/model"
 )
 
 var (
@@ -60,7 +61,7 @@ func setupTestHandler(t *testing.T) *testContext {
 	tc.inConn, tc.outConn = packet.TestNewBufferedConn()
 	go packet.TestReadAndDiscardLoop(tc.ctx, tc.outConn) // MUST read the out conn to avoid blocking the sender
 
-	nicInfo := packet.NICInfo{
+	nicInfo := model.NICInfo{
 		HostMAC:   hostMAC,
 		HostIP4:   net.IPNet{IP: hostIP, Mask: net.IPv4Mask(255, 255, 255, 0)},
 		RouterIP4: net.IPNet{IP: routerIP, Mask: net.IPv4Mask(255, 255, 255, 0)},

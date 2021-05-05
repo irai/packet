@@ -17,7 +17,7 @@ var _ packet.PacketProcessor = &Handler{}
 
 // Handler maintains the underlying socket connection
 type Handler struct {
-	// NICInfo *packet.NICInfo
+	// NICInfo *model.NICInfo
 	// conn    net.PacketConn
 	engine *packet.Handler
 }

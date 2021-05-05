@@ -184,7 +184,7 @@ func NewTestContext() *TestContext {
 	tc.clientInConn, tc.clientOutConn = packet.TestNewBufferedConn()
 	go packet.TestReadAndDiscardLoop(tc.ctx, tc.clientOutConn) // must read to avoid blocking
 
-	nicInfo := packet.NICInfo{
+	nicInfo := model.NICInfo{
 		HostMAC:   HostMAC,
 		HostIP4:   net.IPNet{IP: HostIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
 		RouterIP4: net.IPNet{IP: RouterIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},

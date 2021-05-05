@@ -18,34 +18,13 @@ import (
 	"github.com/vishvananda/netlink"
 )
 
-// NICInfo stores the network interface info
-type NICInfo struct {
-	IFI *net.Interface
-
-	HostMAC  net.HardwareAddr
-	HostIP4  net.IPNet
-	HomeLAN4 net.IPNet
-	HostLLA  net.IPNet
-	HostGUA  net.IPNet
-
-	RouterMAC    net.HardwareAddr
-	RouterIP4    net.IPNet
-	RouterLLA    net.IPNet
-	RouterGUA    net.IPNet
-	RouterPrefix net.IP
-}
-
-func (e NICInfo) String() string {
-	return fmt.Sprintf("mac=%s hostip4=%s lla=%s gua=%s routerIP4=%s routerMAC=%s", e.HostMAC, e.HostIP4, e.HostLLA, e.HostGUA, e.RouterIP4, e.RouterMAC)
-}
-
 // GetNICInfo returns the interface configuration
 //
 // TODO: use routing package to identify default router
 // https://github.com/google/gopacket/tree/v1.1.19/routing
-func GetNICInfo(nic string) (info *NICInfo, err error) {
+func GetNICInfo(nic string) (info *model.NICInfo, err error) {
 
-	info = &NICInfo{}
+	info = &model.NICInfo{}
 	info.IFI, err = net.InterfaceByName(nic)
 	if err != nil {
 		return nil, err
