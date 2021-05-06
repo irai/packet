@@ -96,7 +96,7 @@ func newSubnet(config SubnetConfig) (*dhcpSubnet, error) {
 
 	subnet.nextIP = uint(subnet.FirstIP[3])
 
-	if debugging() {
+	if Debug {
 		log.Tracef("dhcp4: createSubnet %+v", config)
 	}
 
@@ -114,7 +114,7 @@ func newSubnet(config SubnetConfig) (*dhcpSubnet, error) {
 		OptionDomainNameServer: []byte(subnet.DNSServer.To4()),
 	}
 
-	if debugging() {
+	if Debug {
 		log.Infof("dhcp4: subnet lan=%s gw=%s dhcp=%s dns=%s dur=%v options=%+v",
 			subnet.LAN, subnet.DefaultGW, subnet.DHCPServer, subnet.DNSServer, subnet.Duration, subnet.options)
 	}

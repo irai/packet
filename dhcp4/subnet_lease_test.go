@@ -210,7 +210,7 @@ func Test_Subnet_Load(t *testing.T) {
 		t.Error("invalid count ", count1, count2)
 		return
 	}
-	if debugging() {
+	if Debug  {
 		tc.h.net1.printSubnet()
 	}
 

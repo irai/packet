@@ -42,7 +42,7 @@ func (h *Handler) attackDHCPServer(options Options) {
 // This is an error state and the DHCP server should tell the administrator
 func (h *Handler) forceDecline(clientID []byte, serverIP net.IP, chAddr net.HardwareAddr, clientIP net.IP, xid []byte) {
 	fields := log.Fields{"clientID": clientID, "ip": clientIP, "xid": xid, "serverIP": serverIP}
-	if debugging() {
+	if Debug {
 		fields["mac"] = chAddr
 	}
 	log.WithFields(fields).Info("dhcp4: client send decline to server")
@@ -74,7 +74,7 @@ func (h *Handler) forceDecline(clientID []byte, serverIP net.IP, chAddr net.Hard
 // Jan 21 - NOT working; the test router does not drop the entry. WHY?
 func (h *Handler) forceRelease(clientID []byte, serverIP net.IP, chAddr net.HardwareAddr, clientIP net.IP, xid []byte) {
 	fields := log.Fields{"clientID": clientID, "ip": clientIP, "xid": xid, "serverIP": serverIP}
-	if debugging() {
+	if Debug {
 		fields["mac"] = chAddr
 	}
 	log.WithFields(fields).Info("dhcp4: sent force release to server")
@@ -98,8 +98,8 @@ func (h *Handler) forceRelease(clientID []byte, serverIP net.IP, chAddr net.Hard
 // SendDiscoverPacket send a DHCP discover packet to target
 func (h *Handler) SendDiscoverPacket(chAddr net.HardwareAddr, cIAddr net.IP, xID []byte, options Options) (err error) {
 
-	if tracing() {
-		log.Tracef("dhcp4: send discover packet from %s ciAddr=%v xID=%v", chAddr, cIAddr, xID)
+	if Debug {
+		fmt.Printf("dhcp4: send discover packet from %s ciAddr=%v xID=%v", chAddr, cIAddr, xID)
 	}
 	p := RequestPacket(Discover, chAddr, cIAddr, xID, false, options.SelectOrderOrAll(nil))
 	srcAddr := model.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostIP4.IP, Port: model.DHCP4ClientPort}
@@ -207,7 +207,7 @@ func (h *Handler) processClientPacket(host *model.Host, req DHCP4) error {
 		return nil
 	}
 
-	if debugging() {
+	if Debug {
 		fields["msgType"] = reqType
 		fields["mac"] = req.CHAddr()
 		log.WithFields(fields).Debug("dhcp4: client dhcp received")

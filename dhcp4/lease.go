@@ -51,19 +51,6 @@ func (l Lease) String() string {
 
 }
 
-func (h *Handler) find(clientID []byte) *Lease {
-	return h.table[string(clientID)]
-}
-
-func (h *Handler) findByMAC(mac net.HardwareAddr) *Lease {
-	for _, v := range h.table {
-		if bytes.Equal(v.Addr.MAC, mac) {
-			return v
-		}
-	}
-	return nil
-}
-
 func (h *Handler) findByIP(ip net.IP) *Lease {
 	for _, v := range h.table {
 		if v.Addr.IP.Equal(ip) {

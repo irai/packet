@@ -172,7 +172,7 @@ func (config Config) New(session *model.Session, netfilterIP net.IPNet, dnsServe
 	// Add static and classless route options
 	h.net2.appendRouteOptions(h.net1.DefaultGW, h.net1.LAN.Mask, h.net2.DefaultGW)
 
-	if debugging() {
+	if Debug {
 		log.WithFields(log.Fields{"netfilterLAN": h.net2.LAN.String(), "netfilterGW": h.net2.DefaultGW, "firstIP": h.net2.FirstIP,
 			"lastIP": h.net2.LastIP}).Debug("dhcp4: Server Config")
 	}
@@ -344,7 +344,7 @@ func (h *Handler) ProcessPacket(host *model.Host, b []byte, header []byte) (*mod
 			dstAddr = model.Addr{MAC: ether.Src(), IP: ip4.Src(), Port: model.DHCP4ClientPort}
 		}
 
-		if debugging() {
+		if Debug {
 			log.Trace("dhcp4: send reply to ", dstAddr)
 		}
 
