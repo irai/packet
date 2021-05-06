@@ -19,7 +19,7 @@ func (h *Handler) Capture(mac net.HardwareAddr) error {
 	}
 	if macEntry.IsRouter {
 		h.mutex.Unlock()
-		return ErrIsRouter
+		return model.ErrIsRouter
 	}
 	macEntry.Captured = true
 
@@ -51,7 +51,7 @@ func (h *Handler) lockAndStartHunt(addr model.Addr) (err error) {
 	host := h.session.FindIP(addr.IP)
 	if host == nil {
 		fmt.Printf("packet: error invalid ip in lockAndStartHunt ip=%s\n", addr.IP)
-		return ErrInvalidIP
+		return model.ErrInvalidIP
 	}
 
 	host.Row.Lock()
@@ -179,7 +179,7 @@ func (h *Handler) lockAndStopHunt(host *model.Host, stage model.HuntStage) (err 
 	if addr.IP.To4() != nil {
 		go func() {
 			// DHCP4 will return not found if there is no lease entry; this is okay if the host has not acquired an IP yet
-			if _, err = h.HandlerDHCP4.StopHunt(addr); err != nil && !errors.Is(err, ErrNotFound) {
+			if _, err = h.HandlerDHCP4.StopHunt(addr); err != nil && !errors.Is(err, model.ErrNotFound) {
 				fmt.Printf("packet: failed to stop dhcp4 hunt: %s", err.Error())
 			}
 			if _, err = h.HandlerICMP4.StopHunt(addr); err != nil {
@@ -210,7 +210,7 @@ func (h *Handler) lockAndMonitorRoute(now time.Time) (err error) {
 			addr := model.Addr{MAC: host.MACEntry.MAC, IP: host.IP}
 			host.Row.RUnlock()
 			_, err := h.HandlerICMP4.CheckAddr(addr) // ping host
-			if errors.Is(err, ErrNotRedirected) {
+			if errors.Is(err, model.ErrNotRedirected) {
 				fmt.Printf("packet: ip4 routing NOK %s\n", host)
 				// Call stop hunt first to update stage to normal
 				if err := h.lockAndStopHunt(host, model.StageNormal); err != nil {

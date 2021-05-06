@@ -10,7 +10,6 @@ import (
 	"errors"
 	"log"
 
-	"github.com/irai/packet"
 	"github.com/irai/packet/model"
 )
 
@@ -60,10 +59,10 @@ func (h *Handler) request(srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr ne
 }
 
 func (h *Handler) requestWithDstEthernet(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
-	var b [packet.EthMaxSize]byte
-	ether := packet.Ether(b[0:])
+	var b [model.EthMaxSize]byte
+	ether := model.Ether(b[0:])
 
-	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_ARP, srcHwAddr, dstEther)
+	ether = model.EtherMarshalBinary(ether, syscall.ETH_P_ARP, srcHwAddr, dstEther)
 	arp, err := MarshalBinary(ether.Payload(), OperationRequest, srcHwAddr, srcIP, dstHwAddr, dstIP)
 	if err != nil {
 		return err
@@ -90,10 +89,10 @@ func (h *Handler) Reply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, s
 //
 // dstEther identifies the target for the Ethernet packet : i.e. use EthernetBroadcast for gratuitous ARP
 func (h *Handler) reply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
-	var b [packet.EthMaxSize]byte
-	ether := packet.Ether(b[0:])
+	var b [model.EthMaxSize]byte
+	ether := model.Ether(b[0:])
 
-	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_ARP, srcHwAddr, dstEther)
+	ether = model.EtherMarshalBinary(ether, syscall.ETH_P_ARP, srcHwAddr, dstEther)
 	arp, err := MarshalBinary(ether.Payload(), OperationReply, srcHwAddr, srcIP, dstHwAddr, dstIP)
 	if err != nil {
 		return err

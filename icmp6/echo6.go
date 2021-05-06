@@ -5,7 +5,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/irai/packet"
 	"github.com/irai/packet/model"
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv6"
@@ -28,8 +27,8 @@ var icmpTable = struct {
 
 // SendEchoRequest transmit an icmp6 echo request and do not wait for response
 func (h *ICMP6Handler) SendEchoRequest(srcAddr model.Addr, dstAddr model.Addr, id uint16, seq uint16) error {
-	if !packet.IsIP6(srcAddr.IP) || !packet.IsIP6(dstAddr.IP) {
-		return packet.ErrInvalidIP
+	if !model.IsIP6(srcAddr.IP) || !model.IsIP6(dstAddr.IP) {
+		return model.ErrInvalidIP
 	}
 	icmpMessage := icmp.Message{
 		Type: ipv6.ICMPTypeEchoRequest,
@@ -47,7 +46,7 @@ func (h *ICMP6Handler) SendEchoRequest(srcAddr model.Addr, dstAddr model.Addr, i
 	}
 
 	if Debug {
-		fmt.Printf("icmp6 : echo request %s\n", packet.ICMPEcho(p))
+		fmt.Printf("icmp6 : echo request %s\n", model.ICMPEcho(p))
 	}
 	return h.sendPacket(srcAddr, dstAddr, p)
 }
@@ -98,7 +97,7 @@ func (h *ICMP6Handler) Ping(srcAddr model.Addr, dstAddr model.Addr, timeout time
 	icmpTable.Unlock()
 
 	if !msg.msgRecv {
-		return packet.ErrTimeout
+		return model.ErrTimeout
 	}
 
 	return nil

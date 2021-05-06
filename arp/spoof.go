@@ -7,7 +7,6 @@ import (
 
 	"log"
 
-	"github.com/irai/packet"
 	"github.com/irai/packet/model"
 )
 
@@ -34,7 +33,7 @@ func (h *Handler) findHuntByIP(ip net.IP) (model.Addr, bool) {
 func (h *Handler) StartHunt(addr model.Addr) (model.HuntStage, error) {
 	if addr.MAC == nil || addr.IP.To4() == nil {
 		fmt.Println("arp: invalid call to startHuntIP", addr)
-		return model.StageNoChange, packet.ErrInvalidIP
+		return model.StageNoChange, model.ErrInvalidIP
 	}
 
 	h.arpMutex.Lock()

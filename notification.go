@@ -70,3 +70,30 @@ func (h *Handler) purge(now time.Time, probeDur time.Duration, offlineDur time.D
 
 	return nil
 }
+
+func (h *Handler) GetNotificationChannel() <-chan Notification {
+	if h.nameChannel != nil {
+		return h.nameChannel
+	}
+
+	// Notify of all existing hosts
+	list := []Notification{}
+	h.mutex.RLock()
+	for _, host := range h.session.HostTable.Table {
+		host.Row.RLock()
+		list = append(list, Notification{Addr: model.Addr{IP: host.IP, MAC: host.MACEntry.MAC}, Online: host.Online, DHCPName: host.DHCP4Name})
+		host.Row.RUnlock()
+	}
+	h.mutex.RUnlock()
+
+	h.nameChannel = make(chan Notification, notificationChannelCap)
+
+	go func() {
+		for _, n := range list {
+			h.nameChannel <- n
+			time.Sleep(time.Millisecond * 5) // time for reader to process
+		}
+	}()
+
+	return h.nameChannel
+}

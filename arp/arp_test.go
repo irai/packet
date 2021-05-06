@@ -108,7 +108,7 @@ func Test_Handler_CaptureEnterOffline(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		ether   packet.Ether
+		ether   model.Ether
 		arp     ARP
 		wantErr error
 		wantLen int

@@ -4,15 +4,14 @@ import (
 	"fmt"
 	"syscall"
 
-	"github.com/irai/packet"
 	"github.com/irai/packet/model"
 )
 
-func (h *Handler) sendPacket(srcAddr model.Addr, dstAddr model.Addr, p packet.ICMP4) (err error) {
-	ether := packet.Ether(make([]byte, packet.EthMaxSize)) // Ping is called many times concurrently by client
+func (h *Handler) sendPacket(srcAddr model.Addr, dstAddr model.Addr, p model.ICMP4) (err error) {
+	ether := model.Ether(make([]byte, model.EthMaxSize)) // Ping is called many times concurrently by client
 
-	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IP, srcAddr.MAC, dstAddr.MAC)
-	ip4 := packet.IP4MarshalBinary(ether.Payload(), 50, srcAddr.IP, dstAddr.IP)
+	ether = model.EtherMarshalBinary(ether, syscall.ETH_P_IP, srcAddr.MAC, dstAddr.MAC)
+	ip4 := model.IP4MarshalBinary(ether.Payload(), 50, srcAddr.IP, dstAddr.IP)
 	if ip4, err = ip4.AppendPayload(p, syscall.IPPROTO_ICMP); err != nil {
 		return err
 	}
@@ -21,7 +20,7 @@ func (h *Handler) sendPacket(srcAddr model.Addr, dstAddr model.Addr, p packet.IC
 		return err
 	}
 	if dstAddr.MAC == nil {
-		dstAddr.MAC = packet.Eth4AllNodesMulticast
+		dstAddr.MAC = model.Eth4AllNodesMulticast
 	}
 
 	if Debug {

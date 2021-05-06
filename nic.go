@@ -174,7 +174,7 @@ func GetIP4DefaultGatewayAddr(nic string) (addr model.Addr, err error) {
 
 	if addr.IP, err = GetLinuxDefaultGateway(); err != nil {
 		fmt.Println("error getting router ", err)
-		return model.Addr{}, ErrInvalidIP
+		return model.Addr{}, model.ErrInvalidIP
 	}
 	addr.IP = addr.IP.To4()
 

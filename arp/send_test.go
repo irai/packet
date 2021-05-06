@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/model"
 )
 
 func Test_Handler_ARPRequests(t *testing.T) {
@@ -20,7 +21,7 @@ func Test_Handler_ARPRequests(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		ether   packet.Ether
+		ether   model.Ether
 		arp     ARP
 		wantErr error
 		wantLen int
@@ -95,7 +96,7 @@ func Test_Handler_ServeReplies(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		ether   packet.Ether
+		ether   model.Ether
 		arp     ARP
 		wantErr error
 		wantLen int
@@ -177,7 +178,7 @@ func Test_Handler_CaptureSameIP(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		ether     packet.Ether
+		ether     model.Ether
 		arp       ARP
 		wantErr   error
 		wantLen   int

@@ -22,7 +22,7 @@ func Test_Spoof_ForceIPChange(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		ether   packet.Ether
+		ether   model.Ether
 		arp     ARP
 		wantErr error
 		wantLen int

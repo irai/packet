@@ -5,7 +5,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/irai/packet"
 	"github.com/irai/packet/model"
 	"golang.org/x/net/ipv4"
 )
@@ -63,15 +62,15 @@ func (h *Handler) StopHunt(addr model.Addr) (model.HuntStage, error) {
 
 func (h *Handler) ProcessPacket(host *model.Host, p []byte, header []byte) (*model.Host, model.Result, error) {
 
-	ether := packet.Ether(p)
-	ip4Frame := packet.IP4(ether.Payload())
-	icmpFrame := packet.ICMP4(header)
+	ether := model.Ether(p)
+	ip4Frame := model.IP4(ether.Payload())
+	icmpFrame := model.ICMP4(header)
 
 	switch icmpFrame.Type() {
-	case packet.ICMPTypeEchoReply:
+	case model.ICMPTypeEchoReply:
 
 		// ICMPEcho start from icmp frame
-		echo := packet.ICMPEcho(icmpFrame)
+		echo := model.ICMPEcho(icmpFrame)
 		if !echo.IsValid() {
 			fmt.Println("icmp4: invalid echo reply", icmpFrame, len(icmpFrame))
 			return host, model.Result{}, fmt.Errorf("icmp invalid icmp4 packet")
@@ -81,8 +80,8 @@ func (h *Handler) ProcessPacket(host *model.Host, p []byte, header []byte) (*mod
 		}
 		echoNotify(echo.EchoID()) // unblock ping if waiting
 
-	case packet.ICMPTypeEchoRequest:
-		echo := packet.ICMPEcho(icmpFrame)
+	case model.ICMPTypeEchoRequest:
+		echo := model.ICMPEcho(icmpFrame)
 		if Debug {
 			fmt.Printf("icmp4: echo request from ip=%s %s\n", ip4Frame.Src(), echo)
 		}
@@ -96,27 +95,27 @@ func (h *Handler) ProcessPacket(host *model.Host, p []byte, header []byte) (*mod
 		}
 		if len(header) < 8+20 { // minimum 8 bytes icmp + 20 ip4
 			fmt.Println("icmp4 : invalid destination unreachable packet", ip4Frame.Src(), len(header))
-			return host, model.Result{}, packet.ErrParseMessage
+			return host, model.Result{}, model.ErrParseMessage
 		}
-		originalIP4Frame := packet.IP4(header[8:]) // ip4 starts after icmp 8 bytes
+		originalIP4Frame := model.IP4(header[8:]) // ip4 starts after icmp 8 bytes
 		if !originalIP4Frame.IsValid() {
 			fmt.Println("icmp4 : invalid destination unreachable packet", ip4Frame.Src(), len(header))
-			return host, model.Result{}, packet.ErrParseMessage
+			return host, model.Result{}, model.ErrParseMessage
 		}
 		var port uint16
 		switch originalIP4Frame.Protocol() {
 		case syscall.IPPROTO_UDP:
-			udp := packet.UDP(originalIP4Frame.Payload())
+			udp := model.UDP(originalIP4Frame.Payload())
 			if !udp.IsValid() {
 				fmt.Println("icmp4 : invalid upd destination unreacheable", ip4Frame.Src(), originalIP4Frame)
-				return host, model.Result{}, packet.ErrParseMessage
+				return host, model.Result{}, model.ErrParseMessage
 			}
 			port = udp.DstPort()
 		case syscall.IPPROTO_TCP:
-			tcp := packet.TCP(originalIP4Frame.Payload())
+			tcp := model.TCP(originalIP4Frame.Payload())
 			if !tcp.IsValid() {
 				fmt.Println("icmp4 : invalid tcp destination unreacheable", ip4Frame.Src(), originalIP4Frame)
-				return host, model.Result{}, packet.ErrParseMessage
+				return host, model.Result{}, model.ErrParseMessage
 			}
 			port = tcp.DstPort()
 		}

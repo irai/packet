@@ -77,13 +77,13 @@ func readResponse(ctx context.Context, tc *testContext) error {
 		}
 
 		buf = buf[:n]
-		ether := packet.Ether(buf)
+		ether := model.Ether(buf)
 		if !ether.IsValid() {
 			s := fmt.Sprintf("error ether client packet %s", ether)
 			panic(s)
 		}
 
-		dhcp4Frame := DHCP4(packet.UDP(packet.IP4(packet.Ether(buf).Payload()).Payload()).Payload())
+		dhcp4Frame := DHCP4(model.UDP(model.IP4(model.Ether(buf).Payload()).Payload()).Payload())
 		options := dhcp4Frame.ParseOptions()
 		var reqType MessageType
 		if t := options[OptionDHCPMessageType]; len(t) != 1 {
@@ -184,7 +184,7 @@ type testEvent struct {
 	macTableLen   int
 	srcAddr       model.Addr
 	dstAddr       model.Addr
-	ether         packet.Ether
+	ether         model.Ether
 	wantHost      model.Host
 }
 

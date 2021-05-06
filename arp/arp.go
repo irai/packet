@@ -9,7 +9,6 @@ import (
 
 	"log"
 
-	"github.com/irai/packet"
 	"github.com/irai/packet/model"
 )
 
@@ -44,11 +43,11 @@ func (config Config) newARP(session *model.Session) (h *Handler, err error) {
 	h = &Handler{session: session, huntList: make(map[string]model.Addr, 6), closeChan: make(chan bool)}
 	// h.table, _ = loadARPProcTable() // load linux proc table
 	if h.session.NICInfo.HostIP4.IP.To4() == nil {
-		return nil, packet.ErrInvalidIP
+		return nil, model.ErrInvalidIP
 	}
 
 	if h.session.NICInfo.HomeLAN4.IP.To4() == nil || h.session.NICInfo.HomeLAN4.IP.IsUnspecified() {
-		return nil, packet.ErrInvalidIP
+		return nil, model.ErrInvalidIP
 	}
 	h.probeInterval = config.ProbeInterval
 
@@ -148,10 +147,10 @@ const (
 // +============+===+===========+===========+============+============+===================+===========+
 func (h *Handler) ProcessPacket(host *model.Host, b []byte, header []byte) (*model.Host, model.Result, error) {
 
-	ether := packet.Ether(b)
+	ether := model.Ether(b)
 	frame := ARP(header)
 	if !frame.IsValid() {
-		return host, model.Result{}, packet.ErrParseMessage
+		return host, model.Result{}, model.ErrParseMessage
 	}
 
 	// skip link local packets

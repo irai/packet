@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/irai/packet"
+	"github.com/irai/packet/model"
 	"golang.org/x/net/ipv6"
 )
 
@@ -46,9 +46,9 @@ func (p ICMPEcho) EchoData() string {
 func (p ICMPEcho) String() string {
 
 	switch p.Type() {
-	case packet.ICMPTypeEchoReply:
+	case model.ICMPTypeEchoReply:
 		return fmt.Sprintf("echo reply code=%v id=%v data=%v", p.EchoID(), p.Code(), string(p.EchoData()))
-	case packet.ICMPTypeEchoRequest:
+	case model.ICMPTypeEchoRequest:
 		return fmt.Sprintf("echo request code=%v id=%v data=%v", p.EchoID(), p.Code(), string(p.EchoData()))
 	}
 	return fmt.Sprintf("type=%v code=%v", p.Type(), p.Code())

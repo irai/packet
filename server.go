@@ -27,7 +27,7 @@ type Config struct {
 	// Conn enables the client to override the connection with a another packet conn
 	// useful for testing
 	Conn                    net.PacketConn // listen connectinon
-	NICInfo                 *model.NICInfo // override nic information
+	NICInfo                 *model.NICInfo // override nic information - set to non nil to create a test Handler
 	FullNetworkScanInterval time.Duration  // Set it to zero if no scan required
 	ProbeInterval           time.Duration  // how often to probe if IP is online
 	OfflineDeadline         time.Duration  // mark offline if more than OfflineInte
@@ -57,33 +57,6 @@ type Handler struct {
 	closeChan               chan bool     // close goroutines channel
 	mutex                   sync.RWMutex
 	nameChannel             chan Notification
-}
-
-func (h *Handler) GetNotificationChannel() <-chan Notification {
-	if h.nameChannel != nil {
-		return h.nameChannel
-	}
-
-	// Notify of all existing hosts
-	list := []Notification{}
-	h.mutex.RLock()
-	for _, host := range h.session.HostTable.Table {
-		host.Row.RLock()
-		list = append(list, Notification{Addr: model.Addr{IP: host.IP, MAC: host.MACEntry.MAC}, Online: host.Online, DHCPName: host.DHCP4Name})
-		host.Row.RUnlock()
-	}
-	h.mutex.RUnlock()
-
-	h.nameChannel = make(chan Notification, notificationChannelCap)
-
-	go func() {
-		for _, n := range list {
-			h.nameChannel <- n
-			time.Sleep(time.Millisecond * 5) // time for reader to process
-		}
-	}()
-
-	return h.nameChannel
 }
 
 // New creates an ICMPv6 handler with default values
@@ -230,13 +203,13 @@ func (h *Handler) setupConn() (conn net.PacketConn, err error) {
 		bpf.LoadAbsolute{Off: 14, Size: 2},
 		// IPv4?
 		bpf.JumpIf{Cond: bpf.JumpEqual, Val: syscall.ETH_P_IP, SkipFalse: 1},
-		bpf.RetConstant{Val: EthMaxSize},
+		bpf.RetConstant{Val: model.EthMaxSize},
 		// IPv6?
 		bpf.JumpIf{Cond: bpf.JumpEqual, Val: syscall.ETH_P_IPV6, SkipFalse: 1},
-		bpf.RetConstant{Val: EthMaxSize},
+		bpf.RetConstant{Val: model.EthMaxSize},
 		// ARP?
 		bpf.JumpIf{Cond: bpf.JumpEqual, Val: syscall.ETH_P_ARP, SkipFalse: 1},
-		bpf.RetConstant{Val: EthMaxSize},
+		bpf.RetConstant{Val: model.EthMaxSize},
 		bpf.RetConstant{Val: 0},
 	})
 	if err != nil {
@@ -539,7 +512,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 	var d1, d2, d3 time.Duration
 	var startTime time.Time
-	buf := make([]byte, EthMaxSize)
+	buf := make([]byte, model.EthMaxSize)
 	for {
 		if err = h.session.Conn.SetReadDeadline(time.Now().Add(time.Second * 2)); err != nil {
 			if h.closed { // closed by call to h.Close()?
@@ -560,7 +533,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		}
 		startTime = time.Now()
 
-		ether := Ether(buf[:n])
+		ether := model.Ether(buf[:n])
 		if !ether.IsValid() {
 			log.Error("icmp invalid ethernet packet ", ether.EtherType())
 			continue
@@ -581,8 +554,8 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		}
 
 		notify := false
-		var ip4Frame IP4
-		var ip6Frame IP6
+		var ip4Frame model.IP4
+		var ip6Frame model.IP6
 		var l4Proto int
 		var l4Payload []byte
 		var host *model.Host
@@ -590,7 +563,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 		switch ether.EtherType() {
 		case syscall.ETH_P_IP: // 0x0800
-			ip4Frame = IP4(ether.Payload())
+			ip4Frame = model.IP4(ether.Payload())
 			if !ip4Frame.IsValid() {
 				fmt.Println("packet: error invalid ip4 frame type=", ether.EtherType())
 				continue
@@ -609,7 +582,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			l4Payload = ip4Frame.Payload()
 
 		case syscall.ETH_P_IPV6: // 0x86dd
-			ip6Frame = IP6(ether.Payload())
+			ip6Frame = model.IP6(ether.Payload())
 			if !ip6Frame.IsValid() {
 				fmt.Println("packet: error invalid ip6 frame type=", ether.EtherType())
 				continue
@@ -629,12 +602,12 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 			// IPv6 Hop by Hop extension - always the first header if present
 			if l4Proto == syscall.IPPROTO_HOPOPTS {
-				header := HopByHopExtensionHeader(l4Payload)
+				header := model.HopByHopExtensionHeader(l4Payload)
 				if !header.IsValid() {
 					fmt.Printf("packet: error invalid next header payload=%d ext=%d\n", len(l4Payload), n)
 					continue
 				}
-				if n, err = h.ProcessIP6HopByHopExtension(host, ether, l4Payload); err != nil || n <= 0 {
+				if n, err = h.session.ProcessIP6HopByHopExtension(host, ether, l4Payload); err != nil || n <= 0 {
 					fmt.Printf("packet: error processing hop by hop extension : %s\n", err)
 				}
 				if len(l4Payload) <= header.Len()+1 {
@@ -670,7 +643,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		case syscall.IPPROTO_TCP:
 			// skip tcp
 		case syscall.IPPROTO_UDP: // 0x11
-			udp := UDP(l4Payload)
+			udp := model.UDP(l4Payload)
 			if !udp.IsValid() {
 				fmt.Println("packet: error invalid udp frame ", ip4Frame)
 				continue
@@ -683,7 +656,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				}
 
 				// DHCP4 packet?
-				if udp.DstPort() == DHCP4ServerPort || udp.DstPort() == DHCP4ClientPort {
+				if udp.DstPort() == model.DHCP4ServerPort || udp.DstPort() == model.DHCP4ClientPort {
 					if host, result, err = h.HandlerDHCP4.ProcessPacket(host, ether, udp.Payload()); err != nil {
 						fmt.Printf("packet: error processing dhcp4: %s\n", err)
 					}

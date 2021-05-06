@@ -4,7 +4,6 @@ import (
 	"net"
 	"time"
 
-	"github.com/irai/packet"
 	"github.com/irai/packet/model"
 )
 
@@ -77,7 +76,7 @@ func (h *ICMP6Handler) SendRouterSolicitation() error {
 		return err
 	}
 
-	return h.sendPacket(model.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostLLA.IP}, packet.IP6AllRoutersAddr, mb)
+	return h.sendPacket(model.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostLLA.IP}, model.IP6AllRoutersAddr, mb)
 }
 
 func (h *ICMP6Handler) SendNeighborAdvertisement(srcAddr model.Addr, dstAddr model.Addr) error {
@@ -90,5 +89,5 @@ func (h *ICMP6Handler) SendNeighborAdvertisement(srcAddr model.Addr, dstAddr mod
 func (h *ICMP6Handler) SendNeighbourSolicitation(ip net.IP) error {
 	p, _ := ICMP6NeighborSolicitationMarshal(ip, h.session.NICInfo.HostMAC)
 
-	return h.sendPacket(model.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostLLA.IP}, packet.IP6AllNodesAddr, p)
+	return h.sendPacket(model.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostLLA.IP}, model.IP6AllNodesAddr, p)
 }

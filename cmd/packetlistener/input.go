@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/irai/packet"
+	"github.com/irai/packet/model"
 )
 
 func readInput() []string {
@@ -64,7 +64,7 @@ func getIP6(tokens []string, pos int) net.IP {
 		return nil
 	}
 	ip := net.ParseIP(tokens[pos])
-	if ip == nil || ip.IsUnspecified() || !packet.IsIP6(ip) {
+	if ip == nil || ip.IsUnspecified() || !model.IsIP6(ip) {
 		fmt.Println("invalid ip6=", tokens[pos])
 		return nil
 	}

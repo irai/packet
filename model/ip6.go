@@ -1,11 +1,9 @@
-package packet
+package model
 
 import (
 	"encoding/binary"
 	"fmt"
 	"net"
-
-	"github.com/irai/packet/model"
 )
 
 // IP6 structure: see https://github.com/golang/net/blob/master/ipv6/header.go
@@ -88,7 +86,7 @@ func (p HopByHopExtensionHeader) Len() int        { return int(p[1])*8 + 8 } // 
 func (p HopByHopExtensionHeader) Data() []byte    { return p[2:p.Len()] }    //
 
 // ProcessPacket handles icmp6 packets
-func (h *Handler) ProcessIP6HopByHopExtension(host *model.Host, b []byte, header []byte) (n int, err error) {
+func (h *Session) ProcessIP6HopByHopExtension(host *Host, b []byte, header []byte) (n int, err error) {
 
 	// ether := Ether(b)
 	// ip6Frame := IP6(ether.Payload())
@@ -128,9 +126,8 @@ func (h *Handler) ProcessIP6HopByHopExtension(host *model.Host, b []byte, header
 			value := binary.BigEndian.Uint16(buffer[2 : 2+2])
 			pos = pos + 4 // fixed len 4
 
-			if Debug {
-				fmt.Printf("ip6   : hop by hop option router alert value=%d\n", value)
-			}
+			// fmt.Printf("TRACE ip6   : hop by hop option router alert value=%d\n", value)
+
 			switch value {
 			case 0: // packet contains MLD message
 			case 1: // packet contains RSVP message

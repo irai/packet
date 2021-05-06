@@ -457,8 +457,8 @@ func cmd(h *handlers) {
 				// if err := h.SendEchoRequest(model.Addr{MAC: packet.Eth4AllNodesMulticast, IP: ip}, 2, 2); err != nil {
 				if err := h.icmp4.Ping(
 					model.Addr{MAC: h.engine.Session().NICInfo.HostMAC, IP: h.engine.Session().NICInfo.HostIP4.IP},
-					model.Addr{MAC: packet.Eth4AllNodesMulticast, IP: ip}, time.Second*2); err != nil {
-					if errors.Is(err, packet.ErrTimeout) {
+					model.Addr{MAC: model.Eth4AllNodesMulticast, IP: ip}, time.Second*2); err != nil {
+					if errors.Is(err, model.ErrTimeout) {
 						fmt.Println("ping timeout ")
 					} else {
 						fmt.Println("ping error ", err)
@@ -467,14 +467,14 @@ func cmd(h *handlers) {
 				}
 				fmt.Printf("ping %v time=%v\n", dstIP, time.Now().Sub(now))
 			}
-			if packet.IsIP6(ip) {
+			if model.IsIP6(ip) {
 				if h.icmp6 == nil {
 					fmt.Println("error icmp6 is detached")
 					continue
 				}
 				if err := h.icmp6.Ping(
 					model.Addr{MAC: h.engine.Session().NICInfo.HostMAC, IP: h.engine.Session().NICInfo.HostLLA.IP},
-					model.Addr{MAC: packet.Eth6AllNodesMulticast, IP: ip}, time.Second*2); err != nil {
+					model.Addr{MAC: model.Eth6AllNodesMulticast, IP: ip}, time.Second*2); err != nil {
 					// if err := h6.Ping(h6.LLA().IP, ip, time.Second*2); err != nil {
 					fmt.Println("icmp6 echo error ", err)
 					continue

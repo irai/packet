@@ -6,12 +6,12 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/irai/packet"
+	"github.com/irai/packet/model"
 )
 
-func newEtherPacket(hType uint16, srcMAC net.HardwareAddr, dstMAC net.HardwareAddr) packet.Ether {
-	buf := make([]byte, packet.EthMaxSize) // allocate in the stack
-	p := packet.EtherMarshalBinary(buf, hType, srcMAC, dstMAC)
+func newEtherPacket(hType uint16, srcMAC net.HardwareAddr, dstMAC net.HardwareAddr) model.Ether {
+	buf := make([]byte, model.EthMaxSize) // allocate in the stack
+	p := model.EtherMarshalBinary(buf, hType, srcMAC, dstMAC)
 	return p
 }
 
@@ -30,8 +30,8 @@ func tFrame(proto uint16, operation uint16, srcMAC net.HardwareAddr, srcIP net.I
 
 func TestMarshalUnmarshall(t *testing.T) {
 	// marshall
-	buf := make([]byte, packet.EthMaxSize) // allocate in the stack
-	ether := packet.EtherMarshalBinary(buf, syscall.ETH_P_ARP, mac1, mac2)
+	buf := make([]byte, model.EthMaxSize) // allocate in the stack
+	ether := model.EtherMarshalBinary(buf, syscall.ETH_P_ARP, mac1, mac2)
 	arpFrame, err := MarshalBinary(ether.Payload(), OperationRequest, mac1, ip1, mac2, ip2)
 	if err != nil {
 		t.Errorf("error in marshall binary: %s", err)
@@ -45,7 +45,7 @@ func TestMarshalUnmarshall(t *testing.T) {
 
 	// unmarschall
 	n := len(ether) + len(arpFrame)
-	ether = packet.Ether(ether[:n])
+	ether = model.Ether(ether[:n])
 	arpFrame = ARP(ether.Payload())
 	if !ether.IsValid() {
 		t.Errorf("invalid ether=%s", ether)

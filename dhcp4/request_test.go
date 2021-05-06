@@ -121,8 +121,8 @@ func Test_requestExhaust(t *testing.T) {
 	tc.xid++
 	xid := []byte(fmt.Sprintf("%d", tc.xid))
 	mac5 = net.HardwareAddr{0x00, 0xff, 0xaa, 0xbb, 0x05, 0x05} // new mac
-	srcAddr := model.Addr{MAC: mac5, IP: net.IPv4zero, Port: packet.DHCP4ClientPort}
-	dstAddr := model.Addr{MAC: arp.EthernetBroadcast, IP: net.IPv4zero, Port: packet.DHCP4ServerPort}
+	srcAddr := model.Addr{MAC: mac5, IP: net.IPv4zero, Port: model.DHCP4ClientPort}
+	dstAddr := model.Addr{MAC: arp.EthernetBroadcast, IP: net.IPv4zero, Port: model.DHCP4ServerPort}
 	dhcpFrame := newDHCP4DiscoverFrame(srcAddr, "onelastname", xid)
 	if err := sendDHCP4Packet(tc.outConn, srcAddr, dstAddr, dhcpFrame); err != nil {
 		t.Errorf("DHCPHandler.handleDiscover() error sending packet error=%s", err)
@@ -145,8 +145,8 @@ func Test_requestAnotherHost(t *testing.T) {
 	tc.xid++
 	xid := []byte(fmt.Sprintf("%d", tc.xid))
 	mac5 = net.HardwareAddr{0x00, 0xff, 0xaa, 0xbb, 0x05, 0x05} // new mac
-	srcAddr := model.Addr{MAC: mac5, IP: net.IPv4zero, Port: packet.DHCP4ClientPort}
-	dstAddr := model.Addr{MAC: arp.EthernetBroadcast, IP: net.IPv4zero, Port: packet.DHCP4ServerPort}
+	srcAddr := model.Addr{MAC: mac5, IP: net.IPv4zero, Port: model.DHCP4ClientPort}
+	dstAddr := model.Addr{MAC: arp.EthernetBroadcast, IP: net.IPv4zero, Port: model.DHCP4ServerPort}
 
 	// first discover packet
 	dhcpFrame := newDHCP4DiscoverFrame(srcAddr, srcAddr.MAC.String(), xid)
@@ -187,8 +187,8 @@ func Test_requestAnotherHost(t *testing.T) {
 func newDHCPHost(t *testing.T, tc *testContext, mac net.HardwareAddr) []byte {
 	tc.xid++
 	xid := []byte(fmt.Sprintf("%d", tc.xid))
-	srcAddr := model.Addr{MAC: mac, IP: net.IPv4zero, Port: packet.DHCP4ClientPort}
-	dstAddr := model.Addr{MAC: arp.EthernetBroadcast, IP: net.IPv4zero, Port: packet.DHCP4ServerPort}
+	srcAddr := model.Addr{MAC: mac, IP: net.IPv4zero, Port: model.DHCP4ClientPort}
+	dstAddr := model.Addr{MAC: arp.EthernetBroadcast, IP: net.IPv4zero, Port: model.DHCP4ServerPort}
 
 	dhcpFrame := newDHCP4DiscoverFrame(srcAddr, srcAddr.MAC.String(), xid)
 	if err := sendDHCP4Packet(tc.outConn, srcAddr, dstAddr, dhcpFrame); err != nil {

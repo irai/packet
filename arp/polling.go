@@ -8,7 +8,6 @@ import (
 
 	"log"
 
-	"github.com/irai/packet"
 	"github.com/irai/packet/model"
 )
 
@@ -78,7 +77,7 @@ func (h *Handler) ScanNetwork(ctx context.Context, lan net.IPNet) error {
 	ip := model.CopyIP(lan.IP)
 	ip = ip.To4()
 	if ip == nil {
-		return packet.ErrInvalidIP
+		return model.ErrInvalidIP
 	}
 
 	if Debug {

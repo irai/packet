@@ -5,7 +5,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/irai/packet"
 	"github.com/irai/packet/model"
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv4"
@@ -35,7 +34,7 @@ var icmpTable = struct {
 // Do not wait for response
 func (h *Handler) SendEchoRequest(srcAddr model.Addr, dstAddr model.Addr, id uint16, seq uint16) error {
 	if srcAddr.IP.To4() == nil || dstAddr.IP.To4() == nil {
-		return packet.ErrInvalidIP
+		return model.ErrInvalidIP
 	}
 	icmpMessage := icmp.Message{
 		Type: ipv4.ICMPTypeEcho,
@@ -53,7 +52,7 @@ func (h *Handler) SendEchoRequest(srcAddr model.Addr, dstAddr model.Addr, id uin
 	}
 
 	if Debug {
-		fmt.Printf("icmp4: echo request %s\n", packet.ICMPEcho(p))
+		fmt.Printf("icmp4: echo request %s\n", model.ICMPEcho(p))
 	}
 	return h.sendPacket(srcAddr, dstAddr, p)
 }
@@ -107,7 +106,7 @@ func (h *Handler) Ping(srcAddr model.Addr, dstAddr model.Addr, timeout time.Dura
 	icmpTable.Unlock()
 
 	if !msg.msgRecv {
-		return packet.ErrTimeout
+		return model.ErrTimeout
 	}
 
 	return nil
@@ -125,7 +124,7 @@ func (h *Handler) CheckAddr(addr model.Addr) (model.HuntStage, error) {
 	// If client does not respond to echo, there is little we can test
 	if err := h.Ping(model.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostIP4.IP}, addr, time.Second*2); err != nil {
 		fmt.Printf("icmp4 : not responding to ping ip=%s mac=%s\n", addr.IP, addr.MAC)
-		return model.StageNormal, packet.ErrTimeout
+		return model.StageNormal, model.ErrTimeout
 	}
 
 	// first attempt
@@ -140,5 +139,5 @@ func (h *Handler) CheckAddr(addr model.Addr) (model.HuntStage, error) {
 		return model.StageRedirected, nil
 	}
 
-	return model.StageHunt, packet.ErrNotRedirected
+	return model.StageHunt, model.ErrNotRedirected
 }

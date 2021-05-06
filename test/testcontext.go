@@ -73,7 +73,7 @@ type TestContext struct {
 func printResponseTable(tc *TestContext) {
 	fmt.Println("Response table len=", len(tc.responseTable))
 	for i, v := range tc.responseTable {
-		fmt.Printf("  entry=%d etherType=%x\n", i, packet.Ether(v).EtherType())
+		fmt.Printf("  entry=%d etherType=%x\n", i, model.Ether(v).EtherType())
 	}
 }
 
@@ -89,7 +89,7 @@ func waitResponse(tc *TestContext, action Action) error {
 	case s := <-waitChannel:
 		fmt.Println("test  : got response", s)
 	case <-time.After(time.Second * 10):
-		return packet.ErrTimeout
+		return model.ErrTimeout
 	}
 	return nil
 }
@@ -109,7 +109,7 @@ func readResponse(ctx context.Context, tc *TestContext) error {
 		}
 
 		buf = buf[:n]
-		ether := packet.Ether(buf)
+		ether := model.Ether(buf)
 		if !ether.IsValid() {
 			s := fmt.Sprintf("error ether client packet %s", ether)
 			panic(s)
@@ -122,13 +122,13 @@ func readResponse(ctx context.Context, tc *TestContext) error {
 
 		notify := ""
 		if ether.EtherType() == syscall.ETH_P_IP { // IP4?
-			ip4 := packet.IP4(ether.Payload())
+			ip4 := model.IP4(ether.Payload())
 			if !ip4.IsValid() {
 				fmt.Println("invalid ip4 packet ", len(ether.Payload()), ether.Payload())
 				continue
 			}
 			if ip4.Protocol() == syscall.IPPROTO_UDP { // UDP?
-				if udp := packet.UDP(ip4.Payload()); udp.DstPort() == packet.DHCP4ClientPort { // DHCP client port?
+				if udp := model.UDP(ip4.Payload()); udp.DstPort() == model.DHCP4ClientPort { // DHCP client port?
 					dhcp4Frame := dhcp4.DHCP4(udp.Payload())
 					options := dhcp4Frame.ParseOptions()
 					var reqType dhcp4.MessageType
@@ -261,11 +261,11 @@ type TestEvent struct {
 	srcAddr          model.Addr
 	dstAddr          model.Addr
 	dhcpHostName     string // dhcp host name
-	ether            packet.Ether
+	ether            model.Ether
 	wantHost         *model.Host
 }
 
-func newDHCP4DiscoverFrame(src model.Addr, xid []byte, hostName string) packet.Ether {
+func newDHCP4DiscoverFrame(src model.Addr, xid []byte, hostName string) model.Ether {
 	options := []dhcp4.Option{}
 	oDNS := dhcp4.Option{Code: dhcp4.OptionDomainNameServer, Value: []byte{}}
 	options = append(options, oDNS)
@@ -275,10 +275,10 @@ func newDHCP4DiscoverFrame(src model.Addr, xid []byte, hostName string) packet.E
 	}
 
 	var err error
-	ether := packet.Ether(make([]byte, packet.EthMaxSize))
-	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IP, src.MAC, arp.EthernetBroadcast)
-	ip4 := packet.IP4MarshalBinary(ether.Payload(), 50, src.IP, net.IPv4zero)
-	udp := packet.UDPMarshalBinary(ip4.Payload(), packet.DHCP4ClientPort, packet.DHCP4ServerPort)
+	ether := model.Ether(make([]byte, model.EthMaxSize))
+	ether = model.EtherMarshalBinary(ether, syscall.ETH_P_IP, src.MAC, arp.EthernetBroadcast)
+	ip4 := model.IP4MarshalBinary(ether.Payload(), 50, src.IP, net.IPv4zero)
+	udp := model.UDPMarshalBinary(ip4.Payload(), model.DHCP4ClientPort, model.DHCP4ServerPort)
 	dhcp4Frame := dhcp4.RequestPacket(dhcp4.Discover, src.MAC, src.IP, xid, false, options)
 	udp, err = udp.AppendPayload(dhcp4Frame)
 	ip4 = ip4.SetPayload(udp, syscall.IPPROTO_UDP)
@@ -288,7 +288,7 @@ func newDHCP4DiscoverFrame(src model.Addr, xid []byte, hostName string) packet.E
 	return ether
 }
 
-func newDHCP4RequestFrame(src model.Addr, serverID net.IP, requestedIP net.IP, xid []byte, hostName string) packet.Ether {
+func newDHCP4RequestFrame(src model.Addr, serverID net.IP, requestedIP net.IP, xid []byte, hostName string) model.Ether {
 	options := []dhcp4.Option{}
 	oDNS := dhcp4.Option{Code: dhcp4.OptionDomainNameServer, Value: []byte{}}
 	oReqIP := dhcp4.Option{Code: dhcp4.OptionRequestedIPAddress, Value: requestedIP}
@@ -302,10 +302,10 @@ func newDHCP4RequestFrame(src model.Addr, serverID net.IP, requestedIP net.IP, x
 	}
 
 	var err error
-	ether := packet.Ether(make([]byte, packet.EthMaxSize))
-	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IP, src.MAC, arp.EthernetBroadcast)
-	ip4 := packet.IP4MarshalBinary(ether.Payload(), 50, src.IP, net.IPv4zero)
-	udp := packet.UDPMarshalBinary(ip4.Payload(), packet.DHCP4ClientPort, packet.DHCP4ServerPort)
+	ether := model.Ether(make([]byte, model.EthMaxSize))
+	ether = model.EtherMarshalBinary(ether, syscall.ETH_P_IP, src.MAC, arp.EthernetBroadcast)
+	ip4 := model.IP4MarshalBinary(ether.Payload(), 50, src.IP, net.IPv4zero)
+	udp := model.UDPMarshalBinary(ip4.Payload(), model.DHCP4ClientPort, model.DHCP4ServerPort)
 	dhcp4Frame := dhcp4.RequestPacket(dhcp4.Request, src.MAC, requestedIP, xid, false, options)
 	udp, err = udp.AppendPayload(dhcp4Frame)
 	ip4 = ip4.SetPayload(udp, syscall.IPPROTO_UDP)
@@ -315,10 +315,10 @@ func newDHCP4RequestFrame(src model.Addr, serverID net.IP, requestedIP net.IP, x
 	return ether
 }
 
-func newARPFrame(src model.Addr, dst model.Addr, operation uint16) packet.Ether {
+func newARPFrame(src model.Addr, dst model.Addr, operation uint16) model.Ether {
 	var err error
-	ether := packet.Ether(make([]byte, packet.EthMaxSize))
-	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_ARP, src.MAC, dst.MAC)
+	ether := model.Ether(make([]byte, model.EthMaxSize))
+	ether = model.EtherMarshalBinary(ether, syscall.ETH_P_ARP, src.MAC, dst.MAC)
 	arpFrame, err := arp.MarshalBinary(ether.Payload(), operation, src.MAC, src.IP, dst.MAC, dst.IP)
 	if ether, err = ether.SetPayload(arpFrame); err != nil {
 		panic(err.Error())
@@ -383,7 +383,7 @@ func NewHostEvents(addr model.Addr, hostName string, hostInc int, macInc int) []
 	}
 }
 
-var buf = make([]byte, packet.EthMaxSize)
+var buf = make([]byte, model.EthMaxSize)
 
 func runAction(t *testing.T, tc *TestContext, tt TestEvent) {
 	sendPacket := true
