@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/irai/packet"
 	"github.com/irai/packet/arp"
 	"github.com/irai/packet/dhcp4"
+	"github.com/irai/packet/engine"
 	"github.com/irai/packet/model"
 )
 
@@ -57,7 +57,7 @@ type TestContext struct {
 	outConn       net.PacketConn
 	clientInConn  net.PacketConn
 	clientOutConn net.PacketConn
-	Engine        *packet.Handler
+	Engine        *engine.Handler
 	DHCP4Handler  *dhcp4.Handler
 	dhcp4XID      uint16
 	wg            sync.WaitGroup
@@ -192,7 +192,7 @@ func NewTestContext() *TestContext {
 	}
 
 	// override handler with conn and nicInfo
-	config := packet.Config{Conn: tc.inConn, NICInfo: &nicInfo, ProbeInterval: time.Millisecond * 500, OfflineDeadline: time.Millisecond * 500, PurgeDeadline: time.Second * 2}
+	config := engine.Config{Conn: tc.inConn, NICInfo: &nicInfo, ProbeInterval: time.Millisecond * 500, OfflineDeadline: time.Millisecond * 500, PurgeDeadline: time.Second * 2}
 	tc.Engine, err = config.NewEngine("eth0")
 	if err != nil {
 		panic(err)
@@ -208,7 +208,7 @@ func NewTestContext() *TestContext {
 	tc.Engine.AttachARP(tc.Engine.ARPHandler)
 
 	// Default dhcp engine
-	netfilterIP, err := packet.SegmentLAN("eth0",
+	netfilterIP, err := engine.SegmentLAN("eth0",
 		net.IPNet{IP: HostIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
 		net.IPNet{IP: RouterIP4, Mask: net.IPv4Mask(255, 255, 255, 0)})
 	if err != nil {
@@ -250,7 +250,7 @@ func (tc *TestContext) Close() {
 type TestEvent struct {
 	name             string
 	action           Action // capture, block, accept, release, event
-	packetEvent      packet.Notification
+	packetEvent      engine.Notification
 	waitTimeAfter    time.Duration
 	wantCapture      bool
 	wantStage        model.HuntStage

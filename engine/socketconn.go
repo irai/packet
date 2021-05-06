@@ -1,6 +1,6 @@
 // +build linux
 
-package packet
+package engine
 
 // This is file was originally created by Matt Layher
 // as part of the raw package github.com/mdlayher/raw

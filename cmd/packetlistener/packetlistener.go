@@ -13,9 +13,9 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/irai/packet"
 	"github.com/irai/packet/arp"
 	"github.com/irai/packet/dhcp4"
+	"github.com/irai/packet/engine"
 	"github.com/irai/packet/icmp4"
 	"github.com/irai/packet/icmp6"
 	"github.com/irai/packet/model"
@@ -29,7 +29,7 @@ var (
 )
 
 type handlers struct {
-	engine      *packet.Handler
+	engine      *engine.Handler
 	icmp4       *icmp4.Handler
 	arp         *arp.Handler
 	icmp6       *icmp6.Handler
@@ -70,7 +70,7 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	info, err := packet.GetNICInfo(*nic)
+	info, err := engine.GetNICInfo(*nic)
 	if err != nil {
 		fmt.Println("failed to get nic info ", err)
 		return
@@ -78,7 +78,7 @@ func main() {
 	fmt.Printf("nicinfo: %+v\n", info)
 
 	handlers := handlers{}
-	handlers.netfilterIP, err = packet.SegmentLAN(*nic, info.HostIP4, info.RouterIP4)
+	handlers.netfilterIP, err = engine.SegmentLAN(*nic, info.HostIP4, info.RouterIP4)
 	if err != nil {
 		fmt.Println("failed to segment lan ", err)
 		return
@@ -89,13 +89,13 @@ func main() {
 	if !handlers.netfilterIP.IP.Equal(info.HostIP4.IP) {
 		fmt.Printf("Changing host IP to %s - disable with -nodhcpip \n", handlers.netfilterIP)
 
-		if err := packet.LinuxConfigureInterface(*nic, &net.IPNet{IP: handlers.netfilterIP.IP, Mask: info.RouterIP4.Mask}, nil); err != nil {
+		if err := engine.LinuxConfigureInterface(*nic, &net.IPNet{IP: handlers.netfilterIP.IP, Mask: info.RouterIP4.Mask}, nil); err != nil {
 			fmt.Println("failed to change host IP ", err)
 		}
 	}
 
 	// setup packet handler
-	config := packet.Config{
+	config := engine.Config{
 		ProbeInterval:           time.Minute * 1,
 		FullNetworkScanInterval: time.Minute * 20,
 		PurgeDeadline:           time.Minute * 10}
