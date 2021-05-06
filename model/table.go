@@ -27,9 +27,6 @@ type Host struct {
 	Online    bool      // keep host online / offline state
 	HuntStage HuntStage // keep host overall huntStage
 	LastSeen  time.Time // keep last packet time
-	// icmp4Store ICMP4Store   // ICMP4 private store
-	// icmp6Store ICMP6Store   // ICMP6 private store
-	// dhcp4Store Result       // DHCP4 private store
 	DHCP4Name string
 	Row       sync.RWMutex // Row level mutex
 }
@@ -74,35 +71,6 @@ type Result struct {
 func (e Result) String() string {
 	return fmt.Sprintf("dhcp4stage=%s name=%v ipoffer=%v", e.HuntStage, e.Name, e.Addr)
 }
-
-// ARPStore keeps arp specific settings
-type ARPStore struct {
-	HuntStage HuntStage // ARP hunt stage
-}
-
-// ICMP4Store keeps icmp4 specific settings
-type ICMP4Store struct {
-	HuntStage HuntStage // ARP hunt stage
-}
-type ICMP6Store struct {
-	HuntStage HuntStage // ARP hunt stage
-	Router    bool      // ICMP6 specific
-}
-
-func (e ICMP6Store) String() string {
-	return fmt.Sprintf("icmp6stage=%s router=%v", e.HuntStage, e.Router)
-}
-
-/**
-func (host *Host) SetICMP6StoreNoLock(store ICMP6Store) {
-	host.icmp6Store.Router = store.Router
-	host.icmp6Store.HuntStage = store.HuntStage
-}
-
-func (host *Host) GetICMP6StoreNoLock() (store ICMP6Store) {
-	return host.icmp6Store
-}
-***/
 
 // newHostTable returns a HostTable Session
 func NewHostTable() HostTable {

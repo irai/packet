@@ -93,7 +93,6 @@ func TestHandler_findOrCreateHostTestCopyIPMAC(t *testing.T) {
 
 func Benchmark_findOrCreateHost(b *testing.B) {
 	engine := setupTestHandler()
-	// defer engine.Close()
 
 	// March 2021 - running benchmark on WSL 2 - 64 hosts
 	// Benchmark_findOrCreateHost-8   	 7318504	       145 ns/op	       0 B/op	       0 allocs/op
