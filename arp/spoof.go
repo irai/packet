@@ -137,9 +137,9 @@ func (h *Handler) forceSpoof(addr model.Addr) error {
 	return nil
 }
 
-// DONUSEforceAnnouncement send a ARP packets to tell the network we are using the IP.
+// doNotUseforceAnnouncement send a ARP packets to tell the network we are using the IP.
 // NOT used anymore
-func (h *Handler) DONUSEforceAnnouncement(dstEther net.HardwareAddr, mac net.HardwareAddr, ip net.IP) error {
+func (h *Handler) doNotUseforceAnnouncement(dstEther net.HardwareAddr, mac net.HardwareAddr, ip net.IP) error {
 	err := h.announce(dstEther, mac, ip, EthernetBroadcast, 4) // many repeats to force client to reaquire IP
 	if err != nil {
 		log.Printf("arp error send announcement packet mac=%s ip=%s: %s", mac, ip, err)

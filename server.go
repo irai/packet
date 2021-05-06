@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/irai/packet/arp"
+	"github.com/irai/packet/dhcp4"
 	"github.com/irai/packet/model"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/bpf"
@@ -47,8 +48,8 @@ type Handler struct {
 	HandlerIP6   model.PacketProcessor
 	HandlerICMP4 model.PacketProcessor
 	HandlerICMP6 model.PacketProcessor
-	HandlerDHCP4 model.PacketProcessor
-	HandlerARP   model.PacketProcessor
+	DHCP4Handler dhcp4.DHCP4Handler
+	ARPHandler   arp.ARPHandler
 	// callback                []func(Notification) error
 	FullNetworkScanInterval time.Duration // Set it to -1 if no scan required
 	ProbeInterval           time.Duration // how often to probe if IP is online
@@ -112,13 +113,13 @@ func (config Config) NewEngine(nic string) (*Handler, error) {
 	}
 
 	// no plugins to start
-	h.HandlerARP = model.PacketNOOP{}
+	h.ARPHandler = model.PacketNOOP{}
 	h.HandlerIP4 = model.PacketNOOP{}
 	h.HandlerIP6 = model.PacketNOOP{}
-	h.HandlerARP = model.PacketNOOP{}
+	h.ARPHandler = model.PacketNOOP{}
 	h.HandlerICMP4 = model.PacketNOOP{}
 	h.HandlerICMP6 = model.PacketNOOP{}
-	h.HandlerDHCP4 = model.PacketNOOP{}
+	h.DHCP4Handler = model.PacketNOOP{}
 
 	// create the host entry manually because we don't process host packets
 	host, _ := h.session.FindOrCreateHost(h.session.NICInfo.HostMAC, h.session.NICInfo.HostIP4.IP)
@@ -153,12 +154,12 @@ func (h *Handler) Close() error {
 	return nil
 }
 
-func (h *Handler) AttachARP(p *arp.Handler) {
-	h.HandlerARP = p
+func (h *Handler) AttachARP(p arp.ARPHandler) {
+	h.ARPHandler = p
 }
 
 func (h *Handler) DetachARP() {
-	h.HandlerARP = model.PacketNOOP{}
+	h.ARPHandler = model.PacketNOOP{}
 }
 
 func (h *Handler) AttachICMP4(p model.PacketProcessor) {
@@ -175,10 +176,10 @@ func (h *Handler) DetachICMP6() {
 	h.HandlerICMP6 = model.PacketNOOP{}
 }
 func (h *Handler) AttachDHCP4(p model.PacketProcessor) {
-	h.HandlerDHCP4 = p
+	h.DHCP4Handler = p
 }
 func (h *Handler) DetachDHCP4() {
-	h.HandlerDHCP4 = model.PacketNOOP{}
+	h.DHCP4Handler = model.PacketNOOP{}
 }
 
 func (h *Handler) setupConn() (conn net.PacketConn, err error) {
@@ -262,10 +263,10 @@ func (h *Handler) startPlugins() error {
 	if err := h.HandlerICMP6.Start(); err != nil {
 		fmt.Println("error: in ICMP6 start:", err)
 	}
-	if err := h.HandlerARP.Start(); err != nil {
+	if err := h.ARPHandler.Start(); err != nil {
 		fmt.Println("error: in ARP start:", err)
 	}
-	if err := h.HandlerDHCP4.Start(); err != nil {
+	if err := h.DHCP4Handler.Start(); err != nil {
 		fmt.Println("error: in DHCP4 start:", err)
 	}
 	return nil
@@ -284,10 +285,10 @@ func (h *Handler) stopPlugins() error {
 	if err := h.HandlerICMP6.Stop(); err != nil {
 		fmt.Println("error: in ICMP6 stop:", err)
 	}
-	if err := h.HandlerARP.Stop(); err != nil {
+	if err := h.ARPHandler.Stop(); err != nil {
 		fmt.Println("error: in ARP stop:", err)
 	}
-	if err := h.HandlerDHCP4.Stop(); err != nil {
+	if err := h.DHCP4Handler.Stop(); err != nil {
 		fmt.Println("error: in DHCP4 stop:", err)
 	}
 	return nil
@@ -312,10 +313,10 @@ func (h *Handler) minuteChecker(now time.Time) {
 	}
 
 	// Handlers
-	h.HandlerARP.MinuteTicker(now)
+	h.ARPHandler.MinuteTicker(now)
 	h.HandlerICMP4.MinuteTicker(now)
 	h.HandlerICMP6.MinuteTicker(now)
-	h.HandlerDHCP4.MinuteTicker(now)
+	h.DHCP4Handler.MinuteTicker(now)
 
 	// internal checks
 	h.lockAndMonitorRoute(now)
@@ -448,7 +449,7 @@ func (h *Handler) lockAndSetOnline(host *model.Host, notify bool) {
 			if notification.Addr.IP.To4() != nil {
 				// In IPv4 dhcp dictates if host is redirected
 				// start hunt if not redirected
-				stage, err := h.HandlerDHCP4.CheckAddr(addr)
+				stage, err := h.DHCP4Handler.CheckAddr(addr)
 				if err != nil {
 					fmt.Printf("packet: failed to get dhcp hunt status %s error=%s\n", addr, err)
 				}
@@ -657,7 +658,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 				// DHCP4 packet?
 				if udp.DstPort() == model.DHCP4ServerPort || udp.DstPort() == model.DHCP4ClientPort {
-					if host, result, err = h.HandlerDHCP4.ProcessPacket(host, ether, udp.Payload()); err != nil {
+					if host, result, err = h.DHCP4Handler.ProcessPacket(host, ether, udp.Payload()); err != nil {
 						fmt.Printf("packet: error processing dhcp4: %s\n", err)
 					}
 					if result.Update {
@@ -674,7 +675,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			}
 
 		case syscall.ETH_P_ARP: // skip ARP - 0x0806
-			if host, result, err = h.HandlerARP.ProcessPacket(host, ether, ether.Payload()); err != nil {
+			if host, result, err = h.ARPHandler.ProcessPacket(host, ether, ether.Payload()); err != nil {
 				fmt.Printf("packet: error processing arp: %s\n", err)
 			}
 			if result.Update {

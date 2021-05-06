@@ -9,7 +9,6 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/irai/packet"
 	"github.com/irai/packet/arp"
 	"github.com/irai/packet/model"
 )
@@ -17,13 +16,14 @@ import (
 func Test_requestSimple(t *testing.T) {
 
 	log.SetLevel(log.DebugLevel)
-	packet.DebugIP4 = false
-	packet.Debug = true
+	model.DebugIP4 = false
+	model.Debug = true
 	Debug = true
 	os.Remove(testDHCPFilename)
 	tc := setupTestHandler()
 	defer tc.Close()
 
+	/***
 	notificationCount := 0
 	go func() {
 		for {
@@ -38,6 +38,7 @@ func Test_requestSimple(t *testing.T) {
 			}
 		}
 	}()
+	***/
 
 	tests := []struct {
 		name           string
@@ -75,16 +76,18 @@ func Test_requestSimple(t *testing.T) {
 		})
 	}
 
+	/**
 	t.Run("notification count", func(t *testing.T) {
 		if notificationCount != 4 {
 			t.Errorf("Invalid notification count want=%d got=%d", 4, notificationCount)
 		}
 	})
+	**/
 }
 
 func Test_requestExhaust(t *testing.T) {
 
-	packet.Debug = true
+	model.Debug = true
 	Debug = true
 	os.Remove(testDHCPFilename)
 	tc := setupTestHandler()
@@ -94,6 +97,7 @@ func Test_requestExhaust(t *testing.T) {
 	//       test code is sending incorrect arp notification for both host and router
 	exhaustAllIPs(t, tc, mac1)
 
+	/***
 	// read all 255 notififications after
 	notificationCount := 0
 	go func() {
@@ -109,12 +113,15 @@ func Test_requestExhaust(t *testing.T) {
 			}
 		}
 	}()
+	***/
 	time.Sleep(time.Second * 3) // WARNING: it takes about 2 seconds to read all 254 notifications
+	/**8
 	t.Run("notification count", func(t *testing.T) {
 		if notificationCount != 255 { // exclude notification for router && host (test error)
 			t.Errorf("Invalid notification count want=%d got=%d", 255, notificationCount)
 		}
 	})
+	****/
 
 	// send one last discover
 	tc.IPOffer = nil

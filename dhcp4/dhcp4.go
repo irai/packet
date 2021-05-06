@@ -52,7 +52,11 @@ type Config struct {
 	ClientConn net.PacketConn
 }
 
-var _ model.PacketProcessor = &Handler{}
+type DHCP4Handler interface {
+	model.PacketProcessor
+}
+
+var _ DHCP4Handler = &Handler{}
 
 // Start implements PacketProcessor interface
 func (h *Handler) Start() error {

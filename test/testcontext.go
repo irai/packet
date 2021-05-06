@@ -58,7 +58,6 @@ type TestContext struct {
 	clientInConn  net.PacketConn
 	clientOutConn net.PacketConn
 	Engine        *packet.Handler
-	ARPHandler    *arp.Handler
 	DHCP4Handler  *dhcp4.Handler
 	dhcp4XID      uint16
 	wg            sync.WaitGroup
@@ -202,10 +201,11 @@ func NewTestContext() *TestContext {
 		fmt.Println("nicinfo: ", tc.Engine.Session().NICInfo)
 	}
 
-	tc.ARPHandler, err = arp.New(tc.Engine.Session())
+	tc.Engine.ARPHandler, err = arp.New(tc.Engine.Session())
 	if err != nil {
 		panic(err)
 	}
+	tc.Engine.AttachARP(tc.Engine.ARPHandler)
 
 	// Default dhcp engine
 	netfilterIP, err := packet.SegmentLAN("eth0",
@@ -219,6 +219,7 @@ func NewTestContext() *TestContext {
 		panic("cannot create handler" + err.Error())
 	}
 	tc.DHCP4Handler.SetMode(dhcp4.ModeSecondaryServerNice)
+	tc.Engine.AttachDHCP4(tc.DHCP4Handler)
 
 	go func() {
 		if err := tc.Engine.ListenAndServe(tc.ctx); err != nil {

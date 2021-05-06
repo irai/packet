@@ -7,13 +7,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/irai/packet"
 	"github.com/irai/packet/arp"
 	"github.com/irai/packet/model"
 )
 
 func Test_declineSimple(t *testing.T) {
-	packet.DebugIP4 = false
+	model.DebugIP4 = false
 	Debug = false
 	os.Remove(testDHCPFilename)
 	tc := setupTestHandler()

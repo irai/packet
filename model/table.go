@@ -185,6 +185,14 @@ func (h *Session) MustFindIP(ip net.IP) *Host {
 	panic(fmt.Sprintf("MustFindIP not found ip=%s", ip))
 }
 
+func (h *Session) CaptureNoLock(mac net.HardwareAddr) *MACEntry {
+	macEntry := h.MACTable.FindOrCreateNoLock(mac)
+	if !macEntry.Captured {
+		macEntry.Captured = true
+	}
+	return macEntry
+}
+
 // IsCaptured return true is mac is in capture mode
 func (h *Session) IsCaptured(mac net.HardwareAddr) bool {
 	h.mutex.RLock()

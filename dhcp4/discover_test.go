@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/irai/packet"
 	"github.com/irai/packet/model"
 )
 
@@ -74,7 +73,7 @@ func TestDHCPHandler_exhaust(t *testing.T) {
 	options := []Option{}
 	oDNS := Option{Code: OptionDomainNameServer, Value: []byte{}}
 
-	packet.DebugIP4 = false
+	model.DebugIP4 = false
 	Debug = false
 	os.Remove(testDHCPFilename)
 	tc := setupTestHandler()

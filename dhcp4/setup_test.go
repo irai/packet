@@ -53,7 +53,7 @@ type testContext struct {
 	clientInConn  net.PacketConn
 	clientOutConn net.PacketConn
 	h             *Handler
-	engine        *packet.Handler
+	session       *model.Session
 	wg            sync.WaitGroup
 	ctx           context.Context
 	cancel        context.CancelFunc
@@ -131,13 +131,13 @@ func setupTestHandler() *testContext {
 	}
 
 	// override handler with conn and nicInfo
-	config := packet.Config{Conn: tc.inConn, NICInfo: &nicInfo, ProbeInterval: time.Millisecond * 500, OfflineDeadline: time.Millisecond * 500, PurgeDeadline: time.Second * 2}
-	tc.engine, err = config.NewEngine("eth0")
+	// config := packet.Config{Conn: tc.inConn, NICInfo: &nicInfo, ProbeInterval: time.Millisecond * 500, OfflineDeadline: time.Millisecond * 500, PurgeDeadline: time.Second * 2}
+	tc.session = model.NewEmptySession()
 	if err != nil {
 		panic(err)
 	}
 	if Debug {
-		fmt.Println("nicinfo: ", tc.engine.Session().NICInfo)
+		fmt.Println("nicinfo: ", tc.session.NICInfo)
 	}
 
 	// Default dhcp engine
@@ -147,17 +147,19 @@ func setupTestHandler() *testContext {
 	if err != nil {
 		panic(err)
 	}
-	tc.h, err = Config{ClientConn: tc.clientInConn}.Attach(tc.engine.Session(), netfilterIP, dnsIP4, testDHCPFilename)
+	tc.h, err = Config{ClientConn: tc.clientInConn}.Attach(tc.session, netfilterIP, dnsIP4, testDHCPFilename)
 	if err != nil {
 		panic("cannot create handler: " + err.Error())
 	}
 	tc.h.mode = ModeSecondaryServerNice
 
+	/***
 	go func() {
 		if err := tc.engine.ListenAndServe(tc.ctx); err != nil {
 			panic(err)
 		}
 	}()
+	***/
 
 	time.Sleep(time.Millisecond * 10) // time for all goroutine to start
 	return &tc

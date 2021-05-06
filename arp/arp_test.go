@@ -3,7 +3,6 @@ package arp
 import (
 	"context"
 	"fmt"
-	"log"
 	"net"
 	"sync"
 	"syscall"
@@ -41,13 +40,14 @@ type notificationCounter struct {
 }
 
 type testContext struct {
-	inConn  net.PacketConn
-	outConn net.PacketConn
-	arp     *Handler
-	session *model.Session
-	wg      sync.WaitGroup
-	ctx     context.Context
-	cancel  context.CancelFunc
+	inConn        net.PacketConn
+	outConn       net.PacketConn
+	arp           *Handler
+	session       *model.Session
+	wg            sync.WaitGroup
+	ctx           context.Context
+	cancel        context.CancelFunc
+	countResponse int
 }
 
 func setupTestHandler(t *testing.T) *testContext {
@@ -59,7 +59,8 @@ func setupTestHandler(t *testing.T) *testContext {
 	tc.session = model.NewEmptySession()
 
 	tc.inConn, tc.outConn = model.TestNewBufferedConn()
-	go model.TestReadAndDiscardLoop(tc.ctx, tc.outConn) // MUST read the out conn to avoid blocking the sender
+	go readResponse(tc.ctx, &tc) // MUST read the out conn to avoid blocking the sender
+	// go model.TestReadAndDiscardLoop(tc.ctx, tc.inConn) // MUST read the in conn to avoid blocking the sender
 
 	tc.session.Conn = tc.inConn
 	tc.session.NICInfo = &model.NICInfo{
@@ -68,16 +69,6 @@ func setupTestHandler(t *testing.T) *testContext {
 		RouterIP4: net.IPNet{IP: routerIP, Mask: net.IPv4Mask(255, 255, 255, 0)},
 		HomeLAN4:  homeLAN,
 	}
-
-	// override handler with conn and nicInfo
-	// config := packet.Config{Conn: tc.inConn, NICInfo: &nicInfo, ProbeInterval: time.Millisecond * 500, OfflineDeadline: time.Millisecond * 500, PurgeDeadline: time.Second * 2}
-	// tc.session, err = config.NewEngine("eth0")
-	// if err != nil {
-	// panic(err)
-	// }
-	// if Debug {
-	// fmt.Println("nicinfo: ", tc.session.Session().NICInfo)
-	// }
 
 	if tc.arp, err = New(tc.session); err != nil {
 		t.Fatal(err)
@@ -96,34 +87,75 @@ func (tc *testContext) Close() {
 	tc.wg.Wait()
 }
 
-func Test_Handler_CaptureEnterOffline(t *testing.T) {
+func readResponse(ctx context.Context, tc *testContext) error {
+	buffer := make([]byte, 2000)
+	for {
+		buf := buffer[:]
+		n, _, err := tc.outConn.ReadFrom(buf)
+		if err != nil {
+			if ctx.Err() != context.Canceled {
+				panic(err)
+			}
+		}
+		if ctx.Err() == context.Canceled {
+			return nil
+		}
+
+		buf = buf[:n]
+		ether := model.Ether(buf)
+		if !ether.IsValid() {
+			s := fmt.Sprintf("error ether client packet %s", ether)
+			panic(s)
+		}
+
+		// used for debuging - disable to avoid verbose logging
+		if true {
+			fmt.Printf("test  : got test response=%s\n", ether)
+		}
+
+		if ether.EtherType() != syscall.ETH_P_ARP {
+			panic("invalid ether type")
+		}
+
+		arpFrame := ARP(ether.Payload())
+		if !arpFrame.IsValid() {
+			panic("invalid arp packet")
+		}
+		tc.countResponse++
+
+		// tmp := make([]byte, len(buf))
+		// copy(tmp, buf)
+
+	}
+}
+
+func Test_Handler_BasicTest(t *testing.T) {
 	Debug = true
 	model.Debug = true
 	tc := setupTestHandler(t)
 	defer tc.Close()
 
 	tests := []struct {
-		name    string
-		ether   model.Ether
-		arp     ARP
-		wantErr error
-		wantLen int
+		name       string
+		ether      model.Ether
+		arp        ARP
+		wantErr    error
+		wantLen    int
+		wantResult bool
 	}{
 		{name: "replymac2",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac2, routerMAC),
 			arp:     newPacket(OperationReply, mac2, ip2, routerMAC, routerIP),
-			wantErr: nil, wantLen: 3},
+			wantErr: nil, wantLen: 1, wantResult: true},
 		{name: "replymac3",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac3, routerMAC),
 			arp:     newPacket(OperationReply, mac3, ip3, routerMAC, routerIP),
-			wantErr: nil, wantLen: 4},
+			wantErr: nil, wantLen: 2, wantResult: true},
 		{name: "replymac4",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac4, routerMAC),
 			arp:     newPacket(OperationReply, mac4, ip4, routerMAC, routerIP),
-			wantErr: nil, wantLen: 5},
+			wantErr: nil, wantLen: 3, wantResult: true},
 	}
-
-	count := 0
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -131,10 +163,14 @@ func Test_Handler_CaptureEnterOffline(t *testing.T) {
 			if err != nil {
 				panic(err)
 			}
-			if _, err := tc.outConn.WriteTo(ether, nil); err != tt.wantErr {
+
+			_, result, err := tc.arp.ProcessPacket(nil, ether, ether.Payload())
+			if err != tt.wantErr {
 				t.Errorf("Test_Requests:%s error = %v, wantErr %v", tt.name, err, tt.wantErr)
 			}
-			time.Sleep(time.Millisecond * 10)
+			if result.Update {
+				tc.session.FindOrCreateHost(result.Addr.MAC, result.Addr.IP)
+			}
 
 			if len(tc.arp.session.GetHosts()) != tt.wantLen {
 				t.Errorf("Test_Requests:%s table len = %v, wantLen %v", tt.name, len(tc.arp.session.GetHosts()), tt.wantLen)
@@ -143,17 +179,4 @@ func Test_Handler_CaptureEnterOffline(t *testing.T) {
 		})
 	}
 
-	t.Run("cleanup", func(t *testing.T) {
-		tc.session.Capture(mac2)
-
-		// wait until offline
-		time.Sleep(tc.session.OfflineDeadline * 2)
-
-		// arp request mac2
-		ether, _ := tests[0].ether.AppendPayload(tests[0].arp)
-		tc.outConn.WriteTo(ether, nil)
-		time.Sleep(time.Millisecond * 50)
-
-		log.Printf("notification count=%+v", count)
-	})
 }

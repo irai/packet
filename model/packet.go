@@ -13,7 +13,10 @@ import (
 
 // Global variables
 var (
-	Debug bool
+	Debug    bool
+	DebugIP6 bool
+	DebugIP4 bool
+	DebugUDP bool
 
 	// An IP host group address is mapped to an Ethernet multicast address
 	// by placing the low-order 23-bits of the IP address into the low-order

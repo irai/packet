@@ -43,7 +43,7 @@ func (h *Handler) purge(now time.Time, probeDur time.Duration, offlineDur time.D
 		// Probe if device not seen recently
 		if e.Online && e.LastSeen.Before(probeCutoff) {
 			if ip := e.IP.To4(); ip != nil {
-				h.HandlerARP.CheckAddr(model.Addr{MAC: e.MACEntry.MAC, IP: ip})
+				h.ARPHandler.CheckAddr(model.Addr{MAC: e.MACEntry.MAC, IP: ip})
 			} else {
 				h.HandlerICMP6.CheckAddr(model.Addr{MAC: e.MACEntry.MAC, IP: e.IP})
 			}

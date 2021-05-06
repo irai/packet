@@ -1,45 +1,46 @@
 package arp
 
-/***
-func Test_Spoof_ForceIPChange(t *testing.T) {
-	//Debug = true
-	// log.SetLevel(log.DebugLevel)
+import (
+	"net"
+	"syscall"
+	"testing"
+	"time"
+
+	"github.com/irai/packet/model"
+)
+
+func Test_Probe_Reject(t *testing.T) {
 	tc := setupTestHandler(t)
 	defer tc.Close()
-
-	packet.Debug = true
-
-	e2, _ := tc.arp.virtual.upsert(StateNormal, mac2, ip2)
-	tc.arp.virtual.updateIP(e2, ip3)
-	tc.arp.virtual.updateIP(e2, ip4)
-	tc.arp.startSpoof(e2.MAC)
-
-	tc.arp.Lock()
-	if e := tc.arp.virtual.findByMAC(mac2); e == nil || e.State != StateHunt {
-		t.Fatalf("Test_ForceIPChange entry2 state=%s", e.State)
-	}
-	tc.arp.Unlock()
+	Debug = true
+	model.Debug = true
 
 	tests := []struct {
-		name    string
-		ether   model.Ether
-		arp     ARP
-		wantErr error
-		wantLen int
-		wantIPs int
+		name              string
+		ether             model.Ether
+		arp               ARP
+		hunt              bool
+		wantErr           error
+		wantLen           int
+		wantIPs           int
+		wantCountResponse int
 	}{
-		{name: "requestMAC2-IP4",
+		{name: "replyMAC2",
+			ether:   newEtherPacket(syscall.ETH_P_ARP, mac2, routerMAC),
+			arp:     newPacket(OperationReply, mac2, ip2, routerMAC, routerIP),
+			wantErr: nil, wantLen: 1, wantIPs: 1, wantCountResponse: 0, hunt: true},
+		{name: "replyMAC3",
+			ether:   newEtherPacket(syscall.ETH_P_ARP, mac3, hostMAC),
+			arp:     newPacket(OperationReply, mac3, ip3, hostMAC, hostIP),
+			wantErr: nil, wantLen: 2, wantIPs: 2, wantCountResponse: 2, hunt: true}, // MAC2 will enter capture and send two responses
+		{name: "probeMAC2", // probe does not add host but will send a probe reject if IP is not our DHCP IP
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac2, EthernetBroadcast),
-			arp:     newPacket(OperationRequest, mac2, ip4, zeroMAC, ip4),
-			wantErr: nil, wantLen: 4, wantIPs: 3},
-		{name: "requestMAC2-IP4-2",
-			ether:   newEtherPacket(syscall.ETH_P_ARP, mac2, EthernetBroadcast),
-			arp:     newPacket(OperationRequest, mac2, ip4, zeroMAC, ip4),
-			wantErr: nil, wantLen: 4, wantIPs: 3},
-		{name: "requestMAC2-iP5",
-			ether:   newEtherPacket(syscall.ETH_P_ARP, mac2, EthernetBroadcast),
-			arp:     newPacket(OperationRequest, mac2, ip5, zeroMAC, ip5),
-			wantErr: nil, wantLen: 4, wantIPs: 4},
+			arp:     newPacket(OperationRequest, mac2, net.IPv4zero.To4(), zeroMAC, ip2),
+			wantErr: nil, wantLen: 2, wantIPs: 2, wantCountResponse: 5, hunt: false},
+		{name: "probeMAC3", // probe does not add host but will send a probe reject if IP is not our DHCP IP
+			ether:   newEtherPacket(syscall.ETH_P_ARP, mac3, EthernetBroadcast),
+			arp:     newPacket(OperationRequest, mac3, net.IPv4zero.To4(), zeroMAC, ip3),
+			wantErr: nil, wantLen: 2, wantIPs: 2, wantCountResponse: 6, hunt: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -47,45 +48,33 @@ func Test_Spoof_ForceIPChange(t *testing.T) {
 			if err != nil {
 				panic(err)
 			}
-			if _, err := tc.outConn.WriteTo(ether, nil); err != tt.wantErr {
-				t.Errorf("TestHandler_ForceIPChange:%s error = %v, wantErr %v", tt.name, err, tt.wantErr)
+			_, result, err := tc.arp.ProcessPacket(nil, ether, ether.Payload())
+			if err != tt.wantErr {
+				t.Errorf("Test_Requests:%s error = %v, wantErr %v", tt.name, err, tt.wantErr)
 			}
-			time.Sleep(time.Millisecond * 10)
-
-			tc.arp.Lock()
-			defer tc.arp.Unlock()
-
-			if len(tc.arp.virtual.macTable) != tt.wantLen {
-				tc.arp.PrintTable()
-				t.Errorf("TestHandler_ForceIPChange:%s table len = %v, wantLen %v", tt.name, len(tc.arp.virtual.macTable), tt.wantLen)
+			var host *model.Host
+			if result.Update {
+				host, _ = tc.session.FindOrCreateHost(result.Addr.MAC, result.Addr.IP)
 			}
-			if tt.wantIPs != 0 {
-				e := tc.arp.virtual.findByMAC(tt.arp.SrcMAC())
-				if e == nil || len(e.IPs()) != tt.wantIPs {
-					t.Errorf("TestHandler_ForceIPChange:%s table IP entry=%+v, wantLen %v", tt.name, e, tt.wantLen)
-				}
+			time.Sleep(time.Millisecond * 3)
+
+			tc.arp.arpMutex.Lock() // lock to test no dead locks
+			if len(tc.session.HostTable.Table) != tt.wantLen {
+				t.Fatalf("Test_Requests:%s table len = %v, wantLen %v", tt.name, len(tc.session.HostTable.Table), tt.wantLen)
+			}
+			tc.arp.arpMutex.Unlock()
+
+			if len(tc.session.HostTable.Table) != tt.wantLen {
+				t.Fatalf("Test_Requests:%s table len = %v, wantLen %v", tt.name, len(tc.session.HostTable.Table), tt.wantLen)
+			}
+
+			if tc.countResponse != tt.wantCountResponse {
+				t.Errorf("Test_Requests:%s invali response count=%v, want=%v", tt.name, tc.countResponse, tt.wantCountResponse)
+			}
+			if tt.hunt {
+				tc.arp.StartHunt(model.Addr{MAC: host.MACEntry.MAC, IP: host.MACEntry.IP4})
 			}
 		})
 	}
 
-	tc.arp.Lock()
-	defer tc.arp.Unlock()
-
-	if entry := tc.arp.virtual.findVirtualIP(ip2); entry == nil {
-		t.Errorf("TestHandler_ForceIPChange invalid virtual ip2")
-	}
-	if entry := tc.arp.virtual.findVirtualIP(ip3); entry == nil {
-		t.Errorf("TestHandler_ForceIPChange invalid virtual ip3")
-	}
-	if entry := tc.arp.virtual.findVirtualIP(ip4); entry == nil {
-		t.Errorf("TestHandler_ForceIPChange invalid virtual ip4")
-	}
-	if entry := tc.arp.virtual.findVirtualIP(ip5); entry != nil {
-		t.Errorf("TestHandler_ForceIPChange invalid virtual ip5")
-	}
-	if entry := tc.arp.virtual.findByIP(ip5); entry == nil || entry.State != StateNormal || len(entry.IPs()) != 4 {
-		tc.arp.PrintTable()
-		t.Errorf("TestHandler_ForceIPChange invalid virtual ip52 entry=%+v", entry)
-	}
 }
-***/

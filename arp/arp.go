@@ -12,8 +12,12 @@ import (
 	"github.com/irai/packet/model"
 )
 
+type ARPHandler interface {
+	model.PacketProcessor
+}
+
 // must implement interface
-var _ model.PacketProcessor = &Handler{}
+var _ ARPHandler = &Handler{}
 
 // Handler stores instance variables
 type Handler struct {
