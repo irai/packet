@@ -15,6 +15,13 @@ type Session struct {
 	mutex     sync.RWMutex
 }
 
+func NewEmptySession() *Session {
+	session := new(Session)
+	session.MACTable = NewMACTable()
+	session.HostTable = NewHostTable()
+	return session
+}
+
 // PacketProcessor defines the interface for packet processing modules
 type PacketProcessor interface {
 	Start() error

@@ -60,8 +60,8 @@ func setupTestHandler() *testContext {
 	tc := testContext{}
 	tc.ctx, tc.cancel = context.WithCancel(context.Background())
 
-	tc.inConn, tc.outConn = packet.TestNewBufferedConn()
-	go packet.TestReadAndDiscardLoop(tc.ctx, tc.outConn) // MUST read the out conn to avoid blocking the sender
+	tc.inConn, tc.outConn = model.TestNewBufferedConn()
+	go model.TestReadAndDiscardLoop(tc.ctx, tc.outConn) // MUST read the out conn to avoid blocking the sender
 
 	nicInfo := model.NICInfo{
 		HostMAC:   hostMAC,

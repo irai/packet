@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/irai/packet"
 	"github.com/irai/packet/model"
 )
 
@@ -45,7 +44,7 @@ type testContext struct {
 	inConn  net.PacketConn
 	outConn net.PacketConn
 	arp     *Handler
-	packet  *packet.Handler
+	session *model.Session
 	wg      sync.WaitGroup
 	ctx     context.Context
 	cancel  context.CancelFunc
@@ -57,11 +56,13 @@ func setupTestHandler(t *testing.T) *testContext {
 
 	tc := testContext{}
 	tc.ctx, tc.cancel = context.WithCancel(context.Background())
+	tc.session = model.NewEmptySession()
 
-	tc.inConn, tc.outConn = packet.TestNewBufferedConn()
-	go packet.TestReadAndDiscardLoop(tc.ctx, tc.outConn) // MUST read the out conn to avoid blocking the sender
+	tc.inConn, tc.outConn = model.TestNewBufferedConn()
+	go model.TestReadAndDiscardLoop(tc.ctx, tc.outConn) // MUST read the out conn to avoid blocking the sender
 
-	nicInfo := model.NICInfo{
+	tc.session.Conn = tc.inConn
+	tc.session.NICInfo = &model.NICInfo{
 		HostMAC:   hostMAC,
 		HostIP4:   net.IPNet{IP: hostIP, Mask: net.IPv4Mask(255, 255, 255, 0)},
 		RouterIP4: net.IPNet{IP: routerIP, Mask: net.IPv4Mask(255, 255, 255, 0)},
@@ -69,23 +70,18 @@ func setupTestHandler(t *testing.T) *testContext {
 	}
 
 	// override handler with conn and nicInfo
-	config := packet.Config{Conn: tc.inConn, NICInfo: &nicInfo, ProbeInterval: time.Millisecond * 500, OfflineDeadline: time.Millisecond * 500, PurgeDeadline: time.Second * 2}
-	tc.packet, err = config.NewEngine("eth0")
-	if err != nil {
-		panic(err)
-	}
-	if Debug {
-		fmt.Println("nicinfo: ", tc.packet.Session().NICInfo)
-	}
+	// config := packet.Config{Conn: tc.inConn, NICInfo: &nicInfo, ProbeInterval: time.Millisecond * 500, OfflineDeadline: time.Millisecond * 500, PurgeDeadline: time.Second * 2}
+	// tc.session, err = config.NewEngine("eth0")
+	// if err != nil {
+	// panic(err)
+	// }
+	// if Debug {
+	// fmt.Println("nicinfo: ", tc.session.Session().NICInfo)
+	// }
 
-	tc.arp, err = New(tc.packet.Session())
-	tc.packet.HandlerARP = tc.arp
-
-	go func() {
-		if err := tc.packet.ListenAndServe(tc.ctx); err != nil {
-			panic(err)
-		}
-	}()
+	if tc.arp, err = New(tc.session); err != nil {
+		t.Fatal(err)
+	}
 
 	time.Sleep(time.Millisecond * 10) // time for all goroutine to start
 	return &tc
@@ -102,7 +98,7 @@ func (tc *testContext) Close() {
 
 func Test_Handler_CaptureEnterOffline(t *testing.T) {
 	Debug = true
-	packet.Debug = true
+	model.Debug = true
 	tc := setupTestHandler(t)
 	defer tc.Close()
 
@@ -128,20 +124,6 @@ func Test_Handler_CaptureEnterOffline(t *testing.T) {
 	}
 
 	count := 0
-	go func() {
-		for {
-			select {
-			case n := <-tc.packet.GetNotificationChannel():
-				if n.Online {
-					count++
-				} else {
-					count--
-				}
-			case <-tc.ctx.Done():
-				return
-			}
-		}
-	}()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -162,10 +144,10 @@ func Test_Handler_CaptureEnterOffline(t *testing.T) {
 	}
 
 	t.Run("cleanup", func(t *testing.T) {
-		tc.packet.Capture(mac2)
+		tc.session.Capture(mac2)
 
 		// wait until offline
-		time.Sleep(tc.packet.OfflineDeadline * 2)
+		time.Sleep(tc.session.OfflineDeadline * 2)
 
 		// arp request mac2
 		ether, _ := tests[0].ether.AppendPayload(tests[0].arp)

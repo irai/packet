@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/irai/packet/arp"
 	"github.com/irai/packet/model"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/bpf"
@@ -74,9 +75,7 @@ func (config Config) NewEngine(nic string) (*Handler, error) {
 	h := &Handler{closeChan: make(chan bool)}
 
 	// session holds shared data for all plugins
-	h.session = new(model.Session)
-	h.session.MACTable = model.NewMACTable()
-	h.session.HostTable = model.NewHostTable()
+	h.session = model.NewEmptySession()
 
 	h.session.NICInfo = config.NICInfo
 	if h.session.NICInfo == nil {
@@ -154,9 +153,10 @@ func (h *Handler) Close() error {
 	return nil
 }
 
-func (h *Handler) AttachARP(p model.PacketProcessor) {
+func (h *Handler) AttachARP(p *arp.Handler) {
 	h.HandlerARP = p
 }
+
 func (h *Handler) DetachARP() {
 	h.HandlerARP = model.PacketNOOP{}
 }

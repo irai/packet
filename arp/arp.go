@@ -36,10 +36,10 @@ var (
 
 // New creates the ARP handler and attach to the engine
 func New(session *model.Session) (h *Handler, err error) {
-	return Config{ProbeInterval: time.Minute * 5}.newARP(session)
+	return Config{ProbeInterval: time.Minute * 5}.New(session)
 }
 
-func (config Config) newARP(session *model.Session) (h *Handler, err error) {
+func (config Config) New(session *model.Session) (h *Handler, err error) {
 	h = &Handler{session: session, huntList: make(map[string]model.Addr, 6), closeChan: make(chan bool)}
 	// h.table, _ = loadARPProcTable() // load linux proc table
 	if h.session.NICInfo.HostIP4.IP.To4() == nil {

@@ -1,12 +1,10 @@
-package packet
+package model
 
 import (
 	"context"
 	"fmt"
 	"net"
 	"time"
-
-	"github.com/irai/packet/model"
 )
 
 // bufferPacketConn is a net.PacketConn pipe to enable testing
@@ -62,7 +60,7 @@ func TestReadAndDiscardLoop(ctx context.Context, conn net.PacketConn) error {
 		}
 
 		buf = buf[:n]
-		ether := model.Ether(buf)
+		ether := Ether(buf)
 		if !ether.IsValid() {
 			s := fmt.Sprintf("error ether client packet %s", ether)
 			panic(s)

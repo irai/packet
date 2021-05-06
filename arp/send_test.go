@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/irai/packet"
 	"github.com/irai/packet/model"
 )
 
@@ -17,7 +16,7 @@ func Test_Handler_ARPRequests(t *testing.T) {
 	tc := setupTestHandler(t)
 	defer tc.Close()
 
-	packet.Debug = true
+	model.Debug = true
 
 	tests := []struct {
 		name    string
@@ -79,9 +78,9 @@ func Test_Handler_ARPRequests(t *testing.T) {
 			tc.arp.arpMutex.Lock()
 			defer tc.arp.arpMutex.Unlock()
 
-			if len(tc.packet.Session().HostTable.Table) != tt.wantLen {
-				tc.packet.PrintTable()
-				t.Errorf("Test_Requests:%s table len = %v, wantLen %v", tt.name, len(tc.packet.Session().HostTable.Table), tt.wantLen)
+			if len(tc.session.HostTable.Table) != tt.wantLen {
+				tc.session.PrintTable()
+				t.Errorf("Test_Requests:%s table len = %v, wantLen %v", tt.name, len(tc.session.HostTable.Table), tt.wantLen)
 			}
 		})
 	}
@@ -92,7 +91,7 @@ func Test_Handler_ServeReplies(t *testing.T) {
 	// log.SetLevel(log.DebugLevel)
 	tc := setupTestHandler(t)
 	defer tc.Close()
-	packet.Debug = true
+	model.Debug = true
 
 	tests := []struct {
 		name    string
@@ -157,8 +156,8 @@ func Test_Handler_ServeReplies(t *testing.T) {
 			tc.arp.arpMutex.Lock()
 			defer tc.arp.arpMutex.Unlock()
 
-			if len(tc.packet.Session().HostTable.Table) != tt.wantLen {
-				t.Errorf("Test_Requests:%s table len = %v, wantLen %v", tt.name, len(tc.packet.Session().HostTable.Table), tt.wantLen)
+			if len(tc.session.HostTable.Table) != tt.wantLen {
+				t.Errorf("Test_Requests:%s table len = %v, wantLen %v", tt.name, len(tc.session.HostTable.Table), tt.wantLen)
 			}
 		})
 	}

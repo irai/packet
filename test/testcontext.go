@@ -178,11 +178,11 @@ func NewTestContext() *TestContext {
 	tc := TestContext{}
 	tc.ctx, tc.cancel = context.WithCancel(context.Background())
 
-	tc.inConn, tc.outConn = packet.TestNewBufferedConn()
+	tc.inConn, tc.outConn = model.TestNewBufferedConn()
 	go readResponse(tc.ctx, &tc) // MUST read the out conn to avoid blocking the sender
 
-	tc.clientInConn, tc.clientOutConn = packet.TestNewBufferedConn()
-	go packet.TestReadAndDiscardLoop(tc.ctx, tc.clientOutConn) // must read to avoid blocking
+	tc.clientInConn, tc.clientOutConn = model.TestNewBufferedConn()
+	go model.TestReadAndDiscardLoop(tc.ctx, tc.clientOutConn) // must read to avoid blocking
 
 	nicInfo := model.NICInfo{
 		HostMAC:   HostMAC,

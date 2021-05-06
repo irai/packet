@@ -181,7 +181,7 @@ func (h *Session) findOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host,
 	host.LastSeen = now
 	host.HuntStage = StageNormal
 	host.MACEntry.LastSeen = now
-	// host.MACEntry.updateIP(host.IP)
+	host.MACEntry.UpdateIPNoLock(host.IP)
 	h.HostTable.Table[ipNew] = host
 
 	// link host to macEntry
