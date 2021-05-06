@@ -13,7 +13,7 @@ func TestDHCPHandler_handleDiscover(t *testing.T) {
 	options := []Option{}
 	oDNS := Option{Code: OptionDomainNameServer, Value: []byte{}}
 
-	// packet.DebugIP4 = true
+	// model.DebugIP4 = true
 	Debug = true
 	os.Remove(testDHCPFilename)
 	tc := setupTestHandler()

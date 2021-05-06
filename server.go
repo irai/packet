@@ -18,14 +18,6 @@ import (
 	"golang.org/x/net/bpf"
 )
 
-// Debug packets turn on logging if desirable
-var (
-	Debug    bool
-	DebugIP6 bool
-	DebugIP4 bool
-	DebugUDP bool
-)
-
 // Config has a list of configurable parameters that overide package defaults
 type Config struct {
 	// Conn enables the client to override the connection with a another packet conn
@@ -122,11 +114,13 @@ func (config Config) NewEngine(nic string) (*Handler, error) {
 	host, _ := h.session.FindOrCreateHost(h.session.NICInfo.HostMAC, h.session.NICInfo.HostIP4.IP)
 	host.LastSeen = time.Now().Add(time.Hour * 24 * 365) // never expire
 	host.Online = true
+	host.MACEntry.Online = true
 
 	// create the router entry manually and set router flag
 	host, _ = h.session.FindOrCreateHost(h.session.NICInfo.RouterMAC, h.session.NICInfo.RouterIP4.IP)
 	host.MACEntry.IsRouter = true
 	host.Online = true
+	host.MACEntry.Online = true
 
 	return h, nil
 }
@@ -137,7 +131,7 @@ func (h *Handler) Session() *model.Session {
 
 // Close closes the underlying sockets
 func (h *Handler) Close() error {
-	if Debug {
+	if model.Debug {
 		fmt.Println("packet: close() called. closing....")
 	}
 	h.closed = true
@@ -305,7 +299,7 @@ func (h *Handler) minuteLoop() {
 }
 
 func (h *Handler) minuteChecker(now time.Time) {
-	if Debug {
+	if model.Debug {
 		fmt.Printf("packet: running minute checker %v\n", now)
 	}
 
@@ -436,7 +430,7 @@ func (h *Handler) lockAndSetOnline(host *model.Host, notify bool) {
 	addr := model.Addr{IP: host.IP, MAC: host.MACEntry.MAC}
 	notification := Notification{Addr: addr, Online: true, DHCPName: host.DHCP4Name}
 
-	if Debug {
+	if model.Debug {
 		fmt.Printf("packet: IP is online %s\n", host)
 	}
 
@@ -474,7 +468,7 @@ func (h *Handler) lockAndSetOffline(host *model.Host) {
 		host.Row.Unlock()
 		return
 	}
-	if Debug {
+	if model.Debug {
 		fmt.Printf("packet: IP is offline %s\n", host)
 	}
 	host.Online = false
@@ -566,7 +560,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				fmt.Println("packet: error invalid ip4 frame type=", ether.EtherType())
 				continue
 			}
-			if DebugIP4 {
+			if model.DebugIP4 {
 				fmt.Println("ether:", ether)
 				fmt.Println("ip4  :", ip4Frame)
 			}
@@ -585,7 +579,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				fmt.Println("packet: error invalid ip6 frame type=", ether.EtherType())
 				continue
 			}
-			if DebugIP6 {
+			if model.DebugIP6 {
 				fmt.Printf("ether: %s\n", ether)
 				fmt.Printf("ip6  : %s\n", ip6Frame)
 			}
@@ -647,7 +641,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				continue
 			}
 			if ip4Frame != nil {
-				if DebugUDP {
+				if model.DebugUDP {
 					fmt.Println("ether:", ether)
 					fmt.Println("ip4  :", ip4Frame)
 					fmt.Printf("udp  : %s\n", udp)
@@ -663,7 +657,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 					}
 				}
 			} else {
-				if DebugUDP {
+				if model.DebugUDP {
 					fmt.Println("ether:", ether)
 					fmt.Println("ip6  :", ip6Frame)
 					fmt.Printf("udp  : %s\n", udp)

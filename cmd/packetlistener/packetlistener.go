@@ -62,7 +62,7 @@ func main() {
 
 	go pprof()
 
-	packet.Debug = true
+	model.Debug = true
 	log.SetLevel(log.DebugLevel)
 
 	fmt.Printf("packetlistener: Listen and send lan packets\n")
@@ -121,24 +121,28 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to create arp handler nic=%s handler: %s", *nic, err)
 	}
+	handlers.engine.AttachARP(handlers.arp)
 
 	// ICMPv4
 	handlers.icmp4, err = icmp4.Attach(handlers.engine.Session())
 	if err != nil {
 		log.Fatalf("Failed to create icmp nic=%s handler: %s", *nic, err)
 	}
+	handlers.engine.AttachICMP4(handlers.icmp4)
 
 	// ICMPv6
 	handlers.icmp6, err = icmp6.New(handlers.engine.Session())
 	if err != nil {
 		log.Fatalf("Failed to create icmp6 nic=%s handler: %s", *nic, err)
 	}
+	handlers.engine.AttachICMP6(handlers.icmp6)
 
 	// DHCP4
 	handlers.dhcp4, err = dhcp4.New(handlers.engine.Session(), handlers.netfilterIP, dhcp4.CloudFlareDNS1, "./dhcpconfig.yaml")
 	if err != nil {
 		log.Fatalf("Failed to create dhcp4 handler: netfilterIP=%s error=%s", handlers.netfilterIP, err)
 	}
+	handlers.engine.AttachDHCP4(handlers.dhcp4)
 
 	go func() {
 		for {
@@ -418,13 +422,13 @@ func cmd(h *handlers) {
 			p := getString(tokens, 1)
 			switch p {
 			case "engine":
-				packet.Debug = !packet.Debug
+				model.Debug = !model.Debug
 			case "ip4":
-				packet.DebugIP4 = !packet.DebugIP4
+				model.DebugIP4 = !model.DebugIP4
 			case "ip6":
-				packet.DebugIP6 = !packet.DebugIP6
+				model.DebugIP6 = !model.DebugIP6
 			case "udp":
-				packet.DebugUDP = !packet.DebugUDP
+				model.DebugUDP = !model.DebugUDP
 			case "icmp4":
 				icmp4.Debug = !icmp4.Debug
 			case "icmp6":
@@ -436,14 +440,14 @@ func cmd(h *handlers) {
 			default:
 				fmt.Println("invalid package - use 'g icmp4|icmp6|arp|engine|ip4|ip6|dhcp4'")
 			}
-			fmt.Println("   ip4 debug:", packet.DebugIP4)
+			fmt.Println("   ip4 debug:", model.DebugIP4)
 			fmt.Println(" icmp4 debug:", icmp4.Debug)
-			fmt.Println("   ip6 debug:", packet.DebugIP6)
+			fmt.Println("   ip6 debug:", model.DebugIP6)
 			fmt.Println(" icmp6 debug:", icmp6.Debug)
-			fmt.Println("engine debug:", packet.Debug)
+			fmt.Println("engine debug:", model.Debug)
 			fmt.Println("   arp debug:", arp.Debug)
 			fmt.Println(" dhcp4 debug:", dhcp4.Debug)
-			fmt.Println("   udp debug:", packet.DebugUDP)
+			fmt.Println("   udp debug:", model.DebugUDP)
 		case "ping":
 			if ip = getIP(tokens, 1); ip == nil {
 				continue

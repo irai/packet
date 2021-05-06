@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/irai/packet"
 	"github.com/irai/packet/arp"
 	"github.com/irai/packet/dhcp4"
 	"github.com/irai/packet/model"
@@ -18,7 +17,7 @@ func TestHandler_arpcapture(t *testing.T) {
 
 	log.SetLevel(log.DebugLevel)
 	dhcp4.Debug = true
-	packet.Debug = true
+	model.Debug = true
 	arp.Debug = true
 
 	// MAC1

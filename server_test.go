@@ -16,7 +16,7 @@ func setupTestHandler() *Handler {
 func TestHandler_findOrCreateHostDupIP(t *testing.T) {
 	engine := setupTestHandler()
 
-	Debug = true
+	model.Debug = false
 
 	// First create host with two IPs - IP3 and IP2 and set online
 	host1, _ := engine.session.FindOrCreateHost(mac1, ip3)

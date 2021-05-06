@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/irai/packet"
 	"github.com/irai/packet/arp"
 	"github.com/irai/packet/dhcp4"
 	"github.com/irai/packet/model"
@@ -18,7 +17,7 @@ func TestHandler_capture(t *testing.T) {
 
 	log.SetLevel(log.DebugLevel)
 	dhcp4.Debug = false
-	packet.Debug = true
+	model.Debug = true
 	arp.Debug = true
 
 	tests := []TestEvent{}
@@ -52,7 +51,7 @@ func TestHandler_capture(t *testing.T) {
 		})
 
 	}
-	checkOnlineCount(t, tc, 4, 1)
+	checkOnlineCount(t, tc, 5, 0)
 	checkCaptureCount(t, tc, 3, 2)
 }
 
@@ -62,7 +61,7 @@ func TestHandler_captureDHCP(t *testing.T) {
 
 	log.SetLevel(log.DebugLevel)
 	dhcp4.Debug = false
-	packet.Debug = true
+	model.Debug = true
 	arp.Debug = true
 
 	tests := []TestEvent{}
@@ -102,6 +101,6 @@ func TestHandler_captureDHCP(t *testing.T) {
 		})
 
 	}
-	checkOnlineCount(t, tc, 3, 2)
+	checkOnlineCount(t, tc, 5, 0)
 	checkCaptureCount(t, tc, 3, 1)
 }

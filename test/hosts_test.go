@@ -3,7 +3,6 @@ package test
 import (
 	"testing"
 
-	"github.com/irai/packet"
 	"github.com/irai/packet/arp"
 	"github.com/irai/packet/dhcp4"
 	"github.com/irai/packet/model"
@@ -16,7 +15,7 @@ func TestHandler_newHostSimple(t *testing.T) {
 
 	log.SetLevel(log.DebugLevel)
 	dhcp4.Debug = true
-	packet.Debug = true
+	model.Debug = true
 	// arp.Debug = true
 
 	tests := NewHostEvents(model.Addr{MAC: MAC1}, "mac1", 1, 1)
@@ -33,7 +32,7 @@ func TestHandler_newHostMany(t *testing.T) {
 	tc := NewTestContext()
 	defer tc.Close()
 
-	packet.Debug = true
+	model.Debug = true
 	arp.Debug = true
 
 	tests := []TestEvent{}
@@ -56,7 +55,7 @@ func TestHandler_sameHostMany(t *testing.T) {
 	tc := NewTestContext()
 	defer tc.Close()
 
-	packet.Debug = true
+	model.Debug = true
 	arp.Debug = true
 
 	tests := []TestEvent{}
@@ -79,9 +78,9 @@ func TestHandler_existingHost(t *testing.T) {
 	tc := NewTestContext()
 	defer tc.Close()
 
-	packet.Debug = true
+	model.Debug = true
 	arp.Debug = true
-	packet.DebugIP4 = true
+	model.DebugIP4 = true
 
 	// tc.savedIP = ip2.To4()
 	tests := []TestEvent{}
@@ -99,5 +98,5 @@ func TestHandler_existingHost(t *testing.T) {
 		})
 	}
 
-	checkOnlineCount(t, tc, 3, 2)
+	checkOnlineCount(t, tc, 5, 0)
 }

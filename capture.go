@@ -75,7 +75,7 @@ func (h *Handler) lockAndStartHunt(addr model.Addr) (err error) {
 	host.dhcp4Store.model.HuntStage = model.StageHunt
 	host.icmp6Store.model.HuntStage = model.StageHunt
 	**/
-	if Debug {
+	if model.Debug {
 		fmt.Printf("packet: start hunt for %s\n", host)
 	}
 	host.Row.Unlock()
@@ -149,7 +149,7 @@ func (h *Handler) lockAndStopHunt(host *model.Host, stage model.HuntStage) (err 
 		return nil
 	case model.StageRedirected:
 		host.HuntStage = stage
-		if Debug {
+		if model.Debug {
 			fmt.Printf("packet: stop hunt for %s\n", host)
 		}
 		host.Row.Unlock()
@@ -157,7 +157,7 @@ func (h *Handler) lockAndStopHunt(host *model.Host, stage model.HuntStage) (err 
 	}
 
 	host.HuntStage = stage
-	if Debug {
+	if model.Debug {
 		fmt.Printf("packet: stop hunt for %s\n", host)
 	}
 
@@ -220,7 +220,7 @@ func (h *Handler) lockAndMonitorRoute(now time.Time) (err error) {
 					fmt.Printf("packet: failed to start hunt %s error=\"%s\"\n", host, err)
 				}
 			} else {
-				if err == nil && Debug {
+				if err == nil && model.Debug {
 					fmt.Printf("packet: ip4 routing OK %s\n", host)
 				}
 			}

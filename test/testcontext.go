@@ -197,7 +197,7 @@ func NewTestContext() *TestContext {
 	if err != nil {
 		panic(err)
 	}
-	if packet.Debug {
+	if model.Debug {
 		fmt.Println("nicinfo: ", tc.Engine.Session().NICInfo)
 	}
 
@@ -240,7 +240,7 @@ func (tc *TestContext) GetResponse(index int) []byte {
 
 func (tc *TestContext) Close() {
 	time.Sleep(time.Millisecond * 20) // wait for all packets to finish
-	if packet.Debug {
+	if model.Debug {
 		fmt.Println("teminating context")
 	}
 	tc.cancel()

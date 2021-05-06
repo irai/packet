@@ -10,7 +10,7 @@ import (
 )
 
 func Test_Handler_ARPRequests(t *testing.T) {
-	// packet.Debug = true
+	// model.Debug = true
 	// Debug = true
 	// log.SetLevel(log.DebugLevel)
 	tc := setupTestHandler(t)
