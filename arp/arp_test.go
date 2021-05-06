@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/irai/packet/model"
+	"github.com/irai/packet"
 )
 
 var (
@@ -43,7 +43,7 @@ type testContext struct {
 	inConn        net.PacketConn
 	outConn       net.PacketConn
 	arp           *Handler
-	session       *model.Session
+	session       *packet.Session
 	wg            sync.WaitGroup
 	ctx           context.Context
 	cancel        context.CancelFunc
@@ -56,15 +56,15 @@ func setupTestHandler(t *testing.T) *testContext {
 
 	tc := testContext{}
 	tc.ctx, tc.cancel = context.WithCancel(context.Background())
-	tc.session = model.NewEmptySession()
+	tc.session = packet.NewEmptySession()
 
 	// fake conn
-	tc.inConn, tc.outConn = model.TestNewBufferedConn()
+	tc.inConn, tc.outConn = packet.TestNewBufferedConn()
 	go readResponse(tc.ctx, &tc) // MUST read the out conn to avoid blocking the sender
 	tc.session.Conn = tc.inConn
 
 	// fake nicinfo
-	tc.session.NICInfo = &model.NICInfo{
+	tc.session.NICInfo = &packet.NICInfo{
 		HostMAC:   hostMAC,
 		HostIP4:   net.IPNet{IP: hostIP, Mask: net.IPv4Mask(255, 255, 255, 0)},
 		RouterIP4: net.IPNet{IP: routerIP, Mask: net.IPv4Mask(255, 255, 255, 0)},
@@ -103,7 +103,7 @@ func readResponse(ctx context.Context, tc *testContext) error {
 		}
 
 		buf = buf[:n]
-		ether := model.Ether(buf)
+		ether := packet.Ether(buf)
 		if !ether.IsValid() {
 			s := fmt.Sprintf("error ether client packet %s", ether)
 			panic(s)
@@ -132,13 +132,13 @@ func readResponse(ctx context.Context, tc *testContext) error {
 
 func Test_Handler_BasicTest(t *testing.T) {
 	Debug = true
-	model.Debug = true
+	packet.Debug = true
 	tc := setupTestHandler(t)
 	defer tc.Close()
 
 	tests := []struct {
 		name       string
-		ether      model.Ether
+		ether      packet.Ether
 		arp        ARP
 		wantErr    error
 		wantLen    int

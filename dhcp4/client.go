@@ -7,7 +7,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/irai/packet/model"
+	"github.com/irai/packet"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -102,8 +102,8 @@ func (h *Handler) SendDiscoverPacket(chAddr net.HardwareAddr, cIAddr net.IP, xID
 		fmt.Printf("dhcp4: send discover packet from %s ciAddr=%v xID=%v", chAddr, cIAddr, xID)
 	}
 	p := RequestPacket(Discover, chAddr, cIAddr, xID, false, options.SelectOrderOrAll(nil))
-	srcAddr := model.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostIP4.IP, Port: model.DHCP4ClientPort}
-	dstAddr := model.Addr{MAC: h.session.NICInfo.RouterMAC, IP: h.session.NICInfo.RouterIP4.IP, Port: model.DHCP4ServerPort}
+	srcAddr := packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostIP4.IP, Port: packet.DHCP4ClientPort}
+	dstAddr := packet.Addr{MAC: h.session.NICInfo.RouterMAC, IP: h.session.NICInfo.RouterIP4.IP, Port: packet.DHCP4ServerPort}
 	err = sendDHCP4Packet(h.session.Conn, srcAddr, dstAddr, p)
 	return err
 }
@@ -148,16 +148,16 @@ func (h *Handler) sendDeclineReleasePacket(msgType MessageType, clientID []byte,
 		p.AddOption(k, v)
 	}
 	p.PadToMinSize()
-	srcAddr := model.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostIP4.IP, Port: model.DHCP4ClientPort}
-	dstAddr := model.Addr{MAC: h.session.NICInfo.RouterMAC, IP: h.session.NICInfo.RouterIP4.IP, Port: model.DHCP4ServerPort}
+	srcAddr := packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostIP4.IP, Port: packet.DHCP4ClientPort}
+	dstAddr := packet.Addr{MAC: h.session.NICInfo.RouterMAC, IP: h.session.NICInfo.RouterIP4.IP, Port: packet.DHCP4ServerPort}
 	err = sendDHCP4Packet(h.session.Conn, srcAddr, dstAddr, p)
 	// err = h.sendDHCPPacket(serverIP, packet)
 	return err
 }
 
 /***
-func (h *Handler) sendDHCPPacket(srcAddr model.Addr, dstAddr model.Addr, packet DHCP4) (err error) {
-	// dstAddr := model.Addr{MAC: h.engine.NICInfo.RouterMAC, IP: h.engine.NICInfo.RouterIP4, Port: 67}
+func (h *Handler) sendDHCPPacket(srcAddr packet.Addr, dstAddr packet.Addr, packet DHCP4) (err error) {
+	// dstAddr := packet.Addr{MAC: h.engine.NICInfo.RouterMAC, IP: h.engine.NICInfo.RouterIP4, Port: 67}
 	// _, err = h.clientConn.WriteTo(packet, &dstAddr)
 	sendPacket(h.clientConn, srcAddr, dstAddr, packet)
 	if err != nil {
@@ -168,18 +168,18 @@ func (h *Handler) sendDHCPPacket(srcAddr model.Addr, dstAddr model.Addr, packet 
 }
 ***/
 
-func (h *Handler) processClientPacket(host *model.Host, req DHCP4) error {
+func (h *Handler) processClientPacket(host *packet.Host, req DHCP4) error {
 	// req := DHCP4(buffer[:n])
 	if !req.IsValid() {
 		fmt.Println("dhcp4: clientLoop invalid packet len")
-		return model.ErrParseMessage
+		return packet.ErrParseMessage
 	}
 
 	options := req.ParseOptions()
 	t := options[OptionDHCPMessageType]
 	if len(t) != 1 {
 		log.Warn("dhcp4: skiping dhcp packet with option len not 1")
-		return model.ErrParseMessage
+		return packet.ErrParseMessage
 	}
 
 	clientID := getClientID(req, options)
@@ -192,7 +192,7 @@ func (h *Handler) processClientPacket(host *model.Host, req DHCP4) error {
 	fields := log.Fields{"clientID": clientID, "ip": req.YIAddr(), "server": serverIP, "xid": req.XId()}
 	if serverIP.IsUnspecified() {
 		log.WithFields(fields).Error("dhcp4: client offer invalid serverIP")
-		return model.ErrParseMessage
+		return packet.ErrParseMessage
 	}
 
 	reqType := MessageType(t[0])

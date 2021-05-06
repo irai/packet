@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/irai/packet/model"
+	"github.com/irai/packet"
 )
 
 var (
@@ -38,15 +38,15 @@ var (
 	ip6LLA4      = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x04}
 	ip6LLA5      = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x05}
 
-	hostAddr   = model.Addr{MAC: hostMAC, IP: hostIP4}
-	routerAddr = model.Addr{MAC: routerMAC, IP: routerIP4}
+	hostAddr   = packet.Addr{MAC: hostMAC, IP: hostIP4}
+	routerAddr = packet.Addr{MAC: routerMAC, IP: routerIP4}
 )
 
 type testContext struct {
 	inConn  net.PacketConn
 	outConn net.PacketConn
 	h       *Handler
-	session *model.Session
+	session *packet.Session
 	wg      sync.WaitGroup
 	ctx     context.Context
 	cancel  context.CancelFunc
@@ -58,19 +58,19 @@ func setupTestHandler() *testContext {
 
 	tc := testContext{}
 	tc.ctx, tc.cancel = context.WithCancel(context.Background())
-	tc.session = model.NewEmptySession()
+	tc.session = packet.NewEmptySession()
 
 	// fake conn
-	tc.inConn, tc.outConn = model.TestNewBufferedConn()
-	go model.TestReadAndDiscardLoop(tc.ctx, tc.outConn) // MUST read the out conn to avoid blocking the sender
+	tc.inConn, tc.outConn = packet.TestNewBufferedConn()
+	go packet.TestReadAndDiscardLoop(tc.ctx, tc.outConn) // MUST read the out conn to avoid blocking the sender
 	// go readResponse(tc.ctx, &tc) // MUST read the out conn to avoid blocking the sender
 	tc.session.Conn = tc.inConn
 
-	// tc.inConn, tc.outConn = model.TestNewBufferedConn()
-	// go model.TestReadAndDiscardLoop(tc.ctx, tc.outConn) // MUST read the out conn to avoid blocking the sender
+	// tc.inConn, tc.outConn = packet.TestNewBufferedConn()
+	// go packet.TestReadAndDiscardLoop(tc.ctx, tc.outConn) // MUST read the out conn to avoid blocking the sender
 
 	// fake nicinfo
-	tc.session.NICInfo = &model.NICInfo{
+	tc.session.NICInfo = &packet.NICInfo{
 		HostMAC:   hostMAC,
 		HostIP4:   net.IPNet{IP: hostIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
 		RouterIP4: net.IPNet{IP: routerIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},

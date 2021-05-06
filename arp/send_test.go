@@ -6,21 +6,21 @@ import (
 	"testing"
 	"time"
 
-	"github.com/irai/packet/model"
+	"github.com/irai/packet"
 )
 
 func Test_Handler_ARPRequests(t *testing.T) {
-	// model.Debug = true
+	// packet.Debug = true
 	// Debug = true
 	// log.SetLevel(log.DebugLevel)
 	tc := setupTestHandler(t)
 	defer tc.Close()
 
-	model.Debug = true
+	packet.Debug = true
 
 	tests := []struct {
 		name              string
-		ether             model.Ether
+		ether             packet.Ether
 		arp               ARP
 		wantErr           error
 		wantLen           int
@@ -100,11 +100,11 @@ func Test_Handler_ServeReplies(t *testing.T) {
 	// log.SetLevel(log.DebugLevel)
 	tc := setupTestHandler(t)
 	defer tc.Close()
-	model.Debug = true
+	packet.Debug = true
 
 	tests := []struct {
 		name    string
-		ether   model.Ether
+		ether   packet.Ether
 		arp     ARP
 		wantErr error
 		wantLen int

@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/irai/packet/model"
+	"github.com/irai/packet"
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv6"
 )
@@ -26,9 +26,9 @@ var icmpTable = struct {
 }
 
 // SendEchoRequest transmit an icmp6 echo request and do not wait for response
-func (h *Handler) SendEchoRequest(srcAddr model.Addr, dstAddr model.Addr, id uint16, seq uint16) error {
-	if !model.IsIP6(srcAddr.IP) || !model.IsIP6(dstAddr.IP) {
-		return model.ErrInvalidIP
+func (h *Handler) SendEchoRequest(srcAddr packet.Addr, dstAddr packet.Addr, id uint16, seq uint16) error {
+	if !packet.IsIP6(srcAddr.IP) || !packet.IsIP6(dstAddr.IP) {
+		return packet.ErrInvalidIP
 	}
 	icmpMessage := icmp.Message{
 		Type: ipv6.ICMPTypeEchoRequest,
@@ -46,7 +46,7 @@ func (h *Handler) SendEchoRequest(srcAddr model.Addr, dstAddr model.Addr, id uin
 	}
 
 	if Debug {
-		fmt.Printf("icmp6 : echo request %s\n", model.ICMPEcho(p))
+		fmt.Printf("icmp6 : echo request %s\n", packet.ICMPEcho(p))
 	}
 	return h.sendPacket(srcAddr, dstAddr, p)
 }
@@ -67,7 +67,7 @@ func echoNotify(id uint16) {
 }
 
 // Ping send a ping request and wait for a reply
-func (h *Handler) Ping(srcAddr model.Addr, dstAddr model.Addr, timeout time.Duration) (err error) {
+func (h *Handler) Ping(srcAddr packet.Addr, dstAddr packet.Addr, timeout time.Duration) (err error) {
 	if timeout <= 0 || timeout > time.Second*10 {
 		timeout = time.Second * 2
 	}
@@ -97,7 +97,7 @@ func (h *Handler) Ping(srcAddr model.Addr, dstAddr model.Addr, timeout time.Dura
 	icmpTable.Unlock()
 
 	if !msg.msgRecv {
-		return model.ErrTimeout
+		return packet.ErrTimeout
 	}
 
 	return nil

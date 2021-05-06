@@ -13,12 +13,12 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	"github.com/irai/packet"
 	"github.com/irai/packet/arp"
 	"github.com/irai/packet/dhcp4"
 	"github.com/irai/packet/engine"
 	"github.com/irai/packet/icmp4"
 	"github.com/irai/packet/icmp6"
-	"github.com/irai/packet/model"
 )
 
 var (
@@ -62,7 +62,7 @@ func main() {
 
 	go pprof()
 
-	model.Debug = true
+	packet.Debug = true
 	log.SetLevel(log.DebugLevel)
 
 	fmt.Printf("packetlistener: Listen and send lan packets\n")
@@ -275,7 +275,7 @@ func doARP(h *handlers, tokens []string) {
 			return
 		}
 		if ip := getIP4(tokens, 2); ip != nil {
-			if _, err := h.arp.StartHunt(model.Addr{IP: ip}); err != nil {
+			if _, err := h.arp.StartHunt(packet.Addr{IP: ip}); err != nil {
 				fmt.Println("error in start hunt ", err)
 			}
 		}
@@ -285,7 +285,7 @@ func doARP(h *handlers, tokens []string) {
 			return
 		}
 		if ip := getIP4(tokens, 2); ip != nil {
-			if _, err := h.arp.StopHunt(model.Addr{IP: ip}); err != nil {
+			if _, err := h.arp.StopHunt(packet.Addr{IP: ip}); err != nil {
 				fmt.Println("error in start hunt ", err)
 			}
 		}
@@ -322,13 +322,13 @@ func doICMP6(h *handlers, tokens []string) {
 		}
 	case "hunt":
 		if ip := getIP6(tokens, 2); ip != nil {
-			if _, err := h.icmp6.StartHunt(model.Addr{IP: ip}); err != nil {
+			if _, err := h.icmp6.StartHunt(packet.Addr{IP: ip}); err != nil {
 				fmt.Println("error in start hunt ", err)
 			}
 		}
 	case "release":
 		if ip := getIP6(tokens, 2); ip != nil {
-			if _, err := h.icmp6.StopHunt(model.Addr{IP: ip}); err != nil {
+			if _, err := h.icmp6.StopHunt(packet.Addr{IP: ip}); err != nil {
 				fmt.Println("error in start hunt ", err)
 			}
 		}
@@ -422,13 +422,13 @@ func cmd(h *handlers) {
 			p := getString(tokens, 1)
 			switch p {
 			case "engine":
-				model.Debug = !model.Debug
+				packet.Debug = !packet.Debug
 			case "ip4":
-				model.DebugIP4 = !model.DebugIP4
+				packet.DebugIP4 = !packet.DebugIP4
 			case "ip6":
-				model.DebugIP6 = !model.DebugIP6
+				packet.DebugIP6 = !packet.DebugIP6
 			case "udp":
-				model.DebugUDP = !model.DebugUDP
+				packet.DebugUDP = !packet.DebugUDP
 			case "icmp4":
 				icmp4.Debug = !icmp4.Debug
 			case "icmp6":
@@ -440,14 +440,14 @@ func cmd(h *handlers) {
 			default:
 				fmt.Println("invalid package - use 'g icmp4|icmp6|arp|engine|ip4|ip6|dhcp4'")
 			}
-			fmt.Println("   ip4 debug:", model.DebugIP4)
+			fmt.Println("   ip4 debug:", packet.DebugIP4)
 			fmt.Println(" icmp4 debug:", icmp4.Debug)
-			fmt.Println("   ip6 debug:", model.DebugIP6)
+			fmt.Println("   ip6 debug:", packet.DebugIP6)
 			fmt.Println(" icmp6 debug:", icmp6.Debug)
-			fmt.Println("engine debug:", model.Debug)
+			fmt.Println("engine debug:", packet.Debug)
 			fmt.Println("   arp debug:", arp.Debug)
 			fmt.Println(" dhcp4 debug:", dhcp4.Debug)
-			fmt.Println("   udp debug:", model.DebugUDP)
+			fmt.Println("   udp debug:", packet.DebugUDP)
 		case "ping":
 			if ip = getIP(tokens, 1); ip == nil {
 				continue
@@ -458,11 +458,11 @@ func cmd(h *handlers) {
 					fmt.Println("error icmp4 is detached")
 					continue
 				}
-				// if err := h.SendEchoRequest(model.Addr{MAC: packet.Eth4AllNodesMulticast, IP: ip}, 2, 2); err != nil {
+				// if err := h.SendEchoRequest(packet.Addr{MAC: packet.Eth4AllNodesMulticast, IP: ip}, 2, 2); err != nil {
 				if err := h.icmp4.Ping(
-					model.Addr{MAC: h.engine.Session().NICInfo.HostMAC, IP: h.engine.Session().NICInfo.HostIP4.IP},
-					model.Addr{MAC: model.Eth4AllNodesMulticast, IP: ip}, time.Second*2); err != nil {
-					if errors.Is(err, model.ErrTimeout) {
+					packet.Addr{MAC: h.engine.Session().NICInfo.HostMAC, IP: h.engine.Session().NICInfo.HostIP4.IP},
+					packet.Addr{MAC: packet.Eth4AllNodesMulticast, IP: ip}, time.Second*2); err != nil {
+					if errors.Is(err, packet.ErrTimeout) {
 						fmt.Println("ping timeout ")
 					} else {
 						fmt.Println("ping error ", err)
@@ -471,14 +471,14 @@ func cmd(h *handlers) {
 				}
 				fmt.Printf("ping %v time=%v\n", dstIP, time.Now().Sub(now))
 			}
-			if model.IsIP6(ip) {
+			if packet.IsIP6(ip) {
 				if h.icmp6 == nil {
 					fmt.Println("error icmp6 is detached")
 					continue
 				}
 				if err := h.icmp6.Ping(
-					model.Addr{MAC: h.engine.Session().NICInfo.HostMAC, IP: h.engine.Session().NICInfo.HostLLA.IP},
-					model.Addr{MAC: model.Eth6AllNodesMulticast, IP: ip}, time.Second*2); err != nil {
+					packet.Addr{MAC: h.engine.Session().NICInfo.HostMAC, IP: h.engine.Session().NICInfo.HostLLA.IP},
+					packet.Addr{MAC: packet.Eth6AllNodesMulticast, IP: ip}, time.Second*2); err != nil {
 					// if err := h6.Ping(h6.LLA().IP, ip, time.Second*2); err != nil {
 					fmt.Println("icmp6 echo error ", err)
 					continue

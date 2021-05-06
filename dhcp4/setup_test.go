@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/irai/packet/model"
+	"github.com/irai/packet"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -41,8 +41,8 @@ var (
 	ip6LLA4      = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x04}
 	ip6LLA5      = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x05}
 
-	hostAddr   = model.Addr{MAC: hostMAC, IP: hostIP4}
-	routerAddr = model.Addr{MAC: routerMAC, IP: routerIP4}
+	hostAddr   = packet.Addr{MAC: hostMAC, IP: hostIP4}
+	routerAddr = packet.Addr{MAC: routerMAC, IP: routerIP4}
 
 	dnsIP4 = net.IPv4(8, 8, 8, 8)
 )
@@ -53,7 +53,7 @@ type testContext struct {
 	clientInConn  net.PacketConn
 	clientOutConn net.PacketConn
 	h             *Handler
-	session       *model.Session
+	session       *packet.Session
 	wg            sync.WaitGroup
 	ctx           context.Context
 	cancel        context.CancelFunc
@@ -78,13 +78,13 @@ func readResponse(ctx context.Context, tc *testContext) error {
 		}
 
 		buf = buf[:n]
-		ether := model.Ether(buf)
+		ether := packet.Ether(buf)
 		if !ether.IsValid() {
 			s := fmt.Sprintf("error ether client packet %s", ether)
 			panic(s)
 		}
 
-		dhcp4Frame := DHCP4(model.UDP(model.IP4(model.Ether(buf).Payload()).Payload()).Payload())
+		dhcp4Frame := DHCP4(packet.UDP(packet.IP4(packet.Ether(buf).Payload()).Payload()).Payload())
 		options := dhcp4Frame.ParseOptions()
 		var reqType MessageType
 		if t := options[OptionDHCPMessageType]; len(t) != 1 {
@@ -118,18 +118,18 @@ func setupTestHandler() *testContext {
 
 	tc := testContext{}
 	tc.ctx, tc.cancel = context.WithCancel(context.Background())
-	tc.session = model.NewEmptySession()
+	tc.session = packet.NewEmptySession()
 
 	// DHCP server conn
-	tc.inConn, tc.outConn = model.TestNewBufferedConn()
+	tc.inConn, tc.outConn = packet.TestNewBufferedConn()
 	go readResponse(tc.ctx, &tc) // MUST read the out conn to avoid blocking the sender
 	tc.session.Conn = tc.inConn
 
 	// DHCP client conn
-	tc.clientInConn, tc.clientOutConn = model.TestNewBufferedConn()
-	go model.TestReadAndDiscardLoop(tc.ctx, tc.clientOutConn) // must read to avoid blocking
+	tc.clientInConn, tc.clientOutConn = packet.TestNewBufferedConn()
+	go packet.TestReadAndDiscardLoop(tc.ctx, tc.clientOutConn) // must read to avoid blocking
 
-	tc.session.NICInfo = &model.NICInfo{
+	tc.session.NICInfo = &packet.NICInfo{
 		HostMAC:   hostMAC,
 		HostIP4:   net.IPNet{IP: hostIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
 		RouterIP4: net.IPNet{IP: routerIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
@@ -164,17 +164,17 @@ type testEvent struct {
 	action        string // capture, block, accept, release, event
 	waitTimeAfter time.Duration
 	wantCapture   bool
-	wantStage     model.HuntStage
+	wantStage     packet.HuntStage
 	wantOnline    bool
 	hostTableLen  int
 	macTableLen   int
-	srcAddr       model.Addr
-	dstAddr       model.Addr
-	ether         model.Ether
-	wantHost      model.Host
+	srcAddr       packet.Addr
+	dstAddr       packet.Addr
+	ether         packet.Ether
+	wantHost      packet.Host
 }
 
-func newDHCP4DeclineFrame(src model.Addr, declineIP net.IP, serverIP net.IP, xid []byte) DHCP4 {
+func newDHCP4DeclineFrame(src packet.Addr, declineIP net.IP, serverIP net.IP, xid []byte) DHCP4 {
 	options := []Option{}
 	options = append(options, Option{Code: OptionServerIdentifier, Value: serverIP.To4()})
 	options = append(options, Option{Code: OptionRequestedIPAddress, Value: declineIP.To4()})
@@ -182,7 +182,7 @@ func newDHCP4DeclineFrame(src model.Addr, declineIP net.IP, serverIP net.IP, xid
 	return RequestPacket(Decline, src.MAC, src.IP, xid, false, options)
 }
 
-func newDHCP4DiscoverFrame(src model.Addr, name string, xid []byte) DHCP4 {
+func newDHCP4DiscoverFrame(src packet.Addr, name string, xid []byte) DHCP4 {
 	options := []Option{}
 	opt := Option{Code: OptionDomainNameServer, Value: []byte{}}
 	options = append(options, opt)
@@ -191,7 +191,7 @@ func newDHCP4DiscoverFrame(src model.Addr, name string, xid []byte) DHCP4 {
 	return RequestPacket(Discover, src.MAC, src.IP, xid, false, options)
 }
 
-func newDHCP4RequestFrame(src model.Addr, name string, serverID net.IP, requestedIP net.IP, xid []byte) DHCP4 {
+func newDHCP4RequestFrame(src packet.Addr, name string, serverID net.IP, requestedIP net.IP, xid []byte) DHCP4 {
 	options := []Option{}
 	opt := Option{Code: OptionDomainNameServer, Value: []byte{}}
 	options = append(options, opt)
@@ -230,11 +230,11 @@ func checkLeaseTable(t *testing.T, tc *testContext, allocatedCount int, discover
 	}
 }
 
-func sendTestDHCP4Packet(t *testing.T, tc *testContext, srcAddr model.Addr, dstAddr model.Addr, p DHCP4) (err error) {
-	ether := model.Ether(make([]byte, model.EthMaxSize))
-	ether = model.EtherMarshalBinary(ether, syscall.ETH_P_IP, srcAddr.MAC, dstAddr.MAC)
-	ip4 := model.IP4MarshalBinary(ether.Payload(), 50, srcAddr.IP, dstAddr.IP)
-	udp := model.UDPMarshalBinary(ip4.Payload(), srcAddr.Port, dstAddr.Port)
+func sendTestDHCP4Packet(t *testing.T, tc *testContext, srcAddr packet.Addr, dstAddr packet.Addr, p DHCP4) (err error) {
+	ether := packet.Ether(make([]byte, packet.EthMaxSize))
+	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IP, srcAddr.MAC, dstAddr.MAC)
+	ip4 := packet.IP4MarshalBinary(ether.Payload(), 50, srcAddr.IP, dstAddr.IP)
+	udp := packet.UDPMarshalBinary(ip4.Payload(), srcAddr.Port, dstAddr.Port)
 	udp, err = udp.AppendPayload(p)
 	if err != nil {
 		return err

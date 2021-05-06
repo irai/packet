@@ -9,11 +9,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/irai/packet"
 	"github.com/irai/packet/arp"
 	"github.com/irai/packet/dhcp4"
 	"github.com/irai/packet/icmp4"
 	"github.com/irai/packet/icmp6"
-	"github.com/irai/packet/model"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/bpf"
 )
@@ -22,20 +22,20 @@ import (
 type Config struct {
 	// Conn enables the client to override the connection with a another packet conn
 	// useful for testing
-	Conn                    net.PacketConn // listen connectinon
-	NICInfo                 *model.NICInfo // override nic information - set to non nil to create a test Handler
-	FullNetworkScanInterval time.Duration  // Set it to zero if no scan required
-	ProbeInterval           time.Duration  // how often to probe if IP is online
-	OfflineDeadline         time.Duration  // mark offline if more than OfflineInte
+	Conn                    net.PacketConn  // listen connectinon
+	NICInfo                 *packet.NICInfo // override nic information - set to non nil to create a test Handler
+	FullNetworkScanInterval time.Duration   // Set it to zero if no scan required
+	ProbeInterval           time.Duration   // how often to probe if IP is online
+	OfflineDeadline         time.Duration   // mark offline if more than OfflineInte
 	PurgeDeadline           time.Duration
 }
 
 // Handler implements ICMPv6 Neighbor Discovery Protocol
 // see: https://mdlayher.com/blog/network-protocol-breakdown-ndp-and-go/
 type Handler struct {
-	session                 *model.Session // store shared session values
-	HandlerIP4              model.PacketProcessor
-	HandlerIP6              model.PacketProcessor
+	session                 *packet.Session // store shared session values
+	HandlerIP4              packet.PacketProcessor
+	HandlerIP6              packet.PacketProcessor
 	ICMP4Handler            icmp4.ICMP4Handler
 	ICMP6Handler            icmp6.ICMP6Handler
 	DHCP4Handler            dhcp4.DHCP4Handler
@@ -65,7 +65,7 @@ func (config Config) NewEngine(nic string) (*Handler, error) {
 	h := &Handler{closeChan: make(chan bool)}
 
 	// session holds shared data for all plugins
-	h.session = model.NewEmptySession()
+	h.session = packet.NewEmptySession()
 
 	h.session.NICInfo = config.NICInfo
 	if h.session.NICInfo == nil {
@@ -102,13 +102,13 @@ func (config Config) NewEngine(nic string) (*Handler, error) {
 	}
 
 	// no plugins to start
-	h.ARPHandler = model.PacketNOOP{}
-	h.HandlerIP4 = model.PacketNOOP{}
-	h.HandlerIP6 = model.PacketNOOP{}
-	h.ARPHandler = model.PacketNOOP{}
-	h.ICMP4Handler = model.PacketNOOP{}
-	h.ICMP6Handler = model.PacketNOOP{}
-	h.DHCP4Handler = model.PacketNOOP{}
+	h.ARPHandler = packet.PacketNOOP{}
+	h.HandlerIP4 = packet.PacketNOOP{}
+	h.HandlerIP6 = packet.PacketNOOP{}
+	h.ARPHandler = packet.PacketNOOP{}
+	h.ICMP4Handler = packet.PacketNOOP{}
+	h.ICMP6Handler = packet.PacketNOOP{}
+	h.DHCP4Handler = packet.PacketNOOP{}
 
 	// create the host entry manually because we don't process host packets
 	host, _ := h.session.FindOrCreateHost(h.session.NICInfo.HostMAC, h.session.NICInfo.HostIP4.IP)
@@ -125,13 +125,13 @@ func (config Config) NewEngine(nic string) (*Handler, error) {
 	return h, nil
 }
 
-func (h *Handler) Session() *model.Session {
+func (h *Handler) Session() *packet.Session {
 	return h.session
 }
 
 // Close closes the underlying sockets
 func (h *Handler) Close() error {
-	if model.Debug {
+	if packet.Debug {
 		fmt.Println("packet: close() called. closing....")
 	}
 	h.closed = true
@@ -150,27 +150,27 @@ func (h *Handler) AttachARP(p arp.ARPHandler) {
 }
 
 func (h *Handler) DetachARP() {
-	h.ARPHandler = model.PacketNOOP{}
+	h.ARPHandler = packet.PacketNOOP{}
 }
 
 func (h *Handler) AttachICMP4(p icmp4.ICMP4Handler) {
 	h.ICMP4Handler = p
 }
 func (h *Handler) DetachICMP4() {
-	h.ICMP4Handler = model.PacketNOOP{}
+	h.ICMP4Handler = packet.PacketNOOP{}
 }
 
 func (h *Handler) AttachICMP6(p icmp6.ICMP6Handler) {
 	h.ICMP6Handler = p
 }
 func (h *Handler) DetachICMP6() {
-	h.ICMP6Handler = model.PacketNOOP{}
+	h.ICMP6Handler = packet.PacketNOOP{}
 }
 func (h *Handler) AttachDHCP4(p dhcp4.DHCP4Handler) {
 	h.DHCP4Handler = p
 }
 func (h *Handler) DetachDHCP4() {
-	h.DHCP4Handler = model.PacketNOOP{}
+	h.DHCP4Handler = packet.PacketNOOP{}
 }
 
 func (h *Handler) setupConn() (conn net.PacketConn, err error) {
@@ -195,13 +195,13 @@ func (h *Handler) setupConn() (conn net.PacketConn, err error) {
 		bpf.LoadAbsolute{Off: 14, Size: 2},
 		// IPv4?
 		bpf.JumpIf{Cond: bpf.JumpEqual, Val: syscall.ETH_P_IP, SkipFalse: 1},
-		bpf.RetConstant{Val: model.EthMaxSize},
+		bpf.RetConstant{Val: packet.EthMaxSize},
 		// IPv6?
 		bpf.JumpIf{Cond: bpf.JumpEqual, Val: syscall.ETH_P_IPV6, SkipFalse: 1},
-		bpf.RetConstant{Val: model.EthMaxSize},
+		bpf.RetConstant{Val: packet.EthMaxSize},
 		// ARP?
 		bpf.JumpIf{Cond: bpf.JumpEqual, Val: syscall.ETH_P_ARP, SkipFalse: 1},
-		bpf.RetConstant{Val: model.EthMaxSize},
+		bpf.RetConstant{Val: packet.EthMaxSize},
 		bpf.RetConstant{Val: 0},
 	})
 	if err != nil {
@@ -299,7 +299,7 @@ func (h *Handler) minuteLoop() {
 }
 
 func (h *Handler) minuteChecker(now time.Time) {
-	if model.Debug {
+	if packet.Debug {
 		fmt.Printf("packet: running minute checker %v\n", now)
 	}
 
@@ -317,7 +317,7 @@ func (h *Handler) minuteChecker(now time.Time) {
 
 // lockAndProcessDHCP4Update updates the DHCP4 store and transition hunt stage
 //
-func (h *Handler) lockAndProcessDHCP4Update(host *model.Host, result model.Result) (notify bool) {
+func (h *Handler) lockAndProcessDHCP4Update(host *packet.Host, result packet.Result) (notify bool) {
 	if host != nil {
 		host.Row.Lock()
 		if host.DHCP4Name != result.Name {
@@ -328,18 +328,18 @@ func (h *Handler) lockAndProcessDHCP4Update(host *model.Host, result model.Resul
 			host.MACEntry.IP4Offer = result.Addr.IP
 		}
 		capture := host.MACEntry.Captured
-		addr := model.Addr{MAC: host.MACEntry.MAC, IP: host.IP}
+		addr := packet.Addr{MAC: host.MACEntry.MAC, IP: host.IP}
 		host.Row.Unlock()
 
 		// DHCP stage overides all other stages
-		if capture && result.HuntStage == model.StageRedirected {
+		if capture && result.HuntStage == packet.StageRedirected {
 			fmt.Printf("packet: dhcp4 redirected %s\n", addr)
-			if err := h.lockAndStopHunt(host, model.StageRedirected); err != nil {
+			if err := h.lockAndStopHunt(host, packet.StageRedirected); err != nil {
 				fmt.Printf("packet: failed to stop hunt %s error=\"%s\"", host, err)
 			}
 			return notify
 		}
-		if capture && result.HuntStage == model.StageNormal {
+		if capture && result.HuntStage == packet.StageNormal {
 			fmt.Printf("packet: dhcp4 not redirected %s\n", addr)
 			if err := h.lockAndStartHunt(addr); err != nil {
 				fmt.Printf("packet: failed to stop hunt %s error=\"%s\"", host, err)
@@ -365,7 +365,7 @@ func (h *Handler) lockAndProcessDHCP4Update(host *model.Host, result model.Resul
 // This funcion will also mark the previous IP4 host as offline
 //  Parameters:
 //     notify: force a notification as another parameter (likely name) has changed
-func (h *Handler) lockAndSetOnline(host *model.Host, notify bool) {
+func (h *Handler) lockAndSetOnline(host *packet.Host, notify bool) {
 	now := time.Now()
 
 	host.Row.RLock()
@@ -427,10 +427,10 @@ func (h *Handler) lockAndSetOnline(host *model.Host, notify bool) {
 
 	host.MACEntry.Online = true
 	host.Online = true
-	addr := model.Addr{IP: host.IP, MAC: host.MACEntry.MAC}
+	addr := packet.Addr{IP: host.IP, MAC: host.MACEntry.MAC}
 	notification := Notification{Addr: addr, Online: true, DHCPName: host.DHCP4Name}
 
-	if model.Debug {
+	if packet.Debug {
 		fmt.Printf("packet: IP is online %s\n", host)
 	}
 
@@ -444,7 +444,7 @@ func (h *Handler) lockAndSetOnline(host *model.Host, notify bool) {
 				if err != nil {
 					fmt.Printf("packet: failed to get dhcp hunt status %s error=%s\n", addr, err)
 				}
-				if stage != model.StageRedirected {
+				if stage != packet.StageRedirected {
 					if err := h.lockAndStartHunt(addr); err != nil {
 						fmt.Println("packet: failed to start hunt error", err)
 					}
@@ -462,17 +462,17 @@ func (h *Handler) lockAndSetOnline(host *model.Host, notify bool) {
 	}()
 }
 
-func (h *Handler) lockAndSetOffline(host *model.Host) {
+func (h *Handler) lockAndSetOffline(host *packet.Host) {
 	host.Row.Lock()
 	if !host.Online {
 		host.Row.Unlock()
 		return
 	}
-	if model.Debug {
+	if packet.Debug {
 		fmt.Printf("packet: IP is offline %s\n", host)
 	}
 	host.Online = false
-	notification := Notification{Addr: model.Addr{MAC: host.MACEntry.MAC, IP: host.IP}, Online: false}
+	notification := Notification{Addr: packet.Addr{MAC: host.MACEntry.MAC, IP: host.IP}, Online: false}
 
 	// Update mac online status if all hosts are offline
 	macOnline := false
@@ -486,7 +486,7 @@ func (h *Handler) lockAndSetOffline(host *model.Host) {
 
 	host.Row.Unlock()
 
-	h.lockAndStopHunt(host, model.StageNormal)
+	h.lockAndStopHunt(host, packet.StageNormal)
 
 	if h.nameChannel != nil {
 		h.nameChannel <- notification
@@ -504,7 +504,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 	var d1, d2, d3 time.Duration
 	var startTime time.Time
-	buf := make([]byte, model.EthMaxSize)
+	buf := make([]byte, packet.EthMaxSize)
 	for {
 		if err = h.session.Conn.SetReadDeadline(time.Now().Add(time.Second * 2)); err != nil {
 			if h.closed { // closed by call to h.Close()?
@@ -525,7 +525,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		}
 		startTime = time.Now()
 
-		ether := model.Ether(buf[:n])
+		ether := packet.Ether(buf[:n])
 		if !ether.IsValid() {
 			log.Error("icmp invalid ethernet packet ", ether.EtherType())
 			continue
@@ -546,21 +546,21 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		}
 
 		notify := false
-		var ip4Frame model.IP4
-		var ip6Frame model.IP6
+		var ip4Frame packet.IP4
+		var ip6Frame packet.IP6
 		var l4Proto int
 		var l4Payload []byte
-		var host *model.Host
-		var result model.Result
+		var host *packet.Host
+		var result packet.Result
 
 		switch ether.EtherType() {
 		case syscall.ETH_P_IP: // 0x0800
-			ip4Frame = model.IP4(ether.Payload())
+			ip4Frame = packet.IP4(ether.Payload())
 			if !ip4Frame.IsValid() {
 				fmt.Println("packet: error invalid ip4 frame type=", ether.EtherType())
 				continue
 			}
-			if model.DebugIP4 {
+			if packet.DebugIP4 {
 				fmt.Println("ether:", ether)
 				fmt.Println("ip4  :", ip4Frame)
 			}
@@ -574,12 +574,12 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			l4Payload = ip4Frame.Payload()
 
 		case syscall.ETH_P_IPV6: // 0x86dd
-			ip6Frame = model.IP6(ether.Payload())
+			ip6Frame = packet.IP6(ether.Payload())
 			if !ip6Frame.IsValid() {
 				fmt.Println("packet: error invalid ip6 frame type=", ether.EtherType())
 				continue
 			}
-			if model.DebugIP6 {
+			if packet.DebugIP6 {
 				fmt.Printf("ether: %s\n", ether)
 				fmt.Printf("ip6  : %s\n", ip6Frame)
 			}
@@ -594,7 +594,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 			// IPv6 Hop by Hop extension - always the first header if present
 			if l4Proto == syscall.IPPROTO_HOPOPTS {
-				header := model.HopByHopExtensionHeader(l4Payload)
+				header := packet.HopByHopExtensionHeader(l4Payload)
 				if !header.IsValid() {
 					fmt.Printf("packet: error invalid next header payload=%d ext=%d\n", len(l4Payload), n)
 					continue
@@ -635,20 +635,20 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		case syscall.IPPROTO_TCP:
 			// skip tcp
 		case syscall.IPPROTO_UDP: // 0x11
-			udp := model.UDP(l4Payload)
+			udp := packet.UDP(l4Payload)
 			if !udp.IsValid() {
 				fmt.Println("packet: error invalid udp frame ", ip4Frame)
 				continue
 			}
 			if ip4Frame != nil {
-				if model.DebugUDP {
+				if packet.DebugUDP {
 					fmt.Println("ether:", ether)
 					fmt.Println("ip4  :", ip4Frame)
 					fmt.Printf("udp  : %s\n", udp)
 				}
 
 				// DHCP4 packet?
-				if udp.DstPort() == model.DHCP4ServerPort || udp.DstPort() == model.DHCP4ClientPort {
+				if udp.DstPort() == packet.DHCP4ServerPort || udp.DstPort() == packet.DHCP4ClientPort {
 					if host, result, err = h.DHCP4Handler.ProcessPacket(host, ether, udp.Payload()); err != nil {
 						fmt.Printf("packet: error processing dhcp4: %s\n", err)
 					}
@@ -657,7 +657,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 					}
 				}
 			} else {
-				if model.DebugUDP {
+				if packet.DebugUDP {
 					fmt.Println("ether:", ether)
 					fmt.Println("ip6  :", ip6Frame)
 					fmt.Printf("udp  : %s\n", udp)

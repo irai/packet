@@ -9,15 +9,15 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	"github.com/irai/packet"
 	"github.com/irai/packet/arp"
-	"github.com/irai/packet/model"
 )
 
 func Test_requestSimple(t *testing.T) {
 
 	log.SetLevel(log.DebugLevel)
-	model.DebugIP4 = false
-	model.Debug = true
+	packet.DebugIP4 = false
+	packet.Debug = true
 	Debug = true
 	os.Remove(testDHCPFilename)
 	tc := setupTestHandler()
@@ -31,14 +31,14 @@ func Test_requestSimple(t *testing.T) {
 		allocatedCount int
 		discoverCount  int
 		freeCount      int
-		srcAddr        model.Addr
-		dstAddr        model.Addr
+		srcAddr        packet.Addr
+		dstAddr        packet.Addr
 	}{
 		{name: "request-mac1", wantResponse: true, responseCount: 258, tableLen: 1, allocatedCount: 1, freeCount: 0, discoverCount: 0,
-			srcAddr: model.Addr{MAC: mac1},
+			srcAddr: packet.Addr{MAC: mac1},
 		},
 		{name: "request-mac2", wantResponse: true, responseCount: 260, tableLen: 2, allocatedCount: 2, freeCount: 0, discoverCount: 0,
-			srcAddr: model.Addr{MAC: mac2},
+			srcAddr: packet.Addr{MAC: mac2},
 		},
 	}
 	for _, tt := range tests {
@@ -58,7 +58,7 @@ func Test_requestSimple(t *testing.T) {
 
 func Test_requestExhaust(t *testing.T) {
 
-	model.Debug = true
+	packet.Debug = true
 	Debug = true
 	os.Remove(testDHCPFilename)
 	tc := setupTestHandler()
@@ -75,8 +75,8 @@ func Test_requestExhaust(t *testing.T) {
 	tc.xid++
 	xid := []byte(fmt.Sprintf("%d", tc.xid))
 	mac5 = net.HardwareAddr{0x00, 0xff, 0xaa, 0xbb, 0x05, 0x05} // new mac
-	srcAddr := model.Addr{MAC: mac5, IP: net.IPv4zero, Port: model.DHCP4ClientPort}
-	dstAddr := model.Addr{MAC: arp.EthernetBroadcast, IP: net.IPv4zero, Port: model.DHCP4ServerPort}
+	srcAddr := packet.Addr{MAC: mac5, IP: net.IPv4zero, Port: packet.DHCP4ClientPort}
+	dstAddr := packet.Addr{MAC: arp.EthernetBroadcast, IP: net.IPv4zero, Port: packet.DHCP4ServerPort}
 	dhcpFrame := newDHCP4DiscoverFrame(srcAddr, "onelastname", xid)
 	if err := sendTestDHCP4Packet(t, tc, srcAddr, dstAddr, dhcpFrame); err != nil {
 		t.Errorf("DHCPHandler.handleDiscover() error sending packet error=%s", err)
@@ -99,8 +99,8 @@ func Test_requestAnotherHost(t *testing.T) {
 	tc.xid++
 	xid := []byte(fmt.Sprintf("%d", tc.xid))
 	mac5 = net.HardwareAddr{0x00, 0xff, 0xaa, 0xbb, 0x05, 0x05} // new mac
-	srcAddr := model.Addr{MAC: mac5, IP: net.IPv4zero, Port: model.DHCP4ClientPort}
-	dstAddr := model.Addr{MAC: arp.EthernetBroadcast, IP: net.IPv4zero, Port: model.DHCP4ServerPort}
+	srcAddr := packet.Addr{MAC: mac5, IP: net.IPv4zero, Port: packet.DHCP4ClientPort}
+	dstAddr := packet.Addr{MAC: arp.EthernetBroadcast, IP: net.IPv4zero, Port: packet.DHCP4ServerPort}
 
 	// first discover packet
 	dhcpFrame := newDHCP4DiscoverFrame(srcAddr, srcAddr.MAC.String(), xid)
@@ -136,8 +136,8 @@ func Test_requestAnotherHost(t *testing.T) {
 func newDHCPHost(t *testing.T, tc *testContext, mac net.HardwareAddr) []byte {
 	tc.xid++
 	xid := []byte(fmt.Sprintf("%d", tc.xid))
-	srcAddr := model.Addr{MAC: mac, IP: net.IPv4zero, Port: model.DHCP4ClientPort}
-	dstAddr := model.Addr{MAC: arp.EthernetBroadcast, IP: net.IPv4zero, Port: model.DHCP4ServerPort}
+	srcAddr := packet.Addr{MAC: mac, IP: net.IPv4zero, Port: packet.DHCP4ClientPort}
+	dstAddr := packet.Addr{MAC: arp.EthernetBroadcast, IP: net.IPv4zero, Port: packet.DHCP4ServerPort}
 
 	dhcpFrame := newDHCP4DiscoverFrame(srcAddr, srcAddr.MAC.String(), xid)
 	tc.IPOffer = nil

@@ -10,7 +10,7 @@ import (
 	"errors"
 	"log"
 
-	"github.com/irai/packet/model"
+	"github.com/irai/packet"
 )
 
 var (
@@ -59,10 +59,10 @@ func (h *Handler) request(srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr ne
 }
 
 func (h *Handler) requestWithDstEthernet(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
-	var b [model.EthMaxSize]byte
-	ether := model.Ether(b[0:])
+	var b [packet.EthMaxSize]byte
+	ether := packet.Ether(b[0:])
 
-	ether = model.EtherMarshalBinary(ether, syscall.ETH_P_ARP, srcHwAddr, dstEther)
+	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_ARP, srcHwAddr, dstEther)
 	arp, err := MarshalBinary(ether.Payload(), OperationRequest, srcHwAddr, srcIP, dstHwAddr, dstIP)
 	if err != nil {
 		return err
@@ -71,7 +71,7 @@ func (h *Handler) requestWithDstEthernet(dstEther net.HardwareAddr, srcHwAddr ne
 		return err
 	}
 
-	_, err = h.session.Conn.WriteTo(ether, &model.Addr{MAC: dstEther})
+	_, err = h.session.Conn.WriteTo(ether, &packet.Addr{MAC: dstEther})
 	return err
 }
 
@@ -89,10 +89,10 @@ func (h *Handler) Reply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, s
 //
 // dstEther identifies the target for the Ethernet packet : i.e. use EthernetBroadcast for gratuitous ARP
 func (h *Handler) reply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
-	var b [model.EthMaxSize]byte
-	ether := model.Ether(b[0:])
+	var b [packet.EthMaxSize]byte
+	ether := packet.Ether(b[0:])
 
-	ether = model.EtherMarshalBinary(ether, syscall.ETH_P_ARP, srcHwAddr, dstEther)
+	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_ARP, srcHwAddr, dstEther)
 	arp, err := MarshalBinary(ether.Payload(), OperationReply, srcHwAddr, srcIP, dstHwAddr, dstIP)
 	if err != nil {
 		return err
@@ -101,7 +101,7 @@ func (h *Handler) reply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, s
 		return err
 	}
 
-	_, err = h.session.Conn.WriteTo(ether, &model.Addr{MAC: dstEther})
+	_, err = h.session.Conn.WriteTo(ether, &packet.Addr{MAC: dstEther})
 	return err
 }
 
@@ -159,14 +159,14 @@ func (h *Handler) announce(dstEther net.HardwareAddr, mac net.HardwareAddr, ip n
 
 // WhoIs will send a request packet to get the MAC address for the IP. Retry 3 times.
 //
-func (h *Handler) WhoIs(ip net.IP) (model.Addr, error) {
+func (h *Handler) WhoIs(ip net.IP) (packet.Addr, error) {
 
 	for i := 0; i < 3; i++ {
 		if host := h.session.FindIP(ip); host != nil {
-			return model.Addr{IP: host.IP, MAC: host.MACEntry.MAC}, nil
+			return packet.Addr{IP: host.IP, MAC: host.MACEntry.MAC}, nil
 		}
 		if err := h.Request(h.session.NICInfo.HostMAC, h.session.NICInfo.HostIP4.IP, EthernetBroadcast, ip); err != nil {
-			return model.Addr{}, fmt.Errorf("arp WhoIs error: %w", err)
+			return packet.Addr{}, fmt.Errorf("arp WhoIs error: %w", err)
 		}
 		time.Sleep(time.Millisecond * 50)
 	}
@@ -175,5 +175,5 @@ func (h *Handler) WhoIs(ip net.IP) (model.Addr, error) {
 		log.Printf("arp ip=%s whois not found", ip)
 		h.session.PrintTable()
 	}
-	return model.Addr{}, ErrNotFound
+	return packet.Addr{}, ErrNotFound
 }

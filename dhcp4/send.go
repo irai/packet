@@ -5,14 +5,14 @@ import (
 	"net"
 	"syscall"
 
-	"github.com/irai/packet/model"
+	"github.com/irai/packet"
 )
 
-func sendDHCP4Packet(conn net.PacketConn, srcAddr model.Addr, dstAddr model.Addr, p DHCP4) (err error) {
-	ether := model.Ether(make([]byte, model.EthMaxSize))
-	ether = model.EtherMarshalBinary(ether, syscall.ETH_P_IP, srcAddr.MAC, dstAddr.MAC)
-	ip4 := model.IP4MarshalBinary(ether.Payload(), 50, srcAddr.IP, dstAddr.IP)
-	udp := model.UDPMarshalBinary(ip4.Payload(), srcAddr.Port, dstAddr.Port)
+func sendDHCP4Packet(conn net.PacketConn, srcAddr packet.Addr, dstAddr packet.Addr, p DHCP4) (err error) {
+	ether := packet.Ether(make([]byte, packet.EthMaxSize))
+	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IP, srcAddr.MAC, dstAddr.MAC)
+	ip4 := packet.IP4MarshalBinary(ether.Payload(), 50, srcAddr.IP, dstAddr.IP)
+	udp := packet.UDPMarshalBinary(ip4.Payload(), srcAddr.Port, dstAddr.Port)
 	udp, err = udp.AppendPayload(p)
 	if err != nil {
 		return err
@@ -35,7 +35,7 @@ func sendDHCP4Packet(conn net.PacketConn, srcAddr model.Addr, dstAddr model.Addr
 
 /***
 // PING send a standalone echo packet in a new connection
-func PING(dstAddr model.Addr) error {
+func PING(dstAddr packet.Addr) error {
 
 	c, err := net.ListenPacket("ip4:1", "0.0.0.0") // ICMP for IPv4
 	if err != nil {

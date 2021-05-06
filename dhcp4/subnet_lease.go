@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/irai/packet/model"
+	"github.com/irai/packet"
 	log "github.com/sirupsen/logrus"
 	yaml "gopkg.in/yaml.v2"
 )
@@ -18,14 +18,14 @@ import (
 // example: lan 192.168.0.0/24, gw 192.168.0.1
 //          lan 192.168.0.128/25, gw 192.168.0.129
 type SubnetConfig struct {
-	LAN        net.IPNet       // lan address & netmask
-	DefaultGW  net.IP          // Default Gateway for subnet
-	DHCPServer net.IP          // DHCP server ID
-	DNSServer  net.IP          // DNS server IP
-	FirstIP    net.IP          // First IP in range
-	LastIP     net.IP          // Last IP in range
-	Duration   time.Duration   // lease duration
-	Stage      model.HuntStage // Default stage for subnet
+	LAN        net.IPNet        // lan address & netmask
+	DefaultGW  net.IP           // Default Gateway for subnet
+	DHCPServer net.IP           // DHCP server ID
+	DNSServer  net.IP           // DNS server IP
+	FirstIP    net.IP           // First IP in range
+	LastIP     net.IP           // Last IP in range
+	Duration   time.Duration    // lease duration
+	Stage      packet.HuntStage // Default stage for subnet
 }
 
 // dhcpSubnet hold the 256 lease array for subnet
@@ -46,20 +46,20 @@ func newSubnet(config SubnetConfig) (*dhcpSubnet, error) {
 	subnet.LAN = net.IPNet{IP: config.LAN.IP.Mask(config.LAN.Mask).To4(), Mask: config.LAN.Mask}
 
 	// get broadcast addr
-	subnet.broadcast = model.CopyIP(subnet.LAN.IP).To4()
+	subnet.broadcast = packet.CopyIP(subnet.LAN.IP).To4()
 	for i := range subnet.broadcast { // range over the 4 bytes
 		subnet.broadcast[i] = subnet.broadcast[i] | ^subnet.LAN.Mask[i]
 	}
 
 	// default values for first and last IPs
-	config.FirstIP = model.CopyIP(config.FirstIP).To4() // must copy, we are updating the array
+	config.FirstIP = packet.CopyIP(config.FirstIP).To4() // must copy, we are updating the array
 	if config.FirstIP == nil || config.FirstIP.Equal(net.IPv4zero) || config.FirstIP[3] <= subnet.LAN.IP[3] {
-		config.FirstIP = model.CopyIP(subnet.LAN.IP).To4()
+		config.FirstIP = packet.CopyIP(subnet.LAN.IP).To4()
 		config.FirstIP[3] = config.FirstIP[3] + 1
 	}
-	config.LastIP = model.CopyIP(config.LastIP).To4() // must copy, we are updating the array
+	config.LastIP = packet.CopyIP(config.LastIP).To4() // must copy, we are updating the array
 	if config.LastIP == nil || config.LastIP.Equal(net.IPv4zero) || config.LastIP[3] > subnet.broadcast[3] {
-		config.LastIP = model.CopyIP(subnet.broadcast).To4()
+		config.LastIP = packet.CopyIP(subnet.broadcast).To4()
 		config.LastIP[3] = config.LastIP[3] - 1
 	}
 	subnet.Duration = config.Duration
@@ -67,7 +67,7 @@ func newSubnet(config SubnetConfig) (*dhcpSubnet, error) {
 		subnet.Duration = 4 * time.Hour
 	}
 	subnet.Stage = config.Stage
-	if subnet.Stage != model.StageNormal && subnet.Stage != model.StageRedirected {
+	if subnet.Stage != packet.StageNormal && subnet.Stage != packet.StageRedirected {
 		return nil, fmt.Errorf("invalid subnet stage")
 	}
 

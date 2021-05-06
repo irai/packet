@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/irai/packet"
 	"github.com/irai/packet/arp"
 	"github.com/irai/packet/dhcp4"
 	"github.com/irai/packet/engine"
-	"github.com/irai/packet/model"
 )
 
 var (
@@ -46,8 +46,8 @@ var (
 	ip6LLA4      = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x04}
 	ip6LLA5      = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x05}
 
-	HostAddrIP4   = model.Addr{MAC: HostMAC, IP: HostIP4}
-	RouterAddrIP4 = model.Addr{MAC: RouterMAC, IP: RouterIP4}
+	HostAddrIP4   = packet.Addr{MAC: HostMAC, IP: HostIP4}
+	RouterAddrIP4 = packet.Addr{MAC: RouterMAC, IP: RouterIP4}
 
 	DNSGoogleIP4 = net.IPv4(8, 8, 8, 8)
 )
@@ -72,7 +72,7 @@ type TestContext struct {
 func printResponseTable(tc *TestContext) {
 	fmt.Println("Response table len=", len(tc.responseTable))
 	for i, v := range tc.responseTable {
-		fmt.Printf("  entry=%d etherType=%x\n", i, model.Ether(v).EtherType())
+		fmt.Printf("  entry=%d etherType=%x\n", i, packet.Ether(v).EtherType())
 	}
 }
 
@@ -88,7 +88,7 @@ func waitResponse(tc *TestContext, action Action) error {
 	case s := <-waitChannel:
 		fmt.Println("test  : got response", s)
 	case <-time.After(time.Second * 10):
-		return model.ErrTimeout
+		return packet.ErrTimeout
 	}
 	return nil
 }
@@ -108,7 +108,7 @@ func readResponse(ctx context.Context, tc *TestContext) error {
 		}
 
 		buf = buf[:n]
-		ether := model.Ether(buf)
+		ether := packet.Ether(buf)
 		if !ether.IsValid() {
 			s := fmt.Sprintf("error ether client packet %s", ether)
 			panic(s)
@@ -121,13 +121,13 @@ func readResponse(ctx context.Context, tc *TestContext) error {
 
 		notify := ""
 		if ether.EtherType() == syscall.ETH_P_IP { // IP4?
-			ip4 := model.IP4(ether.Payload())
+			ip4 := packet.IP4(ether.Payload())
 			if !ip4.IsValid() {
 				fmt.Println("invalid ip4 packet ", len(ether.Payload()), ether.Payload())
 				continue
 			}
 			if ip4.Protocol() == syscall.IPPROTO_UDP { // UDP?
-				if udp := model.UDP(ip4.Payload()); udp.DstPort() == model.DHCP4ClientPort { // DHCP client port?
+				if udp := packet.UDP(ip4.Payload()); udp.DstPort() == packet.DHCP4ClientPort { // DHCP client port?
 					dhcp4Frame := dhcp4.DHCP4(udp.Payload())
 					options := dhcp4Frame.ParseOptions()
 					var reqType dhcp4.MessageType
@@ -177,13 +177,13 @@ func NewTestContext() *TestContext {
 	tc := TestContext{}
 	tc.ctx, tc.cancel = context.WithCancel(context.Background())
 
-	tc.inConn, tc.outConn = model.TestNewBufferedConn()
+	tc.inConn, tc.outConn = packet.TestNewBufferedConn()
 	go readResponse(tc.ctx, &tc) // MUST read the out conn to avoid blocking the sender
 
-	tc.clientInConn, tc.clientOutConn = model.TestNewBufferedConn()
-	go model.TestReadAndDiscardLoop(tc.ctx, tc.clientOutConn) // must read to avoid blocking
+	tc.clientInConn, tc.clientOutConn = packet.TestNewBufferedConn()
+	go packet.TestReadAndDiscardLoop(tc.ctx, tc.clientOutConn) // must read to avoid blocking
 
-	nicInfo := model.NICInfo{
+	nicInfo := packet.NICInfo{
 		HostMAC:   HostMAC,
 		HostIP4:   net.IPNet{IP: HostIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
 		RouterIP4: net.IPNet{IP: RouterIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
@@ -197,7 +197,7 @@ func NewTestContext() *TestContext {
 	if err != nil {
 		panic(err)
 	}
-	if model.Debug {
+	if packet.Debug {
 		fmt.Println("nicinfo: ", tc.Engine.Session().NICInfo)
 	}
 
@@ -240,7 +240,7 @@ func (tc *TestContext) GetResponse(index int) []byte {
 
 func (tc *TestContext) Close() {
 	time.Sleep(time.Millisecond * 20) // wait for all packets to finish
-	if model.Debug {
+	if packet.Debug {
 		fmt.Println("teminating context")
 	}
 	tc.cancel()
@@ -253,20 +253,20 @@ type TestEvent struct {
 	packetEvent      engine.Notification
 	waitTimeAfter    time.Duration
 	wantCapture      bool
-	wantStage        model.HuntStage
+	wantStage        packet.HuntStage
 	wantOnline       bool
 	hostTableInc     int // expected increment
 	macTableInc      int // expected increment
 	responseTableInc int // expected increment
 	responsePos      int // position of response in responseTable -1 is the last entry
-	srcAddr          model.Addr
-	dstAddr          model.Addr
+	srcAddr          packet.Addr
+	dstAddr          packet.Addr
 	dhcpHostName     string // dhcp host name
-	ether            model.Ether
-	wantHost         *model.Host
+	ether            packet.Ether
+	wantHost         *packet.Host
 }
 
-func newDHCP4DiscoverFrame(src model.Addr, xid []byte, hostName string) model.Ether {
+func newDHCP4DiscoverFrame(src packet.Addr, xid []byte, hostName string) packet.Ether {
 	options := []dhcp4.Option{}
 	oDNS := dhcp4.Option{Code: dhcp4.OptionDomainNameServer, Value: []byte{}}
 	options = append(options, oDNS)
@@ -276,10 +276,10 @@ func newDHCP4DiscoverFrame(src model.Addr, xid []byte, hostName string) model.Et
 	}
 
 	var err error
-	ether := model.Ether(make([]byte, model.EthMaxSize))
-	ether = model.EtherMarshalBinary(ether, syscall.ETH_P_IP, src.MAC, arp.EthernetBroadcast)
-	ip4 := model.IP4MarshalBinary(ether.Payload(), 50, src.IP, net.IPv4zero)
-	udp := model.UDPMarshalBinary(ip4.Payload(), model.DHCP4ClientPort, model.DHCP4ServerPort)
+	ether := packet.Ether(make([]byte, packet.EthMaxSize))
+	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IP, src.MAC, arp.EthernetBroadcast)
+	ip4 := packet.IP4MarshalBinary(ether.Payload(), 50, src.IP, net.IPv4zero)
+	udp := packet.UDPMarshalBinary(ip4.Payload(), packet.DHCP4ClientPort, packet.DHCP4ServerPort)
 	dhcp4Frame := dhcp4.RequestPacket(dhcp4.Discover, src.MAC, src.IP, xid, false, options)
 	udp, err = udp.AppendPayload(dhcp4Frame)
 	ip4 = ip4.SetPayload(udp, syscall.IPPROTO_UDP)
@@ -289,7 +289,7 @@ func newDHCP4DiscoverFrame(src model.Addr, xid []byte, hostName string) model.Et
 	return ether
 }
 
-func newDHCP4RequestFrame(src model.Addr, serverID net.IP, requestedIP net.IP, xid []byte, hostName string) model.Ether {
+func newDHCP4RequestFrame(src packet.Addr, serverID net.IP, requestedIP net.IP, xid []byte, hostName string) packet.Ether {
 	options := []dhcp4.Option{}
 	oDNS := dhcp4.Option{Code: dhcp4.OptionDomainNameServer, Value: []byte{}}
 	oReqIP := dhcp4.Option{Code: dhcp4.OptionRequestedIPAddress, Value: requestedIP}
@@ -303,10 +303,10 @@ func newDHCP4RequestFrame(src model.Addr, serverID net.IP, requestedIP net.IP, x
 	}
 
 	var err error
-	ether := model.Ether(make([]byte, model.EthMaxSize))
-	ether = model.EtherMarshalBinary(ether, syscall.ETH_P_IP, src.MAC, arp.EthernetBroadcast)
-	ip4 := model.IP4MarshalBinary(ether.Payload(), 50, src.IP, net.IPv4zero)
-	udp := model.UDPMarshalBinary(ip4.Payload(), model.DHCP4ClientPort, model.DHCP4ServerPort)
+	ether := packet.Ether(make([]byte, packet.EthMaxSize))
+	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IP, src.MAC, arp.EthernetBroadcast)
+	ip4 := packet.IP4MarshalBinary(ether.Payload(), 50, src.IP, net.IPv4zero)
+	udp := packet.UDPMarshalBinary(ip4.Payload(), packet.DHCP4ClientPort, packet.DHCP4ServerPort)
 	dhcp4Frame := dhcp4.RequestPacket(dhcp4.Request, src.MAC, requestedIP, xid, false, options)
 	udp, err = udp.AppendPayload(dhcp4Frame)
 	ip4 = ip4.SetPayload(udp, syscall.IPPROTO_UDP)
@@ -316,10 +316,10 @@ func newDHCP4RequestFrame(src model.Addr, serverID net.IP, requestedIP net.IP, x
 	return ether
 }
 
-func newARPFrame(src model.Addr, dst model.Addr, operation uint16) model.Ether {
+func newARPFrame(src packet.Addr, dst packet.Addr, operation uint16) packet.Ether {
 	var err error
-	ether := model.Ether(make([]byte, model.EthMaxSize))
-	ether = model.EtherMarshalBinary(ether, syscall.ETH_P_ARP, src.MAC, dst.MAC)
+	ether := packet.Ether(make([]byte, packet.EthMaxSize))
+	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_ARP, src.MAC, dst.MAC)
 	arpFrame, err := arp.MarshalBinary(ether.Payload(), operation, src.MAC, src.IP, dst.MAC, dst.IP)
 	if ether, err = ether.SetPayload(arpFrame); err != nil {
 		panic(err.Error())
@@ -327,11 +327,11 @@ func newARPFrame(src model.Addr, dst model.Addr, operation uint16) model.Ether {
 	return ether
 }
 
-func newArpAnnoucementEvent(addr model.Addr, hostInc int, macInc int) []TestEvent {
+func newArpAnnoucementEvent(addr packet.Addr, hostInc int, macInc int) []TestEvent {
 	return []TestEvent{
 		{name: "arp-announcement-" + addr.MAC.String(), action: "arpAnnouncement", hostTableInc: hostInc, macTableInc: macInc, responsePos: -1, responseTableInc: 0,
 			srcAddr:       addr,
-			wantHost:      &model.Host{IP: addr.IP, Online: true},
+			wantHost:      &packet.Host{IP: addr.IP, Online: true},
 			waitTimeAfter: time.Millisecond * 10,
 		},
 	}
@@ -349,7 +349,7 @@ const (
 	ActionARPAnnouncement Action = "arpAnnouncement"
 )
 
-func NewHost(t *testing.T, tc *TestContext, addr model.Addr, hostName string, hostInc int, macInc int) error {
+func NewHost(t *testing.T, tc *TestContext, addr packet.Addr, hostName string, hostInc int, macInc int) error {
 	events := NewHostEvents(addr, hostName, hostInc, macInc)
 	for _, v := range events {
 		runAction(t, tc, v)
@@ -357,34 +357,34 @@ func NewHost(t *testing.T, tc *TestContext, addr model.Addr, hostName string, ho
 	return nil
 }
 
-func NewHostEvents(addr model.Addr, hostName string, hostInc int, macInc int) []TestEvent {
+func NewHostEvents(addr packet.Addr, hostName string, hostInc int, macInc int) []TestEvent {
 	return []TestEvent{
 		{name: "discover-" + addr.MAC.String(), action: "dhcp4Discover", hostTableInc: 0, macTableInc: macInc, responsePos: -1, responseTableInc: -1,
-			srcAddr:       model.Addr{MAC: addr.MAC, IP: net.IPv4zero},
+			srcAddr:       packet.Addr{MAC: addr.MAC, IP: net.IPv4zero},
 			dhcpHostName:  hostName,
 			wantHost:      nil, // don't validate host
 			waitTimeAfter: time.Millisecond * 10,
 		},
 		{name: "request-" + addr.MAC.String(), action: "dhcp4Request", hostTableInc: hostInc, macTableInc: 0, responsePos: -1, responseTableInc: -1,
-			srcAddr:       model.Addr{MAC: addr.MAC, IP: net.IPv4zero},
+			srcAddr:       packet.Addr{MAC: addr.MAC, IP: net.IPv4zero},
 			dhcpHostName:  hostName,
-			wantHost:      &model.Host{IP: nil, Online: true},
+			wantHost:      &packet.Host{IP: nil, Online: true},
 			waitTimeAfter: time.Millisecond * 50,
 		},
 		{name: "arp-probe-" + addr.MAC.String(), action: "arpProbe", hostTableInc: 0, macTableInc: 0, responsePos: -1, responseTableInc: 0,
-			srcAddr:       model.Addr{MAC: addr.MAC, IP: net.IPv4zero},
-			wantHost:      &model.Host{IP: nil, Online: true},
+			srcAddr:       packet.Addr{MAC: addr.MAC, IP: net.IPv4zero},
+			wantHost:      &packet.Host{IP: nil, Online: true},
 			waitTimeAfter: time.Millisecond * 10,
 		},
 		{name: "arp-announcement-" + addr.MAC.String(), action: "arpAnnouncement", hostTableInc: 0, macTableInc: 0, responsePos: -1, responseTableInc: 0,
-			srcAddr:       model.Addr{MAC: addr.MAC, IP: nil}, // set IP to zero to use savedIP
-			wantHost:      &model.Host{IP: nil, Online: true},
+			srcAddr:       packet.Addr{MAC: addr.MAC, IP: nil}, // set IP to zero to use savedIP
+			wantHost:      &packet.Host{IP: nil, Online: true},
 			waitTimeAfter: time.Millisecond * 10,
 		},
 	}
 }
 
-var buf = make([]byte, model.EthMaxSize)
+var buf = make([]byte, packet.EthMaxSize)
 
 func runAction(t *testing.T, tc *TestContext, tt TestEvent) {
 	sendPacket := true
@@ -416,7 +416,7 @@ func runAction(t *testing.T, tc *TestContext, tt TestEvent) {
 		if tc.IPOffer == nil {
 			panic("invalid IPOffer")
 		}
-		tt.ether = newARPFrame(tt.srcAddr, model.Addr{MAC: arp.EthernetBroadcast, IP: tc.IPOffer}, arp.OperationRequest)
+		tt.ether = newARPFrame(tt.srcAddr, packet.Addr{MAC: arp.EthernetBroadcast, IP: tc.IPOffer}, arp.OperationRequest)
 
 	case "arpAnnouncement":
 		t.Log("send arpAnnouncement ")
@@ -426,7 +426,7 @@ func runAction(t *testing.T, tc *TestContext, tt TestEvent) {
 			}
 			tt.srcAddr.IP = tc.IPOffer
 		}
-		tt.ether = newARPFrame(model.Addr{MAC: tt.srcAddr.MAC, IP: tt.srcAddr.IP.To4()}, model.Addr{MAC: arp.EthernetBroadcast, IP: tt.srcAddr.IP.To4()}, arp.OperationRequest)
+		tt.ether = newARPFrame(packet.Addr{MAC: tt.srcAddr.MAC, IP: tt.srcAddr.IP.To4()}, packet.Addr{MAC: arp.EthernetBroadcast, IP: tt.srcAddr.IP.To4()}, arp.OperationRequest)
 
 	default:
 		fmt.Println("invalid action")
@@ -440,7 +440,7 @@ func runAction(t *testing.T, tc *TestContext, tt TestEvent) {
 	savedMACTableCount := len(tc.Engine.Session().MACTable.Table)
 
 	if sendPacket {
-		if _, err := tc.outConn.WriteTo(tt.ether, &model.Addr{MAC: tt.ether.Dst()}); err != nil {
+		if _, err := tc.outConn.WriteTo(tt.ether, &packet.Addr{MAC: tt.ether.Dst()}); err != nil {
 			panic(err.Error())
 		}
 	}

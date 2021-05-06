@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/irai/packet/model"
+	"github.com/irai/packet"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -54,7 +54,7 @@ type Config struct {
 }
 
 type DHCP4Handler interface {
-	model.PacketProcessor
+	packet.PacketProcessor
 }
 
 var _ DHCP4Handler = &Handler{}
@@ -92,7 +92,7 @@ func configChanged(config SubnetConfig, current SubnetConfig) bool {
 
 // Handler is the main dhcp4 handler
 type Handler struct {
-	session *model.Session // engine handler
+	session *packet.Session // engine handler
 	// clientConn net.PacketConn  // Listen DHCP client port
 	mode      Mode        // if true, force decline and release packets to homeDHCPServer
 	filename  string      // leases filename
@@ -106,16 +106,16 @@ type Handler struct {
 
 // New return a dhcp handler with two internal subnets.
 // func New(home SubnetConfig, netfilter SubnetConfig, filename string) (handler *DHCPHandler, err error) {
-func New(session *model.Session, netfilterIP net.IPNet, dnsServer net.IP, filename string) (handler *Handler, err error) {
+func New(session *packet.Session, netfilterIP net.IPNet, dnsServer net.IP, filename string) (handler *Handler, err error) {
 	return Config{}.New(session, netfilterIP, dnsServer, filename)
 }
 
 // New accepts a configuration structure and return a dhcp handler
-func (config Config) New(session *model.Session, netfilterIP net.IPNet, dnsServer net.IP, filename string) (h *Handler, err error) {
+func (config Config) New(session *packet.Session, netfilterIP net.IPNet, dnsServer net.IP, filename string) (h *Handler, err error) {
 
 	// validate networks
 	if !session.NICInfo.HomeLAN4.Contains(netfilterIP.IP) || netfilterIP.Contains(session.NICInfo.HomeLAN4.IP) {
-		return nil, model.ErrInvalidIP
+		return nil, packet.ErrInvalidIP
 	}
 
 	h = &Handler{table: map[string]*Lease{}}
@@ -133,7 +133,7 @@ func (config Config) New(session *model.Session, netfilterIP net.IPNet, dnsServe
 		DefaultGW:  session.NICInfo.RouterIP4.IP.To4(),
 		DHCPServer: session.NICInfo.HostIP4.IP.To4(),
 		DNSServer:  dnsServer.To4(),
-		Stage:      model.StageNormal,
+		Stage:      packet.StageNormal,
 		// FirstIP:    net.ParseIP("192.168.0.10"),
 		// LastIP:     net.ParseIP("192.168.0.127"),
 	}
@@ -142,7 +142,7 @@ func (config Config) New(session *model.Session, netfilterIP net.IPNet, dnsServe
 		DefaultGW:  netfilterIP.IP.To4(),
 		DHCPServer: session.NICInfo.HostIP4.IP,
 		DNSServer:  CloudFlareFamilyDNS1,
-		Stage:      model.StageRedirected,
+		Stage:      packet.StageRedirected,
 		// FirstIP:    net.ParseIP("192.168.0.10"),
 		// LastIP:     net.ParseIP("192.168.0.127"),
 	}
@@ -186,7 +186,7 @@ func (config Config) New(session *model.Session, netfilterIP net.IPNet, dnsServe
 
 // Detach implements the PacketProcessor interface
 func (h *Handler) Detach() error {
-	// h.session.HandlerDHCP4 = model.PacketNOOP{}
+	// h.session.HandlerDHCP4 = packet.PacketNOOP{}
 	h.closed = true
 	close(h.closeChan)
 	// if h.clientConn != nil {
@@ -221,7 +221,7 @@ func (h *Handler) printTable() {
 }
 
 // StartHunt will start the process to capture the client MAC
-func (h *Handler) StartHunt(addr model.Addr) (model.HuntStage, error) {
+func (h *Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
 	host := h.session.MustFindIP(addr.IP)
 	if Debug {
 		fmt.Printf("dhcp4: start hunt %s\n", host)
@@ -230,18 +230,18 @@ func (h *Handler) StartHunt(addr model.Addr) (model.HuntStage, error) {
 	h.Lock() // local handler lock
 	defer h.Unlock()
 
-	if lease := h.findByIP(addr.IP); lease != nil && lease.subnet.Stage != model.StageRedirected {
+	if lease := h.findByIP(addr.IP); lease != nil && lease.subnet.Stage != packet.StageRedirected {
 		// Fake a dhcp release so router will force the client to discover when it attempts to reconnect
 		if h.mode == ModeSecondaryServer || h.mode == ModeSecondaryServerNice {
 			h.forceRelease(lease.ClientID, h.net1.DefaultGW, lease.Addr.MAC, lease.Addr.IP, nil)
 		}
 		// h.engine.SetIP4Offer(host, net.IPv4zero)
 	}
-	return model.StageHunt, nil
+	return packet.StageHunt, nil
 }
 
 // StopHunt will end the capture process
-func (h *Handler) StopHunt(addr model.Addr) (model.HuntStage, error) {
+func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
 	if Debug {
 		fmt.Printf("dhcp4: stop hunt %s\n", addr)
 	}
@@ -250,7 +250,7 @@ func (h *Handler) StopHunt(addr model.Addr) (model.HuntStage, error) {
 
 // HuntStage returns StageHunt if mac and ip are valid DHCP entry in the capture state.
 // Otherwise returns false.
-func (h *Handler) CheckAddr(addr model.Addr) (model.HuntStage, error) {
+func (h *Handler) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
 	h.Lock()
 	defer h.Unlock()
 
@@ -259,24 +259,24 @@ func (h *Handler) CheckAddr(addr model.Addr) (model.HuntStage, error) {
 	if lease != nil && lease.State == StateAllocated {
 		return lease.subnet.Stage, nil
 	}
-	return model.StageNormal, model.ErrNotFound
+	return packet.StageNormal, packet.ErrNotFound
 }
 
 // ProcessPacket implements PacketProcessor interface
-func (h *Handler) ProcessPacket(host *model.Host, b []byte, header []byte) (*model.Host, model.Result, error) {
-	ether := model.Ether(b)
-	ip4 := model.IP4(ether.Payload())
+func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (*packet.Host, packet.Result, error) {
+	ether := packet.Ether(b)
+	ip4 := packet.IP4(ether.Payload())
 	if !ip4.IsValid() {
-		return host, model.Result{}, model.ErrInvalidIP
+		return host, packet.Result{}, packet.ErrInvalidIP
 	}
-	udp := model.UDP(ip4.Payload())
+	udp := packet.UDP(ip4.Payload())
 	if !udp.IsValid() || len(udp.Payload()) < 240 {
-		return host, model.Result{}, model.ErrInvalidIP
+		return host, packet.Result{}, packet.ErrInvalidIP
 	}
 
 	dhcpFrame := DHCP4(udp.Payload())
 	if !dhcpFrame.IsValid() {
-		return host, model.Result{}, model.ErrParseMessage
+		return host, packet.Result{}, packet.ErrParseMessage
 	}
 	if Debug {
 		fmt.Printf("ether: %s\n", ether)
@@ -285,21 +285,21 @@ func (h *Handler) ProcessPacket(host *model.Host, b []byte, header []byte) (*mod
 		fmt.Printf("dhcp4: %s\n", dhcpFrame)
 	}
 
-	if udp.DstPort() == model.DHCP4ClientPort {
+	if udp.DstPort() == packet.DHCP4ClientPort {
 		err := h.processClientPacket(host, dhcpFrame)
-		return host, model.Result{}, err
+		return host, packet.Result{}, err
 	}
 
 	options := dhcpFrame.ParseOptions()
 	var reqType MessageType
 	if t := options[OptionDHCPMessageType]; len(t) != 1 {
 		log.Warn("dhcp4: skiping dhcp packet with len not 1")
-		return host, model.Result{}, model.ErrParseMessage
+		return host, packet.Result{}, packet.ErrParseMessage
 	} else {
 		reqType = MessageType(t[0])
 		if reqType < Discover || reqType > Inform {
 			log.Warn("dhcp4: skiping dhcp packet invalid type ", reqType)
-			return host, model.Result{}, model.ErrParseMessage
+			return host, packet.Result{}, packet.ErrParseMessage
 		}
 	}
 
@@ -308,7 +308,7 @@ func (h *Handler) ProcessPacket(host *model.Host, b []byte, header []byte) (*mod
 
 	// if res := h.processDHCP(req, reqType, options, ip4.Src()); res != nil {
 	var response DHCP4
-	var result model.Result
+	var result packet.Result
 
 	h.Lock()
 
@@ -337,21 +337,21 @@ func (h *Handler) ProcessPacket(host *model.Host, b []byte, header []byte) (*mod
 	if response != nil {
 		// If IP not available, broadcast
 
-		var dstAddr model.Addr
+		var dstAddr packet.Addr
 		if ip4.Src().Equal(net.IPv4zero) || dhcpFrame.Broadcast() {
-			dstAddr = model.Addr{MAC: model.EthBroadcast, IP: net.IPv4bcast, Port: model.DHCP4ClientPort}
+			dstAddr = packet.Addr{MAC: packet.EthBroadcast, IP: net.IPv4bcast, Port: packet.DHCP4ClientPort}
 		} else {
-			dstAddr = model.Addr{MAC: ether.Src(), IP: ip4.Src(), Port: model.DHCP4ClientPort}
+			dstAddr = packet.Addr{MAC: ether.Src(), IP: ip4.Src(), Port: packet.DHCP4ClientPort}
 		}
 
 		if Debug {
 			log.Trace("dhcp4: send reply to ", dstAddr)
 		}
 
-		srcAddr := model.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostIP4.IP, Port: model.DHCP4ServerPort}
+		srcAddr := packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostIP4.IP, Port: packet.DHCP4ServerPort}
 		if err := sendDHCP4Packet(h.session.Conn, srcAddr, dstAddr, response); err != nil {
 			fmt.Printf("dhcp4: failed sending packet error=%s", err)
-			return host, model.Result{}, err
+			return host, packet.Result{}, err
 		}
 	}
 	return host, result, nil

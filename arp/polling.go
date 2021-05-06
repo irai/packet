@@ -8,7 +8,7 @@ import (
 
 	"log"
 
-	"github.com/irai/packet/model"
+	"github.com/irai/packet"
 )
 
 // pollingLoop detect new IPs on the network
@@ -74,10 +74,10 @@ func (h *Handler) probeOnlineLoop(ctx context.Context, interval time.Duration) e
 func (h *Handler) ScanNetwork(ctx context.Context, lan net.IPNet) error {
 
 	// Copy underneath array so we can modify value.
-	ip := model.CopyIP(lan.IP)
+	ip := packet.CopyIP(lan.IP)
 	ip = ip.To4()
 	if ip == nil {
-		return model.ErrInvalidIP
+		return packet.ErrInvalidIP
 	}
 
 	if Debug {

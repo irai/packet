@@ -6,7 +6,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/irai/packet/model"
+	"github.com/irai/packet"
 )
 
 // State defines type for lease state
@@ -35,7 +35,7 @@ type leaseTable map[string]*Lease
 type Lease struct {
 	ClientID    []byte `yaml:",omitempty"`
 	State       State
-	Addr        model.Addr
+	Addr        packet.Addr
 	IPOffer     net.IP    `yaml:",omitempty"`
 	OfferExpiry time.Time `yaml:",omitempty"`
 	XID         []byte    `yaml:",omitempty"`
@@ -81,10 +81,10 @@ func (h *Handler) findOrCreate(clientID []byte, mac net.HardwareAddr, name strin
 	}
 
 	lease = &Lease{}
-	lease.ClientID = model.CopyBytes(clientID)
+	lease.ClientID = packet.CopyBytes(clientID)
 	lease.State = StateFree
 	lease.IPOffer = nil
-	lease.Addr.MAC = model.CopyMAC(mac)
+	lease.Addr.MAC = packet.CopyMAC(mac)
 	lease.Addr.IP = nil
 	lease.subnet = subnet
 	lease.Name = name
@@ -104,7 +104,7 @@ func (h *Handler) allocIPOffer(lease *Lease, reqIP net.IP) error {
 	if reqIP != nil {
 		if l := h.findByIP(reqIP); l == nil || l.State == StateFree || bytes.Equal(l.ClientID, lease.ClientID) {
 			if h.session.FindIP(reqIP) == nil {
-				lease.IPOffer = model.CopyIP(reqIP).To4()
+				lease.IPOffer = packet.CopyIP(reqIP).To4()
 				if Debug {
 					fmt.Printf("dhcp4 : offer ip=%s\n", lease.IPOffer)
 				}

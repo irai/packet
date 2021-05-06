@@ -5,11 +5,11 @@ import (
 	"net"
 	"time"
 
-	"github.com/irai/packet/model"
+	"github.com/irai/packet"
 )
 
 type Notification struct {
-	Addr     model.Addr
+	Addr     packet.Addr
 	Online   bool
 	DHCPName string
 	MDNSName string
@@ -27,7 +27,7 @@ func (h *Handler) purge(now time.Time, probeDur time.Duration, offlineDur time.D
 	deleteCutoff := now.Add(purgeDur * -1)    // Delete entries that have not responded in last hour
 
 	purge := make([]net.IP, 0, 16)
-	offline := make([]*model.Host, 0, 16)
+	offline := make([]*packet.Host, 0, 16)
 
 	h.mutex.RLock()
 	for _, e := range h.session.HostTable.Table {
@@ -43,9 +43,9 @@ func (h *Handler) purge(now time.Time, probeDur time.Duration, offlineDur time.D
 		// Probe if device not seen recently
 		if e.Online && e.LastSeen.Before(probeCutoff) {
 			if ip := e.IP.To4(); ip != nil {
-				h.ARPHandler.CheckAddr(model.Addr{MAC: e.MACEntry.MAC, IP: ip})
+				h.ARPHandler.CheckAddr(packet.Addr{MAC: e.MACEntry.MAC, IP: ip})
 			} else {
-				h.ICMP6Handler.CheckAddr(model.Addr{MAC: e.MACEntry.MAC, IP: e.IP})
+				h.ICMP6Handler.CheckAddr(packet.Addr{MAC: e.MACEntry.MAC, IP: e.IP})
 			}
 		}
 
@@ -81,7 +81,7 @@ func (h *Handler) GetNotificationChannel() <-chan Notification {
 	h.mutex.RLock()
 	for _, host := range h.session.HostTable.Table {
 		host.Row.RLock()
-		list = append(list, Notification{Addr: model.Addr{IP: host.IP, MAC: host.MACEntry.MAC}, Online: host.Online, DHCPName: host.DHCP4Name})
+		list = append(list, Notification{Addr: packet.Addr{IP: host.IP, MAC: host.MACEntry.MAC}, Online: host.Online, DHCPName: host.DHCP4Name})
 		host.Row.RUnlock()
 	}
 	h.mutex.RUnlock()

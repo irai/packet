@@ -6,18 +6,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/irai/packet/model"
+	"github.com/irai/packet"
 )
 
 func Test_Probe_Reject(t *testing.T) {
 	tc := setupTestHandler(t)
 	defer tc.Close()
 	Debug = true
-	model.Debug = true
+	packet.Debug = true
 
 	tests := []struct {
 		name              string
-		ether             model.Ether
+		ether             packet.Ether
 		arp               ARP
 		hunt              bool
 		wantErr           error
@@ -52,7 +52,7 @@ func Test_Probe_Reject(t *testing.T) {
 			if err != tt.wantErr {
 				t.Errorf("Test_Requests:%s error = %v, wantErr %v", tt.name, err, tt.wantErr)
 			}
-			var host *model.Host
+			var host *packet.Host
 			if result.Update {
 				host, _ = tc.session.FindOrCreateHost(result.Addr.MAC, result.Addr.IP)
 			}
@@ -72,7 +72,7 @@ func Test_Probe_Reject(t *testing.T) {
 				t.Errorf("Test_Requests:%s invali response count=%v, want=%v", tt.name, tc.countResponse, tt.wantCountResponse)
 			}
 			if tt.hunt {
-				tc.arp.StartHunt(model.Addr{MAC: host.MACEntry.MAC, IP: host.MACEntry.IP4})
+				tc.arp.StartHunt(packet.Addr{MAC: host.MACEntry.MAC, IP: host.MACEntry.IP4})
 			}
 		})
 	}

@@ -7,21 +7,21 @@ import (
 
 	"log"
 
-	"github.com/irai/packet/model"
+	"github.com/irai/packet"
 )
 
-func (h *Handler) findHuntByMAC(mac net.HardwareAddr) (model.Addr, bool) {
+func (h *Handler) findHuntByMAC(mac net.HardwareAddr) (packet.Addr, bool) {
 	addr, hunting := h.huntList[string(mac)]
 	return addr, hunting
 }
 
-func (h *Handler) findHuntByIP(ip net.IP) (model.Addr, bool) {
+func (h *Handler) findHuntByIP(ip net.IP) (packet.Addr, bool) {
 	for _, v := range h.huntList {
 		if v.IP.Equal(ip) {
 			return v, true
 		}
 	}
-	return model.Addr{}, false
+	return packet.Addr{}, false
 }
 
 // StartHunt implements PacketProcessor interface
@@ -30,26 +30,26 @@ func (h *Handler) findHuntByIP(ip net.IP) (model.Addr, bool) {
 //  1. add addr to "hunt" list
 //  2. start spoof goroutine to which will continuously spoof the client ARP table
 //
-func (h *Handler) StartHunt(addr model.Addr) (model.HuntStage, error) {
+func (h *Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
 	if addr.MAC == nil || addr.IP.To4() == nil {
 		fmt.Println("arp: invalid call to startHuntIP", addr)
-		return model.StageNoChange, model.ErrInvalidIP
+		return packet.StageNoChange, packet.ErrInvalidIP
 	}
 
 	h.arpMutex.Lock()
 	defer h.arpMutex.Unlock()
 	if _, found := h.huntList[string(addr.MAC)]; found {
-		return model.StageHunt, nil
+		return packet.StageHunt, nil
 	}
 	h.huntList[string(addr.MAC)] = addr
 
 	go h.spoofLoop(addr)
-	return model.StageHunt, nil
+	return packet.StageHunt, nil
 }
 
 // StopHunt implements PacketProcessor interface
 // ARP StopHunt will remove the addr from the hunt list which will terminate the hunting goroutine
-func (h *Handler) StopHunt(addr model.Addr) (model.HuntStage, error) {
+func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
 	h.arpMutex.Lock()
 	_, hunting := h.huntList[string(addr.MAC)]
 	if hunting {
@@ -61,7 +61,7 @@ func (h *Handler) StopHunt(addr model.Addr) (model.HuntStage, error) {
 	}
 
 	fmt.Println("arp   : hunt stop ok", addr)
-	return model.StageNormal, nil
+	return packet.StageNormal, nil
 }
 
 // spoofLoop attacks the client with ARP attacks
@@ -70,7 +70,7 @@ func (h *Handler) StopHunt(addr model.Addr) (model.HuntStage, error) {
 //   1. spoof the client arp table to send router packets to us
 //   2. optionally, claim the ownership of the IP to force client to change IP or go offline
 //
-func (h *Handler) spoofLoop(addr model.Addr) {
+func (h *Handler) spoofLoop(addr packet.Addr) {
 
 	// 4 second re-arp seem to be adequate;
 	// Experimented with 300ms but no noticeable improvement other the chatty net.
@@ -114,7 +114,7 @@ func (h *Handler) spoofLoop(addr model.Addr) {
 // The client ARP table is refreshed often and only last for a short while (few minutes)
 // hence the goroutine that re-arp clients
 // To make sure the cache stays poisoned, replay every 5 seconds with a loop.
-func (h *Handler) forceSpoof(addr model.Addr) error {
+func (h *Handler) forceSpoof(addr packet.Addr) error {
 
 	// Announce to target that we own the router IP
 	// This will update the target arp table with our mac

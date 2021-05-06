@@ -6,7 +6,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/irai/packet/model"
+	"github.com/irai/packet"
 )
 
 // Capture places the mac in capture mode
@@ -19,14 +19,14 @@ func (h *Handler) Capture(mac net.HardwareAddr) error {
 	}
 	if macEntry.IsRouter {
 		h.mutex.Unlock()
-		return model.ErrIsRouter
+		return packet.ErrIsRouter
 	}
 	macEntry.Captured = true
 
-	list := []model.Addr{}
-	// Mark all known entries as model.StageHunt
+	list := []packet.Addr{}
+	// Mark all known entries as packet.StageHunt
 	for _, host := range macEntry.HostList {
-		list = append(list, model.Addr{IP: host.IP, MAC: host.MACEntry.MAC})
+		list = append(list, packet.Addr{IP: host.IP, MAC: host.MACEntry.MAC})
 	}
 	h.mutex.Unlock()
 
@@ -46,16 +46,16 @@ func (h *Handler) Capture(mac net.HardwareAddr) error {
 //   - capture command issued by user
 //   - host has come online
 //   - icmp ping no longer redirected
-func (h *Handler) lockAndStartHunt(addr model.Addr) (err error) {
+func (h *Handler) lockAndStartHunt(addr packet.Addr) (err error) {
 
 	host := h.session.FindIP(addr.IP)
 	if host == nil {
 		fmt.Printf("packet: error invalid ip in lockAndStartHunt ip=%s\n", addr.IP)
-		return model.ErrInvalidIP
+		return packet.ErrInvalidIP
 	}
 
 	host.Row.Lock()
-	if host.HuntStage == model.StageRedirected {
+	if host.HuntStage == packet.StageRedirected {
 		fmt.Printf("packet: host successfully redirected %s\n", host)
 		host.Row.Unlock()
 		return nil
@@ -64,18 +64,18 @@ func (h *Handler) lockAndStartHunt(addr model.Addr) (err error) {
 		host.Row.Unlock()
 		return nil
 	}
-	if host.HuntStage == model.StageHunt {
+	if host.HuntStage == packet.StageHunt {
 		host.Row.Unlock()
 		return nil
 	}
 
-	host.HuntStage = model.StageHunt
+	host.HuntStage = packet.StageHunt
 	/**
-	host.icmp4Store.model.HuntStage = model.StageHunt
-	host.dhcp4Store.model.HuntStage = model.StageHunt
-	host.icmp6Store.model.HuntStage = model.StageHunt
+	host.icmp4Store.packet.HuntStage = packet.StageHunt
+	host.dhcp4Store.packet.HuntStage = packet.StageHunt
+	host.icmp6Store.packet.HuntStage = packet.StageHunt
 	**/
-	if model.Debug {
+	if packet.Debug {
 		fmt.Printf("packet: start hunt for %s\n", host)
 	}
 	host.Row.Unlock()
@@ -120,14 +120,14 @@ func (h *Handler) Release(mac net.HardwareAddr) error {
 		h.mutex.Unlock()
 		return nil
 	}
-	list := []*model.Host{}
+	list := []*packet.Host{}
 	list = append(list, macEntry.HostList...)
 	macEntry.Captured = false
 
 	h.mutex.Unlock()
 
 	for _, host := range list {
-		if err := h.lockAndStopHunt(host, model.StageNormal); err != nil {
+		if err := h.lockAndStopHunt(host, packet.StageNormal); err != nil {
 			return err
 		}
 	}
@@ -137,19 +137,19 @@ func (h *Handler) Release(mac net.HardwareAddr) error {
 // lockAndStopHunt will stop hunting for all modules
 //
 // host could be in one of two states:
-//  - model.StageHunt       - an active hunt is in progress
-//  - model.StageRedirected - the host is redirected; typically called when host went offline
+//  - packet.StageHunt       - an active hunt is in progress
+//  - packet.StageRedirected - the host is redirected; typically called when host went offline
 //                      or routing is no longer OK
 //
-func (h *Handler) lockAndStopHunt(host *model.Host, stage model.HuntStage) (err error) {
+func (h *Handler) lockAndStopHunt(host *packet.Host, stage packet.HuntStage) (err error) {
 	host.Row.Lock()
 	switch host.HuntStage {
-	case model.StageNormal:
+	case packet.StageNormal:
 		host.Row.Unlock()
 		return nil
-	case model.StageRedirected:
+	case packet.StageRedirected:
 		host.HuntStage = stage
-		if model.Debug {
+		if packet.Debug {
 			fmt.Printf("packet: stop hunt for %s\n", host)
 		}
 		host.Row.Unlock()
@@ -157,29 +157,29 @@ func (h *Handler) lockAndStopHunt(host *model.Host, stage model.HuntStage) (err 
 	}
 
 	host.HuntStage = stage
-	if model.Debug {
+	if packet.Debug {
 		fmt.Printf("packet: stop hunt for %s\n", host)
 	}
 
 	/**
-	if host.icmp4Store.model.HuntStage == model.StageHunt {
-		host.icmp4Store.model.HuntStage = model.StageNormal
+	if host.icmp4Store.packet.HuntStage == packet.StageHunt {
+		host.icmp4Store.packet.HuntStage = packet.StageNormal
 	}
-	if host.dhcp4Store.model.HuntStage == model.StageHunt {
-		host.dhcp4Store.model.HuntStage = model.StageNormal
+	if host.dhcp4Store.packet.HuntStage == packet.StageHunt {
+		host.dhcp4Store.packet.HuntStage = packet.StageNormal
 	}
-	if host.icmp6Store.model.HuntStage == model.StageHunt {
-		host.icmp6Store.model.HuntStage = model.StageNormal
+	if host.icmp6Store.packet.HuntStage == packet.StageHunt {
+		host.icmp6Store.packet.HuntStage = packet.StageNormal
 	}
 	**/
-	addr := model.Addr{MAC: host.MACEntry.MAC, IP: host.IP}
+	addr := packet.Addr{MAC: host.MACEntry.MAC, IP: host.IP}
 	host.Row.Unlock()
 
 	// IP4 handlers
 	if addr.IP.To4() != nil {
 		go func() {
 			// DHCP4 will return not found if there is no lease entry; this is okay if the host has not acquired an IP yet
-			if _, err = h.DHCP4Handler.StopHunt(addr); err != nil && !errors.Is(err, model.ErrNotFound) {
+			if _, err = h.DHCP4Handler.StopHunt(addr); err != nil && !errors.Is(err, packet.ErrNotFound) {
 				fmt.Printf("packet: failed to stop dhcp4 hunt: %s", err.Error())
 			}
 			if _, err = h.ICMP4Handler.StopHunt(addr); err != nil {
@@ -206,21 +206,21 @@ func (h *Handler) lockAndMonitorRoute(now time.Time) (err error) {
 	table := h.session.GetHosts()
 	for _, host := range table {
 		host.Row.RLock()
-		if host.HuntStage == model.StageRedirected && host.IP.To4() != nil {
-			addr := model.Addr{MAC: host.MACEntry.MAC, IP: host.IP}
+		if host.HuntStage == packet.StageRedirected && host.IP.To4() != nil {
+			addr := packet.Addr{MAC: host.MACEntry.MAC, IP: host.IP}
 			host.Row.RUnlock()
 			_, err := h.ICMP4Handler.CheckAddr(addr) // ping host
-			if errors.Is(err, model.ErrNotRedirected) {
+			if errors.Is(err, packet.ErrNotRedirected) {
 				fmt.Printf("packet: ip4 routing NOK %s\n", host)
 				// Call stop hunt first to update stage to normal
-				if err := h.lockAndStopHunt(host, model.StageNormal); err != nil {
+				if err := h.lockAndStopHunt(host, packet.StageNormal); err != nil {
 					fmt.Printf("packet: failed to stop hunt %s error=\"%s\"\n", host, err)
 				}
 				if err := h.lockAndStartHunt(addr); err != nil {
 					fmt.Printf("packet: failed to start hunt %s error=\"%s\"\n", host, err)
 				}
 			} else {
-				if err == nil && model.Debug {
+				if err == nil && packet.Debug {
 					fmt.Printf("packet: ip4 routing OK %s\n", host)
 				}
 			}

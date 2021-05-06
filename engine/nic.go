@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/irai/packet"
 	"github.com/irai/packet/icmp4"
-	"github.com/irai/packet/model"
 	"github.com/vishvananda/netlink"
 )
 
@@ -22,9 +22,9 @@ import (
 //
 // TODO: use routing package to identify default router
 // https://github.com/google/gopacket/tree/v1.1.19/routing
-func GetNICInfo(nic string) (info *model.NICInfo, err error) {
+func GetNICInfo(nic string) (info *packet.NICInfo, err error) {
 
-	info = &model.NICInfo{}
+	info = &packet.NICInfo{}
 	info.IFI, err = net.InterfaceByName(nic)
 	if err != nil {
 		return nil, err
@@ -132,7 +132,7 @@ func GetLinuxDefaultGateway() (gw net.IP, err error) {
 //   192.168.0.4      0x1         0x2         4c:bb:58:f4:b2:d7     *        eth0
 //   192.168.0.5      0x1         0x2         84:b1:53:ea:1f:40     *        eth0
 //
-func LoadLinuxARPTable(nic string) (list []model.Addr, err error) {
+func LoadLinuxARPTable(nic string) (list []packet.Addr, err error) {
 	const name = "/proc/net/arp"
 
 	file, err := os.Open(name)
@@ -163,24 +163,24 @@ func LoadLinuxARPTable(nic string) (list []model.Addr, err error) {
 			fmt.Println("raw: error in loadARPProcTable - invalid MAC", tokens)
 			continue
 		}
-		list = append(list, model.Addr{MAC: mac, IP: ip})
+		list = append(list, packet.Addr{MAC: mac, IP: ip})
 	}
 
 	return list, nil
 }
 
 // GetIP4DefaultGatewayAddr return the IP4 default gatewy for nic
-func GetIP4DefaultGatewayAddr(nic string) (addr model.Addr, err error) {
+func GetIP4DefaultGatewayAddr(nic string) (addr packet.Addr, err error) {
 
 	if addr.IP, err = GetLinuxDefaultGateway(); err != nil {
 		fmt.Println("error getting router ", err)
-		return model.Addr{}, model.ErrInvalidIP
+		return packet.Addr{}, packet.ErrInvalidIP
 	}
 	addr.IP = addr.IP.To4()
 
 	// Try 3 times to read arp table
 	// This is required if we just reset the interface and the arp table is nil
-	var arpList []model.Addr
+	var arpList []packet.Addr
 	for i := 0; i < 3; i++ {
 		icmp4.Ping(addr.IP) // ping to populate arp table
 		time.Sleep(time.Millisecond * 15)
@@ -196,7 +196,7 @@ func GetIP4DefaultGatewayAddr(nic string) (addr model.Addr, err error) {
 		}
 	}
 	if addr.MAC == nil {
-		return model.Addr{}, fmt.Errorf("default gw mac not found on interface")
+		return packet.Addr{}, fmt.Errorf("default gw mac not found on interface")
 	}
 
 	return addr, nil
@@ -260,7 +260,7 @@ func SegmentLAN(nic string, hostIP net.IPNet, routerIP net.IPNet) (netfilterIP n
 }
 
 func locateFreeIP(nic string, hostIP net.IP, ip net.IP, start uint8, end uint8) (newIP net.IP, err error) {
-	newIP = model.CopyIP(ip).To4()
+	newIP = packet.CopyIP(ip).To4()
 	for i := start; i <= end; i++ {
 		newIP[3] = i // save to variable
 

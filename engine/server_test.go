@@ -4,19 +4,19 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/irai/packet/model"
+	"github.com/irai/packet"
 )
 
 func setupTestHandler() *Handler {
 	h := &Handler{}
-	h.session = &model.Session{HostTable: model.NewHostTable(), MACTable: model.NewMACTable()}
+	h.session = &packet.Session{HostTable: packet.NewHostTable(), MACTable: packet.NewMACTable()}
 	return h
 }
 
 func TestHandler_findOrCreateHostDupIP(t *testing.T) {
 	engine := setupTestHandler()
 
-	model.Debug = false
+	packet.Debug = false
 
 	// First create host with two IPs - IP3 and IP2 and set online
 	host1, _ := engine.session.FindOrCreateHost(mac1, ip3)

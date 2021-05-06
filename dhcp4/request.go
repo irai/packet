@@ -6,7 +6,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/irai/packet/model"
+	"github.com/irai/packet"
 )
 
 // HandleRequest process client DHCPREQUEST message to servers
@@ -45,10 +45,10 @@ import (
 //  indicating clearly that it presently owns that address. It then broadcasts the request on the local network.
 //
 
-func (h *Handler) handleRequest(host *model.Host, p DHCP4, options Options, senderIP net.IP) (*model.Host, model.Result, DHCP4) {
+func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, senderIP net.IP) (*packet.Host, packet.Result, DHCP4) {
 
 	reqIP, serverIP := net.IPv4zero, net.IPv4zero
-	result := model.Result{}
+	result := packet.Result{}
 
 	clientID := getClientID(p, options)
 	if tmp, ok := options[OptionRequestedIPAddress]; ok {

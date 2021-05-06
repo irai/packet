@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/irai/packet/model"
+	"github.com/irai/packet"
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv4"
 )
@@ -35,9 +35,9 @@ var icmpTable = struct {
 
 // SendEchoRequest transmit an icmp echo request
 // Do not wait for response
-func (h *Handler) SendEchoRequest(srcAddr model.Addr, dstAddr model.Addr, id uint16, seq uint16) error {
+func (h *Handler) SendEchoRequest(srcAddr packet.Addr, dstAddr packet.Addr, id uint16, seq uint16) error {
 	if srcAddr.IP.To4() == nil || dstAddr.IP.To4() == nil {
-		return model.ErrInvalidIP
+		return packet.ErrInvalidIP
 	}
 	icmpMessage := icmp.Message{
 		Type: ipv4.ICMPTypeEcho,
@@ -55,7 +55,7 @@ func (h *Handler) SendEchoRequest(srcAddr model.Addr, dstAddr model.Addr, id uin
 	}
 
 	if Debug {
-		fmt.Printf("icmp4: echo request %s\n", model.ICMPEcho(p))
+		fmt.Printf("icmp4: echo request %s\n", packet.ICMPEcho(p))
 	}
 	return h.sendPacket(srcAddr, dstAddr, p)
 }
@@ -75,7 +75,7 @@ func echoNotify(id uint16) {
 }
 
 // Ping send a ping request and wait for a reply
-func (h *Handler) Ping(srcAddr model.Addr, dstAddr model.Addr, timeout time.Duration) (err error) {
+func (h *Handler) Ping(srcAddr packet.Addr, dstAddr packet.Addr, timeout time.Duration) (err error) {
 	if timeout <= 0 || timeout > time.Second*10 {
 		timeout = time.Second * 2
 	}
@@ -109,7 +109,7 @@ func (h *Handler) Ping(srcAddr model.Addr, dstAddr model.Addr, timeout time.Dura
 	icmpTable.Unlock()
 
 	if !msg.msgRecv {
-		return model.ErrTimeout
+		return packet.ErrTimeout
 	}
 
 	return nil
@@ -122,27 +122,27 @@ func (h *Handler) Ping(srcAddr model.Addr, dstAddr model.Addr, timeout time.Dura
 //
 // Note: the reply will also come to us if the client is undergoing
 // an arp attack (hunt).
-func (h *Handler) CheckAddr(addr model.Addr) (model.HuntStage, error) {
+func (h *Handler) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
 	// Test if client is online first
 	// If client does not respond to echo, there is little we can test
-	if err := h.Ping(model.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostIP4.IP}, addr, time.Second*2); err != nil {
+	if err := h.Ping(packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostIP4.IP}, addr, time.Second*2); err != nil {
 		fmt.Printf("icmp4 : not responding to ping ip=%s mac=%s\n", addr.IP, addr.MAC)
-		return model.StageNormal, model.ErrTimeout
+		return packet.StageNormal, packet.ErrTimeout
 	}
 
 	// first attempt
-	err := h.Ping(model.Addr{MAC: h.session.NICInfo.RouterMAC, IP: h.session.NICInfo.RouterIP4.IP}, addr, time.Second*2)
+	err := h.Ping(packet.Addr{MAC: h.session.NICInfo.RouterMAC, IP: h.session.NICInfo.RouterIP4.IP}, addr, time.Second*2)
 	if err == nil {
-		return model.StageRedirected, nil
+		return packet.StageRedirected, nil
 	}
 
 	// second attempt
-	err = h.Ping(model.Addr{MAC: h.session.NICInfo.RouterMAC, IP: h.session.NICInfo.RouterIP4.IP}, addr, time.Second*2)
+	err = h.Ping(packet.Addr{MAC: h.session.NICInfo.RouterMAC, IP: h.session.NICInfo.RouterIP4.IP}, addr, time.Second*2)
 	if err == nil {
-		return model.StageRedirected, nil
+		return packet.StageRedirected, nil
 	}
 
-	return model.StageHunt, model.ErrNotRedirected
+	return packet.StageHunt, packet.ErrNotRedirected
 }
 
 // Ping execute /usr/bin/ping

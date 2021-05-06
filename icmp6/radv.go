@@ -5,7 +5,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/irai/packet/model"
+	"github.com/irai/packet"
 	"inet.af/netaddr"
 )
 
@@ -38,7 +38,7 @@ var (
 
 // Router holds a router identification
 type Router struct {
-	Addr            model.Addr
+	Addr            packet.Addr
 	enableRADVS     bool // if true, we respond for this server
 	ManagedFlag     bool // if true, hosts should get IP from DHCP, if false, use SLAAC IP
 	OtherCondigFlag bool // if true, hosts should get other info from DHCP
@@ -64,7 +64,7 @@ func (h *Handler) findOrCreateRouter(mac net.HardwareAddr, ip net.IP) (router *R
 	if found {
 		return r, true
 	}
-	router = &Router{Addr: model.Addr{MAC: model.CopyMAC(mac), IP: model.CopyIP(ip)}}
+	router = &Router{Addr: packet.Addr{MAC: packet.CopyMAC(mac), IP: packet.CopyIP(ip)}}
 	h.LANRouters[ipNew] = router
 	h.Router = router // make this the default ipv6 router - used in na attack
 	fmt.Printf("icmp6 : new ipv6 ra router %s\n", router)
@@ -106,11 +106,11 @@ func (r *RADVS) Stop() {
 }
 
 func (r *RADVS) SendRA() error {
-	return r.h.SendRouterAdvertisement(*r.Router, model.IP6AllNodesAddr)
+	return r.h.SendRouterAdvertisement(*r.Router, packet.IP6AllNodesAddr)
 }
 
 func (r *RADVS) sendAdvertistementLoop() {
-	r.h.SendRouterAdvertisement(*r.Router, model.IP6AllNodesAddr)
+	r.h.SendRouterAdvertisement(*r.Router, packet.IP6AllNodesAddr)
 	ticker := time.NewTicker(time.Duration(int64(time.Millisecond) * int64(r.Router.RetransTimer))).C
 	for {
 		select {
@@ -118,7 +118,7 @@ func (r *RADVS) sendAdvertistementLoop() {
 			return
 
 		case <-ticker:
-			if err := r.h.SendRouterAdvertisement(*r.Router, model.IP6AllNodesAddr); err != nil {
+			if err := r.h.SendRouterAdvertisement(*r.Router, packet.IP6AllNodesAddr); err != nil {
 				fmt.Printf("icmp6 : error in send ra: %s", err)
 			}
 		}
