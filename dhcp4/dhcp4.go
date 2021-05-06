@@ -3,6 +3,7 @@ package dhcp4
 import (
 	"fmt"
 	"net"
+	"os"
 	"sync"
 	"time"
 
@@ -150,7 +151,9 @@ func (config Config) New(session *model.Session, netfilterIP net.IPNet, dnsServe
 	h.net1, h.net2, h.table, err = loadConfig(h.filename)
 	if err != nil || h.net1 == nil || h.net2 == nil || h.table == nil ||
 		configChanged(homeSubnet, h.net1.SubnetConfig) || configChanged(netfilterSubnet, h.net2.SubnetConfig) {
-		fmt.Printf("dhcp4: invalid or missing config file=%s. resetting...\n", h.filename)
+		if !os.IsNotExist(err) {
+			fmt.Printf("dhcp4: invalid config file=%s err=%s. resetting...\n", h.filename, err)
+		}
 		h.table = make(map[string]*Lease)
 
 		// net1 is home LAN

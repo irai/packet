@@ -51,7 +51,7 @@ func TestDHCPHandler_handleDiscover(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := sendDHCP4Packet(tc.outConn, tt.srcAddr, tt.dstAddr, tt.packet); err != nil {
+			if err := sendTestDHCP4Packet(t, tc, tt.srcAddr, tt.dstAddr, tt.packet); err != nil {
 				t.Errorf("DHCPHandler.handleDiscover() error sending packet error=%s", err)
 				return
 			}
@@ -61,8 +61,8 @@ func TestDHCPHandler_handleDiscover(t *testing.T) {
 				tc.h.printTable()
 				t.Errorf("DHCPHandler.handleDiscover() invalid lease table len=%d want=%d", n, tt.tableLen)
 			}
-			if tt.responseCount != len(tc.responseTable) {
-				t.Errorf("DHCPHandler.handleDiscover() invalid response count=%d want=%d", len(tc.responseTable), tt.responseCount)
+			if tt.responseCount != tc.count {
+				t.Errorf("DHCPHandler.handleDiscover() invalid response count=%d want=%d", tc.count, tt.responseCount)
 			}
 		})
 	}
@@ -74,6 +74,7 @@ func TestDHCPHandler_exhaust(t *testing.T) {
 	oDNS := Option{Code: OptionDomainNameServer, Value: []byte{}}
 
 	model.DebugIP4 = false
+	model.Debug = false
 	Debug = false
 	os.Remove(testDHCPFilename)
 	tc := setupTestHandler()
@@ -100,7 +101,7 @@ func TestDHCPHandler_exhaust(t *testing.T) {
 				mac := mac1
 				mac[5] = byte(i)
 				tt.packet = RequestPacket(Discover, mac, net.IPv4zero, []byte{0x01}, false, append(options, oDNS))
-				if err := sendDHCP4Packet(tc.outConn, tt.srcAddr, tt.dstAddr, tt.packet); err != nil {
+				if err := sendTestDHCP4Packet(t, tc, tt.srcAddr, tt.dstAddr, tt.packet); err != nil {
 					t.Errorf("DHCPHandler.handleDiscover() error sending packet error=%s", err)
 					return
 				}
@@ -111,8 +112,8 @@ func TestDHCPHandler_exhaust(t *testing.T) {
 				tc.h.printTable()
 				t.Errorf("DHCPHandler.handleDiscover() invalid lease table len=%d want=%d", n, tt.tableLen)
 			}
-			if tt.responseCount != len(tc.responseTable) {
-				t.Errorf("DHCPHandler.handleDiscover() invalid response count=%d want=%d", len(tc.responseTable), tt.responseCount)
+			if tt.responseCount != tc.count {
+				t.Errorf("DHCPHandler.handleDiscover() invalid response count=%d want=%d", tc.count, tt.responseCount)
 			}
 		})
 	}

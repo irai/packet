@@ -12,7 +12,7 @@ import (
 )
 
 func Test_declineSimple(t *testing.T) {
-	model.DebugIP4 = false
+	model.Debug = false
 	Debug = false
 	os.Remove(testDHCPFilename)
 	tc := setupTestHandler()
@@ -24,7 +24,7 @@ func Test_declineSimple(t *testing.T) {
 
 	dhcpFrame := newDHCP4DeclineFrame(srcAddr, tc.IPOffer, hostIP4, xid)
 	dstAddr := model.Addr{MAC: hostMAC, IP: hostIP4, Port: model.DHCP4ServerPort}
-	sendDHCP4Packet(tc.outConn, srcAddr, dstAddr, dhcpFrame)
+	sendTestDHCP4Packet(t, tc, srcAddr, dstAddr, dhcpFrame)
 	time.Sleep(time.Millisecond * 10)
 	checkLeaseTable(t, tc, 0, 0, 1)
 }
@@ -43,22 +43,22 @@ func Test_DeclineFromAnotherServer(t *testing.T) {
 
 	// discover packet
 	dhcpFrame := newDHCP4DiscoverFrame(srcAddr, "name1", xid)
-	sendDHCP4Packet(tc.outConn, srcAddr, dstAddr, dhcpFrame)
+	sendTestDHCP4Packet(t, tc, srcAddr, dstAddr, dhcpFrame)
 	time.Sleep(time.Millisecond * 10)
 	checkLeaseTable(t, tc, 0, 1, 0)
 
 	// decline for other host
 	dhcpFrame = newDHCP4DeclineFrame(srcAddr, ip5, routerIP4, xid)
 	dstAddr = model.Addr{MAC: routerMAC, IP: routerIP4, Port: model.DHCP4ServerPort}
-	sendDHCP4Packet(tc.outConn, srcAddr, dstAddr, dhcpFrame)
+	sendTestDHCP4Packet(t, tc, srcAddr, dstAddr, dhcpFrame)
 	time.Sleep(time.Millisecond * 10)
 	checkLeaseTable(t, tc, 0, 1, 0)
 
 	// request for our server
 	newDHCPHost(t, tc, srcAddr.MAC)
 	time.Sleep(time.Millisecond * 10)
-	if len(tc.responseTable) != 3 {
-		t.Errorf("DHCPHandler.handleDiscover() invalid response count=%d want=%d", len(tc.responseTable), 3)
+	if tc.count != 2 { // count offers
+		t.Errorf("DHCPHandler.handleDiscover() invalid response count=%d want=%d", tc.count, 2)
 	}
 	checkLeaseTable(t, tc, 1, 0, 0)
 

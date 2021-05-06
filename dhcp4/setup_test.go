@@ -60,6 +60,7 @@ type testContext struct {
 	responseTable [][]byte
 	xid           int
 	IPOffer       net.IP
+	count         int
 }
 
 func readResponse(ctx context.Context, tc *testContext) error {
@@ -98,13 +99,14 @@ func readResponse(ctx context.Context, tc *testContext) error {
 				panic("ip is nil")
 			}
 			tc.IPOffer = ip
+			tc.count++
 		}
 
 		tmp := make([]byte, len(buf))
 		copy(tmp, buf)
 		tc.responseTable = append(tc.responseTable, tmp)
 		// used for debuging - disable to avoid verbose logging
-		if true {
+		if false {
 			fmt.Printf("received msg n=%d %s\n", len(tc.responseTable), ether)
 		}
 	}
@@ -138,13 +140,6 @@ func setupTestHandler() *testContext {
 		fmt.Println("nicinfo: ", tc.session.NICInfo)
 	}
 
-	// Default dhcp engine
-	// netfilterIP, err := packet.SegmentLAN("eth0",
-	// net.IPNet{IP: hostIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
-	// net.IPNet{IP: routerIP4, Mask: net.IPv4Mask(255, 255, 255, 0)})
-	// if err != nil {
-	// panic(err)
-	// }
 	tc.h, err = Config{ClientConn: tc.clientInConn}.New(tc.session, net.IPNet{IP: hostIP4, Mask: net.IPv4Mask(255, 255, 255, 128)}, dnsIP4, testDHCPFilename)
 	if err != nil {
 		panic("cannot create handler: " + err.Error())

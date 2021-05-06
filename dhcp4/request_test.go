@@ -122,9 +122,6 @@ func Test_requestAnotherHost(t *testing.T) {
 	// request for our server
 	newDHCPHost(t, tc, srcAddr.MAC)
 	time.Sleep(time.Millisecond * 10)
-	if len(tc.responseTable) != 259 {
-		t.Errorf("DHCPHandler.handleDiscover() invalid response count=%d want=%d", len(tc.responseTable), 259)
-	}
 	checkLeaseTable(t, tc, 1, 0, 0)
 
 	// request for another host
