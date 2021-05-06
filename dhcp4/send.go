@@ -9,8 +9,7 @@ import (
 )
 
 func sendDHCP4Packet(conn net.PacketConn, srcAddr model.Addr, dstAddr model.Addr, p DHCP4) (err error) {
-	ether := model.Ether(make([]byte, model.EthMaxSize)) // Ping is called many times concurrently by client
-
+	ether := model.Ether(make([]byte, model.EthMaxSize))
 	ether = model.EtherMarshalBinary(ether, syscall.ETH_P_IP, srcAddr.MAC, dstAddr.MAC)
 	ip4 := model.IP4MarshalBinary(ether.Payload(), 50, srcAddr.IP, dstAddr.IP)
 	udp := model.UDPMarshalBinary(ip4.Payload(), srcAddr.Port, dstAddr.Port)

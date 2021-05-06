@@ -58,11 +58,12 @@ func setupTestHandler(t *testing.T) *testContext {
 	tc.ctx, tc.cancel = context.WithCancel(context.Background())
 	tc.session = model.NewEmptySession()
 
+	// fake conn
 	tc.inConn, tc.outConn = model.TestNewBufferedConn()
 	go readResponse(tc.ctx, &tc) // MUST read the out conn to avoid blocking the sender
-	// go model.TestReadAndDiscardLoop(tc.ctx, tc.inConn) // MUST read the in conn to avoid blocking the sender
-
 	tc.session.Conn = tc.inConn
+
+	// fake nicinfo
 	tc.session.NICInfo = &model.NICInfo{
 		HostMAC:   hostMAC,
 		HostIP4:   net.IPNet{IP: hostIP, Mask: net.IPv4Mask(255, 255, 255, 0)},
@@ -109,7 +110,7 @@ func readResponse(ctx context.Context, tc *testContext) error {
 		}
 
 		// used for debuging - disable to avoid verbose logging
-		if true {
+		if false {
 			fmt.Printf("test  : got test response=%s\n", ether)
 		}
 

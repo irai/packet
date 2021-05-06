@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
-	"github.com/irai/packet"
 	"github.com/irai/packet/model"
 	log "github.com/sirupsen/logrus"
 )
@@ -100,13 +100,13 @@ func readResponse(ctx context.Context, tc *testContext) error {
 			tc.IPOffer = ip
 		}
 
-		// used for debuging - disable to avoid verbose logging
-		if false {
-			fmt.Printf("raw: got buffere msg=%s\n", ether)
-		}
 		tmp := make([]byte, len(buf))
 		copy(tmp, buf)
 		tc.responseTable = append(tc.responseTable, tmp)
+		// used for debuging - disable to avoid verbose logging
+		if true {
+			fmt.Printf("received msg n=%d %s\n", len(tc.responseTable), ether)
+		}
 	}
 }
 
@@ -116,50 +116,40 @@ func setupTestHandler() *testContext {
 
 	tc := testContext{}
 	tc.ctx, tc.cancel = context.WithCancel(context.Background())
+	tc.session = model.NewEmptySession()
 
+	// DHCP server conn
 	tc.inConn, tc.outConn = model.TestNewBufferedConn()
 	go readResponse(tc.ctx, &tc) // MUST read the out conn to avoid blocking the sender
+	tc.session.Conn = tc.inConn
 
+	// DHCP client conn
 	tc.clientInConn, tc.clientOutConn = model.TestNewBufferedConn()
 	go model.TestReadAndDiscardLoop(tc.ctx, tc.clientOutConn) // must read to avoid blocking
 
-	nicInfo := model.NICInfo{
+	tc.session.NICInfo = &model.NICInfo{
 		HostMAC:   hostMAC,
 		HostIP4:   net.IPNet{IP: hostIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
 		RouterIP4: net.IPNet{IP: routerIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
 		HomeLAN4:  homeLAN,
 	}
 
-	// override handler with conn and nicInfo
-	// config := packet.Config{Conn: tc.inConn, NICInfo: &nicInfo, ProbeInterval: time.Millisecond * 500, OfflineDeadline: time.Millisecond * 500, PurgeDeadline: time.Second * 2}
-	tc.session = model.NewEmptySession()
-	if err != nil {
-		panic(err)
-	}
 	if Debug {
 		fmt.Println("nicinfo: ", tc.session.NICInfo)
 	}
 
 	// Default dhcp engine
-	netfilterIP, err := packet.SegmentLAN("eth0",
-		net.IPNet{IP: hostIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
-		net.IPNet{IP: routerIP4, Mask: net.IPv4Mask(255, 255, 255, 0)})
-	if err != nil {
-		panic(err)
-	}
-	tc.h, err = Config{ClientConn: tc.clientInConn}.Attach(tc.session, netfilterIP, dnsIP4, testDHCPFilename)
+	// netfilterIP, err := packet.SegmentLAN("eth0",
+	// net.IPNet{IP: hostIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
+	// net.IPNet{IP: routerIP4, Mask: net.IPv4Mask(255, 255, 255, 0)})
+	// if err != nil {
+	// panic(err)
+	// }
+	tc.h, err = Config{ClientConn: tc.clientInConn}.New(tc.session, net.IPNet{IP: hostIP4, Mask: net.IPv4Mask(255, 255, 255, 128)}, dnsIP4, testDHCPFilename)
 	if err != nil {
 		panic("cannot create handler: " + err.Error())
 	}
 	tc.h.mode = ModeSecondaryServerNice
-
-	/***
-	go func() {
-		if err := tc.engine.ListenAndServe(tc.ctx); err != nil {
-			panic(err)
-		}
-	}()
-	***/
 
 	time.Sleep(time.Millisecond * 10) // time for all goroutine to start
 	return &tc
@@ -177,7 +167,6 @@ func (tc *testContext) Close() {
 type testEvent struct {
 	name          string
 	action        string // capture, block, accept, release, event
-	packetEvent   packet.Notification
 	waitTimeAfter time.Duration
 	wantCapture   bool
 	wantStage     model.HuntStage
@@ -192,14 +181,12 @@ type testEvent struct {
 
 func newDHCP4DeclineFrame(src model.Addr, declineIP net.IP, serverIP net.IP, xid []byte) DHCP4 {
 	options := []Option{}
-	// oDNS := Option{Code: OptionDomainNameServer, Value: []byte{}}
 	options = append(options, Option{Code: OptionServerIdentifier, Value: serverIP.To4()})
 	options = append(options, Option{Code: OptionRequestedIPAddress, Value: declineIP.To4()})
 	options = append(options, Option{Code: OptionMessage, Value: []byte("netfilter decline")})
-	// p.AddOption(OptionDHCPMessageType, []byte{byte(mt)})
-	// p.AddOption(OptionMessage, []byte("netfilter decline"))
 	return RequestPacket(Decline, src.MAC, src.IP, xid, false, options)
 }
+
 func newDHCP4DiscoverFrame(src model.Addr, name string, xid []byte) DHCP4 {
 	options := []Option{}
 	opt := Option{Code: OptionDomainNameServer, Value: []byte{}}
@@ -246,4 +233,27 @@ func checkLeaseTable(t *testing.T, tc *testContext, allocatedCount int, discover
 	if fCount != freeCount {
 		t.Errorf("leaseTable invalid free lease count want=%d got=%d", freeCount, fCount)
 	}
+}
+
+func sendTestDHCP4Packet(t *testing.T, tc *testContext, srcAddr model.Addr, dstAddr model.Addr, p DHCP4) (err error) {
+	ether := model.Ether(make([]byte, model.EthMaxSize))
+	ether = model.EtherMarshalBinary(ether, syscall.ETH_P_IP, srcAddr.MAC, dstAddr.MAC)
+	ip4 := model.IP4MarshalBinary(ether.Payload(), 50, srcAddr.IP, dstAddr.IP)
+	udp := model.UDPMarshalBinary(ip4.Payload(), srcAddr.Port, dstAddr.Port)
+	udp, err = udp.AppendPayload(p)
+	if err != nil {
+		return err
+	}
+	ip4 = ip4.SetPayload(udp, syscall.IPPROTO_UDP)
+
+	if ether, err = ether.SetPayload(ip4); err != nil {
+		return err
+	}
+
+	udp, _ = udp.AppendPayload(p)
+	_, _, err = tc.h.ProcessPacket(nil, ether, udp.Payload())
+	if err != nil {
+		t.Fatalf("Test_Requests:%s error = %v", "newDHCPHOst", err)
+	}
+	return nil
 }

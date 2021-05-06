@@ -214,7 +214,7 @@ func NewTestContext() *TestContext {
 	if err != nil {
 		panic(err)
 	}
-	tc.DHCP4Handler, err = dhcp4.Config{ClientConn: tc.clientInConn}.Attach(tc.Engine.Session(), netfilterIP, DNSGoogleIP4, "")
+	tc.DHCP4Handler, err = dhcp4.Config{ClientConn: tc.clientInConn}.New(tc.Engine.Session(), netfilterIP, DNSGoogleIP4, "")
 	if err != nil {
 		panic("cannot create handler" + err.Error())
 	}

@@ -103,14 +103,14 @@ type Handler struct {
 	sync.Mutex
 }
 
-// Attach return a dhcp handler with two internal subnets.
+// New return a dhcp handler with two internal subnets.
 // func New(home SubnetConfig, netfilter SubnetConfig, filename string) (handler *DHCPHandler, err error) {
-func Attach(session *model.Session, netfilterIP net.IPNet, dnsServer net.IP, filename string) (handler *Handler, err error) {
-	return Config{}.Attach(session, netfilterIP, dnsServer, filename)
+func New(session *model.Session, netfilterIP net.IPNet, dnsServer net.IP, filename string) (handler *Handler, err error) {
+	return Config{}.New(session, netfilterIP, dnsServer, filename)
 }
 
-// Attach accepts a configuration structure and return a dhcp handler
-func (config Config) Attach(session *model.Session, netfilterIP net.IPNet, dnsServer net.IP, filename string) (h *Handler, err error) {
+// New accepts a configuration structure and return a dhcp handler
+func (config Config) New(session *model.Session, netfilterIP net.IPNet, dnsServer net.IP, filename string) (h *Handler, err error) {
 
 	// validate networks
 	if !session.NICInfo.HomeLAN4.Contains(netfilterIP.IP) || netfilterIP.Contains(session.NICInfo.HomeLAN4.IP) {
