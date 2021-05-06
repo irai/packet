@@ -77,7 +77,7 @@ func setupTestHandler() *testContext {
 		HomeLAN4:  homeLAN,
 	}
 
-	if tc.h, err = Attach(tc.session); err != nil {
+	if tc.h, err = New(tc.session); err != nil {
 		panic(err)
 	}
 

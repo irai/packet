@@ -25,16 +25,16 @@ type Handler struct {
 	session *packet.Session
 }
 
-// Attach create a ICMPv4 handler and attach to the engine
-func Attach(engine *packet.Session) (h *Handler, err error) {
+// New create a ICMPv4 handler and attach to the engine
+func New(engine *packet.Session) (h *Handler, err error) {
 	h = &Handler{session: engine}
 	// h.engine.HandlerICMP4 = h
 
 	return h, nil
 }
 
-// Detach remove the plugin from the engine
-func (h *Handler) Detach() error {
+// Close remove the plugin from the engine
+func (h *Handler) Close() error {
 	// h.engine.HandlerICMP4 = packet.PacketNOOP{}
 	return nil
 }

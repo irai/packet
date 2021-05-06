@@ -124,7 +124,7 @@ func main() {
 	handlers.engine.AttachARP(handlers.arp)
 
 	// ICMPv4
-	handlers.icmp4, err = icmp4.Attach(handlers.engine.Session())
+	handlers.icmp4, err = icmp4.New(handlers.engine.Session())
 	if err != nil {
 		log.Fatalf("Failed to create icmp nic=%s handler: %s", *nic, err)
 	}
@@ -180,7 +180,7 @@ func main() {
 		handlers.arp.Detach()
 	}
 	if handlers.icmp4 != nil {
-		handlers.icmp4.Detach()
+		handlers.icmp4.Close()
 	}
 	if handlers.icmp6 != nil {
 		handlers.icmp6.Close()
@@ -209,7 +209,7 @@ func doEngine(h *handlers, tokens []string) {
 				fmt.Println("error icmp4 is already attached")
 				return
 			}
-			h.icmp4, err = icmp4.Attach(h.engine.Session())
+			h.icmp4, err = icmp4.New(h.engine.Session())
 		case "icmp6":
 			if h.icmp6 != nil {
 				fmt.Println("error icmp6 is already attached")
@@ -236,7 +236,7 @@ func doEngine(h *handlers, tokens []string) {
 			err = h.arp.Detach()
 			h.arp = nil
 		case "icmp4":
-			err = h.icmp4.Detach()
+			err = h.icmp4.Close()
 			h.icmp4 = nil
 		case "icmp6":
 			err = h.icmp6.Close()
