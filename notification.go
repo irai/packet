@@ -45,7 +45,7 @@ func (h *Handler) purge(now time.Time, probeDur time.Duration, offlineDur time.D
 			if ip := e.IP.To4(); ip != nil {
 				h.ARPHandler.CheckAddr(model.Addr{MAC: e.MACEntry.MAC, IP: ip})
 			} else {
-				h.HandlerICMP6.CheckAddr(model.Addr{MAC: e.MACEntry.MAC, IP: e.IP})
+				h.ICMP6Handler.CheckAddr(model.Addr{MAC: e.MACEntry.MAC, IP: e.IP})
 			}
 		}
 

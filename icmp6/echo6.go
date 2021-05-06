@@ -26,7 +26,7 @@ var icmpTable = struct {
 }
 
 // SendEchoRequest transmit an icmp6 echo request and do not wait for response
-func (h *ICMP6Handler) SendEchoRequest(srcAddr model.Addr, dstAddr model.Addr, id uint16, seq uint16) error {
+func (h *Handler) SendEchoRequest(srcAddr model.Addr, dstAddr model.Addr, id uint16, seq uint16) error {
 	if !model.IsIP6(srcAddr.IP) || !model.IsIP6(dstAddr.IP) {
 		return model.ErrInvalidIP
 	}
@@ -67,7 +67,7 @@ func echoNotify(id uint16) {
 }
 
 // Ping send a ping request and wait for a reply
-func (h *ICMP6Handler) Ping(srcAddr model.Addr, dstAddr model.Addr, timeout time.Duration) (err error) {
+func (h *Handler) Ping(srcAddr model.Addr, dstAddr model.Addr, timeout time.Duration) (err error) {
 	if timeout <= 0 || timeout > time.Second*10 {
 		timeout = time.Second * 2
 	}

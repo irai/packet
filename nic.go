@@ -9,7 +9,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -288,24 +287,6 @@ func locateFreeIP(nic string, hostIP net.IP, ip net.IP, start uint8, end uint8) 
 		return newIP, nil
 	}
 	return net.IPv4zero, fmt.Errorf("locatefreeip no ips available")
-}
-
-// Ping execute /usr/bin/ping
-// This is usefuel when engine is not yet running
-func Ping(ip net.IP) (err error) {
-	// -w deadline - wait 1 second
-	// -i frequency - one request each 0,2 seconds
-	// -c count - how many replies to receive before returning (in conjuction with -w)
-	cmd := exec.Command("/usr/bin/ping", ip.String(), "-w", "1", "-i", "0.2", "-c", "1")
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	if err = cmd.Run(); err != nil {
-		fmt.Printf("packet: failed to ping ip=%s error=%s\n", ip, err)
-	}
-	fmt.Printf("ping: %q\n", stdout.String())
-	// fmt.Printf("errs: %q\n", stderr.String())
-	return err
 }
 
 func LinuxConfigureInterface(nic string, ip *net.IPNet, gw *net.IPNet) error {

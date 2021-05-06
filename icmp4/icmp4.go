@@ -12,7 +12,11 @@ import (
 // Debug packets turn on logging if desirable
 var Debug bool
 
-var _ model.PacketProcessor = &Handler{}
+type ICMP4Handler interface {
+	model.PacketProcessor
+}
+
+var _ ICMP4Handler = &Handler{}
 
 // Handler maintains the underlying socket connection
 type Handler struct {

@@ -57,7 +57,7 @@ func (r *Router) String() string {
 	return fmt.Sprintf("%s preference=%v prefix=%v\n", r.Addr, r.Preference, r.Prefixes)
 }
 
-func (h *ICMP6Handler) findOrCreateRouter(mac net.HardwareAddr, ip net.IP) (router *Router, found bool) {
+func (h *Handler) findOrCreateRouter(mac net.HardwareAddr, ip net.IP) (router *Router, found bool) {
 	// using netaddr IP
 	ipNew, _ := netaddr.FromStdIP(ip)
 	r, found := h.LANRouters[ipNew]
@@ -72,16 +72,16 @@ func (h *ICMP6Handler) findOrCreateRouter(mac net.HardwareAddr, ip net.IP) (rout
 }
 
 type RADVS struct {
-	h           *ICMP6Handler
+	h           *Handler
 	Router      *Router
 	stopChannel chan bool
 }
 
-func (h *ICMP6Handler) StartRADVS(managed bool, other bool, prefixes []PrefixInformation, rdnss *RecursiveDNSServer) (*RADVS, error) {
+func (h *Handler) StartRADVS(managed bool, other bool, prefixes []PrefixInformation, rdnss *RecursiveDNSServer) (*RADVS, error) {
 	return h.startRADVS(managed, other, prefixes, rdnss)
 }
 
-func (h *ICMP6Handler) startRADVS(managed bool, other bool, prefixes []PrefixInformation, rdnss *RecursiveDNSServer) (radvs *RADVS, err error) {
+func (h *Handler) startRADVS(managed bool, other bool, prefixes []PrefixInformation, rdnss *RecursiveDNSServer) (radvs *RADVS, err error) {
 	radvs = &RADVS{stopChannel: make(chan bool, 1)}
 	radvs.Router, _ = h.findOrCreateRouter(h.session.NICInfo.HostMAC, h.session.NICInfo.HostLLA.IP)
 	radvs.Router.enableRADVS = true

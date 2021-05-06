@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/irai/packet"
 	"github.com/irai/packet/model"
 )
 
@@ -47,7 +46,7 @@ type testContext struct {
 	inConn  net.PacketConn
 	outConn net.PacketConn
 	h       *Handler
-	packet  *packet.Handler
+	session *model.Session
 	wg      sync.WaitGroup
 	ctx     context.Context
 	cancel  context.CancelFunc
@@ -59,34 +58,28 @@ func setupTestHandler() *testContext {
 
 	tc := testContext{}
 	tc.ctx, tc.cancel = context.WithCancel(context.Background())
+	tc.session = model.NewEmptySession()
 
+	// fake conn
 	tc.inConn, tc.outConn = model.TestNewBufferedConn()
 	go model.TestReadAndDiscardLoop(tc.ctx, tc.outConn) // MUST read the out conn to avoid blocking the sender
+	// go readResponse(tc.ctx, &tc) // MUST read the out conn to avoid blocking the sender
+	tc.session.Conn = tc.inConn
 
-	nicInfo := model.NICInfo{
+	// tc.inConn, tc.outConn = model.TestNewBufferedConn()
+	// go model.TestReadAndDiscardLoop(tc.ctx, tc.outConn) // MUST read the out conn to avoid blocking the sender
+
+	// fake nicinfo
+	tc.session.NICInfo = &model.NICInfo{
 		HostMAC:   hostMAC,
 		HostIP4:   net.IPNet{IP: hostIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
 		RouterIP4: net.IPNet{IP: routerIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
 		HomeLAN4:  homeLAN,
 	}
 
-	// override handler with conn and nicInfo
-	config := packet.Config{Conn: tc.inConn, NICInfo: &nicInfo, ProbeInterval: time.Millisecond * 500, OfflineDeadline: time.Millisecond * 500, PurgeDeadline: time.Second * 2}
-	tc.packet, err = config.NewEngine("eth0")
-	if err != nil {
+	if tc.h, err = Attach(tc.session); err != nil {
 		panic(err)
 	}
-	if Debug {
-		fmt.Println("nicinfo: ", tc.packet.Session().NICInfo)
-	}
-
-	tc.h, err = Attach(tc.packet.Session())
-
-	go func() {
-		if err := tc.packet.ListenAndServe(tc.ctx); err != nil {
-			panic(err)
-		}
-	}()
 
 	time.Sleep(time.Millisecond * 10) // time for all goroutine to start
 	return &tc

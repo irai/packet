@@ -151,8 +151,8 @@ func (config Config) New(session *model.Session, netfilterIP net.IPNet, dnsServe
 	h.net1, h.net2, h.table, err = loadConfig(h.filename)
 	if err != nil || h.net1 == nil || h.net2 == nil || h.table == nil ||
 		configChanged(homeSubnet, h.net1.SubnetConfig) || configChanged(netfilterSubnet, h.net2.SubnetConfig) {
-		if !os.IsNotExist(err) {
-			fmt.Printf("dhcp4: invalid config file=%s err=%s. resetting...\n", h.filename, err)
+		if err != nil && !os.IsNotExist(err) {
+			fmt.Printf("dhcp4: invalid config file=%s. resetting...\n", h.filename)
 		}
 		h.table = make(map[string]*Lease)
 

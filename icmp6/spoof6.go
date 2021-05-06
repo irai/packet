@@ -8,7 +8,7 @@ import (
 )
 
 // StartHunt implements packet processor interface
-func (h *ICMP6Handler) StartHunt(addr model.Addr) (model.HuntStage, error) {
+func (h *Handler) StartHunt(addr model.Addr) (model.HuntStage, error) {
 	if Debug {
 		fmt.Printf("icmp6 : force neighbor spoof %s", addr)
 	}
@@ -26,7 +26,7 @@ func (h *ICMP6Handler) StartHunt(addr model.Addr) (model.HuntStage, error) {
 }
 
 // StopHunt implements PacketProcessor interface
-func (h *ICMP6Handler) StopHunt(addr model.Addr) (model.HuntStage, error) {
+func (h *Handler) StopHunt(addr model.Addr) (model.HuntStage, error) {
 	if Debug {
 		fmt.Printf("icmp6 : stop neighbor spoof %s", addr)
 	}
@@ -46,7 +46,7 @@ func (h *ICMP6Handler) StopHunt(addr model.Addr) (model.HuntStage, error) {
 //   1. spoof the client arp table to send router packets to us
 //   2. optionally, claim the ownership of the IP to force client to change IP or go offline
 //
-func (h *ICMP6Handler) spoofLoop(dstAddr model.Addr) {
+func (h *Handler) spoofLoop(dstAddr model.Addr) {
 	// 4 second re-do seem to be adequate;
 	ticker := time.NewTicker(time.Second * 4).C
 	startTime := time.Now()

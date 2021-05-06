@@ -86,7 +86,7 @@ func (h *Handler) lockAndStartHunt(addr model.Addr) (err error) {
 			if _, err = h.ARPHandler.StartHunt(addr); err != nil {
 				fmt.Printf("packet: failed to start arp hunt: %s", err.Error())
 			}
-			if _, err = h.HandlerICMP4.StartHunt(addr); err != nil {
+			if _, err = h.ICMP4Handler.StartHunt(addr); err != nil {
 				fmt.Printf("packet: failed to start icmp4 hunt: %s", err.Error())
 			}
 			if _, err = h.DHCP4Handler.StartHunt(addr); err != nil {
@@ -104,7 +104,7 @@ func (h *Handler) lockAndStartHunt(addr model.Addr) (err error) {
 			return
 		}
 		addr.IP = host.MACEntry.IP6LLA
-		if _, err = h.HandlerICMP6.StartHunt(addr); err != nil {
+		if _, err = h.ICMP6Handler.StartHunt(addr); err != nil {
 			fmt.Printf("packet: failed to start icmp6 hunt: %s", err.Error())
 		}
 	}()
@@ -182,7 +182,7 @@ func (h *Handler) lockAndStopHunt(host *model.Host, stage model.HuntStage) (err 
 			if _, err = h.DHCP4Handler.StopHunt(addr); err != nil && !errors.Is(err, model.ErrNotFound) {
 				fmt.Printf("packet: failed to stop dhcp4 hunt: %s", err.Error())
 			}
-			if _, err = h.HandlerICMP4.StopHunt(addr); err != nil {
+			if _, err = h.ICMP4Handler.StopHunt(addr); err != nil {
 				fmt.Printf("packet: failed to stop icmp4 hunt: %s", err.Error())
 			}
 			if _, err = h.ARPHandler.StopHunt(addr); err != nil {
@@ -194,7 +194,7 @@ func (h *Handler) lockAndStopHunt(host *model.Host, stage model.HuntStage) (err 
 
 	// IP6 handlers
 	go func() {
-		if _, err = h.HandlerICMP6.StopHunt(addr); err != nil {
+		if _, err = h.ICMP6Handler.StopHunt(addr); err != nil {
 			fmt.Printf("packet: failed to stop icmp6 hunt: %s", err.Error())
 		}
 	}()
@@ -209,7 +209,7 @@ func (h *Handler) lockAndMonitorRoute(now time.Time) (err error) {
 		if host.HuntStage == model.StageRedirected && host.IP.To4() != nil {
 			addr := model.Addr{MAC: host.MACEntry.MAC, IP: host.IP}
 			host.Row.RUnlock()
-			_, err := h.HandlerICMP4.CheckAddr(addr) // ping host
+			_, err := h.ICMP4Handler.CheckAddr(addr) // ping host
 			if errors.Is(err, model.ErrNotRedirected) {
 				fmt.Printf("packet: ip4 routing NOK %s\n", host)
 				// Call stop hunt first to update stage to normal

@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/irai/packet"
+	"github.com/irai/packet/icmp4"
 	"github.com/irai/packet/model"
 	log "github.com/sirupsen/logrus"
 	"inet.af/netaddr"
@@ -25,11 +25,15 @@ type Event struct {
 	Host model.Host
 }
 
-var _ model.PacketProcessor = &ICMP6Handler{}
+type ICMP6Handler interface {
+	model.PacketProcessor
+}
 
-// ICMP6Handler implements ICMPv6 Neighbor Discovery Protocol
+var _ ICMP6Handler = &Handler{}
+
+// Handler implements ICMPv6 Neighbor Discovery Protocol
 // see: https://mdlayher.com/blog/network-protocol-breakdown-ndp-and-go/
-type ICMP6Handler struct {
+type Handler struct {
 	Router     *Router
 	LANRouters map[netaddr.IP]*Router
 	session    *model.Session
@@ -40,7 +44,7 @@ type ICMP6Handler struct {
 }
 
 // PrintTable logs ICMP6 tables to standard out
-func (h *ICMP6Handler) PrintTable() {
+func (h *Handler) PrintTable() {
 	table := h.session.GetHosts()
 	if len(table) > 0 {
 		fmt.Printf("icmp6 hosts table len=%v\n", len(table))
@@ -75,52 +79,50 @@ type Config struct {
 	UniqueLocalAddress   net.IPNet
 }
 
-// Attach creates an ICMP6 handler and attach to the engine
-func Attach(session *model.Session) (*ICMP6Handler, error) {
+// New creates an ICMP6 handler and attach to the engine
+func New(session *model.Session) (*Handler, error) {
 
-	h := &ICMP6Handler{LANRouters: make(map[netaddr.IP]*Router), closeChan: make(chan bool)}
+	h := &Handler{LANRouters: make(map[netaddr.IP]*Router), closeChan: make(chan bool)}
 	h.session = session
-	// engine.HandlerICMP6 = h
 
 	return h, nil
 }
 
-// Detach removes the plugin from the engine
-func (h *ICMP6Handler) Detach() error {
+// Close removes the plugin from the engine
+func (h *Handler) Close() error {
 	h.closed = true
 	close(h.closeChan)
-	// h.engine.HandlerICMP6 = model.PacketNOOP{}
 	return nil
 }
 
 // Start prepares to accept packets
-func (h *ICMP6Handler) Start() error {
+func (h *Handler) Start() error {
 	if err := h.SendRouterSolicitation(); err != nil {
 		return err
 	}
-	return packet.Ping(model.IP6AllNodesMulticast) // ping with external cmd tool
+	return icmp4.Ping(model.IP6AllNodesMulticast) // ping with external cmd tool
 	// return h.SendEchoRequest(model.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, model.IP6AllNodesAddr, 0, 0)
 }
 
 // Stop implements PacketProcessor interface
-func (h *ICMP6Handler) Stop() error {
+func (h *Handler) Stop() error {
 	return nil
 }
 
 // MinuteTicker implements packet processor interface
-func (h *ICMP6Handler) MinuteTicker(now time.Time) error {
+func (h *Handler) MinuteTicker(now time.Time) error {
 	return nil
 }
 
 // HuntStage implements PacketProcessor interface
-func (h *ICMP6Handler) CheckAddr(addr model.Addr) (model.HuntStage, error) {
+func (h *Handler) CheckAddr(addr model.Addr) (model.HuntStage, error) {
 	if err := h.Ping(model.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostLLA.IP}, addr, time.Second*2); err != nil {
 		return model.StageNoChange, model.ErrTimeout
 	}
 	return model.StageNormal, nil
 }
 
-func (h *ICMP6Handler) sendPacket(srcAddr model.Addr, dstAddr model.Addr, b []byte) error {
+func (h *Handler) sendPacket(srcAddr model.Addr, dstAddr model.Addr, b []byte) error {
 	ether := model.Ether(make([]byte, model.EthMaxSize)) // Ping is called many times concurrently by client
 
 	hopLimit := uint8(64)
@@ -163,7 +165,7 @@ func (h *ICMP6Handler) sendPacket(srcAddr model.Addr, dstAddr model.Addr, b []by
 var repeat int = -1
 
 // ProcessPacket handles icmp6 packets
-func (h *ICMP6Handler) ProcessPacket(host *model.Host, p []byte, header []byte) (*model.Host, model.Result, error) {
+func (h *Handler) ProcessPacket(host *model.Host, p []byte, header []byte) (*model.Host, model.Result, error) {
 
 	ether := model.Ether(p)
 	ip6Frame := model.IP6(ether.Payload())

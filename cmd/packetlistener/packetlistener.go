@@ -32,7 +32,7 @@ type handlers struct {
 	engine      *packet.Handler
 	icmp4       *icmp4.Handler
 	arp         *arp.Handler
-	icmp6       *icmp6.ICMP6Handler
+	icmp6       *icmp6.Handler
 	dhcp4       *dhcp4.Handler
 	radvs       *icmp6.RADVS
 	netfilterIP net.IPNet
@@ -129,7 +129,7 @@ func main() {
 	}
 
 	// ICMPv6
-	handlers.icmp6, err = icmp6.Attach(handlers.engine.Session())
+	handlers.icmp6, err = icmp6.New(handlers.engine.Session())
 	if err != nil {
 		log.Fatalf("Failed to create icmp6 nic=%s handler: %s", *nic, err)
 	}
@@ -179,7 +179,7 @@ func main() {
 		handlers.icmp4.Detach()
 	}
 	if handlers.icmp6 != nil {
-		handlers.icmp6.Detach()
+		handlers.icmp6.Close()
 	}
 	if handlers.dhcp4 != nil {
 		handlers.dhcp4.Detach()
@@ -211,7 +211,7 @@ func doEngine(h *handlers, tokens []string) {
 				fmt.Println("error icmp6 is already attached")
 				return
 			}
-			h.icmp6, err = icmp6.Attach(h.engine.Session())
+			h.icmp6, err = icmp6.New(h.engine.Session())
 		case "dhcp4":
 			if h.dhcp4 != nil {
 				fmt.Println("error icmp6 is already attached")
@@ -235,7 +235,7 @@ func doEngine(h *handlers, tokens []string) {
 			err = h.icmp4.Detach()
 			h.icmp4 = nil
 		case "icmp6":
-			err = h.icmp6.Detach()
+			err = h.icmp6.Close()
 			h.icmp6 = nil
 		case "dhcp4":
 			err = h.dhcp4.Detach()

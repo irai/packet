@@ -11,6 +11,8 @@ import (
 
 	"github.com/irai/packet/arp"
 	"github.com/irai/packet/dhcp4"
+	"github.com/irai/packet/icmp4"
+	"github.com/irai/packet/icmp6"
 	"github.com/irai/packet/model"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/bpf"
@@ -39,18 +41,13 @@ type Config struct {
 // Handler implements ICMPv6 Neighbor Discovery Protocol
 // see: https://mdlayher.com/blog/network-protocol-breakdown-ndp-and-go/
 type Handler struct {
-	// NICInfo *model.NICInfo
-	// conn    net.PacketConn
-	// LANHosts     model.HostTable // store IP list - one for each host
-	// MACTable     model.MACTable  // store mac list
-	session      *model.Session
-	HandlerIP4   model.PacketProcessor
-	HandlerIP6   model.PacketProcessor
-	HandlerICMP4 model.PacketProcessor
-	HandlerICMP6 model.PacketProcessor
-	DHCP4Handler dhcp4.DHCP4Handler
-	ARPHandler   arp.ARPHandler
-	// callback                []func(Notification) error
+	session                 *model.Session // store shared session values
+	HandlerIP4              model.PacketProcessor
+	HandlerIP6              model.PacketProcessor
+	ICMP4Handler            icmp4.ICMP4Handler
+	ICMP6Handler            icmp6.ICMP6Handler
+	DHCP4Handler            dhcp4.DHCP4Handler
+	ARPHandler              arp.ARPHandler
 	FullNetworkScanInterval time.Duration // Set it to -1 if no scan required
 	ProbeInterval           time.Duration // how often to probe if IP is online
 	OfflineDeadline         time.Duration // mark offline if no updates
@@ -117,8 +114,8 @@ func (config Config) NewEngine(nic string) (*Handler, error) {
 	h.HandlerIP4 = model.PacketNOOP{}
 	h.HandlerIP6 = model.PacketNOOP{}
 	h.ARPHandler = model.PacketNOOP{}
-	h.HandlerICMP4 = model.PacketNOOP{}
-	h.HandlerICMP6 = model.PacketNOOP{}
+	h.ICMP4Handler = model.PacketNOOP{}
+	h.ICMP6Handler = model.PacketNOOP{}
 	h.DHCP4Handler = model.PacketNOOP{}
 
 	// create the host entry manually because we don't process host packets
@@ -162,20 +159,20 @@ func (h *Handler) DetachARP() {
 	h.ARPHandler = model.PacketNOOP{}
 }
 
-func (h *Handler) AttachICMP4(p model.PacketProcessor) {
-	h.HandlerICMP4 = p
+func (h *Handler) AttachICMP4(p icmp4.ICMP4Handler) {
+	h.ICMP4Handler = p
 }
 func (h *Handler) DetachICMP4() {
-	h.HandlerICMP4 = model.PacketNOOP{}
+	h.ICMP4Handler = model.PacketNOOP{}
 }
 
-func (h *Handler) AttachICMP6(p model.PacketProcessor) {
-	h.HandlerICMP6 = p
+func (h *Handler) AttachICMP6(p icmp6.ICMP6Handler) {
+	h.ICMP6Handler = p
 }
 func (h *Handler) DetachICMP6() {
-	h.HandlerICMP6 = model.PacketNOOP{}
+	h.ICMP6Handler = model.PacketNOOP{}
 }
-func (h *Handler) AttachDHCP4(p model.PacketProcessor) {
+func (h *Handler) AttachDHCP4(p dhcp4.DHCP4Handler) {
 	h.DHCP4Handler = p
 }
 func (h *Handler) DetachDHCP4() {
@@ -257,10 +254,10 @@ func (h *Handler) startPlugins() error {
 	if err := h.HandlerIP6.Start(); err != nil {
 		fmt.Println("error: in IP6 start:", err)
 	}
-	if err := h.HandlerICMP4.Start(); err != nil {
+	if err := h.ICMP4Handler.Start(); err != nil {
 		fmt.Println("error: in ICMP4 start:", err)
 	}
-	if err := h.HandlerICMP6.Start(); err != nil {
+	if err := h.ICMP6Handler.Start(); err != nil {
 		fmt.Println("error: in ICMP6 start:", err)
 	}
 	if err := h.ARPHandler.Start(); err != nil {
@@ -279,10 +276,10 @@ func (h *Handler) stopPlugins() error {
 	if err := h.HandlerIP6.Stop(); err != nil {
 		fmt.Println("error: in IP6 stop:", err)
 	}
-	if err := h.HandlerICMP4.Stop(); err != nil {
+	if err := h.ICMP4Handler.Stop(); err != nil {
 		fmt.Println("error: in ICMP4 stop:", err)
 	}
-	if err := h.HandlerICMP6.Stop(); err != nil {
+	if err := h.ICMP6Handler.Stop(); err != nil {
 		fmt.Println("error: in ICMP6 stop:", err)
 	}
 	if err := h.ARPHandler.Stop(); err != nil {
@@ -314,8 +311,8 @@ func (h *Handler) minuteChecker(now time.Time) {
 
 	// Handlers
 	h.ARPHandler.MinuteTicker(now)
-	h.HandlerICMP4.MinuteTicker(now)
-	h.HandlerICMP6.MinuteTicker(now)
+	h.ICMP4Handler.MinuteTicker(now)
+	h.ICMP6Handler.MinuteTicker(now)
 	h.DHCP4Handler.MinuteTicker(now)
 
 	// internal checks
@@ -630,11 +627,11 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 		switch l4Proto {
 		case syscall.IPPROTO_ICMP:
-			if host, result, err = h.HandlerICMP4.ProcessPacket(host, ether, l4Payload); err != nil {
+			if host, result, err = h.ICMP4Handler.ProcessPacket(host, ether, l4Payload); err != nil {
 				fmt.Printf("packet: error processing icmp4: %s\n", err)
 			}
 		case syscall.IPPROTO_ICMPV6: // 0x03a
-			if host, result, err = h.HandlerICMP6.ProcessPacket(host, ether, l4Payload); err != nil {
+			if host, result, err = h.ICMP6Handler.ProcessPacket(host, ether, l4Payload); err != nil {
 				fmt.Printf("packet: error processing icmp6 : %s\n", err)
 			}
 		case syscall.IPPROTO_IGMP:
