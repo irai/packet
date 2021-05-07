@@ -71,6 +71,14 @@ func (h *Handler) findOrCreateRouter(mac net.HardwareAddr, ip net.IP) (router *R
 	return router, false
 }
 
+func (h *Handler) FindRouter(ip net.IP) Router {
+	h.Mutex.Lock()
+	ipNew, _ := netaddr.FromStdIP(ip)
+	r := h.LANRouters[ipNew]
+	h.Mutex.Unlock()
+	return *r
+}
+
 type RADVS struct {
 	h           *Handler
 	Router      *Router

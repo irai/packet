@@ -105,7 +105,7 @@ func (config Config) NewEngine(nic string) (*Handler, error) {
 	h.HandlerIP6 = packet.PacketNOOP{}
 	h.ARPHandler = packet.PacketNOOP{}
 	h.ICMP4Handler = icmp4.ICMP4NOOP{}
-	h.ICMP6Handler = packet.PacketNOOP{}
+	h.ICMP6Handler = icmp6.ICMP6NOOP{}
 	h.DHCP4Handler = packet.PacketNOOP{}
 
 	// create the host entry manually because we don't process host packets
@@ -162,7 +162,7 @@ func (h *Handler) AttachICMP6(p icmp6.ICMP6Handler) {
 	h.ICMP6Handler = p
 }
 func (h *Handler) DetachICMP6() {
-	h.ICMP6Handler = packet.PacketNOOP{}
+	h.ICMP6Handler = icmp6.ICMP6NOOP{}
 }
 func (h *Handler) AttachDHCP4(p dhcp4.DHCP4Handler) {
 	h.DHCP4Handler = p
@@ -308,6 +308,10 @@ func (h *Handler) minuteChecker(now time.Time) {
 	h.lockAndMonitorRoute(now)
 	h.purge(now, h.ProbeInterval, h.OfflineDeadline, h.PurgeDeadline)
 
+}
+
+func (h *Handler) FindIP6Router(ip net.IP) icmp6.Router {
+	return h.ICMP6Handler.FindRouter(ip)
 }
 
 // lockAndProcessDHCP4Update updates the DHCP4 store and transition hunt stage

@@ -26,10 +26,31 @@ type Event struct {
 }
 
 type ICMP6Handler interface {
+	FindRouter(net.IP) Router
 	packet.PacketProcessor
 }
+type ICMP6NOOP struct{}
+
+func (p ICMP6NOOP) Start() error { return nil }
+func (p ICMP6NOOP) Stop() error  { return nil }
+func (p ICMP6NOOP) ProcessPacket(*packet.Host, []byte, []byte) (*packet.Host, packet.Result, error) {
+	return nil, packet.Result{}, nil
+}
+func (p ICMP6NOOP) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
+	return packet.StageNoChange, nil
+}
+func (p ICMP6NOOP) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
+	return packet.StageNoChange, nil
+}
+func (p ICMP6NOOP) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
+	return packet.StageNoChange, nil
+}
+func (p ICMP6NOOP) Close() error                     { return nil }
+func (p ICMP6NOOP) MinuteTicker(now time.Time) error { return nil }
+func (p ICMP6NOOP) FindRouter(net.IP) Router         { return Router{} }
 
 var _ ICMP6Handler = &Handler{}
+var _ ICMP6Handler = &ICMP6NOOP{}
 
 // Handler implements ICMPv6 Neighbor Discovery Protocol
 // see: https://mdlayher.com/blog/network-protocol-breakdown-ndp-and-go/
