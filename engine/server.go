@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"sync"
 	"syscall"
 	"time"
 
@@ -46,7 +45,6 @@ type Handler struct {
 	PurgeDeadline           time.Duration // purge entry if no updates
 	closed                  bool          // set to true when handler is closed
 	closeChan               chan bool     // close goroutines channel
-	mutex                   sync.RWMutex
 	nameChannel             chan Notification
 }
 
@@ -692,7 +690,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		 **
 		if packet.Debug {
 			fmt.Println("Check engine")
-			h.mutex.Lock()
+			h.session.GlobalLock()
 			fmt.Println("Check lock engine pass")
 			for _, host := range h.session.HostTable.Table {
 				fmt.Println("Check row ", host.IP)
@@ -702,7 +700,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				fmt.Println("Check unlock row pass ", host.IP)
 			}
 			fmt.Println("Check lock pass rows")
-			h.mutex.Unlock()
+			h.session.GlobalUnlock()
 			fmt.Println("Check unlock engine pass ")
 		}
 		***/

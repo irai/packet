@@ -8,11 +8,12 @@ import (
 )
 
 type Session struct {
-	Conn      net.PacketConn
-	NICInfo   *NICInfo
-	HostTable HostTable // store IP list - one for each host
-	MACTable  MACTable  // store mac list
-	mutex     sync.RWMutex
+	Conn         net.PacketConn
+	NICInfo      *NICInfo
+	HostTable    HostTable // store IP list - one for each host
+	MACTable     MACTable  // store mac list
+	mutex        sync.RWMutex
+	eventChannel chan NetEvent
 }
 
 func NewEmptySession() *Session {
@@ -62,27 +63,52 @@ func (h *Session) PrintTable() {
 	h.printHostTable()
 }
 
-// CopyIP simply copies the IP to a new buffer
-// Always return len 16 - using go internal 16 bytes for ipv4
-func CopyIP(srcIP net.IP) net.IP {
-	if len(srcIP) == 4 {
-		return srcIP.To16() // this will copy to a new 16 len buffer
+func (h *Session) GlobalLock() {
+	h.mutex.Lock()
+}
+
+func (h *Session) GlobalUnlock() {
+	h.mutex.Unlock()
+}
+func (h *Session) GlobalRLock() {
+	h.mutex.RLock()
+}
+
+func (h *Session) GlobalRUnlock() {
+	h.mutex.RUnlock()
+}
+
+// NetEventType defines possible net events
+type NetEventType int
+
+const (
+	NetEventRouter = 1 // a router event occurred
+)
+
+// NetEvent is a mechanism to communicate network events upstream.
+//
+// A plugins will raise a network event when there is a need to communicate network changes
+// to the controlling engine. For example, when the plugin detected a new router on the network.
+type NetEvent struct {
+	Type NetEventType
+	Addr Addr
+}
+
+func (n NetEvent) String() string {
+	return fmt.Sprintf("type=%d %s", n.Type, n.Addr)
+}
+
+func (s *Session) RaiseNetEvent(e NetEvent) error {
+	if s.eventChannel == nil {
+		return ErrNoReader
 	}
-	ip := make(net.IP, len(srcIP))
-	copy(ip, srcIP)
-	return ip
+	s.eventChannel <- e
+	return nil
 }
 
-// CopyMAC simply copies a mac address to a new buffer with the same len
-func CopyMAC(srcMAC net.HardwareAddr) net.HardwareAddr {
-	mac := make(net.HardwareAddr, len(srcMAC))
-	copy(mac, srcMAC)
-	return mac
-}
-
-// CopyBytes simply copies a mac address to a new buffer with the same len
-func CopyBytes(b []byte) []byte {
-	bb := make([]byte, len(b))
-	copy(bb, b)
-	return bb
+func (s *Session) NetEventChannel() <-chan NetEvent {
+	if s.eventChannel == nil {
+		s.eventChannel = make(chan NetEvent, 16)
+	}
+	return s.eventChannel
 }

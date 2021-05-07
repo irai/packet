@@ -11,14 +11,14 @@ import (
 
 // Capture places the mac in capture mode
 func (h *Handler) Capture(mac net.HardwareAddr) error {
-	h.mutex.Lock()
+	h.session.GlobalLock()
 	macEntry := h.session.MACTable.FindOrCreateNoLock(mac)
 	if macEntry.Captured {
-		h.mutex.Unlock()
+		h.session.GlobalUnlock()
 		return nil
 	}
 	if macEntry.IsRouter {
-		h.mutex.Unlock()
+		h.session.GlobalUnlock()
 		return packet.ErrIsRouter
 	}
 	macEntry.Captured = true
@@ -28,7 +28,7 @@ func (h *Handler) Capture(mac net.HardwareAddr) error {
 	for _, host := range macEntry.HostList {
 		list = append(list, packet.Addr{IP: host.IP, MAC: host.MACEntry.MAC})
 	}
-	h.mutex.Unlock()
+	h.session.GlobalUnlock()
 
 	go func() {
 		for _, addr := range list {
@@ -113,18 +113,18 @@ func (h *Handler) lockAndStartHunt(addr packet.Addr) (err error) {
 
 // Release removes the mac from capture mode
 func (h *Handler) Release(mac net.HardwareAddr) error {
-	h.mutex.Lock()
+	h.session.GlobalLock()
 
 	macEntry := h.session.MACTable.FindMACNoLock(mac)
 	if macEntry == nil {
-		h.mutex.Unlock()
+		h.session.GlobalUnlock()
 		return nil
 	}
 	list := []*packet.Host{}
 	list = append(list, macEntry.HostList...)
 	macEntry.Captured = false
 
-	h.mutex.Unlock()
+	h.session.GlobalUnlock()
 
 	for _, host := range list {
 		if err := h.lockAndStopHunt(host, packet.StageNormal); err != nil {

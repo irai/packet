@@ -29,7 +29,7 @@ func (h *Handler) purge(now time.Time, probeDur time.Duration, offlineDur time.D
 	purge := make([]net.IP, 0, 16)
 	offline := make([]*packet.Host, 0, 16)
 
-	h.mutex.RLock()
+	h.session.GlobalRLock()
 	for _, e := range h.session.HostTable.Table {
 		e.Row.RLock()
 
@@ -55,7 +55,7 @@ func (h *Handler) purge(now time.Time, probeDur time.Duration, offlineDur time.D
 		}
 		e.Row.RUnlock()
 	}
-	h.mutex.RUnlock()
+	h.session.GlobalRUnlock()
 
 	for _, host := range offline {
 		h.lockAndSetOffline(host) // will lock/unlock row
@@ -78,13 +78,13 @@ func (h *Handler) GetNotificationChannel() <-chan Notification {
 
 	// Notify of all existing hosts
 	list := []Notification{}
-	h.mutex.RLock()
+	h.session.GlobalRLock()
 	for _, host := range h.session.HostTable.Table {
 		host.Row.RLock()
 		list = append(list, Notification{Addr: packet.Addr{IP: host.IP, MAC: host.MACEntry.MAC}, Online: host.Online, DHCPName: host.DHCP4Name})
 		host.Row.RUnlock()
 	}
-	h.mutex.RUnlock()
+	h.session.GlobalRUnlock()
 
 	h.nameChannel = make(chan Notification, notificationChannelCap)
 

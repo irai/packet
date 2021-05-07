@@ -90,6 +90,7 @@ var (
 	ErrTimeout       = errors.New("timeout")
 	ErrNotRedirected = errors.New("not redirected")
 	ErrIsRouter      = errors.New("host is router")
+	ErrNoReader      = errors.New("no reader")
 )
 
 // Ether provide access to ethernet fields without copying the structure
