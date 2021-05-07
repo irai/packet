@@ -65,7 +65,7 @@ type Result struct {
 	HuntStage HuntStage // DHCP4 hunt stage
 	Name      string    // DHCP4 host name
 	Addr      Addr      // IP and MAC
-	// IPOffer   net.IP    // DCHCP discover offer
+	IsRouter  bool      // Mark host as router
 }
 
 func (e Result) String() string {

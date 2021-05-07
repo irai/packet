@@ -423,7 +423,7 @@ func (h *Handler) lockAndSetOnline(host *packet.Host, notify bool) {
 	host.MACEntry.Online = true
 	host.Online = true
 	addr := packet.Addr{IP: host.IP, MAC: host.MACEntry.MAC}
-	notification := Notification{Addr: addr, Online: true, DHCPName: host.DHCP4Name}
+	notification := Notification{Addr: addr, Online: true, DHCPName: host.DHCP4Name, IsRouter: host.MACEntry.IsRouter}
 
 	if packet.Debug {
 		fmt.Printf("packet: IP is online %s\n", host)
@@ -622,6 +622,10 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		case syscall.IPPROTO_ICMPV6: // 0x03a
 			if host, result, err = h.ICMP6Handler.ProcessPacket(host, ether, l4Payload); err != nil {
 				fmt.Printf("packet: error processing icmp6 : %s\n", err)
+			}
+			if host != nil && result.Update && host.MACEntry.IsRouter != result.IsRouter {
+				host.MACEntry.IsRouter = result.IsRouter
+				notify = true
 			}
 		case syscall.IPPROTO_IGMP:
 			// Internet Group Management Protocol - Ipv4 multicast groups

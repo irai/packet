@@ -13,6 +13,7 @@ type Notification struct {
 	Online   bool
 	DHCPName string
 	MDNSName string
+	IsRouter bool
 }
 
 func (n Notification) String() string {

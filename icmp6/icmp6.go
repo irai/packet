@@ -262,6 +262,9 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (*pa
 		}
 		fmt.Printf("icmp6 : router advertisement from ip=%s %s %+v \n", ip6Frame.Src(), frame, router.Options)
 
+		result := packet.Result{Update: true, IsRouter: true}
+		return host, result, nil
+
 	case ipv6.ICMPTypeRouterSolicitation:
 		frame := ICMP6RouterSolicitation(icmp6Frame)
 		if !frame.IsValid() {
