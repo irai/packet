@@ -17,7 +17,7 @@ type Notification struct {
 }
 
 func (n Notification) String() string {
-	return fmt.Sprintf("%s online=%t dhcp4name=%s mdnsname=%s", n.Addr, n.Online, n.DHCPName, n.MDNSName)
+	return fmt.Sprintf("%s online=%t dhcp4name=%s mdnsname=%s router=%v", n.Addr, n.Online, n.DHCPName, n.MDNSName, n.IsRouter)
 }
 
 // purge is called each minute by the minute goroutine
