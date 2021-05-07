@@ -8,8 +8,6 @@ import (
 )
 
 func (h *Handler) SendRouterAdvertisement(router Router, dstAddr packet.Addr) error {
-	// h.mutex.Lock()
-	// defer h.mutex.Unlock()
 	if len(router.Prefixes) == 0 {
 		return nil
 	}

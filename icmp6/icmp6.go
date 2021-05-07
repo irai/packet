@@ -177,9 +177,9 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (*pa
 
 	t := ipv6.ICMPType(icmp6Frame.Type())
 	if Debug && t != ipv6.ICMPTypeRouterAdvertisement {
-		fmt.Println("ether:", ether)
-		fmt.Println("ip6  :", ip6Frame)
-		fmt.Println("icmp6:", icmp6Frame)
+		fmt.Println("ether :", ether)
+		fmt.Println("ip6   :", ip6Frame)
+		fmt.Println("icmp6 :", icmp6Frame)
 	}
 
 	switch t {

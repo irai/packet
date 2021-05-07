@@ -658,9 +658,9 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				}
 			} else {
 				if packet.DebugUDP {
-					fmt.Println("ether:", ether)
-					fmt.Println("ip6  :", ip6Frame)
-					fmt.Printf("udp  : %s\n", udp)
+					fmt.Println("ether :", ether)
+					fmt.Println("ip6   :", ip6Frame)
+					fmt.Printf("udp   : %s\n", udp)
 				}
 
 			}
