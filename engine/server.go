@@ -690,11 +690,11 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		/****
 		 ** Uncomment this to help identify deadlocks
 		 **
-		if Debug {
+		if packet.Debug {
 			fmt.Println("Check engine")
 			h.mutex.Lock()
 			fmt.Println("Check lock engine pass")
-			for _, host := range h.LANHosts.Table {
+			for _, host := range h.session.HostTable.Table {
 				fmt.Println("Check row ", host.IP)
 				host.Row.Lock()
 				fmt.Println("Check lock row pass ", host.IP)
@@ -705,6 +705,6 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			h.mutex.Unlock()
 			fmt.Println("Check unlock engine pass ")
 		}
-		 **/
+		***/
 	}
 }
