@@ -106,7 +106,7 @@ func (config Config) NewEngine(nic string) (*Handler, error) {
 	h.HandlerIP4 = packet.PacketNOOP{}
 	h.HandlerIP6 = packet.PacketNOOP{}
 	h.ARPHandler = packet.PacketNOOP{}
-	h.ICMP4Handler = packet.PacketNOOP{}
+	h.ICMP4Handler = icmp4.ICMP4NOOP{}
 	h.ICMP6Handler = packet.PacketNOOP{}
 	h.DHCP4Handler = packet.PacketNOOP{}
 
@@ -157,7 +157,7 @@ func (h *Handler) AttachICMP4(p icmp4.ICMP4Handler) {
 	h.ICMP4Handler = p
 }
 func (h *Handler) DetachICMP4() {
-	h.ICMP4Handler = packet.PacketNOOP{}
+	h.ICMP4Handler = icmp4.ICMP4NOOP{}
 }
 
 func (h *Handler) AttachICMP6(p icmp6.ICMP6Handler) {

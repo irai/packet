@@ -177,7 +177,7 @@ func main() {
 
 	// Cannot defer this at the moment because we could have changed the pointers
 	if handlers.arp != nil {
-		handlers.arp.Detach()
+		handlers.arp.Close()
 	}
 	if handlers.icmp4 != nil {
 		handlers.icmp4.Close()
@@ -186,7 +186,7 @@ func main() {
 		handlers.icmp6.Close()
 	}
 	if handlers.dhcp4 != nil {
-		handlers.dhcp4.Detach()
+		handlers.dhcp4.Close()
 	}
 	handlers.engine.Close()
 
@@ -233,7 +233,7 @@ func doEngine(h *handlers, tokens []string) {
 	case "detach":
 		switch getString(tokens, 2) {
 		case "arp":
-			err = h.arp.Detach()
+			err = h.arp.Close()
 			h.arp = nil
 		case "icmp4":
 			err = h.icmp4.Close()
@@ -242,7 +242,7 @@ func doEngine(h *handlers, tokens []string) {
 			err = h.icmp6.Close()
 			h.icmp6 = nil
 		case "dhcp4":
-			err = h.dhcp4.Detach()
+			err = h.dhcp4.Close()
 			h.dhcp4 = nil
 		default:
 			fmt.Println("invalid engine name")

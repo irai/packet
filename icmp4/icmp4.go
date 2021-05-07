@@ -14,14 +14,36 @@ var Debug bool
 
 type ICMP4Handler interface {
 	packet.PacketProcessor
+	Ping(srcAddr packet.Addr, dstAddr packet.Addr, timeout time.Duration) (err error)
+}
+
+type ICMP4NOOP struct {
+}
+
+func (p ICMP4NOOP) Start() error { return nil }
+func (p ICMP4NOOP) Stop() error  { return nil }
+func (p ICMP4NOOP) ProcessPacket(*packet.Host, []byte, []byte) (*packet.Host, packet.Result, error) {
+	return nil, packet.Result{}, nil
+}
+func (p ICMP4NOOP) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
+	return packet.StageNoChange, nil
+}
+func (p ICMP4NOOP) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
+	return packet.StageNoChange, nil
+}
+func (p ICMP4NOOP) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
+	return packet.StageNoChange, nil
+}
+func (p ICMP4NOOP) MinuteTicker(now time.Time) error { return nil }
+func (p ICMP4NOOP) Close() error                     { return nil }
+func (p ICMP4NOOP) Ping(srcAddr packet.Addr, dstAddr packet.Addr, timeout time.Duration) error {
+	return nil
 }
 
 var _ ICMP4Handler = &Handler{}
 
 // Handler maintains the underlying socket connection
 type Handler struct {
-	// NICInfo *packet.NICInfo
-	// conn    net.PacketConn
 	session *packet.Session
 }
 

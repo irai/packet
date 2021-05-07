@@ -8,7 +8,7 @@ func TestAttach(t *testing.T) {
 	tc := setupTestHandler()
 
 	// tc.h.clientConn = nil // don't close membuf - segfaul otherwise
-	if err := tc.h.Detach(); err != nil {
+	if err := tc.h.Close(); err != nil {
 		panic(err)
 	}
 

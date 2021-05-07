@@ -31,6 +31,7 @@ type PacketProcessor interface {
 	StopHunt(Addr) (HuntStage, error)
 	CheckAddr(Addr) (HuntStage, error)
 	MinuteTicker(time.Time) error
+	Close() error
 }
 
 // PacketNOOP is a no op packet processor
@@ -46,6 +47,7 @@ func (p PacketNOOP) ProcessPacket(*Host, []byte, []byte) (*Host, Result, error) 
 func (p PacketNOOP) StartHunt(addr Addr) (HuntStage, error) { return StageNoChange, nil }
 func (p PacketNOOP) StopHunt(addr Addr) (HuntStage, error)  { return StageNoChange, nil }
 func (p PacketNOOP) CheckAddr(addr Addr) (HuntStage, error) { return StageNoChange, nil }
+func (p PacketNOOP) Close() error                           { return nil }
 
 // func (p PacketNOOP) HuntStage(addr Addr) HuntStage              { return StageNormal }
 func (p PacketNOOP) MinuteTicker(now time.Time) error { return nil }

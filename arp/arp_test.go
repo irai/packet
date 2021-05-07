@@ -123,6 +123,9 @@ func readResponse(ctx context.Context, tc *testContext) error {
 			panic("invalid arp packet")
 		}
 		tc.countResponse++
+		if true {
+			fmt.Printf("test  : got test number=%d response=%s\n", tc.countResponse, arpFrame)
+		}
 
 		// tmp := make([]byte, len(buf))
 		// copy(tmp, buf)

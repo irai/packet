@@ -185,13 +185,9 @@ func (config Config) New(session *packet.Session, netfilterIP net.IPNet, dnsServ
 }
 
 // Detach implements the PacketProcessor interface
-func (h *Handler) Detach() error {
-	// h.session.HandlerDHCP4 = packet.PacketNOOP{}
+func (h *Handler) Close() error {
 	h.closed = true
 	close(h.closeChan)
-	// if h.clientConn != nil {
-	// h.clientConn.Close() // kill client goroutine
-	// }
 	return nil
 }
 

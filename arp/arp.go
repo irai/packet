@@ -59,7 +59,7 @@ func (config Config) New(session *packet.Session) (h *Handler, err error) {
 }
 
 // Detach removes the plugin from the engine
-func (h *Handler) Detach() error {
+func (h *Handler) Close() error {
 	h.closed = true
 	close(h.closeChan) // this will exit all background goroutines
 	return nil
@@ -160,7 +160,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (*pa
 	// skip link local packets
 	if frame.SrcIP().IsLinkLocalUnicast() || frame.DstIP().IsLinkLocalUnicast() {
 		if Debug {
-			log.Printf("arp skipping link local packet smac=%v sip=%v tmac=%v tip=%v", frame.SrcMAC(), frame.SrcIP(), frame.DstMAC(), frame.DstIP())
+			log.Printf("arp   : skipping link local packet smac=%v sip=%v tmac=%v tip=%v", frame.SrcMAC(), frame.SrcIP(), frame.DstMAC(), frame.DstIP())
 		}
 		return host, packet.Result{}, nil
 	}
@@ -179,7 +179,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (*pa
 			operation = request
 		}
 	default:
-		log.Printf("arp invalid operation: %s", frame)
+		log.Printf("arp   : invalid operation: %s", frame)
 		return host, packet.Result{}, nil
 	}
 
@@ -191,8 +191,8 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (*pa
 		// | request    | 1 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  targetIP |
 		// +============+===+===========+===========+============+============+===================+===========+
 		if Debug {
-			fmt.Println("ether:", ether)
-			fmt.Printf("arp  : who is %s: %s\n", frame.DstIP(), frame)
+			fmt.Println("ether :", ether)
+			fmt.Printf("arp   : who is %s: %s\n", frame.DstIP(), frame)
 		}
 		// if we are spoofing the src host and the src host is trying to discover the router IP,
 		// reply on behalf of the router
@@ -217,8 +217,8 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (*pa
 		// | ACD probe  | 1 | broadcast | clientMAC | clientMAC  | 0x00       | 0x00              |  targetIP |
 		// +============+===+===========+===========+============+============+===================+===========+
 		if Debug {
-			fmt.Println("ether:", ether)
-			fmt.Printf("arp  : probe recvd: %s\n", frame)
+			fmt.Println("ether :", ether)
+			fmt.Printf("arp   : probe recvd: %s\n", frame)
 		}
 
 		// reject any other ip
@@ -232,7 +232,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (*pa
 			// Note: detected one situation where android probed external DNS IP. Not sure if this occur in other clients.
 			//     arp  : probe reject for ip=8.8.8.8 from mac=84:11:9e:03:89:c0 (android phone) - 10 March 2021
 			if h.session.NICInfo.HomeLAN4.Contains(frame.DstIP()) {
-				fmt.Printf("arp  : probe reject for ip=%s from mac=%s macentry=%s\n", frame.DstIP(), frame.SrcMAC(), macEntry)
+				fmt.Printf("arp   : probe reject for ip=%s from mac=%s macentry=%s\n", frame.DstIP(), frame.SrcMAC(), macEntry)
 				h.reply(frame.SrcMAC(), h.session.NICInfo.HostMAC, frame.DstIP(), frame.SrcMAC(), net.IP(EthernetBroadcast))
 			}
 			return host, packet.Result{}, nil
@@ -248,8 +248,8 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (*pa
 		// | ACD announ | 1 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  clientIP |
 		// +============+===+===========+===========+============+============+===================+===========+
 		if Debug {
-			fmt.Println("ether:", ether)
-			fmt.Printf("arp  : announcement recvd: %s\n", frame)
+			fmt.Println("ether :", ether)
+			fmt.Printf("arp   : announcement recvd: %s\n", frame)
 		}
 
 	default:
@@ -260,8 +260,8 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (*pa
 		// | gratuitous | 2 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  clientIP |
 		// +============+===+===========+===========+============+============+===================+===========+
 		if Debug {
-			fmt.Println("ether:", ether)
-			fmt.Printf("arp  : reply recvd: %s\n", frame)
+			fmt.Println("ether :", ether)
+			fmt.Printf("arp   : reply recvd: %s\n", frame)
 		}
 	}
 
