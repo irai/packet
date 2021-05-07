@@ -231,10 +231,7 @@ func (h *Handler) PrintTable() {
 // When we have unicast traffic this bit will be set to 0.
 // For broadcast or multicast traffic this bit will be set to 1.
 func isUnicastMAC(mac net.HardwareAddr) bool {
-	if mac[0]&0x01 == 0x00 {
-		return true
-	}
-	return false
+	return mac[0]&0x01 == 0x00
 }
 
 func (h *Handler) startPlugins() error {
