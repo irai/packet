@@ -23,8 +23,8 @@ func (h *Handler) Capture(mac net.HardwareAddr) error {
 	}
 	macEntry.Captured = true
 
-	list := []packet.Addr{}
 	// Mark all known entries as packet.StageHunt
+	list := []packet.Addr{}
 	for _, host := range macEntry.HostList {
 		list = append(list, packet.Addr{IP: host.IP, MAC: host.MACEntry.MAC})
 	}
@@ -114,7 +114,6 @@ func (h *Handler) lockAndStartHunt(addr packet.Addr) (err error) {
 // Release removes the mac from capture mode
 func (h *Handler) Release(mac net.HardwareAddr) error {
 	h.session.GlobalLock()
-
 	macEntry := h.session.MACTable.FindMACNoLock(mac)
 	if macEntry == nil {
 		h.session.GlobalUnlock()
@@ -123,7 +122,6 @@ func (h *Handler) Release(mac net.HardwareAddr) error {
 	list := []*packet.Host{}
 	list = append(list, macEntry.HostList...)
 	macEntry.Captured = false
-
 	h.session.GlobalUnlock()
 
 	for _, host := range list {

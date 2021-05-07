@@ -158,6 +158,9 @@ func (h *Session) findOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host,
 }
 
 func (h *Session) DeleteHost(ip net.IP) {
+	if Debug {
+		fmt.Printf("packet : delete host ip=%s\n", ip)
+	}
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 
