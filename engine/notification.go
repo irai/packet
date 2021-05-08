@@ -82,7 +82,7 @@ func (h *Handler) GetNotificationChannel() <-chan Notification {
 	h.session.GlobalRLock()
 	for _, host := range h.session.HostTable.Table {
 		host.Row.RLock()
-		list = append(list, Notification{Addr: packet.Addr{IP: host.IP, MAC: host.MACEntry.MAC}, Online: host.Online, DHCPName: host.DHCP4Name})
+		list = append(list, Notification{Addr: packet.Addr{IP: host.IP, MAC: host.MACEntry.MAC}, Online: host.Online, DHCPName: host.DHCP4Name, IsRouter: host.MACEntry.IsRouter})
 		host.Row.RUnlock()
 	}
 	h.session.GlobalRUnlock()
