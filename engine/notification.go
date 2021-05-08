@@ -32,12 +32,12 @@ func (h *Handler) purge(now time.Time, probeDur time.Duration, offlineDur time.D
 
 	h.session.GlobalRLock()
 	for _, e := range h.session.HostTable.Table {
-		e.Row.RLock()
+		e.MACEntry.Row.RLock()
 
 		// Delete from table if the device is offline and was not seen for the last hour
 		if !e.Online && e.LastSeen.Before(deleteCutoff) {
 			purge = append(purge, e.IP)
-			e.Row.RUnlock()
+			e.MACEntry.Row.RUnlock()
 			continue
 		}
 
@@ -54,7 +54,7 @@ func (h *Handler) purge(now time.Time, probeDur time.Duration, offlineDur time.D
 		if e.Online && e.LastSeen.Before(offlineCutoff) {
 			offline = append(offline, e)
 		}
-		e.Row.RUnlock()
+		e.MACEntry.Row.RUnlock()
 	}
 	h.session.GlobalRUnlock()
 
@@ -81,9 +81,9 @@ func (h *Handler) GetNotificationChannel() <-chan Notification {
 	list := []Notification{}
 	h.session.GlobalRLock()
 	for _, host := range h.session.HostTable.Table {
-		host.Row.RLock()
+		host.MACEntry.Row.RLock()
 		list = append(list, Notification{Addr: packet.Addr{IP: host.IP, MAC: host.MACEntry.MAC}, Online: host.Online, DHCPName: host.DHCP4Name, IsRouter: host.MACEntry.IsRouter})
-		host.Row.RUnlock()
+		host.MACEntry.Row.RUnlock()
 	}
 	h.session.GlobalRUnlock()
 

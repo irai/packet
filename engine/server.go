@@ -318,7 +318,7 @@ func (h *Handler) FindIP6Router(ip net.IP) icmp6.Router {
 //
 func (h *Handler) lockAndProcessDHCP4Update(host *packet.Host, result packet.Result) (notify bool) {
 	if host != nil {
-		host.Row.Lock()
+		host.MACEntry.Row.Lock()
 		if host.DHCP4Name != result.Name {
 			host.DHCP4Name = result.Name
 			notify = true
@@ -328,7 +328,7 @@ func (h *Handler) lockAndProcessDHCP4Update(host *packet.Host, result packet.Res
 		}
 		capture := host.MACEntry.Captured
 		addr := packet.Addr{MAC: host.MACEntry.MAC, IP: host.IP}
-		host.Row.Unlock()
+		host.MACEntry.Row.Unlock()
 
 		// DHCP stage overides all other stages
 		if capture && result.HuntStage == packet.StageRedirected {
@@ -367,11 +367,11 @@ func (h *Handler) lockAndProcessDHCP4Update(host *packet.Host, result packet.Res
 func (h *Handler) lockAndSetOnline(host *packet.Host, notify bool) {
 	now := time.Now()
 
-	host.Row.RLock()
+	host.MACEntry.Row.RLock()
 
 	if host.Online && !notify { // just another IP packet - nothing to do
 		if now.Sub(host.LastSeen) < time.Second*1 { // update LastSeen every 1 seconds to minimise locking
-			host.Row.RUnlock()
+			host.MACEntry.Row.RUnlock()
 			return
 		}
 	}
@@ -397,7 +397,7 @@ func (h *Handler) lockAndSetOnline(host *packet.Host, notify bool) {
 			}
 		}
 	}
-	host.Row.RUnlock()
+	host.MACEntry.Row.RUnlock()
 
 	// set previous IP to offline, start hunt and notify of new IP
 	if offlineIP != nil {
@@ -408,8 +408,8 @@ func (h *Handler) lockAndSetOnline(host *packet.Host, notify bool) {
 	}
 
 	// lock row for update
-	host.Row.Lock()
-	defer host.Row.Unlock()
+	host.MACEntry.Row.Lock()
+	defer host.MACEntry.Row.Unlock()
 
 	// update LastSeen and current mac IP
 	host.MACEntry.LastSeen = now
@@ -462,9 +462,9 @@ func (h *Handler) lockAndSetOnline(host *packet.Host, notify bool) {
 }
 
 func (h *Handler) lockAndSetOffline(host *packet.Host) {
-	host.Row.Lock()
+	host.MACEntry.Row.Lock()
 	if !host.Online {
-		host.Row.Unlock()
+		host.MACEntry.Row.Unlock()
 		return
 	}
 	if packet.Debug {
@@ -483,7 +483,7 @@ func (h *Handler) lockAndSetOffline(host *packet.Host) {
 	}
 	host.MACEntry.Online = macOnline
 
-	host.Row.Unlock()
+	host.MACEntry.Row.Unlock()
 
 	h.lockAndStopHunt(host, packet.StageNormal)
 
@@ -699,9 +699,9 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			fmt.Println("Check lock engine pass")
 			for _, host := range h.session.HostTable.Table {
 				fmt.Println("Check row ", host.IP)
-				host.Row.Lock()
+				host.MACEntry.Row.Lock()
 				fmt.Println("Check lock row pass ", host.IP)
-				host.Row.Unlock()
+				host.MACEntry.Row.Unlock()
 				fmt.Println("Check unlock row pass ", host.IP)
 			}
 			fmt.Println("Check lock pass rows")

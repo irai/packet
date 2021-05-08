@@ -54,18 +54,18 @@ func (h *Handler) lockAndStartHunt(addr packet.Addr) (err error) {
 		return packet.ErrInvalidIP
 	}
 
-	host.Row.Lock()
+	host.MACEntry.Row.Lock()
 	if host.HuntStage == packet.StageRedirected {
 		fmt.Printf("packet: host successfully redirected %s\n", host)
-		host.Row.Unlock()
+		host.MACEntry.Row.Unlock()
 		return nil
 	}
 	if !host.Online { // host offline, nothing to do
-		host.Row.Unlock()
+		host.MACEntry.Row.Unlock()
 		return nil
 	}
 	if host.HuntStage == packet.StageHunt {
-		host.Row.Unlock()
+		host.MACEntry.Row.Unlock()
 		return nil
 	}
 
@@ -78,7 +78,7 @@ func (h *Handler) lockAndStartHunt(addr packet.Addr) (err error) {
 	if packet.Debug {
 		fmt.Printf("packet: start hunt for %s\n", host)
 	}
-	host.Row.Unlock()
+	host.MACEntry.Row.Unlock()
 
 	// IP4 handlers
 	if addr.IP.To4() != nil {
@@ -140,17 +140,17 @@ func (h *Handler) Release(mac net.HardwareAddr) error {
 //                      or routing is no longer OK
 //
 func (h *Handler) lockAndStopHunt(host *packet.Host, stage packet.HuntStage) (err error) {
-	host.Row.Lock()
+	host.MACEntry.Row.Lock()
 	switch host.HuntStage {
 	case packet.StageNormal:
-		host.Row.Unlock()
+		host.MACEntry.Row.Unlock()
 		return nil
 	case packet.StageRedirected:
 		host.HuntStage = stage
 		if packet.Debug {
 			fmt.Printf("packet: stop hunt for %s\n", host)
 		}
-		host.Row.Unlock()
+		host.MACEntry.Row.Unlock()
 		return nil
 	}
 
@@ -171,7 +171,7 @@ func (h *Handler) lockAndStopHunt(host *packet.Host, stage packet.HuntStage) (er
 	}
 	**/
 	addr := packet.Addr{MAC: host.MACEntry.MAC, IP: host.IP}
-	host.Row.Unlock()
+	host.MACEntry.Row.Unlock()
 
 	// IP4 handlers
 	if addr.IP.To4() != nil {
@@ -203,10 +203,10 @@ func (h *Handler) lockAndStopHunt(host *packet.Host, stage packet.HuntStage) (er
 func (h *Handler) lockAndMonitorRoute(now time.Time) (err error) {
 	table := h.session.GetHosts()
 	for _, host := range table {
-		host.Row.RLock()
+		host.MACEntry.Row.RLock()
 		if host.HuntStage == packet.StageRedirected && host.IP.To4() != nil {
 			addr := packet.Addr{MAC: host.MACEntry.MAC, IP: host.IP}
-			host.Row.RUnlock()
+			host.MACEntry.Row.RUnlock()
 			_, err := h.ICMP4Handler.CheckAddr(addr) // ping host
 			if errors.Is(err, packet.ErrNotRedirected) {
 				fmt.Printf("packet: ip4 routing NOK %s\n", host)
@@ -223,9 +223,9 @@ func (h *Handler) lockAndMonitorRoute(now time.Time) (err error) {
 				}
 			}
 			// lock again before loop
-			host.Row.RLock()
+			host.MACEntry.Row.RLock()
 		}
-		host.Row.RUnlock()
+		host.MACEntry.Row.RUnlock()
 	}
 
 	return nil

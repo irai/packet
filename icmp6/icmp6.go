@@ -70,11 +70,11 @@ func (h *Handler) PrintTable() {
 	if len(table) > 0 {
 		fmt.Printf("icmp6 hosts table len=%v\n", len(table))
 		for _, host := range table {
-			host.Row.RLock()
+			host.MACEntry.Row.RLock()
 			if packet.IsIP6(host.IP) {
 				fmt.Printf("mac=%s ip=%v online=%v \n", host.MACEntry.MAC, host.IP, host.Online)
 			}
-			host.Row.RUnlock()
+			host.MACEntry.Row.RUnlock()
 		}
 	}
 

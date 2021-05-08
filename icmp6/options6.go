@@ -73,8 +73,6 @@ type LinkLayerAddress struct {
 	Addr      net.HardwareAddr
 }
 
-// TODO(mdlayher): deal with non-ethernet links and variable option length?
-
 // Code implements Option.
 func (lla *LinkLayerAddress) Code() byte { return byte(lla.Direction) }
 
@@ -115,8 +113,6 @@ func (lla *LinkLayerAddress) unmarshal(b []byte) error {
 }
 
 var _ Option = new(MTU)
-
-// TODO(mdlayher): decide if this should just be a struct type instead.
 
 // An MTU is an MTU option, as described in RFC 4861, Section 4.6.1.
 type MTU uint32

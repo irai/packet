@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"net"
-	"sync"
 	"time"
 
 	"inet.af/netaddr"
@@ -28,7 +27,7 @@ type Host struct {
 	HuntStage HuntStage // keep host overall huntStage
 	LastSeen  time.Time // keep last packet time
 	DHCP4Name string
-	Row       sync.RWMutex // Row level mutex
+	// Row       sync.RWMutex // Row level mutex
 }
 
 func (e *Host) String() string {
@@ -122,7 +121,7 @@ func (h *Session) findOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host,
 	ipNew, _ := netaddr.FromStdIP(ip)
 	now := time.Now()
 	if host, ok := h.HostTable.Table[ipNew]; ok {
-		host.Row.Lock() // lock the row
+		host.MACEntry.Row.Lock() // lock the row
 		if !bytes.Equal(host.MACEntry.MAC, mac) {
 			fmt.Println("packet: error mac address differ - duplicated IP???", host.MACEntry.MAC, mac, ipNew)
 			h.printHostTable()
@@ -132,15 +131,19 @@ func (h *Session) findOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host,
 			// Remove IP from existing mac and link host to new macEntry
 			mac := CopyMAC(mac) // copy from frame
 			host.MACEntry.unlink(host)
+			host.MACEntry.Row.Unlock() // release lock on previous mac
+
+			// Link host to new MACEntry
 			macEntry := h.MACTable.FindOrCreateNoLock(mac)
-			macEntry.link(host)
-			host.MACEntry = macEntry
+			macEntry.Row.Lock()          // acquire lock on new macEntry
+			macEntry.link(host)          // link macEntry to host
+			host.MACEntry = macEntry     // link host to macEntry
 			host.HuntStage = StageNormal // reset stage
 			host.DHCP4Name = ""          // clear name from previous host
 		}
 		host.LastSeen = now
 		host.MACEntry.LastSeen = now
-		host.Row.Unlock()
+		host.MACEntry.Row.Unlock()
 		return host, true
 	}
 	mac = CopyMAC(mac) // copy from frame

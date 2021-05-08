@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -20,10 +21,11 @@ type MACEntry struct {
 	Online   bool             // true is mac is online
 	IsRouter bool             // Set to true if this is a router
 	HostList []*Host          // IPs associated with this mac
+	Row      sync.RWMutex     // Row level mutex
 	LastSeen time.Time
 }
 
-func (e MACEntry) String() string {
+func (e *MACEntry) String() string {
 	return fmt.Sprintf("mac=%s captured=%v online=%v ip4=%s ip6=%s lla=%s ip4offer=%s hosts=%d lastSeen=%v",
 		e.MAC, e.Captured, e.Online, e.IP4, e.IP6GUA, e.IP6LLA, e.IP4Offer, len(e.HostList), time.Since(e.LastSeen))
 }

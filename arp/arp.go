@@ -97,11 +97,11 @@ func (h *Handler) MinuteTicker(now time.Time) error {
 	now.Add(h.probeInterval * -1) //
 
 	for _, host := range h.session.GetHosts() {
-		host.Row.RLock()
+		host.MACEntry.Row.RLock()
 		if host.Online && host.LastSeen.Before(now) && host.IP.To4() != nil {
 			arpAddrs = append(arpAddrs, packet.Addr{MAC: host.MACEntry.MAC, IP: host.IP})
 		}
-		host.Row.RUnlock()
+		host.MACEntry.Row.RUnlock()
 	}
 
 	for _, addr := range arpAddrs {
@@ -222,7 +222,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (*pa
 		}
 
 		// reject any other ip
-		// TODO: move lock to mac entry
+		// TODO: need to lock MACEntry?
 		macEntry := h.session.FindMACEntry(frame.SrcMAC())
 		if macEntry == nil || !macEntry.IP4Offer.Equal(frame.DstIP()) {
 			// fmt.Printf("DEBUG arp  : probe reject for ip=%s from mac=%s\n", frame.DstIP(), frame.SrcMAC())
