@@ -275,6 +275,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (*pa
 		router.ReacheableTime = int(frame.ReachableTime())
 		router.RetransTimer = int(frame.RetransmitTimer())
 		router.Options = options
+		router.Prefixes = options.Prefixes
 		h.Unlock()
 
 		if Debug {
