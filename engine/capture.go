@@ -114,7 +114,7 @@ func (h *Handler) lockAndStartHunt(addr packet.Addr) (err error) {
 // Release removes the mac from capture mode
 func (h *Handler) Release(mac net.HardwareAddr) error {
 	h.session.GlobalLock()
-	macEntry := h.session.MACTable.FindMACNoLock(mac)
+	macEntry, _ := h.session.MACTable.FindMACNoLock(mac)
 	if macEntry == nil {
 		h.session.GlobalUnlock()
 		return nil

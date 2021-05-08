@@ -168,6 +168,9 @@ func (h *Session) DeleteHost(ip net.IP) {
 		host.MACEntry.unlink(host)
 		newIP, _ := netaddr.FromStdIP(ip)
 		delete(h.HostTable.Table, newIP)
+		if len(host.MACEntry.HostList) == 0 { // delete if last host
+			h.MACTable.delete(host.MACEntry.MAC)
+		}
 	}
 }
 
@@ -200,7 +203,7 @@ func (h *Session) CaptureNoLock(mac net.HardwareAddr) *MACEntry {
 func (h *Session) IsCaptured(mac net.HardwareAddr) bool {
 	h.mutex.RLock()
 	defer h.mutex.RUnlock()
-	if e := h.MACTable.FindMACNoLock(mac); e != nil && e.Captured {
+	if e, _ := h.MACTable.FindMACNoLock(mac); e != nil && e.Captured {
 		return true
 	}
 	return false

@@ -79,7 +79,7 @@ func (h *Session) printMACTable() {
 
 // FindOrCreateNoLock adds a mac to set
 func (s *MACTable) FindOrCreateNoLock(mac net.HardwareAddr) *MACEntry {
-	if e := s.FindMACNoLock(mac); e != nil {
+	if e, _ := s.FindMACNoLock(mac); e != nil {
 		return e
 	}
 	e := &MACEntry{MAC: mac, IP4: net.IPv4zero, IP6GUA: net.IPv6zero, IP6LLA: net.IPv6zero, IP4Offer: net.IPv4zero}
@@ -87,46 +87,35 @@ func (s *MACTable) FindOrCreateNoLock(mac net.HardwareAddr) *MACEntry {
 	return e
 }
 
-/**
 // del deletes the mac from set
 func (s *MACTable) delete(mac net.HardwareAddr) error {
 	var pos int
-	if pos = s.index(mac); pos == -1 {
+	if _, pos = s.FindMACNoLock(mac); pos == -1 {
 		return nil
 	}
 
-	if pos+1 == len(s.list) { // last element?
-		s.list = s.list[:pos]
+	if pos+1 == len(s.Table) { // last element?
+		s.Table = s.Table[:pos]
 		return nil
 	}
-	copy(s.list[pos:], s.list[pos+1:])
-	s.list = s.list[:len(s.list)-1]
+	copy(s.Table[pos:], s.Table[pos+1:])
+	s.Table = s.Table[:len(s.Table)-1]
 	return nil
 }
-**/
 
 // FindMACEntry returns pointer to macEntry or nil if not found
 func (h *Session) FindMACEntry(mac net.HardwareAddr) *MACEntry {
 	h.mutex.RLock()
 	defer h.mutex.RUnlock()
-	return h.MACTable.FindMACNoLock(mac)
+	entry, _ := h.MACTable.FindMACNoLock(mac)
+	return entry
 }
 
-func (s *MACTable) FindMACNoLock(mac net.HardwareAddr) *MACEntry {
-	for _, v := range s.Table {
+func (s *MACTable) FindMACNoLock(mac net.HardwareAddr) (*MACEntry, int) {
+	for pos, v := range s.Table {
 		if bytes.Equal(v.MAC, mac) {
-			return v
+			return v, pos
 		}
 	}
-	return nil
+	return nil, -1
 }
-
-/***
-// macTableUpsertIPOffer insert of update mac IP4. Set by dhcp discovery.
-func (h *Session) macTableUpsertIPOffer(addr Addr) {
-	if h.NICInfo.HostIP4.Contains(addr.IP) {
-		entry := h.MACTable.FindOrCreateNoLock(addr.MAC)
-		entry.IP4Offer = addr.IP
-	}
-}
-***/
