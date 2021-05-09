@@ -121,8 +121,10 @@ func (h *Handler) Start() error {
 	if err := h.SendRouterSolicitation(); err != nil {
 		return err
 	}
-	return icmp4.Ping(packet.IP6AllNodesMulticast) // ping with external cmd tool
-	// return h.SendEchoRequest(packet.Addr{MAC: h.engine.NICInfo.HostMAC, IP: h.engine.NICInfo.HostLLA.IP}, packet.IP6AllNodesAddr, 0, 0)
+	if err := icmp4.Ping(packet.IP6AllNodesMulticast); err != nil { // ping with external cmd tool
+		fmt.Printf("icmp6 : error in initial ping all nodes multicast - ignoring : %s\n", err)
+	}
+	return nil
 }
 
 // Stop implements PacketProcessor interface
