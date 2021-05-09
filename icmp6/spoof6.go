@@ -31,11 +31,12 @@ func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
 		fmt.Printf("icmp6 : stop neighbor spoof %s", addr)
 	}
 	h.Lock()
+	defer h.Unlock()
+
 	if h.huntList.Index(addr.MAC) == -1 {
 		return packet.StageNormal, nil
 	}
 	h.huntList.Del(addr)
-	h.Unlock()
 
 	return packet.StageNormal, nil
 }
