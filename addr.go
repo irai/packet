@@ -74,6 +74,10 @@ func (s *AddrList) Index(mac net.HardwareAddr) int {
 	return s.index(mac)
 }
 
+func (s *AddrList) Len() int {
+	return len(s.list)
+}
+
 func (s *AddrList) index(mac net.HardwareAddr) int {
 	for i := range s.list {
 		if bytes.Equal(s.list[i].MAC, mac) {
