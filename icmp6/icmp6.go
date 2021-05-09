@@ -193,7 +193,8 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (*pa
 	icmp6Frame := ICMP6(header)
 
 	if !icmp6Frame.IsValid() {
-		return host, packet.Result{}, fmt.Errorf("invalid icmp msg=%v: %w", icmp6Frame, errParseMessage)
+		fmt.Printf("icmp6 : error invalid icmp len=%d msg=\"% x\" \n", len(header), header)
+		return host, packet.Result{}, errParseMessage
 	}
 
 	t := ipv6.ICMPType(icmp6Frame.Type())
