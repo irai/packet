@@ -67,7 +67,7 @@ func (h *Handler) findOrCreateRouter(mac net.HardwareAddr, ip net.IP) (router *R
 	router = &Router{Addr: packet.Addr{MAC: packet.CopyMAC(mac), IP: packet.CopyIP(ip)}}
 	h.LANRouters[ipNew] = router
 	h.Router = router // make this the default ipv6 router - used in na attack
-	fmt.Printf("icmp6 : new ipv6 ra router %s\n", router)
+	fmt.Printf("icmp6 : create new ipv6 router %s\n", router)
 	return router, false
 }
 
@@ -76,7 +76,10 @@ func (h *Handler) FindRouter(ip net.IP) Router {
 	ipNew, _ := netaddr.FromStdIP(ip)
 	r := h.LANRouters[ipNew]
 	h.Mutex.Unlock()
-	return *r
+	if r != nil {
+		return *r
+	}
+	return Router{}
 }
 
 type RADVS struct {
