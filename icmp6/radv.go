@@ -57,8 +57,11 @@ func (r *Router) String() string {
 	return fmt.Sprintf("%s preference=%v prefix=%v\n", r.Addr, r.Preference, r.Prefixes)
 }
 
+// findOrCreateRouter return an existing router that matches ip or create a new one if not found.
+//
+// The function will copy mac and ip if required. It is safe to call this using a frame buffer.
 func (h *Handler) findOrCreateRouter(mac net.HardwareAddr, ip net.IP) (router *Router, found bool) {
-	// using netaddr IP
+	// use netaddr IP in hash
 	ipNew, _ := netaddr.FromStdIP(ip)
 	r, found := h.LANRouters[ipNew]
 	if found {

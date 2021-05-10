@@ -42,7 +42,7 @@ func (h *Handler) SendRouterAdvertisement(router Router, dstAddr packet.Addr) er
 		NewMTU(uint32(h.session.NICInfo.IFI.MTU)),
 		&LinkLayerAddress{
 			Direction: Source,
-			Addr:      h.session.NICInfo.HostMAC,
+			MAC:       h.session.NICInfo.HostMAC,
 		},
 	)
 
@@ -65,7 +65,7 @@ func (h *Handler) SendRouterSolicitation() error {
 		Options: []Option{
 			&LinkLayerAddress{
 				Direction: Source,
-				Addr:      h.session.NICInfo.HostMAC,
+				MAC:       h.session.NICInfo.HostMAC,
 			},
 		},
 	}

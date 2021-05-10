@@ -70,7 +70,7 @@ var _ Option = &LinkLayerAddress{}
 // described in RFC 4861, Section 4.6.1.
 type LinkLayerAddress struct {
 	Direction Direction
-	Addr      net.HardwareAddr
+	MAC       net.HardwareAddr
 }
 
 // Code implements Option.
@@ -81,14 +81,14 @@ func (lla *LinkLayerAddress) marshal() ([]byte, error) {
 		return nil, fmt.Errorf("ndp: invalid link-layer address direction: %d", d)
 	}
 
-	if len(lla.Addr) != ethAddrLen {
-		return nil, fmt.Errorf("ndp: invalid link-layer address: %q", lla.Addr.String())
+	if len(lla.MAC) != ethAddrLen {
+		return nil, fmt.Errorf("ndp: invalid link-layer address: %q", lla.MAC.String())
 	}
 
 	raw := &RawOption{
 		Type:   lla.Code(),
 		Length: llaOptLen,
-		Value:  lla.Addr,
+		Value:  lla.MAC,
 	}
 
 	return raw.marshal()
@@ -96,9 +96,8 @@ func (lla *LinkLayerAddress) marshal() ([]byte, error) {
 
 func (lla *LinkLayerAddress) unmarshal(b []byte) error {
 	t := b[0]
-	l := int(b[1]*8) - 2 // Exclude type and length fields from value's length.
-	if l != 6 {
-		return fmt.Errorf("ndp: unexpected link-layer address option length: %d", l)
+	if b[1] != 1 { // must be 8 bytes long
+		return fmt.Errorf("ndp: unexpected link-layer address option length: %d", b[1])
 	}
 
 	d := Direction(t)
@@ -107,7 +106,7 @@ func (lla *LinkLayerAddress) unmarshal(b []byte) error {
 	}
 
 	lla.Direction = d
-	copy(lla.Addr, b[2:]) // skip type and len
+	lla.MAC = packet.CopyMAC(b[2:])
 
 	return nil
 }

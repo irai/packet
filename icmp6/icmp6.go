@@ -267,9 +267,14 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (*pa
 			return host, packet.Result{}, err
 		}
 
-		//
+		mac := options.SourceLLA.MAC
+		if mac == nil || len(mac) != ethAddrLen {
+			mac = ether.Src()
+			fmt.Printf("icmp6 : options missing sourceLLA options=%v\n", options)
+		}
+
 		h.Lock()
-		router, _ := h.findOrCreateRouter(options.SourceLLA.Addr, ip6Frame.Src())
+		router, _ := h.findOrCreateRouter(mac, ip6Frame.Src())
 		router.ManagedFlag = frame.ManagedConfiguration()
 		router.OtherCondigFlag = frame.OtherConfiguration()
 		router.Preference = frame.Preference()
