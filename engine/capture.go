@@ -159,17 +159,6 @@ func (h *Handler) lockAndStopHunt(host *packet.Host, stage packet.HuntStage) (er
 		fmt.Printf("packet: stop hunt for %s\n", host)
 	}
 
-	/**
-	if host.icmp4Store.packet.HuntStage == packet.StageHunt {
-		host.icmp4Store.packet.HuntStage = packet.StageNormal
-	}
-	if host.dhcp4Store.packet.HuntStage == packet.StageHunt {
-		host.dhcp4Store.packet.HuntStage = packet.StageNormal
-	}
-	if host.icmp6Store.packet.HuntStage == packet.StageHunt {
-		host.icmp6Store.packet.HuntStage = packet.StageNormal
-	}
-	**/
 	addr := packet.Addr{MAC: host.MACEntry.MAC, IP: host.IP}
 	host.MACEntry.Row.Unlock()
 
