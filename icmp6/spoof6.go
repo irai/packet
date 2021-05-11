@@ -77,7 +77,7 @@ func (h *Handler) spoofLoop(dstAddr packet.Addr) {
 					fmt.Println("icmp6 : error sending na ", err)
 				}
 				if nTimes%16 == 0 {
-					fmt.Printf("icmp6 : attack src %s dst %s repeat=%v duration=%v", srcAddr, dstAddr, nTimes, time.Since(startTime))
+					fmt.Printf("icmp6 : attack src %s dst %s repeat=%v duration=%v\n", srcAddr, dstAddr, nTimes, time.Since(startTime))
 				}
 				nTimes++
 			}
