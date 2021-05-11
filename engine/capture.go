@@ -148,7 +148,7 @@ func (h *Handler) lockAndStopHunt(host *packet.Host, stage packet.HuntStage) (er
 	case packet.StageRedirected:
 		host.HuntStage = stage
 		if packet.Debug {
-			fmt.Printf("packet: stop hunt for %s\n", host)
+			fmt.Printf("packet: stop redirected hunt for %s\n", host)
 		}
 		host.MACEntry.Row.Unlock()
 		return nil
