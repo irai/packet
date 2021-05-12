@@ -560,8 +560,8 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				continue
 			}
 			if packet.DebugIP4 {
-				fmt.Println("ether:", ether)
-				fmt.Println("ip4  :", ip4Frame)
+				fmt.Println("packet: ether", ether)
+				fmt.Println("packet: ip4", ip4Frame)
 			}
 
 			// Only lookup host on same subnet
@@ -579,8 +579,8 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				continue
 			}
 			if packet.DebugIP6 {
-				fmt.Printf("ether: %s\n", ether)
-				fmt.Printf("ip6  : %s\n", ip6Frame)
+				fmt.Printf("packet: ether %s\n", ether)
+				fmt.Printf("packet: ip6 %s\n", ip6Frame)
 			}
 
 			l4Proto = ip6Frame.NextHeader()
@@ -645,9 +645,9 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			}
 			if ip4Frame != nil {
 				if packet.DebugUDP {
-					fmt.Println("ether:", ether)
-					fmt.Println("ip4  :", ip4Frame)
-					fmt.Printf("udp  : %s\n", udp)
+					fmt.Printf("packet: ether %s\n", ether)
+					fmt.Printf("packet: ip4 %s\n", ip4Frame)
+					fmt.Printf("packet: udp %s\n", udp)
 				}
 
 				// DHCP4 packet?
@@ -661,9 +661,9 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				}
 			} else {
 				if packet.DebugUDP {
-					fmt.Println("ether :", ether)
-					fmt.Println("ip6   :", ip6Frame)
-					fmt.Printf("udp   : %s\n", udp)
+					fmt.Printf("packet: ether %s\n", ether)
+					fmt.Printf("packet: ip6 %s\n", ip6Frame)
+					fmt.Printf("packet: udp %s\n", udp)
 				}
 
 			}
