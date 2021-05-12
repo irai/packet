@@ -201,9 +201,9 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (*pa
 
 	t := ipv6.ICMPType(icmp6Frame.Type())
 	if Debug && t != ipv6.ICMPTypeRouterAdvertisement {
-		fmt.Println("ether :", ether)
-		fmt.Println("ip6   :", ip6Frame)
-		fmt.Println("icmp6 :", icmp6Frame)
+		fmt.Println("icmp6 : ether", ether)
+		fmt.Println("icmp6 : ip6 ", ip6Frame)
+		fmt.Println("icmp6 : icmp ", icmp6Frame)
 	}
 
 	switch t {
@@ -217,6 +217,9 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (*pa
 
 		// Source IP is sometimes ff02::1 multicast, which means the host is nil
 		if host == nil {
+			if !ip6Frame.Src().Equal(frame.TargetAddress()) {
+				fmt.Printf("icmp6 : neighbor advertisement diverging IP frameIP=%s %s\n", ip6Frame.Src(), frame)
+			}
 			host, _ = h.session.FindOrCreateHost(ether.Src(), frame.TargetAddress()) // will lock/unlock mutex
 		}
 
@@ -288,8 +291,8 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (*pa
 		h.Unlock()
 
 		if Debug {
-			fmt.Println("ether :", ether)
-			fmt.Println("ip6   :", ip6Frame)
+			fmt.Println("icmp6 : ether", ether)
+			fmt.Println("icmp6 : ip6", ip6Frame)
 		}
 		fmt.Printf("icmp6 : router advertisement from ip=%s %s %+v \n", ip6Frame.Src(), frame, router.Options)
 
