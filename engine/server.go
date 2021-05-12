@@ -531,7 +531,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		}
 
 		// Ignore packets sent via our interface
-		// If we don't have this, then we received all forward packets with client IPs but our mac
+		// If we don't have this, then we received all forwarded packets with client IPs containing our host mac
 		//
 		// TODO: should this be in the bpf rules?
 		if bytes.Equal(ether.Src(), h.session.NICInfo.HostMAC) {
@@ -564,7 +564,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				fmt.Println("packet: ip4", ip4Frame)
 			}
 
-			// Only lookup host on same subnet
+			// Create host only if on same subnet
 			// Note: DHCP request for previous discover have zero src IP; therefore wont't create host entry here.
 			if h.session.NICInfo.HostIP4.Contains(ip4Frame.Src()) {
 				host, _ = h.session.FindOrCreateHost(ether.Src(), ip4Frame.Src()) // will lock/unlock
@@ -586,8 +586,12 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			l4Proto = ip6Frame.NextHeader()
 			l4Payload = ip6Frame.Payload()
 
-			// lookup host only if unicast
-			if ip6Frame.Src().IsLinkLocalUnicast() || ip6Frame.Src().IsGlobalUnicast() {
+			// create host only if unicast
+			// also, don't create public IP host if sent by router to prevent incorrect association of IPs when
+			// the router is sending a response to a packet sent by us
+			// TODO: is it better to check if IP is in the prefix?
+			if ip6Frame.Src().IsLinkLocalUnicast() ||
+				(ip6Frame.Src().IsGlobalUnicast() && !bytes.Equal(ether.Src(), h.session.NICInfo.RouterMAC)) {
 				host, _ = h.session.FindOrCreateHost(ether.Src(), ip6Frame.Src()) // will lock/unlock
 			}
 
