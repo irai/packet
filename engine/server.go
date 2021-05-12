@@ -627,7 +627,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			if host, result, err = h.ICMP6Handler.ProcessPacket(host, ether, l4Payload); err != nil {
 				fmt.Printf("packet: error processing icmp6 : %s\n", err)
 			}
-			if host != nil && result.Update && host.MACEntry.IsRouter != result.IsRouter {
+			if host != nil && result.Update {
 				host.MACEntry.IsRouter = result.IsRouter
 				notify = true
 			}

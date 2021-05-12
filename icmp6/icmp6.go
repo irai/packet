@@ -274,7 +274,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (*pa
 		}
 
 		h.Lock()
-		router, _ := h.findOrCreateRouter(mac, ip6Frame.Src())
+		router, found := h.findOrCreateRouter(mac, ip6Frame.Src())
 		router.ManagedFlag = frame.ManagedConfiguration()
 		router.OtherCondigFlag = frame.OtherConfiguration()
 		router.Preference = frame.Preference()
@@ -282,6 +282,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (*pa
 		router.DefaultLifetime = time.Duration(time.Duration(frame.Lifetime()) * time.Second)
 		router.ReacheableTime = int(frame.ReachableTime())
 		router.RetransTimer = int(frame.RetransmitTimer())
+		curPrefix := router.Options.FirstPrefix // keep current prefix
 		router.Options = options
 		router.Prefixes = options.Prefixes
 		h.Unlock()
@@ -292,7 +293,11 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (*pa
 		}
 		fmt.Printf("icmp6 : router advertisement from ip=%s %s %+v \n", ip6Frame.Src(), frame, router.Options)
 
-		result := packet.Result{Update: true, IsRouter: true}
+		result := packet.Result{}
+		//notify if first time or if prefix changed
+		if !found || !curPrefix.Equal(router.Options.FirstPrefix) {
+			result = packet.Result{Update: true, IsRouter: true}
+		}
 		return host, result, nil
 
 	case ipv6.ICMPTypeRouterSolicitation:

@@ -656,6 +656,7 @@ func marshalOptions(options []Option) ([]byte, error) {
 type NewOptions struct {
 	MTU              MTU
 	Prefixes         []PrefixInformation
+	FirstPrefix      net.IP
 	RDNSS            RecursiveDNSServer
 	SourceLLA        LinkLayerAddress
 	TargetLLA        LinkLayerAddress
@@ -702,6 +703,10 @@ func newParseOptions(b []byte) (NewOptions, error) {
 				return NewOptions{}, err
 			}
 			options.Prefixes = append(options.Prefixes, p)
+			// keep first prefix for prefix comparison in future
+			if options.FirstPrefix == nil && len(options.Prefixes) > 0 {
+				options.FirstPrefix = options.Prefixes[0].Prefix
+			}
 		case optRouteInformation:
 			if err := options.RouteInformation.unmarshal(b[i : i+l]); err != nil {
 				return NewOptions{}, err

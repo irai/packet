@@ -27,7 +27,6 @@ type Host struct {
 	HuntStage HuntStage // keep host overall huntStage
 	LastSeen  time.Time // keep last packet time
 	DHCP4Name string
-	// Row       sync.RWMutex // Row level mutex
 }
 
 func (e *Host) String() string {
