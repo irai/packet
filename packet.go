@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"syscall"
 
 	"github.com/mdlayher/netx/rfc4193"
@@ -161,7 +162,17 @@ func (p Ether) AppendPayload(payload []byte) (Ether, error) {
 }
 
 func (p Ether) String() string {
-	return fmt.Sprintf("type=%x src=%v dst=%v len=%v", p.EtherType(), p.Src(), p.Dst(), len(p))
+	var b strings.Builder
+	b.Grow(80)
+	b.WriteString("type=")
+	fmt.Fprintf(&b, "%d", p.EtherType())
+	b.WriteString(" src=")
+	b.WriteString(p.Src().String())
+	b.WriteString(" dst=")
+	b.WriteString(p.Dst().String())
+	b.WriteString(" len=")
+	fmt.Fprintf(&b, "%d", len(p))
+	return b.String()
 }
 
 // EtherMarshalBinary creates a ethernet frame in at b using the values

@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"strings"
 )
 
 // IP6 structure: see https://github.com/golang/net/blob/master/ipv6/header.go
@@ -27,7 +28,23 @@ func (p IP6) Src() net.IP       { return net.IP(p[8:24]) }                      
 func (p IP6) Dst() net.IP       { return net.IP(p[24:40]) }                              // destination address
 func (p IP6) Payload() []byte   { return p[40:] }
 func (p IP6) String() string {
-	return fmt.Sprintf("version=%v src=%v dst=%v nextHeader=%v payloadLen=%v hoplimit=%v class=%v", p.Version(), p.Src(), p.Dst(), p.NextHeader(), p.PayloadLen(), p.HopLimit(), p.TrafficClass())
+	var b strings.Builder
+	b.Grow(140)
+	b.WriteString("version=")
+	fmt.Fprintf(&b, "%d", p.Version())
+	b.WriteString(" src=")
+	b.WriteString(p.Src().String())
+	b.WriteString(" dst=")
+	b.WriteString(p.Dst().String())
+	b.WriteString(" nextHeader=")
+	fmt.Fprintf(&b, "%d", p.NextHeader())
+	b.WriteString(" pLen=")
+	fmt.Fprintf(&b, "%d", p.PayloadLen())
+	b.WriteString(" hopLimit=")
+	fmt.Fprintf(&b, "%d", p.HopLimit())
+	b.WriteString(" class=")
+	fmt.Fprintf(&b, "%d", p.TrafficClass())
+	return b.String()
 }
 
 func IP6MarshalBinary(p []byte, hopLimit uint8, srcIP net.IP, dstIP net.IP) IP6 {
