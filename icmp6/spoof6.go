@@ -8,9 +8,14 @@ import (
 )
 
 // StartHunt implements packet processor interface
+//
+// Hunt IPv6 LLA only; return error if IP is not IP6 Local Link Address
 func (h *Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
 	if Debug {
 		fmt.Printf("icmp6 : start neighbor hunt %s\n", addr)
+	}
+	if !addr.IP.IsLinkLocalUnicast() {
+		return packet.StageNoChange, packet.ErrInvalidIP6LLA
 	}
 	h.Lock()
 	if h.huntList.Index(addr.MAC) != -1 {
