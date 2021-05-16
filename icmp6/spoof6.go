@@ -10,7 +10,7 @@ import (
 // StartHunt implements packet processor interface
 func (h *Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
 	if Debug {
-		fmt.Printf("icmp6 : force neighbor spoof %s", addr)
+		fmt.Printf("icmp6 : start neighbor hunt %s\n", addr)
 	}
 	h.Lock()
 	if h.huntList.Index(addr.MAC) != -1 {
@@ -28,7 +28,7 @@ func (h *Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
 // StopHunt implements PacketProcessor interface
 func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
 	if Debug {
-		fmt.Printf("icmp6 : stop neighbor spoof %s", addr)
+		fmt.Printf("icmp6 : stop neighbor hunt %s\n", addr)
 	}
 	h.Lock()
 	defer h.Unlock()
@@ -52,7 +52,7 @@ func (h *Handler) spoofLoop(dstAddr packet.Addr) {
 	ticker := time.NewTicker(time.Second * 4).C
 	startTime := time.Now()
 	nTimes := 0
-	fmt.Printf("icmp6 : na attack ip=%s time=%v", dstAddr.IP, startTime)
+	fmt.Printf("icmp6 : na attack ip=%s time=%v\n", dstAddr.IP, startTime)
 	for {
 		h.Lock()
 
@@ -61,7 +61,7 @@ func (h *Handler) spoofLoop(dstAddr packet.Addr) {
 			srcAddr := packet.Addr{IP: h.Router.Addr.IP, MAC: h.session.NICInfo.HostMAC}
 			if h.huntList.Index(dstAddr.MAC) == -1 || h.closed {
 				h.Unlock()
-				fmt.Printf("icmp6 : attack end ip=%s repeat=%v duration=%v", dstAddr.IP, nTimes, time.Since(startTime))
+				fmt.Printf("icmp6 : attack end ip=%s repeat=%v duration=%v\n", dstAddr.IP, nTimes, time.Since(startTime))
 				return
 			}
 			list := []packet.Addr{}
