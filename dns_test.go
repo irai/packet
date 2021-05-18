@@ -196,6 +196,7 @@ func TestDNS_DecodeBlockTheKids(t *testing.T) {
 
 func TestDNS_ProcessDNS(t *testing.T) {
 	session := setupTestHandler()
+	Debug = true
 
 	for _, v := range [][]byte{wwwYouTubeComResponse, wwwFacebookComAnswer, wwwBlockthekidsComResponse, wwwFacebookComAnswer} {
 		ip := IP4(v)

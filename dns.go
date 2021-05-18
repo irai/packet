@@ -26,6 +26,35 @@ type DNSEntry struct {
 	CNameRecords map[string]CNameResourceRecord
 }
 
+func (d DNSEntry) IP4List() []netaddr.IP {
+	list := make([]netaddr.IP, 0, len(d.IP4Records))
+	for _, v := range d.IP4Records {
+		list = append(list, v.IP)
+	}
+	return list
+}
+
+func (d DNSEntry) IP6List() []netaddr.IP {
+	list := make([]netaddr.IP, 0, len(d.IP6Records))
+	for _, v := range d.IP6Records {
+		list = append(list, v.IP)
+	}
+	return list
+}
+func (d DNSEntry) CNameList() []string {
+	list := make([]string, 0, len(d.CNameRecords))
+	for _, v := range d.CNameRecords {
+		list = append(list, v.CName)
+	}
+	return list
+}
+
+func (d DNSEntry) print() {
+	fmt.Printf("dns   : name=%s ip4=%+v\n", d.Name, d.IP4List())
+	fmt.Printf("dns   : name=%s ip6=%+v\n", d.Name, d.IP6List())
+	fmt.Printf("dns   : name=%s cname=%+v\n", d.Name, d.CNameList())
+}
+
 // DNS is specified in RFC 1034 / RFC 1035
 // see : https://github.com/google/gopacket/blob/master/layers/dns.go
 
@@ -283,6 +312,9 @@ func (h *Session) ProcessDNS(host *Host, ether Ether, payload []byte) (result Re
 	if _, updated, err = e.decodeAnswers(p, index, &buffer); err != nil {
 		fmt.Printf("dns   : error decoding answers %s %s", err, p)
 		return result, err
+	}
+	if Debug && updated {
+		e.print()
 	}
 	return Result{Update: updated}, nil
 }
