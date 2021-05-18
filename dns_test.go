@@ -2,8 +2,9 @@ package packet
 
 import (
 	"fmt"
-	"net"
 	"testing"
+
+	"inet.af/netaddr"
 )
 
 /**
@@ -48,14 +49,13 @@ func TestDNS_DecodeFacebook(t *testing.T) {
 		t.Fatal("invalid dns packet")
 	}
 
-	_, answers, err := p.Decode()
+	entry, err := p.Decode()
 	if err != nil {
 		t.Fatal("cannot decode", err)
 	}
-	if len(answers.IP4List) != 1 ||
-		answers.IP4List[0].Name != "facebook.com" ||
-		!answers.IP4List[0].IP.Equal(net.IPv4(157, 240, 8, 35)) {
-		t.Fatalf("invalid packet %+v ", answers)
+	r, ok := entry.IP4Records[netaddr.IPv4(157, 240, 8, 35)]
+	if !ok || r.Name != "facebook.com" {
+		t.Fatalf("invalid packet %+v ", r)
 	}
 }
 
@@ -119,14 +119,13 @@ func TestDNS_DecodeYouTube(t *testing.T) {
 		t.Fatal("invalid dns packet")
 	}
 
-	_, answers, err := p.Decode()
+	entry, err := p.Decode()
 	if err != nil {
 		t.Fatal("cannot decode", err)
 	}
-	if len(answers.IP4List) != 9 ||
-		answers.IP4List[0].Name != "youtube-ui.l.google.com" ||
-		!answers.IP4List[0].IP.Equal(net.IPv4(142, 250, 66, 206)) {
-		t.Fatalf("invalid packet %+v ", answers)
+	r, ok := entry.IP4Records[netaddr.IPv4(142, 250, 66, 206)]
+	if len(entry.IP4Records) != 9 || !ok || r.Name != "youtube-ui.l.google.com" {
+		t.Fatalf("invalid packet %+v ", r)
 	}
 }
 
@@ -175,26 +174,41 @@ var wwwBlockthekidsComResponse = []byte{
 func TestDNS_DecodeBlockTheKids(t *testing.T) {
 
 	ip := IP4(wwwBlockthekidsComResponse)
-	fmt.Println("ip", ip)
 	udp := UDP(ip.Payload())
-	fmt.Println("udp", udp)
 	p := DNS(udp.Payload())
-	fmt.Println("dns", p)
 	if !p.IsValid() {
 		t.Fatal("invalid dns packet")
 	}
 
-	_, answers, err := p.Decode()
+	entry, err := p.Decode()
 	if err != nil {
 		t.Fatal("cannot decode", err)
 	}
-	if len(answers.IP4List) != 1 ||
-		answers.IP4List[0].Name != "td-balancer-ause1-67-249.wixdns.net" ||
-		!answers.IP4List[0].IP.Equal(net.IPv4(35, 244, 67, 249)) {
-		t.Fatalf("invalid packet %+v ", answers)
+	r, ok := entry.IP4Records[netaddr.IPv4(35, 244, 67, 249)]
+	if len(entry.IP4Records) != 1 || !ok || r.Name != "td-balancer-ause1-67-249.wixdns.net" {
+		t.Fatalf("invalid packet %+v ", r)
 	}
-	if len(answers.CNAMEList) != 4 ||
-		answers.CNAMEList[0] != "www245.wixdns.net" {
-		t.Fatalf("invalid cname packet %+v ", answers)
+	r2, ok2 := entry.CNameRecords["www245.wixdns.net"]
+	if len(entry.CNameRecords) != 4 || !ok2 {
+		t.Fatalf("invalid cname packet %+v ", r2)
 	}
+}
+
+func TestDNS_ProcessDNS(t *testing.T) {
+	session := setupTestHandler()
+
+	for _, v := range [][]byte{wwwYouTubeComResponse, wwwFacebookComAnswer, wwwBlockthekidsComResponse, wwwFacebookComAnswer} {
+		ip := IP4(v)
+		udp := UDP(ip.Payload())
+
+		r, err := session.ProcessDNS(nil, nil, udp.Payload())
+		if err != nil {
+			t.Fatalf("invalid process packet bltk %+v %s", r, err)
+		}
+	}
+	if n := len(session.DNSTable); n != 3 {
+		t.Fatalf("invalid dns table len=%v want=3 ", n)
+	}
+	fmt.Printf("table %+v", session.DNSTable)
+
 }

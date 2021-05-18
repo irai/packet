@@ -10,8 +10,9 @@ import (
 type Session struct {
 	Conn         net.PacketConn
 	NICInfo      *NICInfo
-	HostTable    HostTable // store IP list - one for each host
-	MACTable     MACTable  // store mac list
+	HostTable    HostTable           // store IP list - one for each host
+	MACTable     MACTable            // store mac list
+	DNSTable     map[string]DNSEntry // store dns records
 	mutex        sync.RWMutex
 	eventChannel chan NetEvent
 }
@@ -20,6 +21,7 @@ func NewEmptySession() *Session {
 	session := new(Session)
 	session.MACTable = NewMACTable()
 	session.HostTable = NewHostTable()
+	session.DNSTable = make(map[string]DNSEntry, 256)
 	return session
 }
 

@@ -4,7 +4,27 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+
+	"inet.af/netaddr"
 )
+
+type CNameResourceRecord struct {
+	Name  string
+	CName string
+	TTL   uint32
+}
+
+type IPResourceRecord struct {
+	Name string
+	IP   netaddr.IP
+	TTL  uint32
+}
+type DNSEntry struct {
+	Name         string
+	IP4Records   map[netaddr.IP]IPResourceRecord
+	IP6Records   map[netaddr.IP]IPResourceRecord
+	CNameRecords map[string]CNameResourceRecord
+}
 
 // DNS is specified in RFC 1034 / RFC 1035
 // see : https://github.com/google/gopacket/blob/master/layers/dns.go
@@ -32,77 +52,62 @@ func (p DNS) QDCount() uint16       { return binary.BigEndian.Uint16(p[4:6]) }  
 func (p DNS) ANCount() uint16       { return binary.BigEndian.Uint16(p[6:8]) }   // answer count
 func (p DNS) NSCount() uint16       { return binary.BigEndian.Uint16(p[8:10]) }  // Authority record count
 func (p DNS) ARCount() uint16       { return binary.BigEndian.Uint16(p[10:12]) } // Additional information count
-func (p DNS) Decode() ([]DNSQuestion, DNSAnswers, error) {
+func (p DNS) Decode() (e DNSEntry, err error) {
 	// buffer for doing name decoding.  We use a single reusable buffer to avoid
 	// name decoding on a single object via multiple DecodeFromBytes calls
 	// requiring constant allocation of small byte slices.
 	var buffer []byte
 
 	index := 12
-	questions, index, err := p.decodeQuestion(index, &buffer)
+	index, err = e.decodeQuestion(p, index, &buffer)
 	if err != nil {
 		fmt.Printf("dns   : error decoding questions %s %s", err, p)
-		return nil, DNSAnswers{}, err
+		return e, err
 	}
 
-	answers, _, err := p.decodeAnswers(index, &buffer)
-	if err != nil {
+	e.IP4Records = make(map[netaddr.IP]IPResourceRecord)
+	e.IP6Records = make(map[netaddr.IP]IPResourceRecord)
+	e.CNameRecords = make(map[string]CNameResourceRecord)
+
+	if index, _, err = e.decodeAnswers(p, index, &buffer); err != nil {
 		fmt.Printf("dns   : error decoding answers %s %s", err, p)
-		return nil, DNSAnswers{}, err
+		return e, err
 	}
 
-	return questions, answers, nil
+	return e, nil
 }
 
-type DNSQuestion struct {
-	Name  string
-	Type  uint16
-	Class uint16
-}
-
-func (p DNS) decodeQuestion(index int, buffer *[]byte) ([]DNSQuestion, int, error) {
-	var list []DNSQuestion
-
-	for i := 0; i < int(p.QDCount()); i++ {
-		if index+6 > len(p) { // must have at least 2 bytes name, 4 bytes type and class
-			return []DNSQuestion{}, 0, ErrParseMessage
-		}
-		name, endq, err := decodeName(p, index, buffer, 1)
-		if err != nil {
-			return []DNSQuestion{}, 0, err
-		}
-		fmt.Println("TRACE name", string(name), endq)
-
-		d := DNSQuestion{}
-		d.Name = string(name)
-		d.Type = binary.BigEndian.Uint16(p[endq : endq+2])    // 2 bytes
-		d.Class = binary.BigEndian.Uint16(p[endq+2 : endq+4]) // 2 bytes
-		list = append(list, d)
-		index = endq + 4 // 4 bytes type and class
+func (e *DNSEntry) decodeQuestion(p DNS, index int, buffer *[]byte) (int, error) {
+	if p.QDCount() != 1 {
+		return -1, ErrParseMessage
 	}
-	return list, index, nil
-}
 
-type IPResourceRecord struct {
-	Name string
-	IP   net.IP
-	TTL  uint32
-}
+	// get first answer
+	if index+6 > len(p) { // must have at least 2 bytes name, 4 bytes type and class
+		return -1, ErrParseMessage
+	}
+	name, endq, err := decodeName(p, index, buffer, 1)
+	if err != nil {
+		return -1, err
+	}
+	fmt.Println("TRACE name", string(name), endq)
 
-type DNSAnswers struct {
-	IP4List   []IPResourceRecord
-	IP6List   []IPResourceRecord
-	CNAMEList []string
+	// d.Type = binary.BigEndian.Uint16(p[endq : endq+2])    // 2 bytes
+	// d.Class = binary.BigEndian.Uint16(p[endq+2 : endq+4]) // 2 bytes
+	index = endq + 4 // 4 bytes type and class
+	e.Name = string(name)
+
+	return index, nil
 }
 
 // decode decodes the resource record, returning the total length of the record.
-func (p DNS) decodeAnswers(offset int, buffer *[]byte) (DNSAnswers, int, error) {
-	answers := DNSAnswers{}
+func (e *DNSEntry) decodeAnswers(p DNS, offset int, buffer *[]byte) (int, bool, error) {
 
+	var updated bool
 	for i := 0; i < int(p.ANCount()); i++ {
 		name, endq, err := decodeName(p, offset, buffer, 1)
 		if err != nil {
-			return DNSAnswers{}, 0, fmt.Errorf("invalid label: %w", err)
+			return 0, false, fmt.Errorf("invalid label: %w", err)
 		}
 
 		t := binary.BigEndian.Uint16(p[endq : endq+2]) // type
@@ -111,35 +116,47 @@ func (p DNS) decodeAnswers(offset int, buffer *[]byte) (DNSAnswers, int, error) 
 		dataLen := binary.BigEndian.Uint16(p[endq+8 : endq+10])
 		offset = endq + 10 + int(dataLen)
 		if offset > len(p) {
-			return DNSAnswers{}, 0, fmt.Errorf("invalid resource record len: %w", ErrInvalidLen)
+			return 0, false, fmt.Errorf("invalid resource record len: %w", ErrInvalidLen)
 		}
 
 		switch t {
 		case 1: // A
 			if dataLen != 4 {
-				return DNSAnswers{}, 0, fmt.Errorf("invalid A data len: %w", ErrInvalidLen)
+				return 0, false, fmt.Errorf("invalid A data len: %w", ErrInvalidLen)
 			}
-			ip := net.IP(p[endq+10 : endq+10+4])
-			answers.IP4List = append(answers.IP4List, IPResourceRecord{Name: string(name), IP: CopyIP(ip), TTL: ttl})
+			ip, _ := netaddr.FromStdIP(net.IP(p[endq+10 : endq+10+4]))
+			if _, found := e.IP4Records[ip]; !found {
+				e.IP4Records[ip] = IPResourceRecord{Name: string(name), IP: ip, TTL: ttl}
+				updated = true
+			}
 
 		case 28: // AAAA
 			if dataLen != 16 {
-				return DNSAnswers{}, 0, fmt.Errorf("invalid AAAA data len: %w", ErrInvalidLen)
+				return 0, false, fmt.Errorf("invalid AAAA data len: %w", ErrInvalidLen)
 			}
-			ip := net.IP(p[endq+10 : endq+10+16])
-			answers.IP6List = append(answers.IP6List, IPResourceRecord{Name: string(name), IP: CopyIP(ip), TTL: ttl})
+			ip, _ := netaddr.FromStdIP(net.IP(p[endq+10 : endq+10+16]))
+			if _, found := e.IP6Records[ip]; !found {
+				e.IP6Records[ip] = IPResourceRecord{Name: string(name), IP: ip, TTL: ttl}
+				updated = true
+			}
 
 		case 5: // CNAME
-			name, endq, err = decodeName(p, endq+10, buffer, 1)
+
+			var cname []byte
+			cname, endq, err = decodeName(p, endq+10, buffer, 1)
 			if err != nil {
 				fmt.Println("TRACE data len", dataLen)
-				return DNSAnswers{}, 0, fmt.Errorf("invalid CNAME data: %w", err)
+				return 0, false, fmt.Errorf("invalid CNAME data: %w", err)
 			}
-			answers.CNAMEList = append(answers.CNAMEList, string(name))
+			r := CNameResourceRecord{Name: string(name), TTL: ttl, CName: string(cname)}
+			if _, found := e.CNameRecords[r.Name]; !found {
+				e.CNameRecords[r.Name] = r
+				updated = true
+			}
 		}
 	}
 
-	return answers, offset, nil
+	return offset, updated, nil
 }
 
 const maxRecursionLevel = 255
@@ -232,4 +249,40 @@ loop:
 		return (*buffer)[start:], index + 1, nil
 	}
 	return (*buffer)[start+1:], index + 1, nil
+}
+
+func (h *Session) ProcessDNS(host *Host, ether Ether, payload []byte) (result Result, err error) {
+	p := DNS(payload)
+	if !p.IsValid() {
+		return result, ErrParseMessage
+	}
+
+	// buffer for doing name decoding.  We use a single reusable buffer to avoid
+	// name decoding on a single object via multiple DecodeFromBytes calls
+	// requiring constant allocation of small byte slices.
+	var buffer []byte
+	tmp := DNSEntry{}
+
+	index := 12
+	index, err = tmp.decodeQuestion(p, index, &buffer)
+	if err != nil {
+		fmt.Printf("dns   : error decoding questions %s %s", err, p)
+		return result, err
+	}
+
+	e, found := h.DNSTable[tmp.Name]
+	if !found {
+		e = tmp
+		e.IP4Records = make(map[netaddr.IP]IPResourceRecord)
+		e.IP6Records = make(map[netaddr.IP]IPResourceRecord)
+		e.CNameRecords = make(map[string]CNameResourceRecord)
+		h.DNSTable[e.Name] = e
+	}
+
+	var updated bool
+	if _, updated, err = e.decodeAnswers(p, index, &buffer); err != nil {
+		fmt.Printf("dns   : error decoding answers %s %s", err, p)
+		return result, err
+	}
+	return Result{Update: updated}, nil
 }

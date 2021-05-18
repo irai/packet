@@ -647,29 +647,32 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				fmt.Println("packet: error invalid udp frame ", ip4Frame)
 				continue
 			}
-			if ip4Frame != nil {
-				if packet.DebugUDP {
-					fmt.Printf("packet: ether %s\n", ether)
+			// is ip4?
+			if packet.DebugUDP {
+				fmt.Printf("packet: ether %s\n", ether)
+				if ip4Frame != nil {
 					fmt.Printf("packet: ip4 %s\n", ip4Frame)
-					fmt.Printf("packet: udp %s\n", udp)
-				}
-
-				// DHCP4 packet?
-				if udp.DstPort() == packet.DHCP4ServerPort || udp.DstPort() == packet.DHCP4ClientPort {
-					if host, result, err = h.DHCP4Handler.ProcessPacket(host, ether, udp.Payload()); err != nil {
-						fmt.Printf("packet: error processing dhcp4: %s\n", err)
-					}
-					if result.Update {
-						h.lockAndProcessDHCP4Update(host, result)
-					}
-				}
-			} else {
-				if packet.DebugUDP {
-					fmt.Printf("packet: ether %s\n", ether)
+				} else {
 					fmt.Printf("packet: ip6 %s\n", ip6Frame)
-					fmt.Printf("packet: udp %s\n", udp)
 				}
+				fmt.Printf("packet: udp %s\n", udp)
+			}
 
+			switch {
+			case udp.DstPort() == packet.DHCP4ServerPort || udp.DstPort() == packet.DHCP4ClientPort: // DHCP4 packet?
+				// if udp.DstPort() == packet.DHCP4ServerPort || udp.DstPort() == packet.DHCP4ClientPort {
+				if host, result, err = h.DHCP4Handler.ProcessPacket(host, ether, udp.Payload()); err != nil {
+					fmt.Printf("packet: error processing dhcp4: %s\n", err)
+				}
+				if result.Update {
+					h.lockAndProcessDHCP4Update(host, result)
+				}
+			case udp.SrcPort() == 53: // DNS response
+				if result, err = h.session.ProcessDNS(host, ether, udp.Payload()); err != nil {
+					fmt.Printf("packet: error processing dns: %s\n", err)
+				}
+				// if result.Update {
+				// }
 			}
 
 		case syscall.ETH_P_ARP: // skip ARP - 0x0806
