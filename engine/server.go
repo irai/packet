@@ -46,6 +46,7 @@ type Handler struct {
 	closed                  bool          // set to true when handler is closed
 	closeChan               chan bool     // close goroutines channel
 	nameChannel             chan Notification
+	dnsChannel              chan packet.DNSEntry
 }
 
 // New creates an ICMPv6 handler with default values
@@ -135,6 +136,9 @@ func (h *Handler) Close() error {
 	h.closed = true
 	if h.nameChannel != nil {
 		close(h.nameChannel)
+	}
+	if h.dnsChannel != nil {
+		close(h.dnsChannel)
 	}
 	close(h.closeChan) // will terminate goroutines
 	if h.session.Conn != nil {
@@ -668,11 +672,14 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 					h.lockAndProcessDHCP4Update(host, result)
 				}
 			case udp.SrcPort() == 53: // DNS response
-				if result, err = h.session.ProcessDNS(host, ether, udp.Payload()); err != nil {
+				dnsEntry, err := h.session.ProcessDNS(host, ether, udp.Payload())
+				if err != nil {
 					fmt.Printf("packet: error processing dns: %s\n", err)
+					break
 				}
-				// if result.Update {
-				// }
+				if dnsEntry.Name != "" && h.dnsChannel != nil {
+					h.dnsChannel <- dnsEntry
+				}
 			}
 
 		case syscall.ETH_P_ARP: // skip ARP - 0x0806

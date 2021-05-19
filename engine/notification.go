@@ -98,3 +98,12 @@ func (h *Handler) GetNotificationChannel() <-chan Notification {
 
 	return h.nameChannel
 }
+
+func (h *Handler) GetDNSNotificationChannel() <-chan packet.DNSEntry {
+	if h.dnsChannel != nil {
+		return h.dnsChannel
+	}
+
+	h.dnsChannel = make(chan packet.DNSEntry, 16)
+	return h.dnsChannel
+}

@@ -119,7 +119,6 @@ func (e *DNSEntry) decodeQuestion(p DNS, index int, buffer *[]byte) (int, error)
 	if err != nil {
 		return -1, err
 	}
-	fmt.Println("TRACE name", string(name), endq)
 
 	// d.Type = binary.BigEndian.Uint16(p[endq : endq+2])    // 2 bytes
 	// d.Class = binary.BigEndian.Uint16(p[endq+2 : endq+4]) // 2 bytes
@@ -174,7 +173,6 @@ func (e *DNSEntry) decodeAnswers(p DNS, offset int, buffer *[]byte) (int, bool, 
 			var cname []byte
 			cname, endq, err = decodeName(p, endq+10, buffer, 1)
 			if err != nil {
-				fmt.Println("TRACE data len", dataLen)
 				return 0, false, fmt.Errorf("invalid CNAME data: %w", err)
 			}
 			r := CNameResourceRecord{Name: string(name), TTL: ttl, CName: string(cname)}
@@ -280,10 +278,10 @@ loop:
 	return (*buffer)[start+1:], index + 1, nil
 }
 
-func (h *Session) ProcessDNS(host *Host, ether Ether, payload []byte) (result Result, err error) {
+func (h *Session) ProcessDNS(host *Host, ether Ether, payload []byte) (e DNSEntry, err error) {
 	p := DNS(payload)
 	if !p.IsValid() {
-		return result, ErrParseMessage
+		return DNSEntry{}, ErrParseMessage
 	}
 
 	// buffer for doing name decoding.  We use a single reusable buffer to avoid
@@ -296,7 +294,7 @@ func (h *Session) ProcessDNS(host *Host, ether Ether, payload []byte) (result Re
 	index, err = tmp.decodeQuestion(p, index, &buffer)
 	if err != nil {
 		fmt.Printf("dns   : error decoding questions %s %s", err, p)
-		return result, err
+		return DNSEntry{}, err
 	}
 
 	e, found := h.DNSTable[tmp.Name]
@@ -311,10 +309,10 @@ func (h *Session) ProcessDNS(host *Host, ether Ether, payload []byte) (result Re
 	var updated bool
 	if _, updated, err = e.decodeAnswers(p, index, &buffer); err != nil {
 		fmt.Printf("dns   : error decoding answers %s %s", err, p)
-		return result, err
+		return DNSEntry{}, err
 	}
 	if Debug && updated {
 		e.print()
 	}
-	return Result{Update: updated}, nil
+	return e, nil
 }
