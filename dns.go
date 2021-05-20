@@ -314,7 +314,6 @@ func (h *Session) ProcessDNS(host *Host, ether Ether, payload []byte) (e DNSEntr
 		e.IP4Records = make(map[netaddr.IP]IPResourceRecord)
 		e.IP6Records = make(map[netaddr.IP]IPResourceRecord)
 		e.CNameRecords = make(map[string]CNameResourceRecord)
-		h.DNSTable[e.Name] = e
 	}
 
 	var updated bool
@@ -326,6 +325,7 @@ func (h *Session) ProcessDNS(host *Host, ether Ether, payload []byte) (e DNSEntr
 		if Debug {
 			e.print()
 		}
+		h.DNSTable[e.Name] = e
 		return e, nil
 	}
 	return DNSEntry{}, nil

@@ -365,6 +365,7 @@ var cmdSyntax = []string{
 	"<command>                              : valid commands arp, icmp4, icmp6, dhcp4, engine",
 	"log <plugin>                           : arp, icmp4, icmp6, dhcp4, engine, ip4, ip6, udp",
 	"ping <ip> ",
+	"dns ",
 	"[quit | list]",
 }
 var arpSyntax = []string{
@@ -500,6 +501,8 @@ func cmd(h *handlers) {
 			doDHCP4(h, tokens)
 		case "h", "help":
 			help()
+		case "dns":
+			h.engine.Session().PrintDNSTable()
 		default:
 			// do nothing
 		}

@@ -65,6 +65,15 @@ func (h *Session) PrintTable() {
 	h.printHostTable()
 }
 
+func (h *Session) PrintDNSTable() {
+	h.mutex.RLock()
+	defer h.mutex.RUnlock()
+	fmt.Printf("dns table len=%d\n", len(h.DNSTable))
+	for _, v := range h.DNSTable {
+		v.print()
+	}
+}
+
 func (h *Session) GlobalLock() {
 	h.mutex.Lock()
 }
