@@ -152,6 +152,11 @@ func main() {
 					return
 				}
 				fmt.Println("Engine notification received", notification)
+			case notification, ok := <-handlers.engine.GetDNSNotificationChannel():
+				if !ok {
+					return
+				}
+				fmt.Println("DNS notification received", notification)
 			case <-ctx.Done():
 				return
 			}
