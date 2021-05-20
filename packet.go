@@ -10,6 +10,7 @@ import (
 
 	"github.com/mdlayher/netx/rfc4193"
 	"golang.org/x/net/ipv4"
+	"inet.af/netaddr"
 )
 
 // Global variables
@@ -211,17 +212,18 @@ func (p IP4) IsValid() bool {
 	return true
 }
 
-func (p IP4) IHL() int        { return int(p[0]&0x0f) << 2 } // Internet header length
-func (p IP4) Version() int    { return int(p[0] >> 4) }
-func (p IP4) Protocol() int   { return int(p[9]) }
-func (p IP4) TOS() int        { return int(p[1]) }
-func (p IP4) ID() int         { return int(binary.BigEndian.Uint16(p[4:6])) }
-func (p IP4) TTL() int        { return int(p[8]) }
-func (p IP4) Checksum() int   { return int(binary.BigEndian.Uint16(p[10:12])) }
-func (p IP4) Src() net.IP     { return net.IPv4(p[12], p[13], p[14], p[15]) }
-func (p IP4) Dst() net.IP     { return net.IPv4(p[16], p[17], p[18], p[19]) }
-func (p IP4) TotalLen() int   { return int(binary.BigEndian.Uint16(p[2:4])) }
-func (p IP4) Payload() []byte { return p[p.IHL():] }
+func (p IP4) IHL() int               { return int(p[0]&0x0f) << 2 } // Internet header length
+func (p IP4) Version() int           { return int(p[0] >> 4) }
+func (p IP4) Protocol() int          { return int(p[9]) }
+func (p IP4) TOS() int               { return int(p[1]) }
+func (p IP4) ID() int                { return int(binary.BigEndian.Uint16(p[4:6])) }
+func (p IP4) TTL() int               { return int(p[8]) }
+func (p IP4) Checksum() int          { return int(binary.BigEndian.Uint16(p[10:12])) }
+func (p IP4) Src() net.IP            { return net.IPv4(p[12], p[13], p[14], p[15]) }
+func (p IP4) Dst() net.IP            { return net.IPv4(p[16], p[17], p[18], p[19]) }
+func (p IP4) NetaddrDst() netaddr.IP { return netaddr.IPv4(p[16], p[17], p[18], p[19]) }
+func (p IP4) TotalLen() int          { return int(binary.BigEndian.Uint16(p[2:4])) }
+func (p IP4) Payload() []byte        { return p[p.IHL():] }
 func (p IP4) String() string {
 	return fmt.Sprintf("version=%v src=%v dst=%v proto=%v ttl=%v tos=%v", p.Version(), p.Src(), p.Dst(), p.Protocol(), p.TTL(), p.TOS())
 }
@@ -401,5 +403,21 @@ func (p TCP) IsValid() bool {
 	return len(p) >= 20
 }
 
-func (p TCP) SrcPort() uint16 { return binary.BigEndian.Uint16(p[0:2]) }
-func (p TCP) DstPort() uint16 { return binary.BigEndian.Uint16(p[2:4]) }
+func (p TCP) SrcPort() uint16  { return binary.BigEndian.Uint16(p[0:2]) }
+func (p TCP) DstPort() uint16  { return binary.BigEndian.Uint16(p[2:4]) }
+func (p TCP) Seq() uint32      { return binary.BigEndian.Uint32(p[4:8]) }
+func (p TCP) Ack() uint32      { return binary.BigEndian.Uint32(p[8:12]) }
+func (p TCP) HeaderLen() int   { return int(p[12] >> 4) }
+func (p TCP) NS() bool         { return p[12]&0x01 != 0 }
+func (p TCP) FIN() bool        { return p[13]&0x01 != 0 }
+func (p TCP) SYN() bool        { return p[13]&0x02 != 0 }
+func (p TCP) RST() bool        { return p[13]&0x04 != 0 }
+func (p TCP) PSH() bool        { return p[13]&0x08 != 0 }
+func (p TCP) ACK() bool        { return p[13]&0x10 != 0 }
+func (p TCP) URG() bool        { return p[13]&0x20 != 0 }
+func (p TCP) ECE() bool        { return p[13]&0x40 != 0 }
+func (p TCP) CWR() bool        { return p[13]&0x80 != 0 }
+func (p TCP) Window() uint16   { return binary.BigEndian.Uint16(p[14:16]) }
+func (p TCP) Checksum() uint16 { return binary.BigEndian.Uint16(p[16:18]) }
+func (p TCP) Urgent() uint16   { return binary.BigEndian.Uint16(p[18:20]) }
+func (p TCP) Payload() []byte  { return p[p[12]>>4:] }
