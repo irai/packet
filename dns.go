@@ -289,6 +289,15 @@ loop:
 	return (*buffer)[start+1:], index + 1, nil
 }
 
+func (h *Session) DNSExist(ip netaddr.IP) bool {
+	for _, entry := range h.DNSTable {
+		if _, found := entry.IP4Records[ip]; found {
+			return true
+		}
+	}
+	return false
+}
+
 func (h *Session) ProcessDNS(host *Host, ether Ether, payload []byte) (e DNSEntry, err error) {
 	p := DNS(payload)
 	if !p.IsValid() {

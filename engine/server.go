@@ -644,7 +644,16 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			// do nothing
 			fmt.Printf("packet: ipv4 igmp packet %s\n", ether)
 		case syscall.IPPROTO_TCP:
-			// skip tcp
+			if packet.Debug {
+				if ip4Frame != nil {
+					tcp := packet.TCP(ip4Frame.Payload())
+					if tcp.SYN() && !h.session.NICInfo.HomeLAN4.Contains(ip4Frame.Dst()) {
+						if !h.session.DNSExist(ip4Frame.NetaddrDst()) {
+							fmt.Printf("packet: dns entry does not exist for ip=%s\n", ip4Frame.Dst())
+						}
+					}
+				}
+			}
 		case syscall.IPPROTO_UDP: // 0x11
 			udp := packet.UDP(l4Payload)
 			if !udp.IsValid() {
