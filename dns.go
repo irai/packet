@@ -180,6 +180,17 @@ func (e *DNSEntry) decodeAnswers(p DNS, offset int, buffer *[]byte) (int, bool, 
 				e.CNameRecords[r.Name] = r
 				updated = true
 			}
+
+		case 15: // MX record
+			if Debug {
+				fmt.Println("dns   : received MX record response - ignoring", string(name))
+			}
+		case 12: // PTR record
+			if Debug {
+				fmt.Println("dns   : received PTR record response - ignoring", string(name))
+			}
+		default:
+			fmt.Println("dns   : unexpected dns resource record ", t, string(name))
 		}
 	}
 
@@ -311,8 +322,11 @@ func (h *Session) ProcessDNS(host *Host, ether Ether, payload []byte) (e DNSEntr
 		fmt.Printf("dns   : error decoding answers %s %s", err, p)
 		return DNSEntry{}, err
 	}
-	if Debug && updated {
-		e.print()
+	if updated {
+		if Debug {
+			e.print()
+		}
+		return e, nil
 	}
-	return e, nil
+	return DNSEntry{}, nil
 }
