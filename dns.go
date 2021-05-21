@@ -290,27 +290,33 @@ loop:
 	return (*buffer)[start+1:], index + 1, nil
 }
 
+func (h *Session) reverseDNS(ip netaddr.IP) error {
+	fmt.Printf("dns   : reverse lookup for ip=%s\n", ip)
+	resolver := &net.Resolver{
+		PreferGo: true,
+		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+			d := net.Dialer{}
+			return d.DialContext(ctx, network, net.JoinHostPort(CloudFlareDNS1.String(), "53")) //CloudFlare
+		},
+	}
+	// resolver = net.DefaultResolver
+
+	names, err := resolver.LookupAddr(context.TODO(), ip.String())
+	if err != nil {
+		fmt.Printf("dns   : error in reverse lookup for ip=%s: %s\n", ip, err)
+		return err
+	}
+	fmt.Printf("dns   : reverse dns ip=%s names=%v\n", ip, names)
+	return nil
+}
+
 func (h *Session) DNSExist(ip netaddr.IP) bool {
 	for _, entry := range h.DNSTable {
 		if _, found := entry.IP4Records[ip]; found {
 			return true
 		}
 	}
-	go func() {
-		fmt.Printf("dns   : reverse lookup for ip=%s\n", ip)
-		resolver := &net.Resolver{
-			PreferGo: true,
-			Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
-				d := net.Dialer{}
-				return d.DialContext(ctx, "udp", net.JoinHostPort(CloudFlareDNS1.String(), "53")) //CloudFlare
-			},
-		}
-		// resolver = net.DefaultResolver
-
-		if _, err := resolver.LookupAddr(context.TODO(), ip.String()); err != nil {
-			fmt.Printf("dns   : error in reverse lookup for ip=%s: %s\n", ip, err)
-		}
-	}()
+	go h.reverseDNS(ip)
 	return false
 }
 

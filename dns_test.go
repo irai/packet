@@ -213,3 +213,11 @@ func TestDNS_ProcessDNS(t *testing.T) {
 	fmt.Printf("table %+v", session.DNSTable)
 
 }
+
+func TestDNS_reverseDNS(t *testing.T) {
+	session := setupTestHandler()
+
+	if err := session.reverseDNS(netaddr.IPv4(172, 217, 167, 118)); err != nil {
+		t.Fatal(err)
+	}
+}
