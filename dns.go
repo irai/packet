@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"strings"
 
 	"inet.af/netaddr"
 )
@@ -51,9 +52,32 @@ func (d DNSEntry) CNameList() []string {
 }
 
 func (d DNSEntry) print() {
+	var b strings.Builder
+	b.Grow(512)
+	b.WriteString("dns   : name=")
+	b.WriteString(d.Name)
+	b.WriteString(" ip4=[ ")
+	for _, v := range d.IP4Records {
+		b.WriteString(v.IP.String())
+		b.WriteString(" ")
+	}
+	b.WriteString("] ip6=[ ")
+	for _, v := range d.IP6Records {
+		b.WriteString(v.IP.String())
+		b.WriteString(" ")
+	}
+	b.WriteString("] cname=[ ")
+	for _, v := range d.CNameRecords {
+		b.WriteString(v.CName)
+		b.WriteString(" ")
+	}
+	b.WriteString("]")
+	fmt.Println(b.String())
+	/**
 	fmt.Printf("dns   : name=%s ip4=%+v\n", d.Name, d.IP4List())
 	fmt.Printf("dns   : name=%s ip6=%+v\n", d.Name, d.IP6List())
 	fmt.Printf("dns   : name=%s cname=%+v\n", d.Name, d.CNameList())
+	*/
 }
 
 // DNS is specified in RFC 1034 / RFC 1035
@@ -306,7 +330,7 @@ func (h *Session) reverseDNS(ip netaddr.IP) error {
 		fmt.Printf("dns   : error in reverse lookup for ip=%s: %s\n", ip, err)
 		return err
 	}
-	fmt.Printf("dns   : reverse dns ip=%s names=%v\n", ip, names)
+	fmt.Printf("dns   : reverse dns success ip=%s names=%v\n", ip, names)
 	return nil
 }
 
