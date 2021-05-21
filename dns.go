@@ -295,6 +295,12 @@ func (h *Session) DNSExist(ip netaddr.IP) bool {
 			return true
 		}
 	}
+	go func() {
+		fmt.Printf("dns   : reverse lookup for ip=%s\n", ip)
+		if _, err := net.LookupAddr(ip.String()); err != nil {
+			fmt.Printf("dns   : error in reverse lookup for ip=%s\n", ip)
+		}
+	}()
 	return false
 }
 
