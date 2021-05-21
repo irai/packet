@@ -42,6 +42,19 @@ var (
 	IP6DefaultRouter = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}
 )
 
+// CLoudFlare family
+// https://developers.cloudflare.com/1.1.1.1/1.1.1.1-for-families
+var (
+	CloudFlareDNS1       = net.IPv4(1, 1, 1, 2) // malware
+	CloudFlareDNS2       = net.IPv4(1, 0, 0, 2) // malware
+	CloudFlareFamilyDNS1 = net.IPv4(1, 1, 1, 3) // malware and adult sites
+	CloudFlareFamilyDNS2 = net.IPv4(1, 0, 0, 3) // malware and adult sites
+
+	// OpenDNS
+	OpenDNS1 = net.IPv4(208, 67, 222, 123)
+	OpenDNS2 = net.IPv4(208, 67, 220, 123)
+)
+
 // DHCP4 port numbers
 const (
 	DHCP4ServerPort = 67

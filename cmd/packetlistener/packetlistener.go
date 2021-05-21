@@ -138,7 +138,7 @@ func main() {
 	handlers.engine.AttachICMP6(handlers.icmp6)
 
 	// DHCP4
-	handlers.dhcp4, err = dhcp4.New(handlers.engine.Session(), handlers.netfilterIP, dhcp4.CloudFlareDNS1, "./dhcpconfig.yaml")
+	handlers.dhcp4, err = dhcp4.New(handlers.engine.Session(), handlers.netfilterIP, packet.CloudFlareDNS1, "./dhcpconfig.yaml")
 	if err != nil {
 		log.Fatalf("Failed to create dhcp4 handler: netfilterIP=%s error=%s", handlers.netfilterIP, err)
 	}

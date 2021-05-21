@@ -35,19 +35,6 @@ const (
 	ModeSecondaryServerNice
 )
 
-// CLoudFlare family
-// https://developers.cloudflare.com/1.1.1.1/1.1.1.1-for-families
-var (
-	CloudFlareDNS1       = net.IPv4(1, 1, 1, 2) // malware
-	CloudFlareDNS2       = net.IPv4(1, 0, 0, 2) // malware
-	CloudFlareFamilyDNS1 = net.IPv4(1, 1, 1, 3) // malware and adult sites
-	CloudFlareFamilyDNS2 = net.IPv4(1, 0, 0, 3) // malware and adult sites
-
-	// OpenDNS
-	OpenDNS1 = net.IPv4(208, 67, 222, 123)
-	OpenDNS2 = net.IPv4(208, 67, 220, 123)
-)
-
 // Config contains configuration overrides
 type Config struct {
 	ClientConn net.PacketConn
@@ -141,7 +128,7 @@ func (config Config) New(session *packet.Session, netfilterIP net.IPNet, dnsServ
 		LAN:        net.IPNet{IP: netfilterIP.IP.Mask(netfilterIP.Mask), Mask: netfilterIP.Mask},
 		DefaultGW:  netfilterIP.IP.To4(),
 		DHCPServer: session.NICInfo.HostIP4.IP,
-		DNSServer:  CloudFlareFamilyDNS1,
+		DNSServer:  packet.CloudFlareFamilyDNS1,
 		Stage:      packet.StageRedirected,
 		// FirstIP:    net.ParseIP("192.168.0.10"),
 		// LastIP:     net.ParseIP("192.168.0.127"),

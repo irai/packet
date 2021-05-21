@@ -1,6 +1,7 @@
 package packet
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 	"net"
@@ -297,7 +298,16 @@ func (h *Session) DNSExist(ip netaddr.IP) bool {
 	}
 	go func() {
 		fmt.Printf("dns   : reverse lookup for ip=%s\n", ip)
-		if _, err := net.LookupAddr(ip.String()); err != nil {
+		resolver := &net.Resolver{
+			PreferGo: true,
+			Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+				d := net.Dialer{}
+				return d.DialContext(ctx, "udp", net.JoinHostPort(CloudFlareDNS1.String(), "53")) //CloudFlare
+			},
+		}
+		// resolver = net.DefaultResolver
+
+		if _, err := resolver.LookupAddr(context.TODO(), ip.String()); err != nil {
 			fmt.Printf("dns   : error in reverse lookup for ip=%s: %s\n", ip, err)
 		}
 	}()
