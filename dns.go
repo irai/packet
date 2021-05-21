@@ -10,7 +10,7 @@ import (
 	"inet.af/netaddr"
 )
 
-type CNameResourceRecord struct {
+type NameResourceRecord struct {
 	Name  string
 	CName string
 	TTL   uint32
@@ -25,7 +25,8 @@ type DNSEntry struct {
 	Name         string
 	IP4Records   map[netaddr.IP]IPResourceRecord
 	IP6Records   map[netaddr.IP]IPResourceRecord
-	CNameRecords map[string]CNameResourceRecord
+	CNameRecords map[string]NameResourceRecord
+	PTRRecords   map[string]IPResourceRecord
 }
 
 func (d DNSEntry) IP4List() []netaddr.IP {
@@ -70,6 +71,13 @@ func (d DNSEntry) print() {
 	for _, v := range d.CNameRecords {
 		b.WriteString(v.CName)
 		b.WriteString(" ")
+	}
+	if len(d.PTRRecords) > 0 {
+		b.WriteString("] ptr=[ ")
+		for _, v := range d.PTRRecords {
+			b.WriteString(v.IP.String())
+			b.WriteString(" ")
+		}
 	}
 	b.WriteString("]")
 	fmt.Println(b.String())
@@ -121,7 +129,8 @@ func (p DNS) Decode() (e DNSEntry, err error) {
 
 	e.IP4Records = make(map[netaddr.IP]IPResourceRecord)
 	e.IP6Records = make(map[netaddr.IP]IPResourceRecord)
-	e.CNameRecords = make(map[string]CNameResourceRecord)
+	e.CNameRecords = make(map[string]NameResourceRecord)
+	e.PTRRecords = make(map[string]IPResourceRecord)
 
 	if index, _, err = e.decodeAnswers(p, index, &buffer); err != nil {
 		fmt.Printf("dns   : error decoding answers %s %s", err, p)
@@ -196,11 +205,11 @@ func (e *DNSEntry) decodeAnswers(p DNS, offset int, buffer *[]byte) (int, bool, 
 		case 5: // CNAME
 
 			var cname []byte
-			cname, endq, err = decodeName(p, endq+10, buffer, 1)
+			cname, _, err = decodeName(p, endq+10, buffer, 1)
 			if err != nil {
 				return 0, false, fmt.Errorf("invalid CNAME data: %w", err)
 			}
-			r := CNameResourceRecord{Name: string(name), TTL: ttl, CName: string(cname)}
+			r := NameResourceRecord{Name: string(name), TTL: ttl, CName: string(cname)}
 			if _, found := e.CNameRecords[r.Name]; !found {
 				e.CNameRecords[r.Name] = r
 				updated = true
@@ -210,9 +219,30 @@ func (e *DNSEntry) decodeAnswers(p DNS, offset int, buffer *[]byte) (int, bool, 
 			if Debug {
 				fmt.Println("dns   : received MX record response - ignoring", string(name))
 			}
+
 		case 12: // PTR record
+			s := strings.TrimSuffix(string(name), ".in-addr.arpa")
+			tmp := net.ParseIP(s)
+			if tmp == nil || tmp.IsUnspecified() {
+				return 0, false, fmt.Errorf("invalid PTR IP: %w", err)
+			}
+			if tmp = tmp.To4(); tmp == nil {
+				fmt.Printf("dns   : ignoring ptr ip6=%s\n", tmp)
+				break
+			}
+			ip := netaddr.IPv4(tmp[3], tmp[2], tmp[1], tmp[0])
+			var ptr []byte
+			ptr, _, err = decodeName(p, endq+10, buffer, 1)
+			if err != nil {
+				return 0, false, fmt.Errorf("invalid PTR data: %w", err)
+			}
+			r := IPResourceRecord{Name: string(ptr), TTL: ttl, IP: ip}
+			if _, found := e.PTRRecords[r.Name]; !found {
+				e.PTRRecords[r.Name] = r
+				updated = true
+			}
 			if Debug {
-				fmt.Println("dns   : received PTR record response - ignoring", string(name))
+				fmt.Printf("dns   : received PTR record response ptr=%s ip=%s", r.Name, r.IP)
 			}
 		default:
 			fmt.Println("dns   : unexpected dns resource record ", t, string(name))
@@ -368,7 +398,7 @@ func (h *Session) ProcessDNS(host *Host, ether Ether, payload []byte) (e DNSEntr
 		e = tmp
 		e.IP4Records = make(map[netaddr.IP]IPResourceRecord)
 		e.IP6Records = make(map[netaddr.IP]IPResourceRecord)
-		e.CNameRecords = make(map[string]CNameResourceRecord)
+		e.CNameRecords = make(map[string]NameResourceRecord)
 	}
 
 	var updated bool
