@@ -399,6 +399,7 @@ func (h *Session) ProcessDNS(host *Host, ether Ether, payload []byte) (e DNSEntr
 		e.IP4Records = make(map[netaddr.IP]IPResourceRecord)
 		e.IP6Records = make(map[netaddr.IP]IPResourceRecord)
 		e.CNameRecords = make(map[string]NameResourceRecord)
+		e.PTRRecords = make(map[string]IPResourceRecord)
 	}
 
 	var updated bool
