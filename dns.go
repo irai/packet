@@ -242,7 +242,7 @@ func (e *DNSEntry) decodeAnswers(p DNS, offset int, buffer *[]byte) (int, bool, 
 				updated = true
 			}
 			if Debug {
-				fmt.Printf("dns   : received PTR record response ptr=%s ip=%s", r.Name, r.IP)
+				fmt.Printf("dns   : received PTR record response ptr=%s ip=%s\n", r.Name, r.IP)
 			}
 		default:
 			fmt.Println("dns   : unexpected dns resource record ", t, string(name))
