@@ -679,6 +679,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 					h.lockAndProcessDHCP4Update(host, result)
 				}
 			case udp.SrcPort() == 53: // DNS response
+				// TODO: move this to background goroutine
 				dnsEntry, err := h.session.ProcessDNS(host, ether, udp.Payload())
 				if err != nil {
 					fmt.Printf("packet: error processing dns: %s\n", err)
