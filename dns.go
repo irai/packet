@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync"
 
 	"inet.af/netaddr"
 )
@@ -29,7 +30,12 @@ type DNSEntry struct {
 	PTRRecords   map[string]IPResourceRecord
 }
 
+var dnsMutex sync.RWMutex // dns table mutex
+
 func (d DNSEntry) IP4List() []netaddr.IP {
+	dnsMutex.RLock()
+	defer dnsMutex.RUnlock()
+
 	list := make([]netaddr.IP, 0, len(d.IP4Records))
 	for _, v := range d.IP4Records {
 		list = append(list, v.IP)
@@ -38,13 +44,20 @@ func (d DNSEntry) IP4List() []netaddr.IP {
 }
 
 func (d DNSEntry) IP6List() []netaddr.IP {
+	dnsMutex.RLock()
+	defer dnsMutex.RUnlock()
+
 	list := make([]netaddr.IP, 0, len(d.IP6Records))
 	for _, v := range d.IP6Records {
 		list = append(list, v.IP)
 	}
 	return list
 }
+
 func (d DNSEntry) CNameList() []string {
+	dnsMutex.RLock()
+	defer dnsMutex.RUnlock()
+
 	list := make([]string, 0, len(d.CNameRecords))
 	for _, v := range d.CNameRecords {
 		list = append(list, v.CName)
@@ -53,6 +66,9 @@ func (d DNSEntry) CNameList() []string {
 }
 
 func (d DNSEntry) print() {
+	dnsMutex.RLock()
+	defer dnsMutex.RUnlock()
+
 	var b strings.Builder
 	b.Grow(512)
 	b.WriteString("dns   : name=")
@@ -81,11 +97,6 @@ func (d DNSEntry) print() {
 	}
 	b.WriteString("]")
 	fmt.Println(b.String())
-	/**
-	fmt.Printf("dns   : name=%s ip4=%+v\n", d.Name, d.IP4List())
-	fmt.Printf("dns   : name=%s ip6=%+v\n", d.Name, d.IP6List())
-	fmt.Printf("dns   : name=%s cname=%+v\n", d.Name, d.CNameList())
-	*/
 }
 
 // DNS is specified in RFC 1034 / RFC 1035
@@ -132,7 +143,10 @@ func (p DNS) Decode() (e DNSEntry, err error) {
 	e.CNameRecords = make(map[string]NameResourceRecord)
 	e.PTRRecords = make(map[string]IPResourceRecord)
 
-	if index, _, err = e.decodeAnswers(p, index, &buffer); err != nil {
+	dnsMutex.Lock()
+	defer dnsMutex.Unlock()
+
+	if _, _, err = e.decodeAnswers(p, index, &buffer); err != nil {
 		fmt.Printf("dns   : error decoding answers %s %s", err, p)
 		return e, err
 	}
@@ -141,7 +155,7 @@ func (p DNS) Decode() (e DNSEntry, err error) {
 }
 
 func (e *DNSEntry) decodeQuestion(p DNS, index int, buffer *[]byte) (int, error) {
-	if p.QDCount() != 1 {
+	if p.QDCount() != 1 { // assume a single question
 		return -1, ErrParseMessage
 	}
 
@@ -163,6 +177,9 @@ func (e *DNSEntry) decodeQuestion(p DNS, index int, buffer *[]byte) (int, error)
 }
 
 // decode decodes the resource record, returning the total length of the record.
+//
+// not goroutine safe:
+//   must acquire lock before calling as function will update maps
 func (e *DNSEntry) decodeAnswers(p DNS, offset int, buffer *[]byte) (int, bool, error) {
 
 	var updated bool
@@ -186,7 +203,7 @@ func (e *DNSEntry) decodeAnswers(p DNS, offset int, buffer *[]byte) (int, bool, 
 			if dataLen != 4 {
 				return 0, false, fmt.Errorf("invalid A data len: %w", ErrInvalidLen)
 			}
-			ip, _ := netaddr.FromStdIP(net.IP(p[endq+10 : endq+10+4]))
+			ip, _ := netaddr.FromStdIPRaw(net.IP(p[endq+10 : endq+10+4]))
 			if _, found := e.IP4Records[ip]; !found {
 				e.IP4Records[ip] = IPResourceRecord{Name: string(name), IP: ip, TTL: ttl}
 				updated = true
@@ -196,7 +213,7 @@ func (e *DNSEntry) decodeAnswers(p DNS, offset int, buffer *[]byte) (int, bool, 
 			if dataLen != 16 {
 				return 0, false, fmt.Errorf("invalid AAAA data len: %w", ErrInvalidLen)
 			}
-			ip, _ := netaddr.FromStdIP(net.IP(p[endq+10 : endq+10+16]))
+			ip, _ := netaddr.FromStdIPRaw(net.IP(p[endq+10 : endq+10+16]))
 			if _, found := e.IP6Records[ip]; !found {
 				e.IP6Records[ip] = IPResourceRecord{Name: string(name), IP: ip, TTL: ttl}
 				updated = true
@@ -209,8 +226,9 @@ func (e *DNSEntry) decodeAnswers(p DNS, offset int, buffer *[]byte) (int, bool, 
 			if err != nil {
 				return 0, false, fmt.Errorf("invalid CNAME data: %w", err)
 			}
-			r := NameResourceRecord{Name: string(name), TTL: ttl, CName: string(cname)}
-			if _, found := e.CNameRecords[r.Name]; !found {
+			n := string(name)
+			if _, found := e.CNameRecords[n]; !found {
+				r := NameResourceRecord{Name: n, TTL: ttl, CName: string(cname)}
 				e.CNameRecords[r.Name] = r
 				updated = true
 			}
@@ -365,6 +383,9 @@ func (h *Session) reverseDNS(ip netaddr.IP) error {
 }
 
 func (h *Session) DNSExist(ip netaddr.IP) bool {
+	dnsMutex.RLock()
+	defer dnsMutex.RUnlock()
+
 	for _, entry := range h.DNSTable {
 		if _, found := entry.IP4Records[ip]; found {
 			return true
@@ -372,6 +393,12 @@ func (h *Session) DNSExist(ip netaddr.IP) bool {
 	}
 	go h.reverseDNS(ip)
 	return false
+}
+
+func (h *Session) findDNSWithLock(name string) DNSEntry {
+	dnsMutex.RLock()
+	defer dnsMutex.RUnlock()
+	return h.DNSTable[name]
 }
 
 func (h *Session) ProcessDNS(host *Host, ether Ether, payload []byte) (e DNSEntry, err error) {
@@ -393,9 +420,12 @@ func (h *Session) ProcessDNS(host *Host, ether Ether, payload []byte) (e DNSEntr
 		return DNSEntry{}, err
 	}
 
+	dnsMutex.Lock()
+	defer dnsMutex.Unlock()
+
 	e, found := h.DNSTable[tmp.Name]
 	if !found {
-		e = tmp
+		e = DNSEntry{Name: tmp.Name}
 		e.IP4Records = make(map[netaddr.IP]IPResourceRecord)
 		e.IP6Records = make(map[netaddr.IP]IPResourceRecord)
 		e.CNameRecords = make(map[string]NameResourceRecord)

@@ -12,8 +12,8 @@ type Session struct {
 	NICInfo      *NICInfo
 	HostTable    HostTable           // store IP list - one for each host
 	MACTable     MACTable            // store mac list
+	mutex        sync.RWMutex        // global session mutex
 	DNSTable     map[string]DNSEntry // store dns records
-	mutex        sync.RWMutex
 	eventChannel chan NetEvent
 }
 

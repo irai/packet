@@ -149,21 +149,6 @@ func Benchmark_packetNoAlloc(b *testing.B) {
 	}
 }
 
-func Benchmark_Pool(b *testing.B) {
-	var Buffer = sync.Pool{New: func() interface{} { return make([]byte, EthMaxSize) }}
-	for i := 0; i < b.N; i++ {
-		func() {
-			buf := Buffer.Get().([]byte)
-			defer Buffer.Put(buf)
-
-			ether := EtherMarshalBinary(buf, syscall.ETH_P_IPV6, hostMAC, mac2)
-			if ether.EtherType() == 0 {
-				fmt.Println("test")
-			}
-		}()
-	}
-}
-
 func Benchmark_StdIP(b *testing.B) {
 	count := 0
 	key := byte(0)

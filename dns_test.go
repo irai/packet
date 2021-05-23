@@ -273,3 +273,43 @@ func TestDNS_reverseDNS(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func Benchmark_DNSConcurrentAccess(b *testing.B) {
+	session := setupTestHandler()
+
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			for _, v := range [][]byte{wwwYouTubeComResponse, wwwFacebookComAnswer, wwwBlockthekidsComResponse, wwwFacebookComAnswer, wwwPTRResponse} {
+				ip := IP4(v)
+				udp := UDP(ip.Payload())
+
+				r, err := session.ProcessDNS(nil, nil, udp.Payload())
+				if err != nil {
+					b.Fatalf("invalid process packet bltk %+v %s\n", r, err)
+				}
+			}
+			e := session.findDNSWithLock("www.blockthekids.com")
+			if e.Name != "www.blockthekids.com" {
+				b.Fatal("invalid blockthekids name", e)
+			}
+			e = session.findDNSWithLock("www.youtube.com")
+			if e.Name != "www.youtube.com" {
+				b.Fatal("invalid youtube name", e)
+			}
+			e = session.findDNSWithLock("facebook.com")
+			if e.Name != "facebook.com" {
+				session.PrintDNSTable()
+				b.Fatal("invalid facebook name", e)
+			}
+		}
+	})
+
+	/**
+	b.Run("facebook", func(b *testing.B) {
+	})
+
+	b.RunParallel("youtube", func(b *testing.B) {
+	})
+	**/
+
+}
