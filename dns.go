@@ -66,8 +66,6 @@ func (d DNSEntry) CNameList() []string {
 }
 
 func (d DNSEntry) print() {
-	dnsMutex.RLock()
-	defer dnsMutex.RUnlock()
 
 	var b strings.Builder
 	b.Grow(512)
