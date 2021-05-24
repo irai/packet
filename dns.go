@@ -3,6 +3,7 @@ package packet
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -136,10 +137,7 @@ func (p DNS) Decode() (e DNSEntry, err error) {
 		return e, err
 	}
 
-	e.IP4Records = make(map[netaddr.IP]IPResourceRecord)
-	e.IP6Records = make(map[netaddr.IP]IPResourceRecord)
-	e.CNameRecords = make(map[string]NameResourceRecord)
-	e.PTRRecords = make(map[string]IPResourceRecord)
+	e = newDNSEntry()
 
 	dnsMutex.Lock()
 	defer dnsMutex.Unlock()
@@ -150,6 +148,14 @@ func (p DNS) Decode() (e DNSEntry, err error) {
 	}
 
 	return e, nil
+}
+
+func newDNSEntry() (entry DNSEntry) {
+	entry.IP4Records = make(map[netaddr.IP]IPResourceRecord)
+	entry.IP6Records = make(map[netaddr.IP]IPResourceRecord)
+	entry.CNameRecords = make(map[string]NameResourceRecord)
+	entry.PTRRecords = make(map[string]IPResourceRecord)
+	return entry
 }
 
 func (e *DNSEntry) decodeQuestion(p DNS, index int, buffer *[]byte) (int, error) {
@@ -360,8 +366,12 @@ loop:
 	return (*buffer)[start+1:], index + 1, nil
 }
 
+// reverseDNS query the PTR record for ip
+// return ErrNotFound if there is no PTR record
 func (h *Session) reverseDNS(ip netaddr.IP) error {
-	fmt.Printf("dns   : reverse lookup for ip=%s\n", ip)
+	if Debug {
+		fmt.Printf("dns   : reverse lookup for ip=%s\n", ip)
+	}
 	resolver := &net.Resolver{
 		PreferGo: true,
 		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
@@ -369,14 +379,22 @@ func (h *Session) reverseDNS(ip netaddr.IP) error {
 			return d.DialContext(ctx, network, net.JoinHostPort(CloudFlareDNS1.String(), "53")) //CloudFlare
 		},
 	}
-	// resolver = net.DefaultResolver
 
 	names, err := resolver.LookupAddr(context.TODO(), ip.String())
 	if err != nil {
-		fmt.Printf("dns   : error in reverse lookup for ip=%s: %s\n", ip, err)
+		// errors.As(err, &dnsErr) - as not implemented yet
+		dnsErr, ok := err.(*net.DNSError)
+		if ok && dnsErr.IsNotFound {
+			if Debug {
+				fmt.Printf("dns   : error in reverse lookup for ip=%s: %s %+v\n", ip, err, *dnsErr)
+			}
+			return ErrNotFound
+		}
 		return err
 	}
-	fmt.Printf("dns   : reverse dns success ip=%s names=%v\n", ip, names)
+	if Debug {
+		fmt.Printf("dns   : reverse dns success ip=%s names=%v\n", ip, names)
+	}
 	return nil
 }
 
@@ -389,8 +407,46 @@ func (h *Session) DNSExist(ip netaddr.IP) bool {
 			return true
 		}
 	}
-	go h.reverseDNS(ip)
 	return false
+}
+
+func (h *Session) DNSLookupPTR(ip netaddr.IP) {
+	if err := h.reverseDNS(ip); errors.Is(err, ErrNotFound) {
+		dnsMutex.Lock()
+		defer dnsMutex.Unlock()
+
+		// cache IPs that do not have a PTR RR to prevent unnecessary lookups;
+		// it is likely the same IP will be used again and again.
+		// TODO: should we block unknown IPs?
+		entry, found := h.DNSTable["ptrentryname"]
+		if !found {
+			entry = newDNSEntry()
+			entry.Name = "ptrentryname"
+			h.DNSTable["ptrentryname"] = entry
+		}
+
+		// IPv4?
+		if ip.Is4() {
+			_, found = entry.IP4Records[ip]
+			if !found {
+				if Debug {
+					fmt.Printf("dns   : add ptr record not found for ip=%s\n", ip)
+				}
+				entry.IP4Records[ip] = IPResourceRecord{IP: ip}
+			}
+			return
+		}
+
+		// IPv6?
+		_, found = entry.IP6Records[ip]
+		if !found {
+			if Debug {
+				fmt.Printf("dns   : ptr record not found for ip=%s\n", ip)
+			}
+			entry.IP4Records[ip] = IPResourceRecord{IP: ip}
+		}
+	}
+
 }
 
 func (h *Session) findDNSWithLock(name string) DNSEntry {
@@ -423,7 +479,8 @@ func (h *Session) ProcessDNS(host *Host, ether Ether, payload []byte) (e DNSEntr
 
 	e, found := h.DNSTable[tmp.Name]
 	if !found {
-		e = DNSEntry{Name: tmp.Name}
+		e = newDNSEntry()
+		e.Name = tmp.Name
 		e.IP4Records = make(map[netaddr.IP]IPResourceRecord)
 		e.IP6Records = make(map[netaddr.IP]IPResourceRecord)
 		e.CNameRecords = make(map[string]NameResourceRecord)

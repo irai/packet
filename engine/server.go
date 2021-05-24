@@ -646,9 +646,13 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		case syscall.IPPROTO_TCP:
 			if ip4Frame != nil {
 				tcp := packet.TCP(ip4Frame.Payload())
+
+				// During connection establishement (SYN), test if we have the host name in case the client is using an ip we don't know about
+				// perform a PTR lookup to attempt to discover the name
 				if tcp.SYN() && !h.session.NICInfo.HomeLAN4.Contains(ip4Frame.Dst()) {
 					if !h.session.DNSExist(ip4Frame.NetaddrDst()) {
 						fmt.Printf("packet: dns entry does not exist for ip=%s\n", ip4Frame.Dst())
+						go h.session.DNSLookupPTR(ip4Frame.NetaddrDst())
 					}
 				}
 			}

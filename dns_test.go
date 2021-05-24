@@ -268,10 +268,31 @@ func TestDNS_ProcessDNS(t *testing.T) {
 
 func TestDNS_reverseDNS(t *testing.T) {
 	session := setupTestHandler()
+	Debug = true
 
 	if err := session.reverseDNS(netaddr.IPv4(172, 217, 167, 118)); err != nil {
 		t.Fatal(err)
 	}
+	// =13.76.219.18
+	if found := session.DNSExist(netaddr.IPv4(13, 76, 219, 18)); found {
+		t.Fatal("invalid entry")
+	}
+
+	session.DNSLookupPTR(netaddr.IPv4(13, 76, 219, 18))
+
+	if found := session.DNSExist(netaddr.IPv4(13, 76, 219, 18)); !found {
+		session.PrintDNSTable()
+		t.Fatal("invalid entry")
+	}
+
+	session.DNSLookupPTR(netaddr.IPv4(13, 76, 219, 18))
+
+	entry, found := session.DNSTable["ptrentryname"]
+	if !found || len(entry.IP4Records) != 1 {
+		session.PrintDNSTable()
+		t.Fatal("invalid entry")
+	}
+
 }
 
 func Benchmark_DNSConcurrentAccess(b *testing.B) {
