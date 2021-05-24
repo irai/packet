@@ -354,6 +354,13 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (*pa
 	case ipv6.ICMPTypeMulticastListenerQuery:
 		fmt.Printf("icmp6 : multicast listener query from ip=%s \n", ip6Frame.Src())
 
+	case ipv6.ICMPTypeRedirect:
+		redirect := ICMP6Redirect(icmp6Frame)
+		if !redirect.IsValid() {
+			return host, packet.Result{}, fmt.Errorf("invalid icmp redirect msg len=%d", len(redirect))
+		}
+		fmt.Printf("icmp6 : redirect from ip=%s %s \n", ip6Frame.Src(), redirect)
+
 	default:
 		log.Printf("icmp6 : type not implemented from ip=%s type=%v\n", ip6Frame.Src(), t)
 		return host, packet.Result{}, fmt.Errorf("unrecognized icmp6 type=%d: %w", t, errParseMessage)

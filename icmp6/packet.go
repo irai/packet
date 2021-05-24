@@ -176,3 +176,22 @@ func ICMP6NeighborSolicitationMarshal(targetAddr net.IP, sourceLLA net.HardwareA
 	copy(b[26:], sourceLLA)
 	return b, nil
 }
+
+type ICMP6Redirect []byte
+
+func (p ICMP6Redirect) IsValid() bool { return len(p) >= 40 }
+func (p ICMP6Redirect) String() string {
+	return fmt.Sprintf("type=na code=%d targetIP=%s targetMAC=%s dstIP=%s", p.Code(), p.TargetAddress(), p.TargetLinkLayerAddr(), p.DstAddress())
+}
+func (p ICMP6Redirect) Type() uint8           { return uint8(p[0]) }
+func (p ICMP6Redirect) Code() byte            { return p[1] }
+func (p ICMP6Redirect) Checksum() int         { return int(binary.BigEndian.Uint16(p[2:4])) }
+func (p ICMP6Redirect) TargetAddress() net.IP { return net.IP(p[8:24]) }
+func (p ICMP6Redirect) DstAddress() net.IP    { return net.IP(p[24:40]) }
+func (p ICMP6Redirect) TargetLinkLayerAddr() net.HardwareAddr {
+	// TargetLLA option
+	if len(p) < 40+8 || p[40] != 2 || p[41] != 1 { // Option type TargetLLA, len 8 bytes
+		return nil
+	}
+	return net.HardwareAddr(p[42 : 42+6])
+}
