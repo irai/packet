@@ -61,14 +61,15 @@ func (h *Handler) spoofLoop(dstAddr packet.Addr) {
 	for {
 		h.Lock()
 
+		if h.huntList.Index(dstAddr.MAC) == -1 || h.closed {
+			h.Unlock()
+			fmt.Printf("icmp6 : attack end ip=%s repeat=%v duration=%v\n", dstAddr.IP, nTimes, time.Since(startTime))
+			return
+		}
+
 		// Attack when we have the router LLA only
 		if h.Router != nil {
 			srcAddr := packet.Addr{IP: h.Router.Addr.IP, MAC: h.session.NICInfo.HostMAC}
-			if h.huntList.Index(dstAddr.MAC) == -1 || h.closed {
-				h.Unlock()
-				fmt.Printf("icmp6 : attack end ip=%s repeat=%v duration=%v\n", dstAddr.IP, nTimes, time.Since(startTime))
-				return
-			}
 			list := []packet.Addr{}
 			for _, router := range h.LANRouters {
 				list = append(list, router.Addr)
