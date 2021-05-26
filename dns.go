@@ -245,8 +245,8 @@ func (e *DNSEntry) decodeAnswers(p DNS, offset int, buffer *[]byte) (int, bool, 
 		case 12: // PTR record
 			s := strings.TrimSuffix(string(name), ".in-addr.arpa")
 			tmp := net.ParseIP(s)
-			if tmp == nil || tmp.IsUnspecified() {
-				return 0, false, fmt.Errorf("invalid PTR IP: %w", err)
+			if tmp == nil {
+				return 0, false, fmt.Errorf("invalid PTR IP: %s", string(name))
 			}
 			if tmp = tmp.To4(); tmp == nil {
 				fmt.Printf("dns   : ignoring ptr ip6=%s\n", tmp)
