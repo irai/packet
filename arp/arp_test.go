@@ -34,11 +34,6 @@ var (
 	localIP2  = net.IPv4(169, 254, 0, 11).To4()
 )
 
-type notificationCounter struct {
-	onlineCounter  int
-	offlineCounter int
-}
-
 type testContext struct {
 	inConn        net.PacketConn
 	outConn       net.PacketConn

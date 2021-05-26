@@ -17,9 +17,6 @@ var (
 	// ErrNotFound is returned when MAC not found
 	ErrNotFound = errors.New("not found")
 
-	writeTimeout, _ = time.ParseDuration("100ms")
-	scanTimeout, _  = time.ParseDuration("5s")
-
 	// EthernetBroadcast defines the broadcast address
 	EthernetBroadcast = net.HardwareAddr{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 )

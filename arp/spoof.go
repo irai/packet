@@ -10,11 +10,6 @@ import (
 	"github.com/irai/packet"
 )
 
-func (h *Handler) findHuntByMAC(mac net.HardwareAddr) (packet.Addr, bool) {
-	addr, hunting := h.huntList[string(mac)]
-	return addr, hunting
-}
-
 func (h *Handler) findHuntByIP(ip net.IP) (packet.Addr, bool) {
 	for _, v := range h.huntList {
 		if v.IP.Equal(ip) {
@@ -43,6 +38,7 @@ func (h *Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
 	}
 	h.huntList[string(addr.MAC)] = addr
 
+	fmt.Printf("arp   : start hunt %s\n", addr)
 	go h.spoofLoop(addr)
 	return packet.StageHunt, nil
 }
@@ -59,8 +55,7 @@ func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
 	if !hunting {
 		fmt.Println("arp   : hunt stop failed - not in hunt stage", addr)
 	}
-
-	fmt.Println("arp   : hunt stop ok", addr)
+	fmt.Println("arp   : stop hunt", addr)
 	return packet.StageNormal, nil
 }
 
@@ -77,7 +72,6 @@ func (h *Handler) spoofLoop(addr packet.Addr) {
 	ticker := time.NewTicker(time.Second * 4).C
 	startTime := time.Now()
 	nTimes := 0
-	fmt.Printf("arp   : hunt loop start %s time=%v\n", addr, startTime)
 	for {
 		h.arpMutex.Lock()
 		targetAddr, hunting := h.findHuntByIP(addr.IP)
@@ -95,7 +89,7 @@ func (h *Handler) spoofLoop(addr packet.Addr) {
 		h.forceSpoof(targetAddr)
 
 		if nTimes%16 == 0 {
-			fmt.Printf("arp   : hunt loop attack %s repeat=%v duration=%v\n", targetAddr, nTimes, time.Now().Sub(startTime))
+			fmt.Printf("arp   : hunt loop attack %s repeat=%v duration=%s\n", targetAddr, nTimes, time.Since(startTime))
 		}
 		nTimes++
 
@@ -132,30 +126,6 @@ func (h *Handler) forceSpoof(addr packet.Addr) error {
 			return err
 		}
 		time.Sleep(time.Millisecond * 10)
-	}
-
-	return nil
-}
-
-// doNotUseforceAnnouncement send a ARP packets to tell the network we are using the IP.
-// NOT used anymore
-func (h *Handler) doNotUseforceAnnouncement(dstEther net.HardwareAddr, mac net.HardwareAddr, ip net.IP) error {
-	err := h.announce(dstEther, mac, ip, EthernetBroadcast, 4) // many repeats to force client to reaquire IP
-	if err != nil {
-		log.Printf("arp error send announcement packet mac=%s ip=%s: %s", mac, ip, err)
-	}
-
-	// Send gratuitous ARP replies : Log the first one only
-	// err = c.Reply(mac, ip, EthernetBroadcast, ip) // Send broadcast gratuitous ARP reply
-	err = h.reply(dstEther, mac, ip, EthernetBroadcast, ip) // Send gratuitous ARP reply - unicast to target
-	for i := 0; i < 3; i++ {
-		if err != nil {
-			log.Printf("arp error send gratuitous packet mac=%s ip=%s: %s", mac, ip, err)
-		}
-		time.Sleep(time.Millisecond * 10)
-
-		// Dont show in log
-		err = h.reply(dstEther, mac, ip, EthernetBroadcast, ip) // Send gratuitous ARP reply
 	}
 
 	return nil
