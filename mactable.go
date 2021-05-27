@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 	"time"
 )
@@ -26,8 +27,34 @@ type MACEntry struct {
 }
 
 func (e *MACEntry) String() string {
-	return fmt.Sprintf("mac=%s captured=%v online=%v ip4=%s ip6=%s lla=%s ip4offer=%s hosts=%d lastSeen=%v",
-		e.MAC, e.Captured, e.Online, e.IP4, e.IP6GUA, e.IP6LLA, e.IP4Offer, len(e.HostList), time.Since(e.LastSeen))
+	// return fmt.Sprintf("mac=%s captured=%v online=%v ip4=%s ip6=%s lla=%s ip4offer=%s hosts=%d lastSeen=%s",
+	// e.MAC, e.Captured, e.Online, e.IP4, e.IP6GUA, e.IP6LLA, e.IP4Offer, len(e.HostList), time.Since(e.LastSeen))
+	var b strings.Builder
+	b.Grow(120)
+	b.WriteString("mac=")
+	b.WriteString(e.MAC.String())
+	if e.Captured {
+		b.WriteString(" captured=true")
+	} else {
+		b.WriteString(" captured=false")
+	}
+	if e.Online {
+		b.WriteString(" online=true ip4=")
+	} else {
+		b.WriteString(" online=false ip4=")
+	}
+	b.WriteString(e.IP4.String())
+	b.WriteString(" ip6=")
+	b.WriteString(e.IP6GUA.String())
+	b.WriteString(" lla=")
+	b.WriteString(e.IP6LLA.String())
+	b.WriteString(" ip4offer=")
+	b.WriteString(e.IP4Offer.String())
+	b.WriteString(" hosts=")
+	b.WriteByte((byte(len(e.HostList)))) // truncate to single byte
+	b.WriteString(" lastSeen=")
+	b.WriteString(time.Since(e.LastSeen).String())
+	return b.String()
 }
 
 // link appends the host to the macEntry host list

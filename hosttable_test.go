@@ -48,7 +48,7 @@ func setupTestHandler() *Session {
 
 func TestHandler_findOrCreateHostTestCopyIPMAC(t *testing.T) {
 	bufIP := []byte{192, 168, 1, 1}
-	ip := net.IPv4(192, 168, 1, 1)
+	ip := CopyIP(net.IP(bufIP).To4())
 
 	bufMAC := []byte{1, 1, 1, 2, 2, 2}
 	mac := net.HardwareAddr{1, 1, 1, 2, 2, 2}
@@ -56,13 +56,9 @@ func TestHandler_findOrCreateHostTestCopyIPMAC(t *testing.T) {
 	session := setupTestHandler()
 
 	host, _ := session.findOrCreateHost(net.HardwareAddr(bufMAC), net.IP(bufIP))
-	// engine.lockAndSetOnline(host, false)
-
 	bufIP[0] = 0xff
 	bufMAC[0] = 0x00
-
-	// must update host and mac entry ip
-	if !host.IP.Equal(ip) || !host.MACEntry.IP4.Equal(ip) {
+	if !host.IP.Equal(ip) {
 		session.printHostTable()
 		t.Error("findOrCreateHost wrong IP", host, host.MACEntry)
 	}
@@ -72,13 +68,12 @@ func TestHandler_findOrCreateHostTestCopyIPMAC(t *testing.T) {
 
 	bufMAC = []byte{1, 1, 1, 2, 2, 2}
 	bufIP6 := []byte{0x20, 0x01, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}
-	ip6 := net.IP{0x20, 0x01, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}
+	ip6 := CopyIP(net.IP(bufIP6))
 
 	host, _ = session.findOrCreateHost(net.HardwareAddr(bufMAC), net.IP(bufIP6))
-	// engine.lockAndSetOnline(host, false)
 	bufIP6[8] = 0xff
 	bufMAC[0] = 0x00
-	if !host.IP.Equal(ip6) || !host.MACEntry.IP6GUA.Equal(ip6) {
+	if !host.IP.Equal(ip6) {
 		t.Error("findOrCreateHost wrong IP", host, host.MACEntry)
 	}
 	if !bytes.Equal(mac, host.MACEntry.MAC) {

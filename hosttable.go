@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"net"
+	"strings"
 	"time"
 
 	"inet.af/netaddr"
@@ -30,7 +31,27 @@ type Host struct {
 }
 
 func (e *Host) String() string {
-	return fmt.Sprintf("mac=%s ip=%v online=%v capture=%v stage4=%s lastSeen=%s", e.MACEntry.MAC, e.IP, e.Online, e.MACEntry.Captured, e.HuntStage, time.Since(e.LastSeen))
+	// return fmt.Sprintf("mac=%s ip=%v online=%v capture=%v stage4=%s lastSeen=%s", e.MACEntry.MAC, e.IP, e.Online, e.MACEntry.Captured, e.HuntStage, time.Since(e.LastSeen))
+	var b strings.Builder
+	b.Grow(120)
+	b.WriteString("mac=")
+	b.WriteString(e.MACEntry.MAC.String())
+	b.WriteString(" ip=")
+	b.WriteString(e.IP.String())
+	if e.Online {
+		b.WriteString(" online=true")
+	} else {
+		b.WriteString(" online=false")
+	}
+	if e.MACEntry.Captured {
+		b.WriteString(" captured=true stage4=")
+	} else {
+		b.WriteString(" captured=false stage4=")
+	}
+	b.WriteString(e.HuntStage.String())
+	b.WriteString(" lastSeen=")
+	b.WriteString(time.Since(e.LastSeen).String())
+	return b.String()
 }
 
 // HuntStage holds the host hunt stage
@@ -67,7 +88,7 @@ type Result struct {
 }
 
 func (e Result) String() string {
-	return fmt.Sprintf("dhcp4stage=%s name=%v ipoffer=%v", e.HuntStage, e.Name, e.Addr)
+	return fmt.Sprintf("dhcp4stage=%s name=%s ipoffer=%s", e.HuntStage, e.Name, e.Addr)
 }
 
 // newHostTable returns a HostTable Session
@@ -151,7 +172,7 @@ func (h *Session) findOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host,
 	host.LastSeen = now
 	host.HuntStage = StageNormal
 	host.MACEntry.LastSeen = now
-	host.MACEntry.UpdateIPNoLock(host.IP)
+	// host.MACEntry.UpdateIPNoLock(host.IP)
 	h.HostTable.Table[ipNew] = host
 
 	// link host to macEntry

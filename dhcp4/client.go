@@ -108,26 +108,6 @@ func (h *Handler) SendDiscoverPacket(chAddr net.HardwareAddr, cIAddr net.IP, xID
 	return err
 }
 
-func dupReleasePacket(request *DHCP4) DHCP4 {
-	messageid := make([]byte, 4)
-	if _, err := rand.Read(messageid); err != nil {
-		panic(err)
-	}
-
-	acknowledgementOptions := request.ParseOptions()
-
-	packet := NewPacket(BootRequest)
-	packet.SetCHAddr(request.CHAddr())
-
-	packet.SetXId(messageid)
-	packet.SetCIAddr(request.YIAddr())
-
-	packet.AddOption(OptionDHCPMessageType, []byte{byte(Release)})
-	packet.AddOption(OptionServerIdentifier, acknowledgementOptions[OptionServerIdentifier])
-
-	return packet
-}
-
 func (h *Handler) sendDeclineReleasePacket(msgType MessageType, clientID []byte, serverIP net.IP, chAddr net.HardwareAddr, ciAddr net.IP, xid []byte, options Options) (err error) {
 	if xid == nil {
 		xid = make([]byte, 4)

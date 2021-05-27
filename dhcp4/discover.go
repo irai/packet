@@ -9,7 +9,7 @@ import (
 	"github.com/irai/packet"
 )
 
-// HandleDiscover respond with a DHCP offer packet
+// handleDiscover respond with a DHCP offer packet
 //
 // RFC2131: https://tools.ietf.org/html/rfc2131
 //

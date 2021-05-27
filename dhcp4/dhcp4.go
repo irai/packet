@@ -262,10 +262,10 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (*pa
 		return host, packet.Result{}, packet.ErrParseMessage
 	}
 	if Debug {
-		fmt.Printf("ether: %s\n", ether)
-		fmt.Printf("ip4  : %s\n", ip4)
-		fmt.Printf("udp  : %s\n", udp)
-		fmt.Printf("dhcp4: %s\n", dhcpFrame)
+		fmt.Printf("dhcp4 : ether %s\n", ether)
+		fmt.Printf("dhcp4 : ip4 %s\n", ip4)
+		fmt.Printf("dhcp4 : udp %s\n", udp)
+		fmt.Printf("dhcp4 : dhcp %s\n", dhcpFrame)
 	}
 
 	if udp.DstPort() == packet.DHCP4ClientPort {
@@ -276,12 +276,12 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (*pa
 	options := dhcpFrame.ParseOptions()
 	var reqType MessageType
 	if t := options[OptionDHCPMessageType]; len(t) != 1 {
-		log.Warn("dhcp4: skiping dhcp packet with len not 1")
+		log.Warn("dhcp4 : skiping dhcp packet with len not 1")
 		return host, packet.Result{}, packet.ErrParseMessage
 	} else {
 		reqType = MessageType(t[0])
 		if reqType < Discover || reqType > Inform {
-			log.Warn("dhcp4: skiping dhcp packet invalid type ", reqType)
+			log.Warn("dhcp4 : skiping dhcp packet invalid type ", reqType)
 			return host, packet.Result{}, packet.ErrParseMessage
 		}
 	}
@@ -300,7 +300,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (*pa
 		result, response = h.handleDiscover(dhcpFrame, options)
 
 	case Request:
-		host, result, response = h.handleRequest(host, dhcpFrame, options, ip4.Src())
+		result, response = h.handleRequest(host, dhcpFrame, options, ip4.Src())
 
 	case Decline:
 		response = h.handleDecline(dhcpFrame, options)

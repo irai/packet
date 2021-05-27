@@ -318,7 +318,7 @@ func (h *Handler) FindIP6Router(ip net.IP) icmp6.Router {
 	return h.ICMP6Handler.FindRouter(ip)
 }
 
-// lockAndProcessDHCP4Update updates the DHCP4 store and transition hunt stage
+// lockAndProcessDHCP4Update updates the DHCP4 fields and transition to/from hunt stage
 //
 func (h *Handler) lockAndProcessDHCP4Update(host *packet.Host, result packet.Result) (notify bool) {
 	if host != nil {
@@ -327,13 +327,15 @@ func (h *Handler) lockAndProcessDHCP4Update(host *packet.Host, result packet.Res
 			host.DHCP4Name = result.Name
 			notify = true
 		}
-		if result.Addr.IP != nil { // Discover IPOffer?
-			host.MACEntry.IP4Offer = result.Addr.IP
-		}
-		capture := host.MACEntry.Captured
-		addr := packet.Addr{MAC: host.MACEntry.MAC, IP: host.IP}
+		host.HuntStage = packet.StageRedirected
+		// if result.Addr.IP != nil { // Discover IPOffer?
+		// host.MACEntry.IP4Offer = result.Addr.IP
+		// }
+		// capture := host.MACEntry.Captured
+		// addr := packet.Addr{MAC: host.MACEntry.MAC, IP: host.IP}
 		host.MACEntry.Row.Unlock()
 
+		/***
 		// DHCP stage overides all other stages
 		if capture && result.HuntStage == packet.StageRedirected {
 			fmt.Printf("packet: dhcp4 redirected %s\n", addr)
@@ -349,13 +351,14 @@ func (h *Handler) lockAndProcessDHCP4Update(host *packet.Host, result packet.Res
 			}
 			return notify
 		}
+		****/
 
 		return notify
 	}
 
 	// First dhcp discovery has no host entry
-	// h.macTableUpsertIPOffer(result.Addr)
-	if result.Addr.IP != nil && h.session.NICInfo.HostIP4.Contains(result.Addr.IP) { // Discover IPOffer?
+	// Ensure there is a mac entry with the IP offer
+	if result.Addr.IP != nil && h.session.NICInfo.HostIP4.Contains(result.Addr.IP) {
 		entry := h.session.MACTable.FindOrCreateNoLock(result.Addr.MAC)
 		entry.IP4Offer = result.Addr.IP
 	}
@@ -403,7 +406,7 @@ func (h *Handler) lockAndSetOnline(host *packet.Host, notify bool) {
 	}
 	host.MACEntry.Row.RUnlock()
 
-	// set previous IP to offline, start hunt and notify of new IP
+	// set previous IP to offline
 	if offlineIP != nil {
 		previousHost := h.session.FindIP(offlineIP) // will lock the engine; we cannot have Row lock
 		if previousHost != nil {
@@ -556,6 +559,9 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		var host *packet.Host
 		var result packet.Result
 
+		// Process layer 3 - IP4, IP6 and ARP
+		//
+		// This will set host if the sender is a local IP and not multicast.
 		switch ether.EtherType() {
 		case syscall.ETH_P_IP: // 0x0800
 			ip4Frame = packet.IP4(ether.Payload())
@@ -590,9 +596,13 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			l4Proto = ip6Frame.NextHeader()
 			l4Payload = ip6Frame.Payload()
 
-			// create host only if unicast
-			// also, don't create public IP host if sent by router to prevent incorrect association of IPs when
-			// the router is sending a response to a packet sent by us
+			// create host only if src IP is:
+			//     - unicast local link address (i.e. fe80::)
+			//     - global IP6 sent by a local host not the router
+			//
+			// We ignore IP6 packets forwarded by the router to a local host using a Global Unique Addresses.
+			// For example, an IP6 google search will be forwared by the router as:
+			//    ip6 src=google.com dst=GUA localhost and srcMAC=routerMAC dstMAC=localHostMAC
 			// TODO: is it better to check if IP is in the prefix?
 			if ip6Frame.Src().IsLinkLocalUnicast() ||
 				(ip6Frame.Src().IsGlobalUnicast() && !bytes.Equal(ether.Src(), h.session.NICInfo.RouterMAC)) {
@@ -626,6 +636,8 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		}
 		d1 = time.Since(startTime)
 
+		// Process level 4 and 5 protocols: ICMP4, ICMP6, IGMP, TCP, UDP, DHCP4, DNS
+		//
 		switch l4Proto {
 		case syscall.IPPROTO_ICMP:
 			if host, result, err = h.ICMP4Handler.ProcessPacket(host, ether, l4Payload); err != nil {
@@ -647,7 +659,8 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			if ip4Frame != nil {
 				tcp := packet.TCP(ip4Frame.Payload())
 
-				// During connection establishement (SYN), test if we have the host name in case the client is using an ip we don't know about
+				// During connection establishement (SYN), test if we have the host name
+				// in case the client is using an ip we don't know about
 				// perform a PTR lookup to attempt to discover the name
 				if tcp.SYN() && !h.session.NICInfo.HomeLAN4.Contains(ip4Frame.Dst()) {
 					if !h.session.DNSExist(ip4Frame.NetaddrDst()) {
@@ -662,7 +675,6 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				fmt.Println("packet: error invalid udp frame ", ip4Frame)
 				continue
 			}
-			// is ip4?
 			if packet.DebugUDP {
 				fmt.Printf("packet: ether %s\n", ether)
 				if ip4Frame != nil {
@@ -676,10 +688,13 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			switch {
 			case udp.DstPort() == packet.DHCP4ServerPort || udp.DstPort() == packet.DHCP4ClientPort: // DHCP4 packet?
 				// if udp.DstPort() == packet.DHCP4ServerPort || udp.DstPort() == packet.DHCP4ClientPort {
-				if host, result, err = h.DHCP4Handler.ProcessPacket(host, ether, udp.Payload()); err != nil {
+				if _, result, err = h.DHCP4Handler.ProcessPacket(host, ether, udp.Payload()); err != nil {
 					fmt.Printf("packet: error processing dhcp4: %s\n", err)
 				}
 				if result.Update {
+					if result.IsRouter { // IsRouter is true if this is a new host from a DHCP request
+						host, _ = h.session.FindOrCreateHost(result.Addr.MAC, result.Addr.IP)
+					}
 					h.lockAndProcessDHCP4Update(host, result)
 				}
 			case udp.SrcPort() == 53: // DNS response

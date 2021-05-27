@@ -98,5 +98,5 @@ func TestHandler_existingHost(t *testing.T) {
 		})
 	}
 
-	checkOnlineCount(t, tc, 5, 0)
+	checkOnlineCount(t, tc, 3, 2)
 }

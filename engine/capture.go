@@ -132,7 +132,7 @@ func (h *Handler) Release(mac net.HardwareAddr) error {
 	return nil
 }
 
-// lockAndStopHunt will stop hunting for all modules
+// lockAndStopHunt will call stop hunting for all plugins
 //
 // host could be in one of two states:
 //  - packet.StageHunt       - an active hunt is in progress

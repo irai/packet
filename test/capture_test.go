@@ -11,7 +11,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func TestHandler_capture(t *testing.T) {
+func TestHandler_captureNormal(t *testing.T) {
 	tc := NewTestContext()
 	defer tc.Close()
 
@@ -22,23 +22,23 @@ func TestHandler_capture(t *testing.T) {
 
 	tests := []TestEvent{}
 
-	// MAC1 - capture after dhcp
+	// MAC1 - capture after dhcp - ip1
 	addr := packet.Addr{MAC: MAC1}
 	tests = append(tests, NewHostEvents(addr, "mac1", 1, 1)...)
 	tests = append(tests, TestEvent{name: "capture-" + addr.MAC.String(), hostTableInc: 0, macTableInc: 0, responsePos: 0, responseTableInc: -1, // -1 means don't count
 		waitTimeAfter: time.Millisecond * 10,
 		action:        "capture", srcAddr: packet.Addr{MAC: addr.MAC, IP: net.IPv4zero},
 	})
-	tests = append(tests, NewHostEvents(addr, "mac1", 1, 0)...) // get a second IP with captured net
+	tests = append(tests, NewHostEvents(addr, "mac1", 1, 0)...) // get a second IP with captured net - ip 192.168.0.130
 
-	// MAC2 - capture before dhcp discover
+	// MAC2 - capture before dhcp discover - ip 192.168.0.131
 	addr = packet.Addr{MAC: MAC2}
 	tests = append(tests, TestEvent{name: "capture-" + addr.MAC.String(), hostTableInc: 0, macTableInc: 0, responsePos: 0, responseTableInc: -1, // -1 means don't count
 		action: "capture", srcAddr: packet.Addr{MAC: addr.MAC, IP: net.IPv4zero},
 	})
 	tests = append(tests, NewHostEvents(addr, "mac2", 1, 0)...)
 
-	// capture MAC1 again
+	// capture MAC1 again - ip 192.168.0.130
 	addr = packet.Addr{MAC: MAC1}
 	tests = append(tests, TestEvent{name: "capture-" + addr.MAC.String(), hostTableInc: 0, macTableInc: 0, responsePos: 0, responseTableInc: -1, // -1 means don't count
 		waitTimeAfter: time.Millisecond * 10,
@@ -49,10 +49,22 @@ func TestHandler_capture(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			runAction(t, tc, tt)
 		})
-
 	}
-	checkOnlineCount(t, tc, 5, 0)
+	checkOnlineCount(t, tc, 4, 1)
 	checkCaptureCount(t, tc, 3, 2)
+
+	t.Run("stage check", func(t *testing.T) {
+		// initial ip must be set to offline and stage normal
+		if host := tc.Engine.Session().FindIP(net.IPv4(192, 168, 0, 1)); host == nil || host.Online != false || host.HuntStage != packet.StageNormal {
+			tc.Engine.PrintTable()
+			t.Fatalf("unexpected host variables %s ", host)
+		}
+		// captured ip must be set to online and stage redirected
+		if host := tc.Engine.Session().FindIP(net.IPv4(192, 168, 0, 130)); host == nil || host.Online != true || host.HuntStage != packet.StageRedirected {
+			tc.Engine.PrintTable()
+			t.Fatalf("unexpected host variables %s ", host)
+		}
+	})
 }
 
 func TestHandler_captureDHCP(t *testing.T) {
@@ -74,8 +86,7 @@ func TestHandler_captureDHCP(t *testing.T) {
 		action:        "capture", srcAddr: packet.Addr{MAC: addr.MAC, IP: net.IPv4zero},
 	})
 
-	// tests = append(tests, NewHostEvents(addr, 1, 0)...) // get a second IP with captured net
-
+	// simulate another host - request a different IP
 	tests = append(tests, []TestEvent{
 		{name: "discover2-" + addr.MAC.String(), action: "dhcp4Discover", hostTableInc: 0, macTableInc: 0, responsePos: -1, responseTableInc: -1,
 			srcAddr:       packet.Addr{MAC: addr.MAC, IP: net.IPv4zero},
@@ -93,6 +104,8 @@ func TestHandler_captureDHCP(t *testing.T) {
 			waitTimeAfter: time.Millisecond * 10,
 		},
 	}...)
+
+	// request again - get 192.168.0.130
 	tests = append(tests, NewHostEvents(addr, "mac1", 1, 0)...)
 
 	for _, tt := range tests {
@@ -101,6 +114,19 @@ func TestHandler_captureDHCP(t *testing.T) {
 		})
 
 	}
-	checkOnlineCount(t, tc, 5, 0)
+	checkOnlineCount(t, tc, 3, 2)
 	checkCaptureCount(t, tc, 3, 1)
+
+	t.Run("stage check", func(t *testing.T) {
+		// initial ip must be set to offline and stage normal
+		if host := tc.Engine.Session().FindIP(net.IPv4(192, 168, 0, 1)); host == nil || host.Online != false || host.HuntStage != packet.StageNormal {
+			tc.Engine.PrintTable()
+			t.Fatalf("unexpected host variables %s ", host)
+		}
+		// captured ip must be set to online and stage redirected
+		if host := tc.Engine.Session().FindIP(net.IPv4(192, 168, 0, 131)); host == nil || host.Online != true || host.HuntStage != packet.StageRedirected {
+			tc.Engine.PrintTable()
+			t.Fatalf("unexpected host variables %s ", host)
+		}
+	})
 }
