@@ -1,6 +1,7 @@
 package icmp6
 
 import (
+	"fmt"
 	"net"
 	"time"
 
@@ -84,8 +85,9 @@ func (h *Handler) SendNeighborAdvertisement(srcAddr packet.Addr, dstAddr packet.
 }
 
 // SendNeighbourSolicitation send an ICMP6 NS packet.
-func (h *Handler) SendNeighbourSolicitation(ip net.IP) error {
-	p, _ := ICMP6NeighborSolicitationMarshal(ip, h.session.NICInfo.HostMAC)
+func (h *Handler) SendNeighbourSolicitation(srcAddr packet.Addr, dstAddr packet.Addr, targetIP net.IP) error {
+	p, _ := ICMP6NeighborSolicitationMarshal(targetIP, h.session.NICInfo.HostMAC)
 
-	return h.sendPacket(packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostLLA.IP}, packet.IP6AllNodesAddr, p)
+	fmt.Printf("icmp6 : sending NS src %s dst %s targetIP=%s\n", srcAddr, dstAddr, targetIP)
+	return h.sendPacket(srcAddr, dstAddr, p)
 }

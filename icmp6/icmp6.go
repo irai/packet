@@ -244,6 +244,15 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (*pa
 		if ip6Frame.Src().IsUnspecified() {
 			fmt.Printf("icmp6 : dad probe for target=%s srcip=%s srcmac=%s dstip=%s dstmac=%s\n", frame.TargetAddress(), ip6Frame.Src(), ether.Src(), ip6Frame.Dst(), ether.Dst())
 			host, _ = h.session.FindOrCreateHost(ether.Src(), frame.TargetAddress()) // will lock/unlock mutex
+			break
+		}
+
+		// If a host is looking up for a GUA on the lan, it is likely a valid IP6 GUA for a local host.
+		// So, send our own neighbour solicitation to discover the IP
+		if frame.TargetAddress().IsGlobalUnicast() {
+			srcAddr := packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostLLA.IP}
+			dstAddr := packet.Addr{MAC: ether.Dst(), IP: ip6Frame.Dst()}
+			h.SendNeighbourSolicitation(srcAddr, dstAddr, frame.TargetAddress())
 		}
 
 	case ipv6.ICMPTypeRouterAdvertisement: // 0x86
