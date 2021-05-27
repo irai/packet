@@ -127,7 +127,7 @@ func (p ICMP6NeighborAdvertisement) TargetLLA() net.HardwareAddr {
 	return net.HardwareAddr(p[26 : 26+6])
 }
 
-func ICMP6NeighborAdvertisementMarshal(router bool, solicited bool, override bool, targetAddr net.IP, targetLLA net.HardwareAddr) []byte {
+func ICMP6NeighborAdvertisementMarshal(router bool, solicited bool, override bool, targetAddr packet.Addr) []byte {
 	b := make([]byte, 32)
 	b[0] = byte(ipv6.ICMPTypeNeighborAdvertisement)
 	if router {
@@ -139,10 +139,10 @@ func ICMP6NeighborAdvertisementMarshal(router bool, solicited bool, override boo
 	if override {
 		b[4] |= (1 << 5)
 	}
-	copy(b[8:], targetAddr)
-	b[24] = 2
-	b[25] = 1
-	copy(b[26:], targetLLA)
+	copy(b[8:], targetAddr.IP)   // target ip address
+	b[24] = 2                    // option type 2 - target addr
+	b[25] = 1                    // len = 1 (8 bytes)
+	copy(b[26:], targetAddr.MAC) // target mac addr
 	return b
 }
 
