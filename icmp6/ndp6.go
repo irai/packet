@@ -80,7 +80,8 @@ func (h *Handler) SendRouterSolicitation() error {
 func (h *Handler) SendNeighborAdvertisement(srcAddr packet.Addr, dstAddr packet.Addr) error {
 	p := ICMP6NeighborAdvertisementMarshal(true, false, true, srcAddr.IP, srcAddr.MAC)
 
-	return h.sendPacket(packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostLLA.IP}, dstAddr, p)
+	// return h.sendPacket(packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostLLA.IP}, dstAddr, p)
+	return h.sendPacket(srcAddr, dstAddr, p)
 }
 
 // SendNeighbourSolicitation send an ICMP6 NS packet.
