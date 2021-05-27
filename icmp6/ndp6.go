@@ -77,8 +77,8 @@ func (h *Handler) SendRouterSolicitation() error {
 	return h.sendPacket(packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostLLA.IP}, packet.IP6AllRoutersAddr, mb)
 }
 
-func (h *Handler) SendNeighborAdvertisement(srcAddr packet.Addr, dstAddr packet.Addr) error {
-	p := ICMP6NeighborAdvertisementMarshal(true, false, true, srcAddr.IP, srcAddr.MAC)
+func (h *Handler) SendNeighborAdvertisement(srcAddr packet.Addr, dstAddr packet.Addr, mac net.HardwareAddr) error {
+	p := ICMP6NeighborAdvertisementMarshal(true, false, true, srcAddr.IP, mac)
 
 	// return h.sendPacket(packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostLLA.IP}, dstAddr, p)
 	return h.sendPacket(srcAddr, dstAddr, p)
