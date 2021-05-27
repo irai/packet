@@ -53,8 +53,9 @@ func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
 //   2. optionally, claim the ownership of the IP to force client to change IP or go offline
 //
 func (h *Handler) spoofLoop(dstAddr packet.Addr) {
-	// 4 second re-do seem to be adequate;
-	ticker := time.NewTicker(time.Second * 4).C
+	// Tplink home router send RA every 3 seconds
+	// 1 second re-do seem to be adequate;
+	ticker := time.NewTicker(time.Second * 1).C
 	startTime := time.Now()
 	nTimes := 0
 	fmt.Printf("icmp6 : na attack ip=%s time=%v\n", dstAddr.IP, startTime)
