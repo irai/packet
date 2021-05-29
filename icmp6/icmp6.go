@@ -150,7 +150,7 @@ func (h *Handler) sendPacket(srcAddr packet.Addr, dstAddr packet.Addr, b []byte)
 
 	hopLimit := uint8(64)
 	if dstAddr.IP.IsLinkLocalUnicast() || dstAddr.IP.IsLinkLocalMulticast() {
-		hopLimit = 1
+		hopLimit = 255
 	}
 
 	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IPV6, srcAddr.MAC, dstAddr.MAC)
