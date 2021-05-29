@@ -51,7 +51,7 @@ func (e *MACEntry) String() string {
 	b.WriteString(" ip4offer=")
 	b.WriteString(e.IP4Offer.String())
 	b.WriteString(" hosts=")
-	b.WriteByte((byte(len(e.HostList)))) // truncate to single byte
+	b.WriteString(fmt.Sprintf("%d", len(e.HostList)))
 	b.WriteString(" lastSeen=")
 	b.WriteString(time.Since(e.LastSeen).String())
 	return b.String()
