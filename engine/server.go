@@ -320,6 +320,8 @@ func (h *Handler) FindIP6Router(ip net.IP) icmp6.Router {
 
 // lockAndProcessDHCP4Update updates the DHCP4 fields and transition to/from hunt stage
 //
+// Note: typically called with a new IP host and not the previous IP.
+//       the new host is likely to be offline and stage normal
 func (h *Handler) lockAndProcessDHCP4Update(host *packet.Host, result packet.Result) (notify bool) {
 	if host != nil {
 		host.MACEntry.Row.Lock()
@@ -327,31 +329,10 @@ func (h *Handler) lockAndProcessDHCP4Update(host *packet.Host, result packet.Res
 			host.DHCP4Name = result.Name
 			notify = true
 		}
-		host.HuntStage = packet.StageRedirected
-		// if result.Addr.IP != nil { // Discover IPOffer?
-		// host.MACEntry.IP4Offer = result.Addr.IP
-		// }
-		// capture := host.MACEntry.Captured
-		// addr := packet.Addr{MAC: host.MACEntry.MAC, IP: host.IP}
 		host.MACEntry.Row.Unlock()
-
-		/***
-		// DHCP stage overides all other stages
-		if capture && result.HuntStage == packet.StageRedirected {
-			fmt.Printf("packet: dhcp4 redirected %s\n", addr)
-			if err := h.lockAndStopHunt(host, packet.StageRedirected); err != nil {
-				fmt.Printf("packet: failed to stop hunt %s error=\"%s\"", host, err)
-			}
-			return notify
+		if err := h.lockAndStopHunt(host, packet.StageRedirected); err != nil {
+			fmt.Printf("packet: failed to stop hunt %s error=\"%s\"", host, err)
 		}
-		if capture && result.HuntStage == packet.StageNormal {
-			fmt.Printf("packet: dhcp4 not redirected %s\n", addr)
-			if err := h.lockAndStartHunt(addr); err != nil {
-				fmt.Printf("packet: failed to stop hunt %s error=\"%s\"", host, err)
-			}
-			return notify
-		}
-		****/
 
 		return notify
 	}

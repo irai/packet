@@ -55,11 +55,6 @@ func (h *Handler) lockAndStartHunt(addr packet.Addr) (err error) {
 	}
 
 	host.MACEntry.Row.Lock()
-	if host.HuntStage == packet.StageRedirected {
-		fmt.Printf("packet: host successfully redirected %s\n", host)
-		host.MACEntry.Row.Unlock()
-		return nil
-	}
 	if !host.Online { // host offline, nothing to do
 		host.MACEntry.Row.Unlock()
 		return nil
@@ -68,13 +63,7 @@ func (h *Handler) lockAndStartHunt(addr packet.Addr) (err error) {
 		host.MACEntry.Row.Unlock()
 		return nil
 	}
-
 	host.HuntStage = packet.StageHunt
-	/**
-	host.icmp4Store.packet.HuntStage = packet.StageHunt
-	host.dhcp4Store.packet.HuntStage = packet.StageHunt
-	host.icmp6Store.packet.HuntStage = packet.StageHunt
-	**/
 	if packet.Debug {
 		fmt.Printf("packet: start hunt for %s\n", host)
 	}
@@ -142,14 +131,8 @@ func (h *Handler) Release(mac net.HardwareAddr) error {
 func (h *Handler) lockAndStopHunt(host *packet.Host, stage packet.HuntStage) (err error) {
 	host.MACEntry.Row.Lock()
 	switch host.HuntStage {
-	case packet.StageNormal:
-		host.MACEntry.Row.Unlock()
-		return nil
-	case packet.StageRedirected:
+	case packet.StageNormal, packet.StageRedirected:
 		host.HuntStage = stage
-		if packet.Debug {
-			fmt.Printf("packet: stop redirected hunt for %s\n", host)
-		}
 		host.MACEntry.Row.Unlock()
 		return nil
 	}

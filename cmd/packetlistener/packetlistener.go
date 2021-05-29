@@ -22,10 +22,8 @@ import (
 )
 
 var (
-	srcIP  = flag.String("src", "192.168.0.5", "source IP for originating packet")
-	dstIP  = flag.String("dst", "192.168.0.1", "destination IP for target packet")
-	nic    = flag.String("nic", "eth0", "nic interface to listent to")
-	dhcpip = flag.Bool("nodhcpip", false, "don't change ip to support dhcp")
+	dstIP = flag.String("dst", "192.168.0.1", "destination IP for target packet")
+	nic   = flag.String("nic", "eth0", "nic interface to listent to")
 )
 
 type handlers struct {
@@ -318,9 +316,12 @@ func doICMP6(h *handlers, tokens []string) {
 		if ip = getIP6(tokens, 2); ip == nil {
 			return
 		}
-		if err := h.icmp6.SendNeighbourSolicitation(ip); err != nil {
-			fmt.Printf("error in neigbour solicitation: %s\n", err)
-		}
+		fmt.Println("not implemented")
+		/*
+			if err := h.icmp6.SendNeighbourSolicitation(); err != nil {
+				fmt.Printf("error in neigbour solicitation: %s\n", err)
+			}
+		*/
 	case "ra":
 		if err := h.radvs.SendRA(); err != nil {
 			fmt.Printf("error in router adversitement: %s\n", err)
@@ -475,7 +476,7 @@ func cmd(h *handlers) {
 					}
 					continue
 				}
-				fmt.Printf("ping %v time=%v\n", dstIP, time.Now().Sub(now))
+				fmt.Printf("ping %v time=%v\n", dstIP, time.Since(now))
 			}
 			if packet.IsIP6(ip) {
 				if h.icmp6 == nil {
@@ -489,7 +490,7 @@ func cmd(h *handlers) {
 					fmt.Println("icmp6 echo error ", err)
 					continue
 				}
-				fmt.Printf("ping %v time=%v\n", dstIP, time.Now().Sub(now))
+				fmt.Printf("ping %v time=%v\n", dstIP, time.Since(now))
 			}
 		case "engine":
 			doEngine(h, tokens)
