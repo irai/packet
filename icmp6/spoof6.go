@@ -25,7 +25,10 @@ func (h *Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
 	h.huntList.Add(addr)
 	h.Unlock()
 
-	go h.spoofLoop(addr)
+	// only interested in LLA
+	if addr.IP.IsLinkLocalUnicast() {
+		go h.spoofLoop(addr)
+	}
 
 	return packet.StageHunt, nil
 }
@@ -38,11 +41,7 @@ func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
 	h.Lock()
 	defer h.Unlock()
 
-	if h.huntList.Index(addr.MAC) == -1 {
-		return packet.StageNormal, nil
-	}
 	h.huntList.Del(addr)
-
 	return packet.StageNormal, nil
 }
 

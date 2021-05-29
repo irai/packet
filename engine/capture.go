@@ -9,7 +9,28 @@ import (
 	"github.com/irai/packet"
 )
 
-// Capture places the mac in capture mode
+// Stage transitions identify how the engine behave in various states
+//
+// MACEntry State records if the mac address is being captured or not. Possible values:
+//  - Capture - the mac was set to capture by the user
+//  - Normal  - initial value or it was subsequently set by user
+//
+// Host transitions include:
+//  - online  - the IP address is actively trasnmismitting on the network
+//              transition to online generates a host notification event
+//  - offline - the IP address has stopped transmitting and will be purged in the near future if not
+//              the deadline for an IP to move to offline is set via the OfflineDeadline field in the handler
+//              transition to offline generates a host notification event
+//              the IP will be purged
+//
+// A host may also be in one of the following hunt stages:
+//  - normal      the host is not captured and there is nothing to do
+//  - hunt        the host is activelly being hunted by each plugin.
+//                the arp plugin will spoof the mac address
+//                the icmp6 plugin will spoof the neighbor discovery protocol
+//  - redirected  the host is redirected via dhcp and is activelly sending traffic to netfilter
+
+// Capture set the mac to capture mode
 func (h *Handler) Capture(mac net.HardwareAddr) error {
 	h.session.GlobalLock()
 	macEntry := h.session.MACTable.FindOrCreateNoLock(mac)
@@ -30,13 +51,32 @@ func (h *Handler) Capture(mac net.HardwareAddr) error {
 	}
 	h.session.GlobalUnlock()
 
-	go func() {
-		for _, addr := range list {
-			if err := h.lockAndStartHunt(addr); err != nil {
-				fmt.Printf("packet: error in initial capture ip=%s error=%s\n", addr.IP, err)
-			}
+	for _, addr := range list {
+		if err := h.lockAndStartHunt(addr); err != nil {
+			fmt.Printf("packet: error in initial capture ip=%s error=%s\n", addr.IP, err)
 		}
-	}()
+	}
+	return nil
+}
+
+// Release removes the mac from capture mode
+func (h *Handler) Release(mac net.HardwareAddr) error {
+	h.session.GlobalLock()
+	macEntry, _ := h.session.MACTable.FindMACNoLock(mac)
+	if macEntry == nil {
+		h.session.GlobalUnlock()
+		return nil
+	}
+	list := []*packet.Host{}
+	list = append(list, macEntry.HostList...)
+	macEntry.Captured = false
+	h.session.GlobalUnlock()
+
+	for _, host := range list {
+		if err := h.lockAndStopHunt(host, packet.StageNormal); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -87,37 +127,10 @@ func (h *Handler) lockAndStartHunt(addr packet.Addr) (err error) {
 
 	// IP6 handlers
 	go func() {
-		// IP6 hunts local link layer IP, not Global Unique Address IP
-		if host.MACEntry.IP6LLA == nil {
-			fmt.Printf("packet: invalid LLA - failed to hunt %s host %s\n", addr, host)
-			return
-		}
-		addr.IP = host.MACEntry.IP6LLA
 		if _, err = h.ICMP6Handler.StartHunt(addr); err != nil {
 			fmt.Printf("packet: failed to start icmp6 hunt: %s", err.Error())
 		}
 	}()
-	return nil
-}
-
-// Release removes the mac from capture mode
-func (h *Handler) Release(mac net.HardwareAddr) error {
-	h.session.GlobalLock()
-	macEntry, _ := h.session.MACTable.FindMACNoLock(mac)
-	if macEntry == nil {
-		h.session.GlobalUnlock()
-		return nil
-	}
-	list := []*packet.Host{}
-	list = append(list, macEntry.HostList...)
-	macEntry.Captured = false
-	h.session.GlobalUnlock()
-
-	for _, host := range list {
-		if err := h.lockAndStopHunt(host, packet.StageNormal); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
@@ -130,8 +143,7 @@ func (h *Handler) Release(mac net.HardwareAddr) error {
 //
 func (h *Handler) lockAndStopHunt(host *packet.Host, stage packet.HuntStage) (err error) {
 	host.MACEntry.Row.Lock()
-	switch host.HuntStage {
-	case packet.StageNormal, packet.StageRedirected:
+	if host.HuntStage != packet.StageHunt {
 		host.HuntStage = stage
 		host.MACEntry.Row.Unlock()
 		return nil
@@ -171,34 +183,162 @@ func (h *Handler) lockAndStopHunt(host *packet.Host, stage packet.HuntStage) (er
 	return nil
 }
 
-// lockAndMonitorRoute monitors the default gateway is still pointing to us
-func (h *Handler) lockAndMonitorRoute(now time.Time) (err error) {
-	table := h.session.GetHosts()
-	for _, host := range table {
-		host.MACEntry.Row.RLock()
-		if host.HuntStage == packet.StageRedirected && host.IP.To4() != nil {
-			addr := packet.Addr{MAC: host.MACEntry.MAC, IP: host.IP}
+// lockAndSetOnline set the host online and transition activities
+//
+// This funcion will generate the online event and mark the previous IP4 host as offline if required
+//  Parameters:
+//     notify: force a notification as another parameter (likely name) has changed
+func (h *Handler) lockAndSetOnline(host *packet.Host, notify bool) {
+	now := time.Now()
+	host.MACEntry.Row.RLock()
+
+	if host.Online && !notify { // just another IP packet - nothing to do
+		if now.Sub(host.LastSeen) < time.Second*1 { // update LastSeen every 1 seconds to minimise locking
 			host.MACEntry.Row.RUnlock()
-			_, err := h.ICMP4Handler.CheckAddr(addr) // ping host
-			if errors.Is(err, packet.ErrNotRedirected) {
-				fmt.Printf("packet: ip4 routing NOK %s\n", host)
-				// Call stop hunt first to update stage to normal
-				if err := h.lockAndStopHunt(host, packet.StageNormal); err != nil {
-					fmt.Printf("packet: failed to stop hunt %s error=\"%s\"\n", host, err)
-				}
-				if err := h.lockAndStartHunt(addr); err != nil {
-					fmt.Printf("packet: failed to start hunt %s error=\"%s\"\n", host, err)
-				}
-			} else {
-				if err == nil && packet.Debug {
-					fmt.Printf("packet: ip4 routing OK %s\n", host)
-				}
-			}
-			// lock again before loop
-			host.MACEntry.Row.RLock()
+			return
 		}
-		host.MACEntry.Row.RUnlock()
 	}
 
-	return nil
+	// if transitioning to online, test if we need to make previous IP offline
+	if !host.Online {
+		if host.IP.To4() != nil {
+			if !host.IP.Equal(host.MACEntry.IP4) { // changed IP4
+				fmt.Printf("packet: host changed ip4 mac=%s from=%s to=%s\n", host.MACEntry.MAC, host.MACEntry.IP4, host.IP)
+			}
+		} else {
+			if host.IP.IsGlobalUnicast() && !host.IP.Equal(host.MACEntry.IP6GUA) { // changed IP6 global unique address
+				fmt.Printf("packet: host changed ip6 mac=%s from=%s to=%s\n", host.MACEntry.MAC, host.MACEntry.IP6GUA, host.IP)
+				// offlineIP = host.MACEntry.IP6GUA
+			}
+			if host.IP.IsLinkLocalUnicast() && !host.IP.Equal(host.MACEntry.IP6LLA) { // changed IP6 link local address
+				fmt.Printf("packet: host changed ip6LLA mac=%s from=%s to=%s\n", host.MACEntry.MAC, host.MACEntry.IP6LLA, host.IP)
+				// don't set offline IP as we don't target LLA
+			}
+		}
+	}
+
+	offline := []*packet.Host{}
+	for _, v := range host.MACEntry.HostList {
+		if ip := v.IP.To4(); ip != nil && !ip.Equal(host.IP) {
+			offline = append(offline, v)
+		}
+	}
+	host.MACEntry.Row.RUnlock()
+
+	// set any previous IP4 to offline
+	for _, v := range offline {
+		h.lockAndSetOffline(v)
+	}
+
+	// lock row for update
+	host.MACEntry.Row.Lock()
+	defer host.MACEntry.Row.Unlock()
+
+	// update LastSeen and current mac IP
+	host.MACEntry.LastSeen = now
+	host.LastSeen = now
+	host.MACEntry.UpdateIPNoLock(host.IP)
+
+	// return immediately if host already online and not notification
+	if host.Online && !notify {
+		return
+	}
+
+	// if mac is captured, then start hunting process when IP is online
+	captured := host.MACEntry.Captured
+
+	host.MACEntry.Online = true
+	host.Online = true
+	addr := packet.Addr{IP: host.IP, MAC: host.MACEntry.MAC}
+	notification := Notification{Addr: addr, Online: true, DHCPName: host.DHCP4Name, IsRouter: host.MACEntry.IsRouter}
+
+	if packet.Debug {
+		fmt.Printf("packet: IP is online %s\n", host)
+	}
+
+	// in goroutine - cannot access host fields
+	go func() {
+		if captured {
+			if notification.Addr.IP.To4() != nil {
+				// In IPv4 dhcp dictates if host is redirected
+				// start hunt if not redirected
+				stage, err := h.DHCP4Handler.CheckAddr(addr)
+				if err != nil {
+					fmt.Printf("packet: failed to get dhcp hunt status %s error=%s\n", addr, err)
+				}
+				if stage != packet.StageRedirected {
+					if err := h.lockAndStartHunt(addr); err != nil {
+						fmt.Println("packet: failed to start hunt error", err)
+					}
+				}
+			} else {
+				// IPv6 always start hunt
+				if err := h.lockAndStartHunt(addr); err != nil {
+					fmt.Println("packet: failed to start hunt error", err)
+				}
+			}
+		}
+		if h.nameChannel != nil {
+			h.nameChannel <- notification
+		}
+	}()
+}
+
+func (h *Handler) lockAndSetOffline(host *packet.Host) {
+	host.MACEntry.Row.Lock()
+	if !host.Online {
+		host.MACEntry.Row.Unlock()
+		return
+	}
+	if packet.Debug {
+		fmt.Printf("packet: IP is offline %s\n", host)
+	}
+	host.Online = false
+	notification := Notification{Addr: packet.Addr{MAC: host.MACEntry.MAC, IP: host.IP}, Online: false}
+
+	// Update mac online status if all hosts are offline
+	macOnline := false
+	for _, host := range host.MACEntry.HostList {
+		if host.Online {
+			macOnline = true
+			break
+		}
+	}
+	host.MACEntry.Online = macOnline
+
+	host.MACEntry.Row.Unlock()
+
+	h.lockAndStopHunt(host, packet.StageNormal)
+
+	if h.nameChannel != nil {
+		h.nameChannel <- notification
+	}
+}
+
+// lockAndProcessDHCP4Update updates the DHCP4 fields and transition to/from hunt stage
+//
+// Note: typically called with a new IP host and not the previous IP.
+//       the new host is likely to be offline and stage normal
+func (h *Handler) lockAndProcessDHCP4Update(host *packet.Host, result packet.Result) (notify bool) {
+	if host != nil {
+		host.MACEntry.Row.Lock()
+		if host.DHCP4Name != result.Name {
+			host.DHCP4Name = result.Name
+			notify = true
+		}
+		host.MACEntry.Row.Unlock()
+		if err := h.lockAndStopHunt(host, packet.StageRedirected); err != nil {
+			fmt.Printf("packet: failed to stop hunt %s error=\"%s\"", host, err)
+		}
+
+		return notify
+	}
+
+	// First dhcp discovery has no host entry
+	// Ensure there is a mac entry with the IP offer
+	if result.Addr.IP != nil && h.session.NICInfo.HostIP4.Contains(result.Addr.IP) {
+		entry := h.session.MACTable.FindOrCreateNoLock(result.Addr.MAC)
+		entry.IP4Offer = result.Addr.IP
+	}
+	return false
 }

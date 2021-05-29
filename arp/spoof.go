@@ -27,7 +27,6 @@ func (h *Handler) findHuntByIP(ip net.IP) (packet.Addr, bool) {
 //
 func (h *Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
 	if addr.MAC == nil || addr.IP.To4() == nil {
-		fmt.Println("arp: invalid call to startHuntIP", addr)
 		return packet.StageNoChange, packet.ErrInvalidIP
 	}
 

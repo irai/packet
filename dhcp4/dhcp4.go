@@ -205,9 +205,8 @@ func (h *Handler) printTable() {
 
 // StartHunt will start the process to capture the client MAC
 func (h *Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
-	host := h.session.MustFindIP(addr.IP)
 	if Debug {
-		fmt.Printf("dhcp4: start hunt %s\n", host)
+		fmt.Printf("dhcp4: start hunt %s\n", addr)
 	}
 
 	h.Lock() // local handler lock
