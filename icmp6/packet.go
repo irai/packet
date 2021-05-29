@@ -171,7 +171,7 @@ func ICMP6NeighborSolicitationMarshal(targetAddr net.IP, sourceLLA net.HardwareA
 	copy(b[8:], targetAddr)
 
 	// single option: SourceLLA option
-	b[24] = 1 // SourceLLA option
+	b[24] = 2 // Target option
 	b[25] = 1 // len 8 bytes
 	copy(b[26:], sourceLLA)
 	return b, nil
