@@ -148,6 +148,8 @@ func (h *Handler) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
 func (h *Handler) sendPacket(srcAddr packet.Addr, dstAddr packet.Addr, b []byte) error {
 	ether := packet.Ether(make([]byte, packet.EthMaxSize)) // Ping is called many times concurrently by client
 
+	// All Neighbor Discovery packets must use link-local addresses (FE80::/64)
+	// and a hop limit of 255. Linux discards ND messages with hop limits different than 255.
 	hopLimit := uint8(64)
 	if dstAddr.IP.IsLinkLocalUnicast() || dstAddr.IP.IsLinkLocalMulticast() {
 		hopLimit = 255
