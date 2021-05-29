@@ -77,13 +77,13 @@ func (h *Handler) spoofLoop(dstAddr packet.Addr) {
 				// spoof host
 				//
 				host := packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostLLA.IP}
-				// targetAddr := packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: routerAddr.IP}
-				targetAddr := packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: packet.IP6AllNodesMulticast}
+				targetAddr := packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: routerAddr.IP}
 				fakeRouter := packet.Addr{MAC: host.MAC, IP: routerAddr.IP}
-				if err := h.SendNeighborAdvertisement(fakeRouter, dstAddr, targetAddr); err != nil {
+				dst := packet.Addr{MAC: dstAddr.MAC, IP: packet.IP6AllNodesMulticast}
+				if err := h.SendNeighborAdvertisement(fakeRouter, dst, targetAddr); err != nil {
 					fmt.Println("icmp6 : error sending na ", err)
 				}
-				if err := h.SendNeighbourSolicitation(fakeRouter, dstAddr, dstAddr.IP); err != nil {
+				if err := h.SendNeighbourSolicitation(fakeRouter, dst, dstAddr.IP); err != nil {
 					fmt.Println("icmp6 : error sending na ", err)
 				}
 
