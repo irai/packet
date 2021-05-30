@@ -44,7 +44,11 @@ func (h *Handler) Capture(mac net.HardwareAddr) error {
 	}
 	macEntry.Captured = true
 
-	// Mark all known entries as packet.StageHunt
+	lla := macEntry.IP6LLA
+	if lla == nil {
+		lla = packet.IPv6NewLLA(mac)
+	}
+
 	list := []packet.Addr{}
 	for _, host := range macEntry.HostList {
 		list = append(list, packet.Addr{IP: host.IP, MAC: host.MACEntry.MAC})
@@ -56,6 +60,10 @@ func (h *Handler) Capture(mac net.HardwareAddr) error {
 			fmt.Printf("packet: error in initial capture ip=%s error=%s\n", addr.IP, err)
 		}
 	}
+
+	// ping IPv6 in case the LLA has not registered yet
+	h.ICMP6Handler.CheckAddr(packet.Addr{MAC: mac, IP: lla})
+
 	return nil
 }
 

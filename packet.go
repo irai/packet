@@ -69,14 +69,30 @@ func IPv6SolicitedNode(lla net.IP) Addr {
 	}
 }
 
-// GenerateULA creates a universal local address
+// IPv6NewULA create a universal local address
 // Usefule to create a IPv6 prefix when there is no global IPv6 routing
-func GenerateULA(mac net.HardwareAddr, subnet uint16) (*net.IPNet, error) {
+func IPv6NewULA(mac net.HardwareAddr, subnet uint16) (*net.IPNet, error) {
 	prefix, err := rfc4193.Generate(mac)
 	if err != nil {
 		return nil, err
 	}
 	return prefix.Subnet(subnet).IPNet(), nil
+}
+
+// IPv6NewLLA produce a local link layer address with an EUI-64 value for mac.
+// Reference: https://packetlife.net/blog/2008/aug/4/eui-64-ipv6/.
+func IPv6NewLLA(mac net.HardwareAddr) net.IP {
+	if mac == nil || len(mac) != 6 {
+		fmt.Printf("packet: error in ipv6newlla invalid mac=%s\n", mac)
+		return nil
+	}
+	ip := net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xfe, 0, 0, 0}
+	ip[11] = 0xff
+	ip[12] = 0xfe
+	copy(ip[8:], mac[:3])
+	copy(ip[13:], mac[3:])
+	ip[8] ^= 0x02
+	return CopyIP(ip)
 }
 
 // Ethernet packet types - ETHER_TYPE
