@@ -91,11 +91,13 @@ func (h *Handler) spoofLoop(dstAddr packet.Addr) {
 				}
 				nTimes++
 
+				/**
 				// spoof router
 				targetAddr.IP = dstAddr.IP
 				if err := h.SendNeighborAdvertisement(host, routerAddr, targetAddr); err != nil {
 					fmt.Println("icmp6 : error sending na ", err)
 				}
+				*/
 			}
 		} else {
 			h.Unlock()
