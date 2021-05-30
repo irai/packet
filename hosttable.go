@@ -101,7 +101,7 @@ func (h *Session) printHostTable() {
 	count := 0
 	for _, v := range h.MACTable.Table {
 		for _, host := range v.HostList {
-			fmt.Printf("packet: host entry %s\n", host)
+			fmt.Printf("host %s\n", host)
 			count++
 		}
 	}

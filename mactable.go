@@ -102,7 +102,7 @@ func NewMACTable() MACTable {
 // PrintTable prints the table to stdout
 func (h *Session) printMACTable() {
 	for _, v := range h.MACTable.Table {
-		fmt.Printf("packet: mac entry %s\n", v)
+		fmt.Printf("mac %s\n", v)
 	}
 }
 
