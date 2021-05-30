@@ -200,10 +200,16 @@ func (h *Handler) lockAndSetOnline(host *packet.Host, notify bool) {
 	}
 
 	// if transitioning to online, test if we need to make previous IP offline
+	offline := []*packet.Host{}
 	if !host.Online {
 		if host.IP.To4() != nil {
 			if !host.IP.Equal(host.MACEntry.IP4) { // changed IP4
 				fmt.Printf("packet: host changed ip4 mac=%s from=%s to=%s\n", host.MACEntry.MAC, host.MACEntry.IP4, host.IP)
+			}
+			for _, v := range host.MACEntry.HostList {
+				if ip := v.IP.To4(); ip != nil && !ip.Equal(host.IP) {
+					offline = append(offline, v)
+				}
 			}
 		} else {
 			if host.IP.IsGlobalUnicast() && !host.IP.Equal(host.MACEntry.IP6GUA) { // changed IP6 global unique address
@@ -217,12 +223,6 @@ func (h *Handler) lockAndSetOnline(host *packet.Host, notify bool) {
 		}
 	}
 
-	offline := []*packet.Host{}
-	for _, v := range host.MACEntry.HostList {
-		if ip := v.IP.To4(); ip != nil && !ip.Equal(host.IP) {
-			offline = append(offline, v)
-		}
-	}
 	host.MACEntry.Row.RUnlock()
 
 	// set any previous IP4 to offline
