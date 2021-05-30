@@ -291,7 +291,7 @@ func (h *Handler) FindIP6Router(ip net.IP) icmp6.Router {
 // ListenAndServe listen for raw packets and invoke hooks as required
 func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
-	// start all plugins
+	// start all plugins with delay
 	go h.startPlugins()
 	defer h.stopPlugins()
 

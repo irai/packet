@@ -3,7 +3,6 @@ package icmp4
 import (
 	"bytes"
 	"fmt"
-	"net"
 	"os/exec"
 	"sync"
 	"time"
@@ -145,13 +144,15 @@ func (h *Handler) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
 	return packet.StageHunt, packet.ErrNotRedirected
 }
 
-// Ping execute /usr/bin/ping
-// This is usefuel when engine is not yet running
-func Ping(ip net.IP) (err error) {
+// ExecPing execute /usr/bin/ping
+//
+// This is usefull when engine is not yet running and you need to populate the local arp/ndp cache
+// If passing an IPv6 LLA, then must pass the scope as in "fe80::1%eth0"
+func ExecPing(ip string) (err error) {
 	// -w deadline - wait 1 second
 	// -i frequency - one request each 0,2 seconds
 	// -c count - how many replies to receive before returning (in conjuction with -w)
-	cmd := exec.Command("/usr/bin/ping", ip.String(), "-w", "1", "-i", "0.2", "-c", "1")
+	cmd := exec.Command("/usr/bin/ping", ip, "-w", "1", "-i", "0.2", "-c", "1")
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
