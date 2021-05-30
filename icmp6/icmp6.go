@@ -265,6 +265,14 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (*pa
 			return host, packet.Result{}, packet.ErrParseMessage
 		}
 
+		// wakeup all pending spoof goroutines
+		// we want to immediately spoof hosts after a RA
+		if h.huntList.Len() > 0 {
+			ch := h.closeChan
+			h.closeChan = make(chan bool)
+			close(ch) // this will cause all spoof loop select to wakeup
+		}
+
 		repeat++
 		if repeat%4 != 0 { // skip if too often - home router send RA every 4 sec
 			break

