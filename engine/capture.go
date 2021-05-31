@@ -43,13 +43,10 @@ func (h *Handler) Capture(mac net.HardwareAddr) error {
 		return packet.ErrIsRouter
 	}
 	macEntry.Captured = true
-	lla := macEntry.IP6LLA
 
 	list := []packet.Addr{}
 	for _, host := range macEntry.HostList {
-		if host.IP.To4() != nil { // only after IP 4
-			list = append(list, packet.Addr{IP: host.IP, MAC: host.MACEntry.MAC})
-		}
+		list = append(list, packet.Addr{IP: host.IP, MAC: host.MACEntry.MAC})
 	}
 	h.session.GlobalUnlock()
 
@@ -59,12 +56,11 @@ func (h *Handler) Capture(mac net.HardwareAddr) error {
 		}
 	}
 
-	// Always capture IPv6 LLA
-	// mac lla will be nil if there is no LLA yet and
-	// we will use a multicast address as target
-	ipv6Addr := packet.Addr{MAC: mac, IP: lla}
-	if err := h.lockAndStartHunt(ipv6Addr); err != nil {
-		fmt.Printf("packet: error in initial capture ip=%s error=%s\n", ipv6Addr, err)
+	// Force hunt for host in case we don't have a IPv6 address yet
+	// This call will be ignored if the host was already captured above
+	ipv6Addr := packet.Addr{MAC: mac, IP: nil}
+	if _, err := h.ICMP6Handler.StartHunt(ipv6Addr); err != nil {
+		fmt.Printf("packet: failed to start icmp6 hunt: %s", err.Error())
 	}
 
 	// ping IPv6 all nodes to capture any lagging host
