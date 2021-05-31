@@ -139,9 +139,22 @@ func (h *Handler) MinuteTicker(now time.Time) error {
 
 // HuntStage implements PacketProcessor interface
 func (h *Handler) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
-	if err := h.Ping(packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostLLA.IP}, addr, time.Second*2); err != nil {
+	srcAddr := packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostLLA.IP}
+
+	// Neigbour solicitation almost always result in a response from host if online unless
+	// host is on battery saving mode
+	if addr.IP.IsLinkLocalUnicast() {
+		if err := h.SendNeighbourSolicitation(srcAddr, packet.IPv6SolicitedNode(addr.IP), addr.IP); err != nil {
+			fmt.Printf("icmp6 : error checking address %s error=\"%s\"", addr, err)
+		}
+		return packet.StageNoChange, nil
+	}
+
+	// ping response is optional and could be disabled on a given host
+	if err := h.Ping(srcAddr, addr, time.Second*2); err != nil {
 		return packet.StageNoChange, packet.ErrTimeout
 	}
+
 	return packet.StageNormal, nil
 }
 
