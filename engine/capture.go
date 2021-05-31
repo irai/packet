@@ -56,7 +56,10 @@ func (h *Handler) Capture(mac net.HardwareAddr) error {
 		}
 	}
 
-	// Force hunt for host in case we don't have a IPv6 address yet
+	// There is a chance that we don't have the IPv6 LLA for host as mobile
+	// hosts don't always respond to ping ff02::1.
+	//
+	// Then, force hunt using a multicast IPv6 as the target host
 	// This call will be ignored if the host was already captured above
 	ipv6Addr := packet.Addr{MAC: mac, IP: nil}
 	if _, err := h.ICMP6Handler.StartHunt(ipv6Addr); err != nil {

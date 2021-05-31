@@ -138,7 +138,12 @@ func (h *Session) FindOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host,
 func (h *Session) findOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host, found bool) {
 
 	// using netaddr IP
-	ipNew, _ := netaddr.FromStdIP(ip)
+	ipNew, ok := netaddr.FromStdIP(ip)
+	// TODO: remove this panic after July 2021
+	//       trying to find a nil IP bug found in may 21 in test env
+	if !ok {
+		panic(fmt.Sprintf("fatal error invalid ip in findOrCreateHost ip=%s", ip))
+	}
 	now := time.Now()
 	if host, ok := h.HostTable.Table[ipNew]; ok {
 		host.MACEntry.Row.Lock() // lock the row
