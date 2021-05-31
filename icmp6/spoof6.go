@@ -22,10 +22,7 @@ func (h *Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
 	h.huntList.Add(addr)
 	h.Unlock()
 
-	// only interested in LLA
-	if addr.IP.IsLinkLocalUnicast() {
-		go h.spoofLoop(addr)
-	}
+	go h.spoofLoop(addr)
 
 	return packet.StageHunt, nil
 }
@@ -51,13 +48,16 @@ func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
 func (h *Handler) spoofLoop(dstAddr packet.Addr) {
 	startTime := time.Now()
 	nTimes := 0
-	fmt.Printf("icmp6 : na attack ip=%s time=%v\n", dstAddr.IP, startTime)
+	if dstAddr.IP == nil {
+		dstAddr.IP = packet.IP6AllNodesMulticast
+	}
+	fmt.Printf("icmp6 : na attack %s time=%v\n", dstAddr, startTime)
 	for {
 		h.Lock()
 
 		if h.huntList.Index(dstAddr.MAC) == -1 || h.closed {
 			h.Unlock()
-			fmt.Printf("icmp6 : attack end ip=%s repeat=%v duration=%v\n", dstAddr.IP, nTimes, time.Since(startTime))
+			fmt.Printf("icmp6 : attack end %s repeat=%v duration=%v\n", dstAddr, nTimes, time.Since(startTime))
 			return
 		}
 
@@ -71,11 +71,10 @@ func (h *Handler) spoofLoop(dstAddr packet.Addr) {
 			h.Unlock()
 
 			for _, routerAddr := range list {
-
-				// spoof host
-				host := packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostLLA.IP}
+				hostAddr := packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostLLA.IP}
 				targetAddr := packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: routerAddr.IP}
-				fakeRouter := packet.Addr{MAC: host.MAC, IP: routerAddr.IP}
+				fakeRouter := packet.Addr{MAC: hostAddr.MAC, IP: routerAddr.IP}
+
 				if err := h.SendNeighborAdvertisement(fakeRouter, dstAddr, targetAddr); err != nil {
 					fmt.Println("icmp6 : error sending na ", err)
 				}
@@ -87,15 +86,17 @@ func (h *Handler) spoofLoop(dstAddr packet.Addr) {
 				*/
 
 				if nTimes%16 == 0 {
-					fmt.Printf("icmp6 : attack src %s dst %s target %s repeat=%v duration=%v\n", host, dstAddr, targetAddr, nTimes, time.Since(startTime))
+					fmt.Printf("icmp6 : attack src %s dst %s target %s repeat=%v duration=%v\n", hostAddr, dstAddr, targetAddr, nTimes, time.Since(startTime))
 				}
 				nTimes++
 
 				/**
-				// spoof router
-				targetAddr.IP = dstAddr.IP
-				if err := h.SendNeighborAdvertisement(host, routerAddr, targetAddr); err != nil {
-					fmt.Println("icmp6 : error sending na ", err)
+					// spoof router
+					if !dstAddr.IP.Equal(packet.IP6AllNodesMulticast) { // dont spoof router if we don't know the IPv6
+					targetAddr.IP = dstAddr.IP
+					if err := h.SendNeighborAdvertisement(host, routerAddr, targetAddr); err != nil {
+						fmt.Println("icmp6 : error sending na ", err)
+					}
 				}
 				*/
 			}
