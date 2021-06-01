@@ -114,7 +114,8 @@ func (h *Handler) spoofLoop(dstAddr packet.Addr) {
 		select {
 		case <-h.closeChan:
 			// Tplink home router send RA every 3 seconds
-			// Note: when processing a RA message, we close the channel to wakeup all go routines
+			// Note: when processing a RA message, we close the channel to wakeup all go routines and
+			//       closeChan will be set to a new channel.
 
 		case <-time.After(time.Millisecond*2000 + time.Duration(rand.Int31n(800))):
 			// 2 second spoof seem to be adequate to keep cache poisoned
