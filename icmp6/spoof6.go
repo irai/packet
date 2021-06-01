@@ -2,6 +2,7 @@ package icmp6
 
 import (
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/irai/packet"
@@ -45,7 +46,9 @@ func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
 //   1. spoof the client arp table to send router packets to us
 //   2. optionally, claim the ownership of the IP to force client to change IP or go offline
 //
+
 func (h *Handler) spoofLoop(dstAddr packet.Addr) {
+	rand.Seed(time.Now().UnixNano())
 	startTime := time.Now()
 	nTimes := 0
 	if dstAddr.IP == nil {
@@ -113,7 +116,7 @@ func (h *Handler) spoofLoop(dstAddr packet.Addr) {
 			// Tplink home router send RA every 3 seconds
 			// Note: when processing a RA message, we close the channel to wakeup all go routines
 
-		case <-time.After(time.Second * 2):
+		case <-time.After(time.Millisecond*2000 + time.Duration(rand.Int31n(800))):
 			// 2 second spoof seem to be adequate to keep cache poisoned
 		}
 	}
