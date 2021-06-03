@@ -210,6 +210,8 @@ func (h *Handler) setupConn() (conn net.PacketConn, err error) {
 		log.Fatal("bpf assemble error", err)
 	}
 
+	bpf = nil // remove bpf test - June 2021
+
 	// see: https://www.man7.org/linux/man-pages/man7/packet.7.html
 	conn, err = NewServerConn(h.session.NICInfo.IFI, syscall.ETH_P_ALL, SocketConfig{Filter: bpf})
 	if err != nil {
@@ -420,7 +422,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			l4Proto = syscall.ETH_P_ARP // treat arp as l4 proto; similar to IP6 ICMP NDP
 
 		default:
-			fmt.Printf("packet: error invalid ethernet type=%x\n", ether.EtherType())
+			fmt.Printf("packet: error invalid ethernet frame %s\n", ether)
 			continue
 		}
 		d1 = time.Since(startTime)
