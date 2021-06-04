@@ -79,7 +79,7 @@ func (h *Handler) SendRouterSolicitation() error {
 }
 
 func (h *Handler) SendNeighborAdvertisement(srcAddr packet.Addr, dstAddr packet.Addr, targetAddr packet.Addr) error {
-	p := ICMP6NeighborAdvertisementMarshal(true, false, true, targetAddr)
+	p := ICMP6NeighborAdvertisementMarshal(false, false, true, targetAddr)
 
 	return h.sendPacket(srcAddr, dstAddr, p)
 }
