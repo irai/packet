@@ -47,6 +47,7 @@ type Handler struct {
 	closeChan               chan bool     // close goroutines channel
 	nameChannel             chan Notification
 	dnsChannel              chan packet.DNSEntry
+	forceScan               bool
 }
 
 // New creates an ICMPv6 handler with default values
@@ -420,6 +421,21 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 		case syscall.ETH_P_ARP: // 0x806
 			l4Proto = syscall.ETH_P_ARP // treat arp as l4 proto; similar to IP6 ICMP NDP
+
+		case 6:
+			// TODO: identify this protocol
+			// wifi mac notification -
+			// if mac is not online, request full network scan at next interval; we have a new host on the network
+			// To see these:
+			//    sudo tcpdump -vv -x not ip6 and not ip and not arp
+			//    then switch a mobile phone to airplane mode to force a network reconnect
+			if macEntry := h.session.FindMACEntry(ether.Src()); macEntry != nil && !macEntry.Online {
+				if packet.Debug {
+					fmt.Printf("packet: rcvd onlink event when offline mac=%s\n", ether.Src())
+				}
+				h.forceScan = true
+			}
+			continue
 
 		default:
 			fmt.Printf("packet: error invalid ethernet frame %s\n", ether)

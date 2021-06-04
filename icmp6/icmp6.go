@@ -27,12 +27,14 @@ type Event struct {
 
 type ICMP6Handler interface {
 	FindRouter(net.IP) Router
+	PingAll() error
 	packet.PacketProcessor
 }
 type ICMP6NOOP struct{}
 
-func (p ICMP6NOOP) Start() error { return nil }
-func (p ICMP6NOOP) Stop() error  { return nil }
+func (p ICMP6NOOP) Start() error   { return nil }
+func (p ICMP6NOOP) Stop() error    { return nil }
+func (p ICMP6NOOP) PingAll() error { return nil }
 func (p ICMP6NOOP) ProcessPacket(*packet.Host, []byte, []byte) (*packet.Host, packet.Result, error) {
 	return nil, packet.Result{}, nil
 }
@@ -130,6 +132,14 @@ func (h *Handler) Start() error {
 // Stop implements PacketProcessor interface
 func (h *Handler) Stop() error {
 	return nil
+}
+
+func (h *Handler) PingAll() error {
+	if h.session.NICInfo.HostLLA.IP == nil {
+		return packet.ErrInvalidIP6LLA
+	}
+	fmt.Println("icmp6 : ping all")
+	return h.SendEchoRequest(packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostLLA.IP}, packet.IP6AllNodesAddr, 99, 1)
 }
 
 // MinuteTicker implements packet processor interface

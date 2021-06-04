@@ -53,6 +53,12 @@ func (h *Handler) minuteChecker(now time.Time) {
 
 	// internal checks
 	h.lockAndMonitorRoute(now)
+
+	// received a new "onlink" event
+	if h.forceScan {
+		h.forceScan = false
+		h.ICMP6Handler.PingAll()
+	}
 	h.purge(now, h.ProbeInterval, h.OfflineDeadline, h.PurgeDeadline)
 
 }
