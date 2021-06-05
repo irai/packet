@@ -340,7 +340,11 @@ func (h *Handler) lockAndProcessDHCP4Update(host *packet.Host, result packet.Res
 			notify = true
 		}
 		host.MACEntry.Row.Unlock()
-		if err := h.lockAndStopHunt(host, packet.StageRedirected); err != nil {
+		huntStage := result.HuntStage
+		if huntStage != packet.StageNoChange {
+			huntStage = host.HuntStage // keep host stage
+		}
+		if err := h.lockAndStopHunt(host, huntStage); err != nil {
 			fmt.Printf("packet: failed to stop hunt %s error=\"%s\"", host, err)
 		}
 

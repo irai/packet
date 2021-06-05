@@ -136,6 +136,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 			result.IsRouter = true // hack to mark result as a new host
 			result.Addr = packet.Addr{MAC: packet.CopyMAC(p.CHAddr()), IP: packet.CopyIP(reqIP)}
 			result.Name = name
+			result.HuntStage = packet.StageNoChange
 
 			if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && captured) {
 				// The client is attempting to confirm an offer with another server
@@ -190,6 +191,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 				result.IsRouter = true // hack to mark result as a new host
 				result.Addr = packet.Addr{MAC: packet.CopyMAC(p.CHAddr()), IP: packet.CopyIP(reqIP)}
 				result.Name = name
+				result.HuntStage = packet.StageNoChange
 
 				// always NACK so next attempt may trigger discover
 				// also, it must return nack if moving form net2 to net1
