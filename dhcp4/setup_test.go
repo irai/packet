@@ -230,25 +230,25 @@ func checkLeaseTable(t *testing.T, tc *testContext, allocatedCount int, discover
 	}
 }
 
-func sendTestDHCP4Packet(t *testing.T, tc *testContext, srcAddr packet.Addr, dstAddr packet.Addr, p DHCP4) (err error) {
+func sendTestDHCP4Packet(t *testing.T, tc *testContext, srcAddr packet.Addr, dstAddr packet.Addr, p DHCP4) (result packet.Result, err error) {
 	ether := packet.Ether(make([]byte, packet.EthMaxSize))
 	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IP, srcAddr.MAC, dstAddr.MAC)
 	ip4 := packet.IP4MarshalBinary(ether.Payload(), 50, srcAddr.IP, dstAddr.IP)
 	udp := packet.UDPMarshalBinary(ip4.Payload(), srcAddr.Port, dstAddr.Port)
 	udp, err = udp.AppendPayload(p)
 	if err != nil {
-		return err
+		return result, err
 	}
 	ip4 = ip4.SetPayload(udp, syscall.IPPROTO_UDP)
 
 	if ether, err = ether.SetPayload(ip4); err != nil {
-		return err
+		return result, err
 	}
 
 	udp, _ = udp.AppendPayload(p)
-	_, _, err = tc.h.ProcessPacket(nil, ether, udp.Payload())
+	_, result, err = tc.h.ProcessPacket(nil, ether, udp.Payload())
 	if err != nil {
 		t.Fatalf("Test_Requests:%s error = %v", "newDHCPHOst", err)
 	}
-	return nil
+	return result, nil
 }

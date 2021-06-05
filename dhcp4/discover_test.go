@@ -51,7 +51,7 @@ func TestDHCPHandler_handleDiscover(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := sendTestDHCP4Packet(t, tc, tt.srcAddr, tt.dstAddr, tt.packet); err != nil {
+			if _, err := sendTestDHCP4Packet(t, tc, tt.srcAddr, tt.dstAddr, tt.packet); err != nil {
 				t.Errorf("DHCPHandler.handleDiscover() error sending packet error=%s", err)
 				return
 			}
@@ -101,7 +101,7 @@ func TestDHCPHandler_exhaust(t *testing.T) {
 				mac := mac1
 				mac[5] = byte(i)
 				tt.packet = RequestPacket(Discover, mac, net.IPv4zero, []byte{0x01}, false, append(options, oDNS))
-				if err := sendTestDHCP4Packet(t, tc, tt.srcAddr, tt.dstAddr, tt.packet); err != nil {
+				if _, err := sendTestDHCP4Packet(t, tc, tt.srcAddr, tt.dstAddr, tt.packet); err != nil {
 					t.Errorf("DHCPHandler.handleDiscover() error sending packet error=%s", err)
 					return
 				}

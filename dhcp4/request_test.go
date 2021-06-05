@@ -78,7 +78,7 @@ func Test_requestExhaust(t *testing.T) {
 	srcAddr := packet.Addr{MAC: mac5, IP: net.IPv4zero, Port: packet.DHCP4ClientPort}
 	dstAddr := packet.Addr{MAC: arp.EthernetBroadcast, IP: net.IPv4zero, Port: packet.DHCP4ServerPort}
 	dhcpFrame := newDHCP4DiscoverFrame(srcAddr, "onelastname", xid)
-	if err := sendTestDHCP4Packet(t, tc, srcAddr, dstAddr, dhcpFrame); err != nil {
+	if _, err := sendTestDHCP4Packet(t, tc, srcAddr, dstAddr, dhcpFrame); err != nil {
 		t.Errorf("DHCPHandler.handleDiscover() error sending packet error=%s", err)
 		return
 	}
@@ -104,17 +104,24 @@ func Test_requestAnotherHost(t *testing.T) {
 
 	// first discover packet
 	dhcpFrame := newDHCP4DiscoverFrame(srcAddr, srcAddr.MAC.String(), xid)
-	if err := sendTestDHCP4Packet(t, tc, srcAddr, dstAddr, dhcpFrame); err != nil {
-		t.Errorf("DHCPHandler.handleDiscover() error sending packet error=%s", err)
+	if _, err := sendTestDHCP4Packet(t, tc, srcAddr, dstAddr, dhcpFrame); err != nil {
+		t.Errorf("Test_requestAnotherHost() error sending packet error=%s", err)
 		return
 	}
 	time.Sleep(time.Millisecond * 10)
 	checkLeaseTable(t, tc, 0, 1, 0)
 
 	// request for another host
-	dhcpFrame = newDHCP4RequestFrame(srcAddr, srcAddr.MAC.String(), routerIP4, ip3, xid)
-	if err := sendTestDHCP4Packet(t, tc, srcAddr, dstAddr, dhcpFrame); err != nil {
-		t.Fatalf("DHCPHandler.handleDiscover() error sending packet error=%s", err)
+	result := packet.Result{}
+	var err error
+	dhcpFrame = newDHCP4RequestFrame(srcAddr, "host name", routerIP4, ip3, xid)
+	if result, err = sendTestDHCP4Packet(t, tc, srcAddr, dstAddr, dhcpFrame); err != nil {
+		t.Fatalf("Test_requestAnotherHost() error sending packet error=%s", err)
+	}
+	if !result.IsRouter || !result.Update ||
+		result.Addr.IP == nil || result.Addr.MAC == nil ||
+		result.Name != "host name" {
+		t.Fatalf("Test_requestAnotherHost() invalid update=%v isrouter=%v result=%+v ", result.Update, result.IsRouter, result)
 	}
 	time.Sleep(time.Millisecond * 10)
 	checkLeaseTable(t, tc, 0, 1, 0)
@@ -126,8 +133,8 @@ func Test_requestAnotherHost(t *testing.T) {
 
 	// request for another host
 	dhcpFrame = newDHCP4RequestFrame(srcAddr, srcAddr.MAC.String(), routerIP4, ip4, xid)
-	if err := sendTestDHCP4Packet(t, tc, srcAddr, dstAddr, dhcpFrame); err != nil {
-		t.Fatalf("DHCPHandler.handleDiscover() error sending packet error=%s", err)
+	if _, err := sendTestDHCP4Packet(t, tc, srcAddr, dstAddr, dhcpFrame); err != nil {
+		t.Fatalf("Test_requestAnotherHost() error sending packet error=%s", err)
 	}
 	time.Sleep(time.Millisecond * 10)
 	checkLeaseTable(t, tc, 0, 0, 1)
@@ -141,7 +148,7 @@ func newDHCPHost(t *testing.T, tc *testContext, mac net.HardwareAddr) []byte {
 
 	dhcpFrame := newDHCP4DiscoverFrame(srcAddr, srcAddr.MAC.String(), xid)
 	tc.IPOffer = nil
-	if err := sendTestDHCP4Packet(t, tc, srcAddr, dstAddr, dhcpFrame); err != nil {
+	if _, err := sendTestDHCP4Packet(t, tc, srcAddr, dstAddr, dhcpFrame); err != nil {
 		t.Fatalf("DHCPHandler.handleDiscover() error sending packet error=%s", err)
 	}
 	time.Sleep(time.Millisecond * 10)
@@ -150,7 +157,7 @@ func newDHCPHost(t *testing.T, tc *testContext, mac net.HardwareAddr) []byte {
 	}
 
 	dhcpFrame = newDHCP4RequestFrame(srcAddr, srcAddr.MAC.String(), hostIP4, tc.IPOffer, xid)
-	if err := sendTestDHCP4Packet(t, tc, srcAddr, dstAddr, dhcpFrame); err != nil {
+	if _, err := sendTestDHCP4Packet(t, tc, srcAddr, dstAddr, dhcpFrame); err != nil {
 		t.Fatalf("DHCPHandler.handleDiscover() error sending packet error=%s", err)
 	}
 	time.Sleep(time.Millisecond * 10)

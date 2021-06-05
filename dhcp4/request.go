@@ -89,7 +89,6 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 
 	// renewal packet? discover packet not sent
 	case reqIP.Equal(net.IPv4zero) && !senderIP.Equal(net.IPv4bcast):
-		// p.Broadcast():
 		reqIP = p.CIAddr()
 		operation = renewing
 
@@ -123,7 +122,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 	// Main switch
 	switch operation {
 	case selecting:
-		// selecting from another server
+		// selecting for another server
 		if !serverIP.Equal(subnet.DHCPServer) {
 			// Keep state discover in case we get a second request
 			// Free all other states - the host is trying to get an IP from the other server
@@ -131,6 +130,13 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 				lease.State = StateFree
 				lease.Addr.IP = nil
 			}
+
+			// almost always a new host IP
+			result.Update = true
+			result.IsRouter = true // hack to mark result as a new host
+			result.Addr = packet.Addr{MAC: packet.CopyMAC(p.CHAddr()), IP: packet.CopyIP(reqIP)}
+			result.Name = name
+
 			if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && captured) {
 				// The client is attempting to confirm an offer with another server
 				// Send a nack to client
@@ -146,7 +152,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 			(lease.State == StateDiscover && (!bytes.Equal(lease.XID, p.XId()) || !lease.IPOffer.Equal(reqIP))) || // invalid discover request
 			(lease.State == StateAllocated && !lease.Addr.IP.Equal(reqIP)) { // invalid request - iphone send duplicate select packets - let it pass
 			fmt.Printf("dhcp4 : request NACK - select invalid parameters %s lxid=%v leaseIP=%s\n", fields, lease.XID, lease.Addr.IP)
-			return result, ReplyPacket(p, NAK, subnet.DHCPServer, net.IPv4zero, 0, nil)
+			return packet.Result{}, ReplyPacket(p, NAK, subnet.DHCPServer, net.IPv4zero, 0, nil)
 		}
 		fmt.Printf("dhcp4 : request ACK - select %s\n", fields)
 
@@ -158,7 +164,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 			lease.DHCPExpiry.Before(time.Now()) {
 			fmt.Printf("dhcp4 : request NACK - renew invalid or expired lease %s gw=%s\n", fields, subnet.DefaultGW)
 
-			return result, ReplyPacket(p, NAK, subnet.DHCPServer, net.IPv4zero, 0, nil)
+			return packet.Result{}, ReplyPacket(p, NAK, subnet.DHCPServer, net.IPv4zero, 0, nil)
 		}
 
 		fmt.Printf("dhcp4 : request ACK - renewing %s\n", fields)
@@ -179,11 +185,16 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 				// Do not use RELEASE as the server can still reuse the parameters and does not issue a NAK later
 				go h.forceDecline(dupBytes(clientID), h.net1.DefaultGW, dupMAC(p.CHAddr()), dupIP(reqIP), dupBytes(p.XId()))
 
+				// almost always a new host IP
+				result.Update = true
+				result.IsRouter = true // hack to mark result as a new host
+				result.Addr = packet.Addr{MAC: packet.CopyMAC(p.CHAddr()), IP: packet.CopyIP(reqIP)}
+				result.Name = name
+
 				// always NACK so next attempt may trigger discover
 				// also, it must return nack if moving form net2 to net1
 				// in the iPhone case, this causes the iPhone to retry discover
 				return result, ReplyPacket(p, NAK, h.net1.DefaultGW, net.IPv4zero, 0, nil)
-
 			}
 
 		}
@@ -202,7 +213,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 
 			// We have the lease but the IP or MAC don't match
 			// Send NACK
-			return result, ReplyPacket(p, NAK, subnet.DHCPServer, net.IPv4zero, 0, nil)
+			return packet.Result{}, ReplyPacket(p, NAK, subnet.DHCPServer, net.IPv4zero, 0, nil)
 		}
 
 		if operation == rebooting {
@@ -214,7 +225,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 	default:
 		// log.WithFields(log.Fields{"clientid": clientID, "mac": lease.Addr.MAC.String(), "ip": reqIP}).Error("dhcp4: request - ignore invalid state")
 		fmt.Printf("dhcp4 : error in request - ignore invalid operation %s operation=%v\n", fields, operation)
-		return result, nil
+		return packet.Result{}, nil
 	}
 
 	// successful request

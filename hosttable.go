@@ -88,7 +88,7 @@ type Result struct {
 }
 
 func (e Result) String() string {
-	return fmt.Sprintf("dhcp4stage=%s name=%s ipoffer=%s", e.HuntStage, e.Name, e.Addr)
+	return fmt.Sprintf("huntstage=%s name=%s %s", e.HuntStage, e.Name, e.Addr)
 }
 
 // newHostTable returns a HostTable Session
