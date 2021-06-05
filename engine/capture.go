@@ -341,7 +341,7 @@ func (h *Handler) lockAndProcessDHCP4Update(host *packet.Host, result packet.Res
 		}
 		host.MACEntry.Row.Unlock()
 		huntStage := result.HuntStage
-		if huntStage != packet.StageNoChange {
+		if huntStage == packet.StageNoChange {
 			huntStage = host.HuntStage // keep host stage
 		}
 		if err := h.lockAndStopHunt(host, huntStage); err != nil {
