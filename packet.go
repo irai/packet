@@ -117,6 +117,7 @@ var (
 	ErrParseMessage  = errors.New("failed to parse message")
 	ErrInvalidConn   = errors.New("invalid connection")
 	ErrInvalidIP     = errors.New("invalid ip")
+	ErrInvalidMAC    = errors.New("invalid mac")
 	ErrInvalidIP6LLA = errors.New("invalid ip6 lla")
 	ErrNotFound      = errors.New("not found")
 	ErrTimeout       = errors.New("timeout")
