@@ -120,6 +120,7 @@ func Test_requestAnotherHost(t *testing.T) {
 	}
 	if !result.IsRouter || !result.Update ||
 		result.Addr.IP == nil || result.Addr.MAC == nil ||
+		result.HuntStage != packet.StageNoChange ||
 		result.Name != "host name" {
 		t.Fatalf("Test_requestAnotherHost() invalid update=%v isrouter=%v result=%+v ", result.Update, result.IsRouter, result)
 	}
@@ -149,7 +150,7 @@ func newDHCPHost(t *testing.T, tc *testContext, mac net.HardwareAddr) []byte {
 	dhcpFrame := newDHCP4DiscoverFrame(srcAddr, srcAddr.MAC.String(), xid)
 	tc.IPOffer = nil
 	if _, err := sendTestDHCP4Packet(t, tc, srcAddr, dstAddr, dhcpFrame); err != nil {
-		t.Fatalf("DHCPHandler.handleDiscover() error sending packet error=%s", err)
+		t.Fatalf("newDHCPHost() error sending packet error=%s", err)
 	}
 	time.Sleep(time.Millisecond * 10)
 	if tc.IPOffer == nil {
@@ -157,8 +158,20 @@ func newDHCPHost(t *testing.T, tc *testContext, mac net.HardwareAddr) []byte {
 	}
 
 	dhcpFrame = newDHCP4RequestFrame(srcAddr, srcAddr.MAC.String(), hostIP4, tc.IPOffer, xid)
-	if _, err := sendTestDHCP4Packet(t, tc, srcAddr, dstAddr, dhcpFrame); err != nil {
-		t.Fatalf("DHCPHandler.handleDiscover() error sending packet error=%s", err)
+	result := packet.Result{}
+	var err error
+	if result, err = sendTestDHCP4Packet(t, tc, srcAddr, dstAddr, dhcpFrame); err != nil {
+		t.Fatalf("newDHCPHost() error sending packet error=%s", err)
+	}
+	wantHuntStage := packet.StageNormal
+	if tc.h.session.IsCaptured(mac) {
+		wantHuntStage = packet.StageRedirected
+	}
+	if !result.IsRouter || !result.Update ||
+		result.Addr.IP == nil || result.Addr.MAC == nil ||
+		result.HuntStage != wantHuntStage ||
+		result.Name != srcAddr.MAC.String() {
+		t.Fatalf("newDHCPHost() invalid update=%v isrouter=%v result=%+v ", result.Update, result.IsRouter, result)
 	}
 	time.Sleep(time.Millisecond * 10)
 
