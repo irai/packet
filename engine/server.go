@@ -492,8 +492,9 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				fmt.Printf("packet: udp %s\n", udp)
 			}
 
+			udpSrcPort := udp.SrcPort()
 			switch {
-			case udp.DstPort() == packet.DHCP4ServerPort || udp.DstPort() == packet.DHCP4ClientPort: // DHCP4 packet?
+			case udpSrcPort == packet.DHCP4ServerPort || udp.DstPort() == packet.DHCP4ClientPort: // DHCP4 packet?
 				// if udp.DstPort() == packet.DHCP4ServerPort || udp.DstPort() == packet.DHCP4ClientPort {
 				if _, result, err = h.DHCP4Handler.ProcessPacket(host, ether, udp.Payload()); err != nil {
 					fmt.Printf("packet: error processing dhcp4: %s\n", err)
@@ -506,7 +507,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 						notify = true
 					}
 				}
-			case udp.SrcPort() == 53: // DNS response
+			case udpSrcPort == 53: // DNS response
 				// TODO: move this to background goroutine
 				dnsEntry, err := h.session.ProcessDNS(host, ether, udp.Payload())
 				if err != nil {
@@ -517,11 +518,19 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 					h.dnsChannel <- dnsEntry
 				}
 
-			case udp.DstPort() == 53: // DNS request
+			case udpSrcPort == 53: // DNS request
 			// do nothing
 
-			case udp.SrcPort() == 5353 || udp.DstPort() == 5353:
+			case udpSrcPort == 5353 || udp.DstPort() == 5353:
 				// Multicast DNS
+				// do nothing
+
+			case udpSrcPort == 137:
+				// NBNS
+				// do nothing
+
+			case udpSrcPort == 123:
+				// Network time synchonization protocol
 				// do nothing
 
 			default:
