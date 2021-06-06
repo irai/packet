@@ -516,6 +516,8 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				if dnsEntry.Name != "" && h.dnsChannel != nil {
 					h.dnsChannel <- dnsEntry
 				}
+			default:
+				fmt.Printf("packet: unexpected udp %s\n", udp)
 			}
 
 		case syscall.ETH_P_ARP: // skip ARP - 0x0806

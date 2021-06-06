@@ -220,7 +220,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (*pa
 	icmp6Frame := ICMP6(header)
 
 	if !icmp6Frame.IsValid() {
-		fmt.Printf("icmp6 : error invalid icmp len=%d msg=\"% x\" \n", len(header), header)
+		fmt.Printf("icmp6 : error invalid icmp from %s len=%d msg=\"% x\" \n", ip6Frame, len(header), header)
 		return host, packet.Result{}, errParseMessage
 	}
 
