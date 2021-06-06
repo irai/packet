@@ -246,8 +246,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 				fmt.Printf("icmp6 : neighbor advertisement diverging IP frameIP=%s %s\n", ip6Frame.Src(), frame)
 			}
 			result.Update = true
-			result.Addr = packet.Addr{MAC: packet.CopyMAC(ether.Src()), IP: packet.CopyIP(frame.TargetAddress())}
-			// host, _ = h.session.FindOrCreateHost(ether.Src(), frame.TargetAddress()) // will lock/unlock mutex
+			result.FrameAddr = packet.Addr{MAC: ether.Src(), IP: frame.TargetAddress()} // ok to pass frame addr
 		}
 		return result, nil
 
@@ -272,10 +271,8 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 		if ip6Frame.Src().IsUnspecified() {
 			fmt.Printf("icmp6 : dad probe for target=%s srcip=%s srcmac=%s dstip=%s dstmac=%s\n", frame.TargetAddress(), ip6Frame.Src(), ether.Src(), ip6Frame.Dst(), ether.Dst())
 			result.Update = true
-			result.Addr = packet.Addr{MAC: packet.CopyMAC(ether.Src()), IP: packet.CopyIP(frame.TargetAddress())}
+			result.FrameAddr = packet.Addr{MAC: ether.Src(), IP: frame.TargetAddress()} // ok to pass frame addr
 			return result, nil
-			// host, _ = h.session.FindOrCreateHost(ether.Src(), frame.TargetAddress()) // will lock/unlock mutex
-			// break
 		}
 
 		// If a host is looking up for a GUA on the lan, it is likely a valid IP6 GUA for a local host.

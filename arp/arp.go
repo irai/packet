@@ -265,10 +265,8 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (pac
 		}
 	}
 
-	// If new client, then create a MACEntry in table
 	if host == nil && h.session.NICInfo.HostIP4.Contains(frame.SrcIP()) {
-		return packet.Result{Update: true, Addr: packet.Addr{MAC: packet.CopyMAC(frame.SrcMAC()), IP: packet.CopyIP(frame.SrcIP())}}, nil
-		// host, _ = h.session.FindOrCreateHost(frame.SrcMAC(), frame.SrcIP())
+		return packet.Result{Update: true, FrameAddr: packet.Addr{MAC: frame.SrcMAC(), IP: frame.SrcIP()}}, nil
 	}
 	return packet.Result{}, nil
 }

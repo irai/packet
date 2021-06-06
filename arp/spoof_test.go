@@ -54,7 +54,7 @@ func Test_Probe_Reject(t *testing.T) {
 			}
 			var host *packet.Host
 			if result.Update {
-				host, _ = tc.session.FindOrCreateHost(result.Addr.MAC, result.Addr.IP)
+				host, _ = tc.session.FindOrCreateHost(result.FrameAddr)
 			}
 			time.Sleep(time.Millisecond * 50) // there is a delay of 10 msec for each packet in arp hunt - need 30msec to get all three
 

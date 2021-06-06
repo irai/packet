@@ -111,13 +111,13 @@ func (config Config) NewEngine(nic string) (*Handler, error) {
 	h.DHCP4Handler = packet.PacketNOOP{}
 
 	// create the host entry manually because we don't process host packets
-	host, _ := h.session.FindOrCreateHost(h.session.NICInfo.HostMAC, h.session.NICInfo.HostIP4.IP)
+	host, _ := h.session.FindOrCreateHost(packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostIP4.IP})
 	host.LastSeen = time.Now().Add(time.Hour * 24 * 365) // never expire
 	host.Online = true
 	host.MACEntry.Online = true
 
 	// create the router entry manually and set router flag
-	host, _ = h.session.FindOrCreateHost(h.session.NICInfo.RouterMAC, h.session.NICInfo.RouterIP4.IP)
+	host, _ = h.session.FindOrCreateHost(packet.Addr{MAC: h.session.NICInfo.RouterMAC, IP: h.session.NICInfo.RouterIP4.IP})
 	host.MACEntry.IsRouter = true
 	host.Online = true
 	host.MACEntry.Online = true
@@ -369,7 +369,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			// Create host only if on same subnet
 			// Note: DHCP request for previous discover have zero src IP; therefore wont't create host entry here.
 			if h.session.NICInfo.HostIP4.Contains(ip4Frame.Src()) {
-				host, _ = h.session.FindOrCreateHost(ether.Src(), ip4Frame.Src()) // will lock/unlock
+				host, _ = h.session.FindOrCreateHost(packet.Addr{MAC: ether.Src(), IP: ip4Frame.Src()}) // will lock/unlock
 			}
 			l4Proto = ip4Frame.Protocol()
 			l4Payload = ip4Frame.Payload()
@@ -398,7 +398,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			// TODO: is it better to check if IP is in the prefix?
 			if ip6Frame.Src().IsLinkLocalUnicast() ||
 				(ip6Frame.Src().IsGlobalUnicast() && !bytes.Equal(ether.Src(), h.session.NICInfo.RouterMAC)) {
-				host, _ = h.session.FindOrCreateHost(ether.Src(), ip6Frame.Src()) // will lock/unlock
+				host, _ = h.session.FindOrCreateHost(packet.Addr{MAC: ether.Src(), IP: ip6Frame.Src()}) // will lock/unlock
 			}
 
 			// IPv6 Hop by Hop extension - always the first header if present
@@ -455,8 +455,8 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				fmt.Printf("packet: error processing icmp6 : %s\n", err)
 			}
 			if result.Update {
-				if result.Addr.IP != nil {
-					host, _ = h.session.FindOrCreateHost(result.Addr.MAC, result.Addr.IP)
+				if result.FrameAddr.IP != nil {
+					host, _ = h.session.FindOrCreateHost(result.FrameAddr)
 				}
 				if host != nil {
 					host.MACEntry.IsRouter = result.IsRouter
@@ -507,7 +507,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				}
 				if result.Update {
 					if result.IsRouter { // IsRouter is true if this is a new host from a DHCP request
-						host, _ = h.session.FindOrCreateHost(result.Addr.MAC, result.Addr.IP)
+						host, _ = h.session.FindOrCreateHost(result.FrameAddr)
 					}
 					if h.lockAndProcessDHCP4Update(host, result) {
 						notify = true
@@ -548,7 +548,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				fmt.Printf("packet: error processing arp: %s\n", err)
 			}
 			if result.Update {
-				host, _ = h.session.FindOrCreateHost(result.Addr.MAC, result.Addr.IP)
+				host, _ = h.session.FindOrCreateHost(result.FrameAddr)
 			}
 
 		default:

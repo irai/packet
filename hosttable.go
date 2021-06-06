@@ -85,12 +85,12 @@ type Result struct {
 	Update    bool      // Set to true if update is required
 	HuntStage HuntStage // DHCP4 hunt stage
 	Name      string    // DHCP4 host name
-	Addr      Addr      // IP and MAC
+	FrameAddr Addr      // reference to frame IP and MAC (i.e. not copied) - the engine will copy if required
 	IsRouter  bool      // Mark host as router
 }
 
 func (e Result) String() string {
-	return fmt.Sprintf("huntstage=%s name=%s %s", e.HuntStage, e.Name, e.Addr)
+	return fmt.Sprintf("huntstage=%s name=%s %s", e.HuntStage, e.Name, e.FrameAddr)
 }
 
 // newHostTable returns a HostTable Session
@@ -116,12 +116,12 @@ func (h *Session) printHostTable() {
 // FindOrCreateHost will create a new host entry or return existing
 //
 // The funcion copies both the mac and the ip; it is safe to call this with a frame.IP(), frame.MAC()
-func (h *Session) FindOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host, found bool) {
+func (h *Session) FindOrCreateHost(addr Addr) (host *Host, found bool) {
 
 	//optimise the common path
-	ipNew, _ := netaddr.FromStdIP(ip)
+	ipNew, _ := netaddr.FromStdIP(addr.IP)
 	h.mutex.RLock()
-	if host, ok := h.HostTable.Table[ipNew]; ok && bytes.Equal(host.MACEntry.MAC, mac) {
+	if host, ok := h.HostTable.Table[ipNew]; ok && bytes.Equal(host.MACEntry.MAC, addr.MAC) {
 		h.mutex.RUnlock()
 		return host, true
 	}
@@ -131,37 +131,30 @@ func (h *Session) FindOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host,
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 
-	return h.findOrCreateHost(mac, ip)
+	return h.findOrCreateHost(addr)
 }
 
 // findOrCreateHost find the host using the frame IP (avoid copy if not needed)
 //
 // Must have engine lock before calling
-func (h *Session) findOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host, found bool) {
-
+func (h *Session) findOrCreateHost(addr Addr) (host *Host, found bool) {
 	// using netaddr IP
-	ipNew, ok := netaddr.FromStdIP(ip)
-	// TODO: remove this panic after July 2021
-	//       trying to find a nil IP bug found in may 21 in test env
-	if !ok {
-		panic(fmt.Sprintf("fatal error invalid ip in findOrCreateHost ip=%s", ip))
-	}
+	ipNew, _ := netaddr.FromStdIP(addr.IP)
 	now := time.Now()
 	if host, ok := h.HostTable.Table[ipNew]; ok {
 		host.MACEntry.Row.Lock() // lock the row
-		if !bytes.Equal(host.MACEntry.MAC, mac) {
-			fmt.Println("packet: error mac address differ - duplicated IP???", host.MACEntry.MAC, mac, ipNew)
+		if !bytes.Equal(host.MACEntry.MAC, addr.MAC) {
+			fmt.Println("packet: error mac address differ - duplicated IP???", host.MACEntry.MAC, addr.MAC, ipNew)
 			h.printHostTable()
 			// TODO: previous host is offline then???
 			//       should we send notification?
 
 			// Remove IP from existing mac and link host to new macEntry
-			mac := CopyMAC(mac) // copy from frame
 			host.MACEntry.unlink(host)
 			host.MACEntry.Row.Unlock() // release lock on previous mac
 
 			// Link host to new MACEntry
-			macEntry := h.MACTable.FindOrCreateNoLock(mac)
+			macEntry := h.MACTable.FindOrCreateNoLock(CopyMAC(addr.MAC))
 			macEntry.Row.Lock()          // acquire lock on new macEntry
 			macEntry.link(host)          // link macEntry to host
 			host.MACEntry = macEntry     // link host to macEntry
@@ -173,9 +166,8 @@ func (h *Session) findOrCreateHost(mac net.HardwareAddr, ip net.IP) (host *Host,
 		host.MACEntry.Row.Unlock()
 		return host, true
 	}
-	mac = CopyMAC(mac) // copy from frame
-	macEntry := h.MACTable.FindOrCreateNoLock(mac)
-	host = &Host{IP: CopyIP(ip), MACEntry: macEntry, Online: false} // set Online to false to trigger Online transition
+	macEntry := h.MACTable.FindOrCreateNoLock(CopyMAC(addr.MAC))
+	host = &Host{IP: CopyIP(addr.IP), MACEntry: macEntry, Online: false} // set Online to false to trigger Online transition
 	host.LastSeen = now
 	host.HuntStage = StageNormal
 	host.MACEntry.LastSeen = now

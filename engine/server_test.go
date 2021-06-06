@@ -30,9 +30,11 @@ func TestHandler_findOrCreateHostDupIP(t *testing.T) {
 	packet.Debug = false
 
 	// First create host with two IPs - IP3 and IP2 and set online
-	host1, _ := engine.session.FindOrCreateHost(mac1, ip3)
+	addr := packet.Addr{MAC: mac1, IP: ip3}
+	host1, _ := engine.session.FindOrCreateHost(addr)
 	engine.lockAndSetOnline(host1, true)
-	host1, _ = engine.session.FindOrCreateHost(mac1, ip2)
+	addr.IP = ip2
+	host1, _ = engine.session.FindOrCreateHost(addr)
 	host1.DHCP4Name = "mac1" // test that name will clear - this was a previous bug
 	engine.lockAndSetOnline(host1, true)
 
@@ -47,7 +49,7 @@ func TestHandler_findOrCreateHostDupIP(t *testing.T) {
 	}
 
 	// new mac, same IP - Duplicated IP on network
-	host2, _ := engine.session.FindOrCreateHost(mac2, ip2)
+	host2, _ := engine.session.FindOrCreateHost(packet.Addr{MAC: mac2, IP: ip2})
 	if host2.MACEntry.Captured { // mac should not be captured
 		engine.session.PrintTable()
 		t.Fatal("host not capture")
@@ -69,7 +71,7 @@ func TestHandler_findOrCreateHostDupIP(t *testing.T) {
 	}
 
 	// second IPs
-	host1, _ = engine.session.FindOrCreateHost(mac2, ip2)
+	host1, _ = engine.session.FindOrCreateHost(packet.Addr{MAC: mac2, IP: ip2})
 	if host1.MACEntry.Captured { // mac should not be captured
 		t.Fatal("host not capture")
 	}
@@ -81,17 +83,17 @@ func TestHandler_Offline(t *testing.T) {
 	packet.Debug = true
 
 	// First create host with two IPs - IP3 and IP2 and set online
-	host1, _ := engine.session.FindOrCreateHost(mac1, ip3)
+	host1, _ := engine.session.FindOrCreateHost(packet.Addr{MAC: mac1, IP: ip3})
 	engine.lockAndSetOnline(host1, true)
-	host2, _ := engine.session.FindOrCreateHost(mac1, ip2)
+	host2, _ := engine.session.FindOrCreateHost(packet.Addr{MAC: mac1, IP: ip2})
 	engine.lockAndSetOnline(host2, true)
-	host3, _ := engine.session.FindOrCreateHost(mac1, ip6LLA1)
+	host3, _ := engine.session.FindOrCreateHost(packet.Addr{MAC: mac1, IP: ip6LLA1})
 	engine.lockAndSetOnline(host3, true)
-	host4, _ := engine.session.FindOrCreateHost(mac1, ip6GUA1)
+	host4, _ := engine.session.FindOrCreateHost(packet.Addr{MAC: mac1, IP: ip6GUA1})
 	engine.lockAndSetOnline(host4, true)
-	host5, _ := engine.session.FindOrCreateHost(mac1, ip6GUA2)
+	host5, _ := engine.session.FindOrCreateHost(packet.Addr{MAC: mac1, IP: ip6GUA2})
 	engine.lockAndSetOnline(host5, true)
-	host6, _ := engine.session.FindOrCreateHost(mac1, ip6GUA3)
+	host6, _ := engine.session.FindOrCreateHost(packet.Addr{MAC: mac1, IP: ip6GUA3})
 	engine.lockAndSetOnline(host6, true)
 
 	if n := len(engine.session.HostTable.Table); n != 6 {

@@ -119,7 +119,7 @@ func Test_requestAnotherHost(t *testing.T) {
 		t.Fatalf("Test_requestAnotherHost() error sending packet error=%s", err)
 	}
 	if !result.IsRouter || !result.Update ||
-		result.Addr.IP == nil || result.Addr.MAC == nil ||
+		result.FrameAddr.IP == nil || result.FrameAddr.MAC == nil ||
 		result.HuntStage != packet.StageNoChange ||
 		result.Name != "host name" {
 		t.Fatalf("Test_requestAnotherHost() invalid update=%v isrouter=%v result=%+v ", result.Update, result.IsRouter, result)
@@ -168,7 +168,7 @@ func newDHCPHost(t *testing.T, tc *testContext, mac net.HardwareAddr) []byte {
 		wantHuntStage = packet.StageRedirected
 	}
 	if !result.IsRouter || !result.Update ||
-		result.Addr.IP == nil || result.Addr.MAC == nil ||
+		result.FrameAddr.IP == nil || result.FrameAddr.MAC == nil ||
 		result.HuntStage != wantHuntStage ||
 		result.Name != srcAddr.MAC.String() {
 		t.Fatalf("newDHCPHost() invalid update=%v isrouter=%v result=%+v ", result.Update, result.IsRouter, result)
