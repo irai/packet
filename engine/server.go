@@ -516,6 +516,14 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				if dnsEntry.Name != "" && h.dnsChannel != nil {
 					h.dnsChannel <- dnsEntry
 				}
+
+			case udp.DstPort() == 53: // DNS request
+			// do nothing
+
+			case udp.SrcPort() == 5353 || udp.DstPort() == 5353:
+				// Multicast DNS
+				// do nothing
+
 			default:
 				fmt.Printf("packet: unexpected udp %s\n", udp)
 			}
