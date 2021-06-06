@@ -176,29 +176,27 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 		//  - client tries to pick up previosly know IP address, with a request packet.
 		//  - client has not sent discover packet
 
+		// almost always a new host IP
+		result.Update = true
+		result.IsRouter = true // hack to mark result as a new host
+		result.Addr = packet.Addr{MAC: packet.CopyMAC(p.CHAddr()), IP: packet.CopyIP(reqIP)}
+		result.Name = name
+		result.HuntStage = packet.StageNoChange
+
 		if lease.State == StateFree {
 			fmt.Printf("dhcp4 : request NACK - rebooting for another server %s\n", fields)
 
 			if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && captured) {
-
 				// Attempt to force other dhcp server to release the IP
 				// Send a DECLINE packet to home router in case server responded with ACK
 				// Do not use RELEASE as the server can still reuse the parameters and does not issue a NAK later
 				go h.forceDecline(dupBytes(clientID), h.net1.DefaultGW, dupMAC(p.CHAddr()), dupIP(reqIP), dupBytes(p.XId()))
-
-				// almost always a new host IP
-				result.Update = true
-				result.IsRouter = true // hack to mark result as a new host
-				result.Addr = packet.Addr{MAC: packet.CopyMAC(p.CHAddr()), IP: packet.CopyIP(reqIP)}
-				result.Name = name
-				result.HuntStage = packet.StageNoChange
 
 				// always NACK so next attempt may trigger discover
 				// also, it must return nack if moving form net2 to net1
 				// in the iPhone case, this causes the iPhone to retry discover
 				return result, ReplyPacket(p, NAK, h.net1.DefaultGW, net.IPv4zero, 0, nil)
 			}
-
 		}
 
 		if lease.State != StateAllocated ||
@@ -215,7 +213,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 
 			// We have the lease but the IP or MAC don't match
 			// Send NACK
-			return packet.Result{}, ReplyPacket(p, NAK, subnet.DHCPServer, net.IPv4zero, 0, nil)
+			return result, ReplyPacket(p, NAK, subnet.DHCPServer, net.IPv4zero, 0, nil)
 		}
 
 		if operation == rebooting {
