@@ -543,7 +543,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				fmt.Printf("packet: unexpected udp %s\n", udp)
 			}
 
-		case syscall.ETH_P_ARP: // skip ARP - 0x0806
+		case syscall.ETH_P_ARP: // ARP - 0x0806
 			if result, err = h.ARPHandler.ProcessPacket(host, ether, ether.Payload()); err != nil {
 				fmt.Printf("packet: error processing arp: %s\n", err)
 			}
