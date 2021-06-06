@@ -502,7 +502,9 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 					if result.IsRouter { // IsRouter is true if this is a new host from a DHCP request
 						host, _ = h.session.FindOrCreateHost(result.Addr.MAC, result.Addr.IP)
 					}
-					h.lockAndProcessDHCP4Update(host, result)
+					if h.lockAndProcessDHCP4Update(host, result) {
+						notify = true
+					}
 				}
 			case udp.SrcPort() == 53: // DNS response
 				// TODO: move this to background goroutine
