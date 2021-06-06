@@ -49,6 +49,8 @@ func (e *Host) String() string {
 		b.WriteString(" captured=false stage4=")
 	}
 	b.WriteString(e.HuntStage.String())
+	b.WriteString(" name=")
+	b.WriteString(e.DHCP4Name)
 	b.WriteString(" lastSeen=")
 	b.WriteString(time.Since(e.LastSeen).String())
 	return b.String()
