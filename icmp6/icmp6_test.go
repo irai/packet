@@ -55,7 +55,7 @@ func Test_ICMP6Redirect(t *testing.T) {
 		t.Fatal("invalid fields ", redirect)
 	}
 
-	_, _, err := tc.h.ProcessPacket(nil, ether, ip6Frame.Payload())
+	_, err := tc.h.ProcessPacket(nil, ether, ip6Frame.Payload())
 	if err != nil {
 		t.Fatal(err)
 	}

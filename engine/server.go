@@ -447,16 +447,21 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		//
 		switch l4Proto {
 		case syscall.IPPROTO_ICMP:
-			if host, result, err = h.ICMP4Handler.ProcessPacket(host, ether, l4Payload); err != nil {
+			if result, err = h.ICMP4Handler.ProcessPacket(host, ether, l4Payload); err != nil {
 				fmt.Printf("packet: error processing icmp4: %s\n", err)
 			}
 		case syscall.IPPROTO_ICMPV6: // 0x03a
-			if host, result, err = h.ICMP6Handler.ProcessPacket(host, ether, l4Payload); err != nil {
+			if result, err = h.ICMP6Handler.ProcessPacket(host, ether, l4Payload); err != nil {
 				fmt.Printf("packet: error processing icmp6 : %s\n", err)
 			}
-			if host != nil && result.Update {
-				host.MACEntry.IsRouter = result.IsRouter
-				notify = true
+			if result.Update {
+				if result.Addr.IP != nil {
+					host, _ = h.session.FindOrCreateHost(result.Addr.MAC, result.Addr.IP)
+				}
+				if host != nil {
+					host.MACEntry.IsRouter = result.IsRouter
+					notify = true
+				}
 			}
 		case syscall.IPPROTO_IGMP:
 			// Internet Group Management Protocol - Ipv4 multicast groups
@@ -495,9 +500,9 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			udpSrcPort := udp.SrcPort()
 			udpDstPort := udp.DstPort()
 			switch {
-			case udpSrcPort == packet.DHCP4ServerPort || udpDstPort == packet.DHCP4ClientPort: // DHCP4 packet?
+			case udpDstPort == packet.DHCP4ServerPort || udpDstPort == packet.DHCP4ClientPort: // DHCP4 packet?
 				// if udp.DstPort() == packet.DHCP4ServerPort || udp.DstPort() == packet.DHCP4ClientPort {
-				if _, result, err = h.DHCP4Handler.ProcessPacket(host, ether, udp.Payload()); err != nil {
+				if result, err = h.DHCP4Handler.ProcessPacket(host, ether, udp.Payload()); err != nil {
 					fmt.Printf("packet: error processing dhcp4: %s\n", err)
 				}
 				if result.Update {
@@ -539,7 +544,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			}
 
 		case syscall.ETH_P_ARP: // skip ARP - 0x0806
-			if host, result, err = h.ARPHandler.ProcessPacket(host, ether, ether.Payload()); err != nil {
+			if result, err = h.ARPHandler.ProcessPacket(host, ether, ether.Payload()); err != nil {
 				fmt.Printf("packet: error processing arp: %s\n", err)
 			}
 			if result.Update {

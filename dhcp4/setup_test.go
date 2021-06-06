@@ -246,7 +246,7 @@ func sendTestDHCP4Packet(t *testing.T, tc *testContext, srcAddr packet.Addr, dst
 	}
 
 	udp, _ = udp.AppendPayload(p)
-	_, result, err = tc.h.ProcessPacket(nil, ether, udp.Payload())
+	result, err = tc.h.ProcessPacket(nil, ether, udp.Payload())
 	if err != nil {
 		t.Fatalf("Test_Requests:%s error = %v", "newDHCPHOst", err)
 	}

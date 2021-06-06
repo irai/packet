@@ -245,20 +245,20 @@ func (h *Handler) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
 }
 
 // ProcessPacket implements PacketProcessor interface
-func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (*packet.Host, packet.Result, error) {
+func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (packet.Result, error) {
 	ether := packet.Ether(b)
 	ip4 := packet.IP4(ether.Payload())
 	if !ip4.IsValid() {
-		return host, packet.Result{}, packet.ErrInvalidIP
+		return packet.Result{}, packet.ErrInvalidIP
 	}
 	udp := packet.UDP(ip4.Payload())
 	if !udp.IsValid() || len(udp.Payload()) < 240 {
-		return host, packet.Result{}, packet.ErrInvalidIP
+		return packet.Result{}, packet.ErrInvalidIP
 	}
 
 	dhcpFrame := DHCP4(udp.Payload())
 	if !dhcpFrame.IsValid() {
-		return host, packet.Result{}, packet.ErrParseMessage
+		return packet.Result{}, packet.ErrParseMessage
 	}
 	if Debug {
 		fmt.Printf("dhcp4 : ether %s\n", ether)
@@ -269,19 +269,19 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (*pa
 
 	if udp.DstPort() == packet.DHCP4ClientPort {
 		err := h.processClientPacket(host, dhcpFrame)
-		return host, packet.Result{}, err
+		return packet.Result{}, err
 	}
 
 	options := dhcpFrame.ParseOptions()
 	var reqType MessageType
 	if t := options[OptionDHCPMessageType]; len(t) != 1 {
 		log.Warn("dhcp4 : skiping dhcp packet with len not 1")
-		return host, packet.Result{}, packet.ErrParseMessage
+		return packet.Result{}, packet.ErrParseMessage
 	} else {
 		reqType = MessageType(t[0])
 		if reqType < Discover || reqType > Inform {
 			log.Warn("dhcp4 : skiping dhcp packet invalid type ", reqType)
-			return host, packet.Result{}, packet.ErrParseMessage
+			return packet.Result{}, packet.ErrParseMessage
 		}
 	}
 
@@ -333,10 +333,10 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (*pa
 		srcAddr := packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostIP4.IP, Port: packet.DHCP4ServerPort}
 		if err := sendDHCP4Packet(h.session.Conn, srcAddr, dstAddr, response); err != nil {
 			fmt.Printf("dhcp4: failed sending packet error=%s", err)
-			return host, packet.Result{}, err
+			return packet.Result{}, err
 		}
 	}
-	return host, result, nil
+	return result, nil
 }
 
 func getClientID(p DHCP4, options Options) []byte {

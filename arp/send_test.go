@@ -71,7 +71,7 @@ func Test_Handler_ARPRequests(t *testing.T) {
 				panic(err)
 			}
 			// fmt.Println("frame ether: ", ether, "frame arp: ", ARP(ether.Payload()), "srcarp: ", tt.arp)
-			_, result, err := tc.arp.ProcessPacket(nil, ether, ether.Payload())
+			result, err := tc.arp.ProcessPacket(nil, ether, ether.Payload())
 			if err != tt.wantErr {
 				t.Errorf("Test_Requests:%s error = %v, wantErr %v", tt.name, err, tt.wantErr)
 			}
@@ -157,7 +157,7 @@ func Test_Handler_ServeReplies(t *testing.T) {
 			if err != nil {
 				panic(err)
 			}
-			_, result, err := tc.arp.ProcessPacket(nil, ether, ether.Payload())
+			result, err := tc.arp.ProcessPacket(nil, ether, ether.Payload())
 			if err != tt.wantErr {
 				t.Errorf("Test_Requests:%s error = %v, wantErr %v", tt.name, err, tt.wantErr)
 			}

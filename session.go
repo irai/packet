@@ -29,7 +29,7 @@ func NewEmptySession() *Session {
 type PacketProcessor interface {
 	Start() error
 	Stop() error
-	ProcessPacket(host *Host, p []byte, header []byte) (*Host, Result, error)
+	ProcessPacket(host *Host, p []byte, header []byte) (Result, error)
 	StartHunt(Addr) (HuntStage, error)
 	StopHunt(Addr) (HuntStage, error)
 	CheckAddr(Addr) (HuntStage, error)
@@ -44,8 +44,8 @@ var _ PacketProcessor = PacketNOOP{}
 
 func (p PacketNOOP) Start() error { return nil }
 func (p PacketNOOP) Stop() error  { return nil }
-func (p PacketNOOP) ProcessPacket(*Host, []byte, []byte) (*Host, Result, error) {
-	return nil, Result{}, nil
+func (p PacketNOOP) ProcessPacket(*Host, []byte, []byte) (Result, error) {
+	return Result{}, nil
 }
 func (p PacketNOOP) StartHunt(addr Addr) (HuntStage, error) { return StageNoChange, nil }
 func (p PacketNOOP) StopHunt(addr Addr) (HuntStage, error)  { return StageNoChange, nil }
