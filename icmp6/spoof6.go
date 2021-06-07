@@ -11,9 +11,13 @@ import (
 // StartHunt implements packet processor interface
 //
 // Hunt IPv6 LLA only; return error if IP is not IP6 Local Link Address
+// If IP is nil, we use unicast ethernet address but multicast ip address to get the packet to the target
 func (h *Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
 	if Debug {
 		fmt.Printf("icmp6 : start neighbor hunt %s\n", addr)
+	}
+	if addr.IP != nil && !addr.IP.IsLinkLocalUnicast() {
+		return packet.StageNoChange, packet.ErrInvalidIP6LLA
 	}
 	h.Lock()
 	if h.huntList.Index(addr.MAC) != -1 {
@@ -33,24 +37,24 @@ func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
 	if Debug {
 		fmt.Printf("icmp6 : stop neighbor hunt %s\n", addr)
 	}
+	if addr.IP != nil && !addr.IP.IsLinkLocalUnicast() {
+		return packet.StageNoChange, packet.ErrInvalidIP6LLA
+	}
 	h.Lock()
-	defer h.Unlock()
-
 	h.huntList.Del(addr)
+	h.Unlock()
 	return packet.StageNormal, nil
 }
 
-// spoofLoop attacks the client with ARP attacks
+// spoofLoop attacks the client with neighbor advertisement attacks
 //
-// It will continuously send a number of ARP packets to client:
-//   1. spoof the client arp table to send router packets to us
-//   2. optionally, claim the ownership of the IP to force client to change IP or go offline
-//
-
+// It will continuously send a number of NA packets to client until the mac is no longer in hunt list.
 func (h *Handler) spoofLoop(dstAddr packet.Addr) {
 	rand.Seed(time.Now().UnixNano())
 	startTime := time.Now()
 	nTimes := 0
+
+	// if no IP, then use unicast Ether address and multicast IP to get packet to destination
 	if dstAddr.IP == nil {
 		dstAddr.IP = packet.IP6AllNodesMulticast
 	}

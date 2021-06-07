@@ -139,6 +139,10 @@ func (h *Handler) lockAndStartHunt(addr packet.Addr) (err error) {
 	}
 
 	// IP6 handlers
+	// Only hunt link local IP
+	if !addr.IP.IsLinkLocalUnicast() {
+		return nil
+	}
 	go func() {
 		if _, err = h.ICMP6Handler.StartHunt(addr); err != nil {
 			fmt.Printf("packet: failed to start icmp6 hunt: %s", err.Error())
