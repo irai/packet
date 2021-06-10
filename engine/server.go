@@ -426,6 +426,10 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			// This protocol allows an expernal application to control a dumb switch.
 			// TODO: Need to investigate this
 			// https://andreas.jakum.net/blog/2012/10/27/rrcp-realtek-remote-control-protocol
+			// Realtek's RTL8316B, RTL8324, RTL8326 and RTL8326S are supported
+			//
+			// See frames here:
+			// http://realtek.info/pdf/rtl8324.pdf  page 43
 			//
 			fmt.Printf("packet: error invalid RRCP frame %s payload=\"% x\"\n", ether, ether.Payload())
 			continue
