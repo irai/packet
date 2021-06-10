@@ -422,6 +422,14 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		case syscall.ETH_P_ARP: // 0x806
 			l4Proto = syscall.ETH_P_ARP // treat arp as l4 proto; similar to IP6 ICMP NDP
 
+		case 0x8899: // Realtek Remote Control Protocol (RRCP)
+			// This protocol allows an expernal application to control a dumb switch.
+			// TODO: Need to investigate this
+			// https://andreas.jakum.net/blog/2012/10/27/rrcp-realtek-remote-control-protocol
+			//
+			fmt.Printf("packet: error invalid RRCP frame %s payload=\"% x\"\n", ether, ether.Payload())
+			continue
+
 		case 6:
 			// TODO: identify this protocol
 			// wifi mac notification -
