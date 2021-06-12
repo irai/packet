@@ -106,7 +106,7 @@ func (h *Handler) spoofLoop(addr packet.Addr) {
 //
 // The client ARP table is refreshed often and only last for a short while (few minutes)
 // hence the goroutine that re-arp clients
-// To make sure the cache stays poisoned, replay every 5 seconds with a loop.
+// To make sure the cache stays poisoned, replay every few seconds with a loop.
 func (h *Handler) forceSpoof(addr packet.Addr) error {
 
 	// Announce to target that we own the router IP
