@@ -55,7 +55,10 @@ func (h *Handler) request(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr,
 	var b [packet.EthMaxSize]byte
 	ether := packet.Ether(b[0:])
 
-	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_ARP, srcHwAddr, dstEther)
+	// ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_ARP, srcHwAddr, dstEther)
+
+	// Send packet with ether src set to host but arp packet set to target
+	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_ARP, h.session.NICInfo.HostMAC, dstEther)
 	arp, err := MarshalBinary(ether.Payload(), OperationRequest, srcHwAddr, srcIP, dstHwAddr, dstIP)
 	if err != nil {
 		return err
@@ -85,7 +88,9 @@ func (h *Handler) reply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, s
 	var b [packet.EthMaxSize]byte
 	ether := packet.Ether(b[0:])
 
-	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_ARP, srcHwAddr, dstEther)
+	// ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_ARP, srcHwAddr, dstEther)
+	// Send packet with ether src set to host but arp packet set to target
+	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_ARP, h.session.NICInfo.HostMAC, dstEther)
 	arp, err := MarshalBinary(ether.Payload(), OperationReply, srcHwAddr, srcIP, dstHwAddr, dstIP)
 	if err != nil {
 		return err
