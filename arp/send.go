@@ -130,7 +130,7 @@ func (h *Handler) Probe(ip net.IP) error {
 // previously have been using the same address.  The host may begin
 // legitimately using the IP address immediately after sending the first
 // of the two ARP Announcements;
-func (h *Handler) announce(dstEther net.HardwareAddr, mac net.HardwareAddr, ip net.IP, targetMac net.HardwareAddr, repeats int) (err error) {
+func (h *Handler) announce(dstEther net.HardwareAddr, mac net.HardwareAddr, ip net.IP, targetMac net.HardwareAddr) (err error) {
 	if Debug {
 		if bytes.Equal(dstEther, EthernetBroadcast) {
 			log.Printf("arp send announcement broadcast - I am ip=%s mac=%s", ip, mac)
@@ -141,12 +141,14 @@ func (h *Handler) announce(dstEther net.HardwareAddr, mac net.HardwareAddr, ip n
 
 	err = h.request(dstEther, mac, ip, targetMac, ip)
 
+	/**
 	go func() {
 		for i := 0; i < repeats; i++ {
 			time.Sleep(time.Millisecond * 500)
 			h.request(dstEther, mac, ip, targetMac, ip)
 		}
 	}()
+	**/
 	return err
 }
 
