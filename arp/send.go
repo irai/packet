@@ -142,7 +142,7 @@ func (h *Handler) announce(dstEther net.HardwareAddr, mac net.HardwareAddr, ip n
 	err = h.request(dstEther, mac, ip, targetMac, ip)
 
 	go func() {
-		for i := 1; i < repeats; i++ {
+		for i := 0; i < repeats; i++ {
 			time.Sleep(time.Millisecond * 500)
 			h.request(dstEther, mac, ip, targetMac, ip)
 		}

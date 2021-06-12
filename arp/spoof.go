@@ -78,6 +78,9 @@ func (h *Handler) spoofLoop(addr packet.Addr) {
 
 		if !hunting || h.closed {
 			fmt.Printf("arp   : hunt loop stop %s repeat=%v duration=%v\n", addr, nTimes, time.Since(startTime))
+			if err := h.announce(addr.MAC, h.session.NICInfo.RouterMAC, h.session.NICInfo.RouterIP4.IP, EthernetBroadcast, 1); err != nil {
+				log.Printf("arp error send announcement packet %s: %s", addr, err)
+			}
 			return
 		}
 
@@ -111,7 +114,7 @@ func (h *Handler) forceSpoof(addr packet.Addr) error {
 
 	// Announce to target that we own the router IP
 	// This will update the target arp table with our mac
-	err := h.announce(addr.MAC, h.session.NICInfo.HostMAC, h.session.NICInfo.RouterIP4.IP, EthernetBroadcast, 2)
+	err := h.announce(addr.MAC, h.session.NICInfo.HostMAC, h.session.NICInfo.RouterIP4.IP, EthernetBroadcast, 1)
 	if err != nil {
 		log.Printf("arp error send announcement packet %s: %s", addr, err)
 		return err
