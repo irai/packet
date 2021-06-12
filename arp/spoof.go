@@ -117,8 +117,8 @@ func (h *Handler) forceSpoof(addr packet.Addr) error {
 		return err
 	}
 
-	// Send 3 unsolicited ARP reply; clients may discard this
-	for i := 0; i < 2; i++ {
+	// Send 1 unsolicited ARP reply; clients may discard this
+	for i := 0; i < 1; i++ {
 		err = h.reply(addr.MAC, h.session.NICInfo.HostMAC, h.session.NICInfo.RouterIP4.IP, addr.MAC, addr.IP)
 		if err != nil {
 			log.Printf("arp error spoof client %s: %s", addr, err)
