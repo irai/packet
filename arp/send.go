@@ -48,14 +48,10 @@ func (h *Handler) Request(srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr ne
 		}
 	}
 
-	return h.requestWithDstEthernet(EthernetBroadcast, srcHwAddr, srcIP, dstHwAddr, dstIP)
+	return h.request(EthernetBroadcast, srcHwAddr, srcIP, dstHwAddr, dstIP)
 }
 
-func (h *Handler) request(srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
-	return h.requestWithDstEthernet(EthernetBroadcast, srcHwAddr, srcIP, dstHwAddr, dstIP)
-}
-
-func (h *Handler) requestWithDstEthernet(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
+func (h *Handler) request(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
 	var b [packet.EthMaxSize]byte
 	ether := packet.Ether(b[0:])
 
@@ -115,11 +111,6 @@ func (h *Handler) Probe(ip net.IP) error {
 	return h.Request(h.session.NICInfo.HostMAC, net.IPv4zero, EthernetBroadcast, ip)
 }
 
-// probeUnicast is used to validate the client is still online; same as ARP probe but unicast to target
-func (h *Handler) probeUnicast(mac net.HardwareAddr, ip net.IP) error {
-	return h.Request(h.session.NICInfo.HostMAC, net.IPv4zero, mac, ip)
-}
-
 // announce sends arp announcement packet
 //
 // Having probed to determine that a desired address may be used safely,
@@ -143,12 +134,12 @@ func (h *Handler) announce(dstEther net.HardwareAddr, mac net.HardwareAddr, ip n
 		}
 	}
 
-	err = h.requestWithDstEthernet(dstEther, mac, ip, targetMac, ip)
+	err = h.request(dstEther, mac, ip, targetMac, ip)
 
 	go func() {
 		for i := 1; i < repeats; i++ {
 			time.Sleep(time.Millisecond * 500)
-			h.requestWithDstEthernet(dstEther, mac, ip, targetMac, ip)
+			h.request(dstEther, mac, ip, targetMac, ip)
 		}
 	}()
 	return err

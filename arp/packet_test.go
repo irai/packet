@@ -23,11 +23,6 @@ func newPacket(op uint16, sMAC net.HardwareAddr, sIP net.IP, tMAC net.HardwareAd
 	return p
 }
 
-func tFrame(proto uint16, operation uint16, srcMAC net.HardwareAddr, srcIP net.IP, dstMAC net.HardwareAddr, dstIP net.IP) []byte {
-	b, _ := MarshalBinary(nil, operation, srcMAC, srcIP, dstMAC, dstIP)
-	return b
-}
-
 func TestMarshalUnmarshall(t *testing.T) {
 	// marshall
 	buf := make([]byte, packet.EthMaxSize) // allocate in the stack
@@ -91,7 +86,7 @@ func TestMarshalBinary(t *testing.T) {
 			if !bytes.Equal(p.SrcMAC(), tt.srcMAC) || !bytes.Equal(p.DstMAC(), tt.dstMAC) {
 				t.Errorf("%s: invalid srcMAC=%s wantSrcMAC=%s dstMAC=%s wantDstMAC=%s", tt.name, p.SrcMAC(), tt.srcMAC, p.DstMAC(), tt.dstMAC)
 			}
-			if !bytes.Equal(p.SrcIP(), tt.srcIP) || !bytes.Equal(p.DstIP(), tt.dstIP) {
+			if !p.SrcIP().Equal(tt.srcIP) || !p.DstIP().Equal(tt.dstIP) {
 				t.Errorf("%s: invalid srcIP=%s wantSrcIP=%s dstIP=%s wantDstIP=%s", tt.name, p.SrcIP(), tt.srcIP, p.DstIP(), tt.dstIP)
 			}
 		})
