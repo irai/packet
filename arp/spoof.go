@@ -114,7 +114,7 @@ func (h *Handler) forceSpoof(addr packet.Addr) error {
 
 	// Announce to target that we own the router IP
 	// This will update the target arp table with our mac
-	err := h.announce(addr.MAC, h.session.NICInfo.HostAddr4, EthernetBroadcast)
+	err := h.announce(addr.MAC, packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.RouterIP4.IP}, EthernetBroadcast)
 	if err != nil {
 		log.Printf("arp error send announcement packet %s: %s", addr, err)
 		return err
