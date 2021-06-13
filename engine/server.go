@@ -551,6 +551,10 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				// Network time synchonization protocol
 				// do nothing
 
+			case udpSrcPort == 433 || udpDstPort == 433:
+				// ssl udp - likely quic?
+				// do nothing
+
 			default:
 				fmt.Printf("packet: unexpected udp %s\n", udp)
 			}
