@@ -230,7 +230,7 @@ func checkLeaseTable(t *testing.T, tc *testContext, allocatedCount int, discover
 	}
 }
 
-func sendTestDHCP4Packet(t *testing.T, tc *testContext, srcAddr packet.Addr, dstAddr packet.Addr, p DHCP4) (result packet.Result, err error) {
+func processTestDHCP4Packet(t *testing.T, tc *testContext, srcAddr packet.Addr, dstAddr packet.Addr, p DHCP4) (result packet.Result, err error) {
 	ether := packet.Ether(make([]byte, packet.EthMaxSize))
 	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IP, srcAddr.MAC, dstAddr.MAC)
 	ip4 := packet.IP4MarshalBinary(ether.Payload(), 50, srcAddr.IP, dstAddr.IP)
