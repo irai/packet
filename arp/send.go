@@ -40,6 +40,11 @@ var (
 // +============+===+===========+===========+============+============+===================+===========+
 //
 func (h *Handler) Request(srcAddr packet.Addr, dstAddr packet.Addr) error {
+	srcAddr.IP = srcAddr.IP.To4()
+	dstAddr.IP = dstAddr.IP.To4()
+	if srcAddr.IP == nil || dstAddr.IP == nil {
+		return packet.ErrInvalidIP
+	}
 	if Debug {
 		if srcAddr.IP.Equal(dstAddr.IP) {
 			log.Printf("arp send announcement - I am ip=%s mac=%s", srcAddr.IP, srcAddr.MAC)

@@ -105,7 +105,9 @@ func (h *Handler) MinuteTicker(now time.Time) error {
 	}
 
 	for _, addr := range arpAddrs {
-		h.Request(h.session.NICInfo.HostAddr4, addr)
+		if err := h.Request(h.session.NICInfo.HostAddr4, addr); err != nil {
+			return err
+		}
 	}
 	return nil
 }

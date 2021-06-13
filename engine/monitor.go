@@ -46,7 +46,9 @@ func (h *Handler) minuteChecker(now time.Time) {
 	}
 
 	// Handlers
-	h.ARPHandler.MinuteTicker(now)
+	if err := h.ARPHandler.MinuteTicker(now); err != nil {
+		fmt.Printf("packet: error in arp minute ticker err=\"%s\"\n", err)
+	}
 	h.ICMP4Handler.MinuteTicker(now)
 	h.ICMP6Handler.MinuteTicker(now)
 	h.DHCP4Handler.MinuteTicker(now)
