@@ -98,8 +98,8 @@ func (h *Handler) MinuteTicker(now time.Time) error {
 
 	for _, host := range h.session.GetHosts() {
 		host.MACEntry.Row.RLock()
-		if host.Online && host.LastSeen.Before(now) && host.IP.To4() != nil {
-			arpAddrs = append(arpAddrs, packet.Addr{MAC: host.MACEntry.MAC, IP: host.IP})
+		if host.Online && host.LastSeen.Before(now) && host.Addr.IP.To4() != nil {
+			arpAddrs = append(arpAddrs, packet.Addr{MAC: host.MACEntry.MAC, IP: host.Addr.IP})
 		}
 		host.MACEntry.Row.RUnlock()
 	}

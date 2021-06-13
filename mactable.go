@@ -65,7 +65,7 @@ func (e *MACEntry) link(host *Host) {
 // unlink removes the Host from the macEntry
 func (e *MACEntry) unlink(host *Host) {
 	for i := range e.HostList {
-		if e.HostList[i].IP.Equal(host.IP) {
+		if e.HostList[i].Addr.IP.Equal(host.Addr.IP) {
 			if i+1 == len(e.HostList) { // last element?
 				e.HostList = e.HostList[:i]
 				return

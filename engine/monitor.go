@@ -13,8 +13,8 @@ func (h *Handler) lockAndMonitorRoute(now time.Time) (err error) {
 	table := h.session.GetHosts()
 	for _, host := range table {
 		host.MACEntry.Row.RLock()
-		if host.HuntStage == packet.StageRedirected && host.IP.To4() != nil {
-			addr := packet.Addr{MAC: host.MACEntry.MAC, IP: host.IP}
+		if host.HuntStage == packet.StageRedirected && host.Addr.IP.To4() != nil {
+			addr := packet.Addr{MAC: host.MACEntry.MAC, IP: host.Addr.IP}
 			host.MACEntry.Row.RUnlock()
 			_, err := h.ICMP4Handler.CheckAddr(addr) // ping host
 			if errors.Is(err, packet.ErrNotRedirected) {

@@ -46,7 +46,7 @@ func (h *Handler) Capture(mac net.HardwareAddr) error {
 
 	list := []packet.Addr{}
 	for _, host := range macEntry.HostList {
-		list = append(list, packet.Addr{IP: host.IP, MAC: host.MACEntry.MAC})
+		list = append(list, packet.Addr{IP: host.Addr.IP, MAC: host.MACEntry.MAC})
 	}
 	h.session.GlobalUnlock()
 
@@ -171,7 +171,7 @@ func (h *Handler) lockAndStopHunt(host *packet.Host, stage packet.HuntStage) (er
 		fmt.Printf("packet: stop hunt for %s\n", host)
 	}
 
-	addr := packet.Addr{MAC: host.MACEntry.MAC, IP: host.IP}
+	addr := packet.Addr{MAC: host.MACEntry.MAC, IP: host.Addr.IP}
 	host.MACEntry.Row.Unlock()
 
 	// IP4 handlers
@@ -219,22 +219,22 @@ func (h *Handler) lockAndSetOnline(host *packet.Host, notify bool) {
 	// if transitioning to online, test if we need to make previous IP offline
 	offline := []*packet.Host{}
 	if !host.Online {
-		if host.IP.To4() != nil {
-			if !host.IP.Equal(host.MACEntry.IP4) { // changed IP4
-				fmt.Printf("packet: host changed ip4 mac=%s from=%s to=%s\n", host.MACEntry.MAC, host.MACEntry.IP4, host.IP)
+		if host.Addr.IP.To4() != nil {
+			if !host.Addr.IP.Equal(host.MACEntry.IP4) { // changed IP4
+				fmt.Printf("packet: host changed ip4 mac=%s from=%s to=%s\n", host.MACEntry.MAC, host.MACEntry.IP4, host.Addr.IP)
 			}
 			for _, v := range host.MACEntry.HostList {
-				if ip := v.IP.To4(); ip != nil && !ip.Equal(host.IP) {
+				if ip := v.Addr.IP.To4(); ip != nil && !ip.Equal(host.Addr.IP) {
 					offline = append(offline, v)
 				}
 			}
 		} else {
-			if host.IP.IsGlobalUnicast() && !host.IP.Equal(host.MACEntry.IP6GUA) { // changed IP6 global unique address
-				fmt.Printf("packet: host changed ip6 mac=%s from=%s to=%s\n", host.MACEntry.MAC, host.MACEntry.IP6GUA, host.IP)
+			if host.Addr.IP.IsGlobalUnicast() && !host.Addr.IP.Equal(host.MACEntry.IP6GUA) { // changed IP6 global unique address
+				fmt.Printf("packet: host changed ip6 mac=%s from=%s to=%s\n", host.MACEntry.MAC, host.MACEntry.IP6GUA, host.Addr.IP)
 				// offlineIP = host.MACEntry.IP6GUA
 			}
-			if host.IP.IsLinkLocalUnicast() && !host.IP.Equal(host.MACEntry.IP6LLA) { // changed IP6 link local address
-				fmt.Printf("packet: host changed ip6LLA mac=%s from=%s to=%s\n", host.MACEntry.MAC, host.MACEntry.IP6LLA, host.IP)
+			if host.Addr.IP.IsLinkLocalUnicast() && !host.Addr.IP.Equal(host.MACEntry.IP6LLA) { // changed IP6 link local address
+				fmt.Printf("packet: host changed ip6LLA mac=%s from=%s to=%s\n", host.MACEntry.MAC, host.MACEntry.IP6LLA, host.Addr.IP)
 				// don't set offline IP as we don't target LLA
 			}
 		}
@@ -254,7 +254,7 @@ func (h *Handler) lockAndSetOnline(host *packet.Host, notify bool) {
 	// update LastSeen and current mac IP
 	host.MACEntry.LastSeen = now
 	host.LastSeen = now
-	host.MACEntry.UpdateIPNoLock(host.IP)
+	host.MACEntry.UpdateIPNoLock(host.Addr.IP)
 
 	// return immediately if host already online and not notification
 	if host.Online && !notify {
@@ -266,7 +266,7 @@ func (h *Handler) lockAndSetOnline(host *packet.Host, notify bool) {
 
 	host.MACEntry.Online = true
 	host.Online = true
-	addr := packet.Addr{IP: host.IP, MAC: host.MACEntry.MAC}
+	addr := packet.Addr{IP: host.Addr.IP, MAC: host.MACEntry.MAC}
 	notification := Notification{Addr: addr, Online: true, DHCPName: host.DHCP4Name, IsRouter: host.MACEntry.IsRouter}
 
 	if packet.Debug {
@@ -311,7 +311,7 @@ func (h *Handler) lockAndSetOffline(host *packet.Host) {
 		fmt.Printf("packet: IP is offline %s\n", host)
 	}
 	host.Online = false
-	notification := Notification{Addr: packet.Addr{MAC: host.MACEntry.MAC, IP: host.IP}, Online: false}
+	notification := Notification{Addr: packet.Addr{MAC: host.MACEntry.MAC, IP: host.Addr.IP}, Online: false}
 
 	// Update mac online status if all hosts are offline
 	macOnline := false

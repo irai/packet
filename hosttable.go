@@ -22,7 +22,8 @@ type HostTable struct {
 // Host has a RWMutex used to sync access to the record. This must be read locked to access fields or write locked for updating
 // When locking the engine, you must lock the engine first then row lock to avoid deadlocks
 type Host struct {
-	IP        net.IP    // either IP6 or ip4
+	// Addr.IP   net.IP    // either IP6 or ip4
+	Addr      Addr      // MAC and IP
 	MACEntry  *MACEntry // pointer to mac entry
 	Online    bool      // keep host online / offline state
 	HuntStage HuntStage // keep host overall huntStage
@@ -37,7 +38,7 @@ func (e *Host) String() string {
 	b.WriteString("mac=")
 	b.WriteString(e.MACEntry.MAC.String())
 	b.WriteString(" ip=")
-	b.WriteString(e.IP.String())
+	b.WriteString(e.Addr.IP.String())
 	if e.Online {
 		b.WriteString(" online=true")
 	} else {
@@ -157,6 +158,7 @@ func (h *Session) findOrCreateHost(addr Addr) (host *Host, found bool) {
 			macEntry := h.MACTable.FindOrCreateNoLock(CopyMAC(addr.MAC))
 			macEntry.Row.Lock()          // acquire lock on new macEntry
 			macEntry.link(host)          // link macEntry to host
+			host.Addr.MAC = macEntry.MAC // new mac
 			host.MACEntry = macEntry     // link host to macEntry
 			host.HuntStage = StageNormal // reset stage
 			host.DHCP4Name = ""          // clear name from previous host
@@ -167,7 +169,7 @@ func (h *Session) findOrCreateHost(addr Addr) (host *Host, found bool) {
 		return host, true
 	}
 	macEntry := h.MACTable.FindOrCreateNoLock(CopyMAC(addr.MAC))
-	host = &Host{IP: CopyIP(addr.IP), MACEntry: macEntry, Online: false} // set Online to false to trigger Online transition
+	host = &Host{Addr: Addr{IP: CopyIP(addr.IP), MAC: macEntry.MAC}, MACEntry: macEntry, Online: false} // set Online to false to trigger Online transition
 	host.LastSeen = now
 	host.HuntStage = StageNormal
 	host.MACEntry.LastSeen = now
@@ -244,7 +246,7 @@ func (h *Session) FindByMAC(mac net.HardwareAddr) (list []Addr) {
 	defer h.mutex.RUnlock()
 	for _, v := range h.HostTable.Table {
 		if bytes.Equal(v.MACEntry.MAC, mac) {
-			list = append(list, Addr{MAC: v.MACEntry.MAC, IP: v.IP})
+			list = append(list, Addr{MAC: v.MACEntry.MAC, IP: v.Addr.IP})
 		}
 	}
 	return list

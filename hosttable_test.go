@@ -58,7 +58,7 @@ func TestHandler_findOrCreateHostTestCopyIPMAC(t *testing.T) {
 	host, _ := session.findOrCreateHost(Addr{MAC: net.HardwareAddr(bufMAC), IP: net.IP(bufIP)})
 	bufIP[0] = 0xff
 	bufMAC[0] = 0x00
-	if !host.IP.Equal(ip) {
+	if !host.Addr.IP.Equal(ip) {
 		session.printHostTable()
 		t.Error("findOrCreateHost wrong IP", host, host.MACEntry)
 	}
@@ -73,7 +73,7 @@ func TestHandler_findOrCreateHostTestCopyIPMAC(t *testing.T) {
 	host, _ = session.findOrCreateHost(Addr{MAC: net.HardwareAddr(bufMAC), IP: net.IP(bufIP6)})
 	bufIP6[8] = 0xff
 	bufMAC[0] = 0x00
-	if !host.IP.Equal(ip6) {
+	if !host.Addr.IP.Equal(ip6) {
 		t.Error("findOrCreateHost wrong IP", host, host.MACEntry)
 	}
 	if !bytes.Equal(mac, host.MACEntry.MAC) {
@@ -98,7 +98,7 @@ func Benchmark_findOrCreateHost(b *testing.B) {
 		ip[3] = byte(i % 64)
 		mac[5] = byte(i % 64)
 		host, _ := engine.findOrCreateHost(Addr{MAC: mac, IP: ip})
-		if host.IP.Equal(net.IPv4zero) {
+		if host.Addr.IP.Equal(net.IPv4zero) {
 			fmt.Println("invalid host")
 		}
 	}

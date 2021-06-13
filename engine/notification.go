@@ -36,17 +36,17 @@ func (h *Handler) purge(now time.Time, probeDur time.Duration, offlineDur time.D
 
 		// Delete from table if the device is offline and was not seen for the last hour
 		if !e.Online && e.LastSeen.Before(deleteCutoff) {
-			purge = append(purge, e.IP)
+			purge = append(purge, e.Addr.IP)
 			e.MACEntry.Row.RUnlock()
 			continue
 		}
 
 		// Probe if device not seen recently
 		if e.Online && e.LastSeen.Before(probeCutoff) {
-			if ip := e.IP.To4(); ip != nil {
+			if ip := e.Addr.IP.To4(); ip != nil {
 				h.ARPHandler.CheckAddr(packet.Addr{MAC: e.MACEntry.MAC, IP: ip})
 			} else {
-				h.ICMP6Handler.CheckAddr(packet.Addr{MAC: e.MACEntry.MAC, IP: e.IP})
+				h.ICMP6Handler.CheckAddr(packet.Addr{MAC: e.MACEntry.MAC, IP: e.Addr.IP})
 			}
 		}
 
@@ -82,7 +82,7 @@ func (h *Handler) GetNotificationChannel() <-chan Notification {
 	h.session.GlobalRLock()
 	for _, host := range h.session.HostTable.Table {
 		host.MACEntry.Row.RLock()
-		list = append(list, Notification{Addr: packet.Addr{IP: host.IP, MAC: host.MACEntry.MAC}, Online: host.Online, DHCPName: host.DHCP4Name, IsRouter: host.MACEntry.IsRouter})
+		list = append(list, Notification{Addr: host.Addr, Online: host.Online, DHCPName: host.DHCP4Name, IsRouter: host.MACEntry.IsRouter})
 		host.MACEntry.Row.RUnlock()
 	}
 	h.session.GlobalRUnlock()

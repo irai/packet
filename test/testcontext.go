@@ -331,7 +331,7 @@ func newArpAnnoucementEvent(addr packet.Addr, hostInc int, macInc int) []TestEve
 	return []TestEvent{
 		{name: "arp-announcement-" + addr.MAC.String(), action: "arpAnnouncement", hostTableInc: hostInc, macTableInc: macInc, responsePos: -1, responseTableInc: 0,
 			srcAddr:       addr,
-			wantHost:      &packet.Host{IP: addr.IP, Online: true},
+			wantHost:      &packet.Host{Addr: addr, Online: true},
 			waitTimeAfter: time.Millisecond * 10,
 		},
 	}
@@ -368,17 +368,17 @@ func NewHostEvents(addr packet.Addr, hostName string, hostInc int, macInc int) [
 		{name: "request-" + addr.MAC.String(), action: "dhcp4Request", hostTableInc: hostInc, macTableInc: 0, responsePos: -1, responseTableInc: -1,
 			srcAddr:       packet.Addr{MAC: addr.MAC, IP: net.IPv4zero},
 			dhcpHostName:  hostName,
-			wantHost:      &packet.Host{IP: nil, Online: true},
+			wantHost:      &packet.Host{Addr: packet.Addr{}, Online: true},
 			waitTimeAfter: time.Millisecond * 50,
 		},
 		{name: "arp-probe-" + addr.MAC.String(), action: "arpProbe", hostTableInc: 0, macTableInc: 0, responsePos: -1, responseTableInc: 0,
 			srcAddr:       packet.Addr{MAC: addr.MAC, IP: net.IPv4zero},
-			wantHost:      &packet.Host{IP: nil, Online: true},
+			wantHost:      &packet.Host{Addr: packet.Addr{}, Online: true},
 			waitTimeAfter: time.Millisecond * 10,
 		},
 		{name: "arp-announcement-" + addr.MAC.String(), action: "arpAnnouncement", hostTableInc: 0, macTableInc: 0, responsePos: -1, responseTableInc: 0,
 			srcAddr:       packet.Addr{MAC: addr.MAC, IP: nil}, // set IP to zero to use savedIP
-			wantHost:      &packet.Host{IP: nil, Online: true},
+			wantHost:      &packet.Host{Addr: packet.Addr{}, Online: true},
 			waitTimeAfter: time.Millisecond * 10,
 		},
 	}
@@ -477,7 +477,7 @@ func runAction(t *testing.T, tc *TestContext, tt TestEvent) {
 	}
 
 	if tt.wantHost != nil {
-		ip := tt.wantHost.IP
+		ip := tt.wantHost.Addr.IP
 		if ip == nil {
 			ip = tc.IPOffer
 		}
