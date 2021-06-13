@@ -77,6 +77,52 @@ func TestHandler_findOrCreateHostDupIP(t *testing.T) {
 	}
 }
 
+// TestHandler_anotherHostDHCP test the stage transition when dhcp is for another host
+//
+func TestHandler_anotherHostDHCP(t *testing.T) {
+	engine := setupTestHandler()
+
+	packet.Debug = false
+
+	// First create host with two IPs - IP3 and IP2 and set online
+	addr := packet.Addr{MAC: mac1, IP: ip3}
+	host1, _ := engine.session.FindOrCreateHost(addr)
+	engine.lockAndSetOnline(host1, true)
+	if err := engine.Capture(mac1); err != nil {
+		t.Fatal(err)
+	}
+
+	if !host1.MACEntry.Captured {
+		engine.session.PrintTable()
+		t.Fatal("host not captured")
+	}
+	if host1.HuntStage != packet.StageHunt {
+		t.Fatalf("invalid stage=%v want=%v", host1.HuntStage, packet.StageHunt)
+	}
+
+	// simulate DHCP same host result
+	result := packet.Result{}
+	result.Update = true
+	result.IsRouter = true  // hack to mark result as a new host
+	result.FrameAddr = addr // same addr IP
+	result.Name = "New name"
+	result.HuntStage = packet.StageNoChange
+	engine.lockAndProcessDHCP4Update(host1, result)
+	// it is the same IP, stage should not change
+	if host1.HuntStage != packet.StageHunt {
+		t.Fatalf("invalid stage=%v want=%v", host1.HuntStage, packet.StageHunt)
+	}
+
+	if n := len(engine.session.MACTable.Table); n != 1 {
+		engine.PrintTable()
+		t.Fatal(fmt.Sprintf("invalid mac table len=%d", n))
+	}
+	if n := len(engine.session.HostTable.Table); n != 1 {
+		engine.PrintTable()
+		t.Fatal(fmt.Sprintf("invalid host table len=%d ", n))
+	}
+}
+
 func TestHandler_Offline(t *testing.T) {
 	engine := setupTestHandler()
 
