@@ -67,6 +67,8 @@ func GetNICInfo(nic string) (info *packet.NICInfo, err error) {
 	info.RouterMAC = defaultGW.MAC
 	info.HomeLAN4 = net.IPNet{IP: info.HostIP4.IP.Mask(info.HostIP4.Mask).To4(), Mask: info.HostIP4.Mask}
 	info.HostMAC = info.IFI.HardwareAddr
+	info.RouterAddr4 = packet.Addr{MAC: info.RouterMAC, IP: info.RouterIP4.IP}
+	info.HostAddr4 = packet.Addr{MAC: info.RouterMAC, IP: info.HostIP4.IP}
 	return info, nil
 }
 

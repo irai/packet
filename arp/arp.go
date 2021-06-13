@@ -99,13 +99,13 @@ func (h *Handler) MinuteTicker(now time.Time) error {
 	for _, host := range h.session.GetHosts() {
 		host.MACEntry.Row.RLock()
 		if host.Online && host.LastSeen.Before(now) && host.Addr.IP.To4() != nil {
-			arpAddrs = append(arpAddrs, packet.Addr{MAC: host.MACEntry.MAC, IP: host.Addr.IP})
+			arpAddrs = append(arpAddrs, host.Addr)
 		}
 		host.MACEntry.Row.RUnlock()
 	}
 
 	for _, addr := range arpAddrs {
-		h.Request(h.session.NICInfo.HostMAC, h.session.NICInfo.HostIP4.IP, addr.MAC, addr.IP.To4())
+		h.Request(h.session.NICInfo.HostAddr4, addr)
 	}
 	return nil
 }
@@ -114,7 +114,7 @@ func (h *Handler) MinuteTicker(now time.Time) error {
 //
 // The ARP handler sends a ARP Request packet
 func (h *Handler) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
-	err := h.request(EthernetBroadcast, h.session.NICInfo.HostMAC, h.session.NICInfo.HostIP4.IP, EthernetBroadcast, addr.IP)
+	err := h.request(EthernetBroadcast, h.session.NICInfo.HostAddr4, packet.Addr{MAC: EthernetBroadcast, IP: addr.IP})
 	h.arpMutex.Lock()
 	defer h.arpMutex.Unlock()
 	if _, found := h.huntList[string(addr.MAC)]; found {
@@ -203,7 +203,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (pac
 			if Debug {
 				log.Printf("arp: router spoofing - send reply i am ip=%s", frame.DstIP())
 			}
-			h.reply(frame.SrcMAC(), h.session.NICInfo.HostMAC, frame.DstIP(), frame.SrcMAC(), frame.SrcIP())
+			h.reply(frame.SrcMAC(), packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: frame.DstIP()}, packet.Addr{MAC: frame.SrcMAC(), IP: frame.SrcIP()})
 			return packet.Result{}, nil
 		}
 
@@ -233,7 +233,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (pac
 			//     arp  : probe reject for ip=8.8.8.8 from mac=84:11:9e:03:89:c0 (android phone) - 10 March 2021
 			if h.session.NICInfo.HomeLAN4.Contains(frame.DstIP()) {
 				fmt.Printf("arp   : probe reject for ip=%s from mac=%s macentry=%s\n", frame.DstIP(), frame.SrcMAC(), macEntry)
-				h.reply(frame.SrcMAC(), h.session.NICInfo.HostMAC, frame.DstIP(), frame.SrcMAC(), net.IP(EthernetBroadcast))
+				h.reply(frame.SrcMAC(), packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: frame.DstIP()}, packet.Addr{MAC: frame.SrcMAC(), IP: net.IP(EthernetBroadcast)})
 			}
 			return packet.Result{}, nil
 		}

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net"
 	"syscall"
+
+	"github.com/irai/packet"
 )
 
 // ARP Operation types
@@ -84,7 +86,7 @@ func (b ARP) String() string {
 // see format: https://en.wikipedia.org/wiki/Address_Resolution_Protocol
 //
 // operation - 1 request, 2 reply
-func MarshalBinary(b []byte, operation uint16, srcMAC net.HardwareAddr, srcIP net.IP, dstMAC net.HardwareAddr, dstIP net.IP) (ARP, error) {
+func MarshalBinary(b []byte, operation uint16, srcAddr packet.Addr, dstAddr packet.Addr) (ARP, error) {
 	if b == nil {
 		b = make([]byte, arpLen)
 	}
@@ -98,9 +100,9 @@ func MarshalBinary(b []byte, operation uint16, srcMAC net.HardwareAddr, srcIP ne
 	b[4] = 6                                             // mac len - fixed
 	b[5] = 4                                             // ipv4 len - fixed
 	binary.BigEndian.PutUint16(b[6:8], operation)        // operation
-	copy(b[8:8+6], srcMAC[:6])
-	copy(b[14:14+4], srcIP[:4])
-	copy(b[18:18+6], dstMAC[:6])
-	copy(b[24:24+4], dstIP[:4])
+	copy(b[8:8+6], srcAddr.MAC[:6])
+	copy(b[14:14+4], srcAddr.IP[:4])
+	copy(b[18:18+6], dstAddr.MAC[:6])
+	copy(b[24:24+4], dstAddr.IP[:4])
 	return b, nil
 }

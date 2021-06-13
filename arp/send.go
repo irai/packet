@@ -39,19 +39,19 @@ var (
 // | ACD announ | 1 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  clientIP |
 // +============+===+===========+===========+============+============+===================+===========+
 //
-func (h *Handler) Request(srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
+func (h *Handler) Request(srcAddr packet.Addr, dstAddr packet.Addr) error {
 	if Debug {
-		if srcIP.Equal(dstIP) {
-			log.Printf("arp send announcement - I am ip=%s mac=%s", srcIP, srcHwAddr)
+		if srcAddr.IP.Equal(dstAddr.IP) {
+			log.Printf("arp send announcement - I am ip=%s mac=%s", srcAddr.IP, srcAddr.MAC)
 		} else {
-			log.Printf("arp send request - who is ip=%s tell sip=%s smac=%s", dstIP, srcIP, srcHwAddr)
+			log.Printf("arp send request - who is ip=%s tell sip=%s smac=%s", dstAddr.IP, srcAddr.IP, srcAddr.MAC)
 		}
 	}
 
-	return h.request(EthernetBroadcast, srcHwAddr, srcIP, dstHwAddr, dstIP)
+	return h.request(EthernetBroadcast, srcAddr, dstAddr)
 }
 
-func (h *Handler) request(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
+func (h *Handler) request(dstEther net.HardwareAddr, srcAddr packet.Addr, dstAddr packet.Addr) error {
 	var b [packet.EthMaxSize]byte
 	ether := packet.Ether(b[0:])
 
@@ -59,7 +59,7 @@ func (h *Handler) request(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr,
 
 	// Send packet with ether src set to host but arp packet set to target
 	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_ARP, h.session.NICInfo.HostMAC, dstEther)
-	arp, err := MarshalBinary(ether.Payload(), OperationRequest, srcHwAddr, srcIP, dstHwAddr, dstIP)
+	arp, err := MarshalBinary(ether.Payload(), OperationRequest, srcAddr, dstAddr)
 	if err != nil {
 		return err
 	}
@@ -74,24 +74,26 @@ func (h *Handler) request(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr,
 // Reply send ARP reply from the src to the dst
 //
 // Call with dstHwAddr = ethernet.Broadcast to reply to all
-func (h *Handler) Reply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
+// func (h *Handler) Reply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
+func (h *Handler) Reply(dstEther net.HardwareAddr, srcAddr packet.Addr, dstAddr packet.Addr) error {
 	if Debug {
-		log.Printf("arp send reply - ip=%s is at mac=%s", srcIP, srcHwAddr)
+		log.Printf("arp send reply - ip=%s is at mac=%s", srcAddr.IP, srcAddr.MAC)
 	}
-	return h.reply(dstEther, srcHwAddr, srcIP, dstHwAddr, dstIP)
+	return h.reply(dstEther, srcAddr, dstAddr)
 }
 
 // reply sends a ARP reply packet from src to dst.
 //
 // dstEther identifies the target for the Ethernet packet : i.e. use EthernetBroadcast for gratuitous ARP
-func (h *Handler) reply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
+// func (h *Handler) reply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
+func (h *Handler) reply(dstEther net.HardwareAddr, srcAddr packet.Addr, dstAddr packet.Addr) error {
 	var b [packet.EthMaxSize]byte
 	ether := packet.Ether(b[0:])
 
 	// ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_ARP, srcHwAddr, dstEther)
 	// Send packet with ether src set to host but arp packet set to target
 	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_ARP, h.session.NICInfo.HostMAC, dstEther)
-	arp, err := MarshalBinary(ether.Payload(), OperationReply, srcHwAddr, srcIP, dstHwAddr, dstIP)
+	arp, err := MarshalBinary(ether.Payload(), OperationReply, srcAddr, dstAddr)
 	if err != nil {
 		return err
 	}
@@ -113,7 +115,7 @@ func (h *Handler) reply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, s
 // An ARP Probe conveys both a question ("Is anyone using this address?") and an
 // implied statement ("This is the address I hope to use.").
 func (h *Handler) Probe(ip net.IP) error {
-	return h.Request(h.session.NICInfo.HostMAC, net.IPv4zero, EthernetBroadcast, ip)
+	return h.Request(packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: net.IPv4zero}, packet.Addr{MAC: EthernetBroadcast, IP: ip})
 }
 
 // announce sends arp announcement packet
@@ -130,16 +132,16 @@ func (h *Handler) Probe(ip net.IP) error {
 // previously have been using the same address.  The host may begin
 // legitimately using the IP address immediately after sending the first
 // of the two ARP Announcements;
-func (h *Handler) announce(dstEther net.HardwareAddr, mac net.HardwareAddr, ip net.IP, targetMac net.HardwareAddr) (err error) {
+func (h *Handler) announce(dstEther net.HardwareAddr, srcAddr packet.Addr, targetMac net.HardwareAddr) (err error) {
 	if Debug {
 		if bytes.Equal(dstEther, EthernetBroadcast) {
-			log.Printf("arp send announcement broadcast - I am ip=%s mac=%s", ip, mac)
+			log.Printf("arp send announcement broadcast - I am %s\n", srcAddr)
 		} else {
-			log.Printf("arp send announcement unicast - I am ip=%s mac=%s to=%s", ip, mac, dstEther)
+			log.Printf("arp send announcement unicast - I am %s to=%s", srcAddr, dstEther)
 		}
 	}
 
-	err = h.request(dstEther, mac, ip, targetMac, ip)
+	err = h.request(dstEther, srcAddr, packet.Addr{MAC: targetMac, IP: srcAddr.IP})
 
 	/**
 	go func() {
@@ -160,7 +162,7 @@ func (h *Handler) WhoIs(ip net.IP) (packet.Addr, error) {
 		if host := h.session.FindIP(ip); host != nil {
 			return packet.Addr{IP: host.Addr.IP, MAC: host.MACEntry.MAC}, nil
 		}
-		if err := h.Request(h.session.NICInfo.HostMAC, h.session.NICInfo.HostIP4.IP, EthernetBroadcast, ip); err != nil {
+		if err := h.Request(h.session.NICInfo.HostAddr4, packet.Addr{MAC: EthernetBroadcast, IP: ip}); err != nil {
 			return packet.Addr{}, fmt.Errorf("arp WhoIs error: %w", err)
 		}
 		time.Sleep(time.Millisecond * 50)

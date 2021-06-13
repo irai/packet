@@ -9,17 +9,18 @@ import (
 type NICInfo struct {
 	IFI *net.Interface
 
-	HostMAC  net.HardwareAddr
-	HostIP4  net.IPNet
-	HomeLAN4 net.IPNet
-	HostLLA  net.IPNet
-	HostGUA  net.IPNet
-
+	HostMAC      net.HardwareAddr
+	HostIP4      net.IPNet
+	HomeLAN4     net.IPNet
+	HostLLA      net.IPNet
+	HostGUA      net.IPNet
 	RouterMAC    net.HardwareAddr
 	RouterIP4    net.IPNet
 	RouterLLA    net.IPNet
 	RouterGUA    net.IPNet
 	RouterPrefix net.IP
+	HostAddr4    Addr
+	RouterAddr4  Addr
 }
 
 func (e NICInfo) String() string {

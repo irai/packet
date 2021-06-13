@@ -32,6 +32,15 @@ var (
 	mac5      = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x05}
 	localIP   = net.IPv4(169, 254, 0, 10).To4()
 	localIP2  = net.IPv4(169, 254, 0, 11).To4()
+
+	addr1 = packet.Addr{MAC: mac1, IP: ip1}
+	addr2 = packet.Addr{MAC: mac2, IP: ip2}
+	addr3 = packet.Addr{MAC: mac3, IP: ip3}
+	addr4 = packet.Addr{MAC: mac4, IP: ip4}
+	addr5 = packet.Addr{MAC: mac5, IP: ip5}
+
+	routerAddr = packet.Addr{MAC: routerMAC, IP: routerIP}
+	hostAddr   = packet.Addr{MAC: hostMAC, IP: hostIP}
 )
 
 type testContext struct {
@@ -64,6 +73,7 @@ func setupTestHandler(t *testing.T) *testContext {
 		HostIP4:   net.IPNet{IP: hostIP, Mask: net.IPv4Mask(255, 255, 255, 0)},
 		RouterIP4: net.IPNet{IP: routerIP, Mask: net.IPv4Mask(255, 255, 255, 0)},
 		HomeLAN4:  homeLAN,
+		HostAddr4: packet.Addr{MAC: hostMAC, IP: hostIP},
 	}
 
 	if tc.arp, err = New(tc.session); err != nil {
@@ -144,15 +154,15 @@ func Test_Handler_BasicTest(t *testing.T) {
 	}{
 		{name: "replymac2",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac2, routerMAC),
-			arp:     newPacket(OperationReply, mac2, ip2, routerMAC, routerIP),
+			arp:     newPacket(OperationReply, addr2, routerAddr),
 			wantErr: nil, wantLen: 1, wantResult: true},
 		{name: "replymac3",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac3, routerMAC),
-			arp:     newPacket(OperationReply, mac3, ip3, routerMAC, routerIP),
+			arp:     newPacket(OperationReply, addr3, routerAddr),
 			wantErr: nil, wantLen: 2, wantResult: true},
 		{name: "replymac4",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac4, routerMAC),
-			arp:     newPacket(OperationReply, mac4, ip4, routerMAC, routerIP),
+			arp:     newPacket(OperationReply, addr4, routerAddr),
 			wantErr: nil, wantLen: 3, wantResult: true},
 	}
 

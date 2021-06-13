@@ -29,8 +29,8 @@ func TestHandler_arpcapture(t *testing.T) {
 		},
 		{name: "arp-announcement-" + addr.MAC.String(),
 			action: "arpAnnouncement", hostTableInc: 1, macTableInc: 0, responsePos: -1, responseTableInc: -1,
-			srcAddr:       packet.Addr{MAC: addr.MAC, IP: IP1}, // set IP to zero to use savedIP
-			wantHost:      &packet.Host{Addr: packet.Addr{IP: IP1}, Online: true},
+			srcAddr:       addr,
+			wantHost:      &packet.Host{Addr: addr, Online: true},
 			waitTimeAfter: time.Millisecond * 10,
 		},
 	}
@@ -63,15 +63,15 @@ func Test_Handler_CaptureEnterOffline(t *testing.T) {
 	}{
 		{name: "replymac2",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac2, routerMAC),
-			arp:     newPacket(OperationReply, mac2, ip2, routerMAC, routerIP),
+			arp:     newPacket(OperationReply, addr2, routerAddr),
 			wantErr: nil, wantLen: 3},
 		{name: "replymac3",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac3, routerMAC),
-			arp:     newPacket(OperationReply, mac3, ip3, routerMAC, routerIP),
+			arp:     newPacket(OperationReply, addr3, routerAddr),
 			wantErr: nil, wantLen: 4},
 		{name: "replymac4",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac4, routerMAC),
-			arp:     newPacket(OperationReply, mac4, ip4, routerMAC, routerIP),
+			arp:     newPacket(OperationReply, addr4, routerAddr),
 			wantErr: nil, wantLen: 5},
 	}
 

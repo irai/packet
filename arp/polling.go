@@ -23,6 +23,7 @@ func (h *Handler) ScanNetwork(ctx context.Context, lan net.IPNet) error {
 	if Debug {
 		log.Printf("arp Discovering IP - sending 254 ARP requests - lan %v", lan)
 	}
+	hostAddr := packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostIP4.IP}
 	for host := 1; host < 255; host++ {
 		ip[3] = byte(host)
 
@@ -31,7 +32,7 @@ func (h *Handler) ScanNetwork(ctx context.Context, lan net.IPNet) error {
 			continue
 		}
 
-		err := h.request(EthernetBroadcast, h.session.NICInfo.HostMAC, h.session.NICInfo.HostIP4.IP, EthernetBroadcast, ip)
+		err := h.request(EthernetBroadcast, hostAddr, packet.Addr{MAC: EthernetBroadcast, IP: ip})
 		if ctx.Err() == context.Canceled {
 			return nil
 		}
