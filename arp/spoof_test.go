@@ -32,15 +32,15 @@ func Test_Probe_Reject(t *testing.T) {
 		{name: "replyMAC3",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac3, hostMAC),
 			arp:     newPacket(OperationReply, mac3, ip3, hostMAC, hostIP),
-			wantErr: nil, wantLen: 2, wantIPs: 2, wantCountResponse: 3, hunt: true}, // MAC2 will start hunt and send two responses
+			wantErr: nil, wantLen: 2, wantIPs: 2, wantCountResponse: 1, hunt: true}, // MAC2 will start hunt and send single response
 		{name: "probeMAC2", // probe does not add host but will send a probe reject if IP is not our DHCP IP
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac2, EthernetBroadcast),
 			arp:     newPacket(OperationRequest, mac2, net.IPv4zero.To4(), zeroMAC, ip2),
-			wantErr: nil, wantLen: 2, wantIPs: 2, wantCountResponse: 7, hunt: false},
+			wantErr: nil, wantLen: 2, wantIPs: 2, wantCountResponse: 3, hunt: false},
 		{name: "probeMAC3", // probe does not add host but will send a probe reject if IP is not our DHCP IP
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac3, EthernetBroadcast),
 			arp:     newPacket(OperationRequest, mac3, net.IPv4zero.To4(), zeroMAC, ip3),
-			wantErr: nil, wantLen: 2, wantIPs: 2, wantCountResponse: 8, hunt: false},
+			wantErr: nil, wantLen: 2, wantIPs: 2, wantCountResponse: 4, hunt: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -71,7 +71,7 @@ func Test_Probe_Reject(t *testing.T) {
 			if tc.countResponse != tt.wantCountResponse {
 				t.Errorf("Test_Requests:%s invali response count=%v, want=%v", tt.name, tc.countResponse, tt.wantCountResponse)
 			}
-			if tt.hunt { // Hunt will send 3 packets for each mac
+			if tt.hunt { // Hunt will send 1 packets for each mac
 				tc.arp.StartHunt(packet.Addr{MAC: host.MACEntry.MAC, IP: host.MACEntry.IP4})
 			}
 		})
