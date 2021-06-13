@@ -344,11 +344,14 @@ func (h *Handler) lockAndProcessDHCP4Update(host *packet.Host, result packet.Res
 			notify = true
 		}
 		host.MACEntry.Row.Unlock()
-		huntStage := result.HuntStage
-		if huntStage == packet.StageNoChange {
-			huntStage = host.HuntStage // keep host stage
+
+		// when selecting or rebooting from another dhcp server,
+		// the host will not change state
+		if result.HuntStage == packet.StageNoChange {
+			return notify
 		}
-		if err := h.lockAndStopHunt(host, huntStage); err != nil {
+
+		if err := h.lockAndStopHunt(host, result.HuntStage); err != nil {
 			fmt.Printf("packet: failed to stop hunt %s error=\"%s\"", host, err)
 		}
 

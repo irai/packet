@@ -223,7 +223,6 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 		}
 
 	default:
-		// log.WithFields(log.Fields{"clientid": clientID, "mac": lease.Addr.MAC.String(), "ip": reqIP}).Error("dhcp4: request - ignore invalid state")
 		fmt.Printf("dhcp4 : error in request - ignore invalid operation %s operation=%v\n", fields, operation)
 		return packet.Result{}, nil
 	}
