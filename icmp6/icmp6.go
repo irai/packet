@@ -143,8 +143,9 @@ func (h *Handler) PingAll() error {
 }
 
 // MinuteTicker implements packet processor interface
+// Send echo request to all nodes
 func (h *Handler) MinuteTicker(now time.Time) error {
-	return nil
+	return h.SendEchoRequest(packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostLLA.IP}, packet.IP6AllNodesAddr, 199, 1)
 }
 
 // HuntStage implements PacketProcessor interface
