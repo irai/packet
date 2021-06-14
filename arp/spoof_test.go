@@ -68,9 +68,11 @@ func Test_Probe_Reject(t *testing.T) {
 				t.Fatalf("Test_Requests:%s table len = %v, wantLen %v", tt.name, len(tc.session.HostTable.Table), tt.wantLen)
 			}
 
+			tc.Lock()
 			if tc.countResponse != tt.wantCountResponse {
 				t.Errorf("Test_Requests:%s invali response count=%v, want=%v", tt.name, tc.countResponse, tt.wantCountResponse)
 			}
+			tc.Unlock()
 			if tt.hunt { // Hunt will send 1 packets for each mac
 				tc.arp.StartHunt(packet.Addr{MAC: host.MACEntry.MAC, IP: host.MACEntry.IP4})
 			}

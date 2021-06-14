@@ -52,6 +52,7 @@ type testContext struct {
 	ctx           context.Context
 	cancel        context.CancelFunc
 	countResponse int
+	sync.Mutex
 }
 
 func setupTestHandler(t *testing.T) *testContext {
@@ -127,7 +128,9 @@ func readResponse(ctx context.Context, tc *testContext) error {
 		if !arpFrame.IsValid() {
 			panic("invalid arp packet")
 		}
+		tc.Lock()
 		tc.countResponse++
+		tc.Unlock()
 		if true {
 			fmt.Printf("test  : got test number=%d response=%s\n", tc.countResponse, arpFrame)
 		}

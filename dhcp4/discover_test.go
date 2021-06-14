@@ -61,9 +61,11 @@ func TestDHCPHandler_handleDiscover(t *testing.T) {
 				tc.h.printTable()
 				t.Errorf("DHCPHandler.handleDiscover() invalid lease table len=%d want=%d", n, tt.tableLen)
 			}
+			tc.Lock()
 			if tt.responseCount != tc.count {
 				t.Errorf("DHCPHandler.handleDiscover() invalid response count=%d want=%d", tc.count, tt.responseCount)
 			}
+			tc.Unlock()
 		})
 	}
 	checkLeaseTable(t, tc, 0, 2, 0)
@@ -112,9 +114,11 @@ func TestDHCPHandler_exhaust(t *testing.T) {
 				tc.h.printTable()
 				t.Errorf("DHCPHandler.handleDiscover() invalid lease table len=%d want=%d", n, tt.tableLen)
 			}
+			tc.Lock()
 			if tt.responseCount != tc.count {
 				t.Errorf("DHCPHandler.handleDiscover() invalid response count=%d want=%d", tc.count, tt.responseCount)
 			}
+			tc.Unlock()
 		})
 	}
 	checkLeaseTable(t, tc, 0, 256, 0) // there will be 256 mac addresses but only 253 ips :-)

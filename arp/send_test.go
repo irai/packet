@@ -88,6 +88,8 @@ func Test_Handler_ARPRequests(t *testing.T) {
 				t.Errorf("Test_Requests:%s table len = %v, wantLen %v", tt.name, len(tc.session.HostTable.Table), tt.wantLen)
 			}
 
+			tc.Lock()
+			defer tc.Unlock()
 			if tc.countResponse != tt.wantCountResponse {
 				t.Errorf("Test_Requests:%s invali response count=%v, want=%v", tt.name, tc.countResponse, tt.wantCountResponse)
 			}

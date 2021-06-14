@@ -148,14 +148,19 @@ func newDHCPHost(t *testing.T, tc *testContext, mac net.HardwareAddr) []byte {
 	dstAddr := packet.Addr{MAC: arp.EthernetBroadcast, IP: net.IPv4zero, Port: packet.DHCP4ServerPort}
 
 	dhcpFrame := newDHCP4DiscoverFrame(srcAddr, srcAddr.MAC.String(), xid)
+	tc.Lock()
 	tc.IPOffer = nil
+	tc.Unlock()
 	if _, err := processTestDHCP4Packet(t, tc, srcAddr, dstAddr, dhcpFrame); err != nil {
 		t.Fatalf("newDHCPHost() error sending packet error=%s", err)
 	}
 	time.Sleep(time.Millisecond * 10)
+	tc.Lock()
 	if tc.IPOffer == nil {
+		tc.Unlock()
 		t.Fatalf("didn't get ip offer, check sleep time")
 	}
+	tc.Unlock()
 
 	dhcpFrame = newDHCP4RequestFrame(srcAddr, srcAddr.MAC.String(), hostIP4, tc.IPOffer, xid)
 	result := packet.Result{}

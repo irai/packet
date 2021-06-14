@@ -61,6 +61,7 @@ type testContext struct {
 	xid           int
 	IPOffer       net.IP
 	count         int
+	sync.Mutex
 }
 
 func readResponse(ctx context.Context, tc *testContext) error {
@@ -98,8 +99,10 @@ func readResponse(ctx context.Context, tc *testContext) error {
 			if ip == nil {
 				panic("ip is nil")
 			}
+			tc.Lock()
 			tc.IPOffer = ip
 			tc.count++
+			tc.Unlock()
 		}
 
 		tmp := make([]byte, len(buf))
