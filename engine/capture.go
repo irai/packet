@@ -125,14 +125,14 @@ func (h *Handler) lockAndStartHunt(addr packet.Addr) (err error) {
 	// IP4 handlers
 	if addr.IP.To4() != nil {
 		go func() {
-			if _, err = h.ARPHandler.StartHunt(addr); err != nil {
+			if _, err := h.ARPHandler.StartHunt(addr); err != nil {
 				fmt.Printf("packet: failed to start arp hunt: %s", err.Error())
 			}
-			if _, err = h.ICMP4Handler.StartHunt(addr); err != nil {
+			if _, err := h.ICMP4Handler.StartHunt(addr); err != nil {
 				fmt.Printf("packet: failed to start icmp4 hunt: %s", err.Error())
 			}
-			if _, err = h.DHCP4Handler.StartHunt(addr); err != nil {
-				fmt.Printf("packet: failed to start dhcp4 hunt: %s", err.Error())
+			if _, err := h.DHCP4Handler.StartHunt(addr); err != nil {
+				fmt.Printf("packet: fai1led to start dhcp4 hunt: %s", err.Error())
 			}
 		}()
 		return nil
@@ -144,7 +144,7 @@ func (h *Handler) lockAndStartHunt(addr packet.Addr) (err error) {
 		return nil
 	}
 	go func() {
-		if _, err = h.ICMP6Handler.StartHunt(addr); err != nil {
+		if _, err := h.ICMP6Handler.StartHunt(addr); err != nil {
 			fmt.Printf("packet: failed to start icmp6 hunt: %s", err.Error())
 		}
 	}()
@@ -178,13 +178,13 @@ func (h *Handler) lockAndStopHunt(host *packet.Host, stage packet.HuntStage) (er
 	if addr.IP.To4() != nil {
 		go func() {
 			// DHCP4 will return not found if there is no lease entry; this is okay if the host has not acquired an IP yet
-			if _, err = h.DHCP4Handler.StopHunt(addr); err != nil && !errors.Is(err, packet.ErrNotFound) {
+			if _, err := h.DHCP4Handler.StopHunt(addr); err != nil && !errors.Is(err, packet.ErrNotFound) {
 				fmt.Printf("packet: failed to stop dhcp4 hunt: %s", err.Error())
 			}
-			if _, err = h.ICMP4Handler.StopHunt(addr); err != nil {
+			if _, err := h.ICMP4Handler.StopHunt(addr); err != nil {
 				fmt.Printf("packet: failed to stop icmp4 hunt: %s", err.Error())
 			}
-			if _, err = h.ARPHandler.StopHunt(addr); err != nil {
+			if _, err := h.ARPHandler.StopHunt(addr); err != nil {
 				fmt.Printf("packet: failed to stop arp hunt: %s", err.Error())
 			}
 		}()
@@ -193,7 +193,7 @@ func (h *Handler) lockAndStopHunt(host *packet.Host, stage packet.HuntStage) (er
 
 	// IP6 handlers
 	go func() {
-		if _, err = h.ICMP6Handler.StopHunt(addr); err != nil {
+		if _, err := h.ICMP6Handler.StopHunt(addr); err != nil {
 			fmt.Printf("packet: failed to stop icmp6 hunt: %s", err.Error())
 		}
 	}()
