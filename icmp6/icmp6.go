@@ -200,10 +200,7 @@ func (h *Handler) sendPacket(srcAddr packet.Addr, dstAddr packet.Addr, b []byte)
 	copy(psh[40:], b)
 	ICMP6(ip6.Payload()).SetChecksum(packet.Checksum(psh))
 
-	// icmp6 := ICMP6(packet.IP6(ether.Payload()).Payload())
-	// fmt.Println("DEBUG icmp :", icmp6, len(icmp6))
-	// fmt.Println("DEBUG ether:", ether, len(ether), len(b))
-	if _, err := h.session.Conn.WriteTo(ether, &packet.Addr{MAC: dstAddr.MAC}); err != nil {
+	if _, err := h.session.Conn.WriteTo(ether, &dstAddr); err != nil {
 		log.Error("icmp failed to write ", err)
 		return err
 	}
