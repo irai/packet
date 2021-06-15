@@ -33,35 +33,3 @@ func (h *Handler) sendPacket(srcAddr packet.Addr, dstAddr packet.Addr, p packet.
 
 	return nil
 }
-
-/***
-// PING send a standalone echo packet in a new connection
-func PING(dstAddr packet.Addr) error {
-
-	c, err := net.ListenPacket("ip4:1", "0.0.0.0") // ICMP for IPv4
-	if err != nil {
-		log.Error("icmp error in listen packet: ", err)
-		return err
-	}
-	defer c.Close()
-
-	r, err := ipv4.NewRawConn(c)
-	if err != nil {
-		log.Error("icmp error in newrawconn: ", err)
-		return err
-	}
-	c, err := net.ListenPacket("ip4:1", "0.0.0.0") // ICMP for IPv4
-	if err != nil {
-		log.Error("icmp error in listen packet: ", err)
-		return err
-	}
-	defer c.Close()
-
-	if err := c.WriteTo(iph, p, nil); err != nil {
-		log.Error("icmp failed to write ", err)
-		return err
-	}
-
-	return nil
-}
-	***/
