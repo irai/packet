@@ -542,17 +542,17 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			case udpSrcPort == 5353 || udpDstPort == 5353:
 				// Multicast DNS
 				// do nothing
-				fmt.Printf("packet: MDNS %s\n", host)
+				fmt.Printf("proto : MDNS %s\n", host)
 
 			case udpSrcPort == 137 || udpDstPort == 137:
 				// NBNS
 				// do nothing
-				fmt.Printf("packet: NBNS %s\n", host)
+				fmt.Printf("proto : NBNS %s\n", host)
 
 			case udpSrcPort == 123:
 				// Network time synchonization protocol
 				// do nothing
-				fmt.Printf("packet: NTP %s\n", host)
+				fmt.Printf("proto : NTP %s\n", host)
 
 			case udpSrcPort == 433 || udpDstPort == 433:
 				// ssl udp - likely quic?
@@ -561,14 +561,14 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			case udpDstPort == 1900:
 				// Microsoft Simple Service Discovery Protocol
 				// do nothing
-				fmt.Printf("packet: Microsoft SSDP %s\n", host)
+				fmt.Printf("proto : Microsoft SSDP %s\n", host)
 
 			case udpDstPort == 3702:
 				// Web Services Discovery Protocol (WSD)
-				fmt.Printf("packet: WSD %s\n", host)
+				fmt.Printf("proto : WSD %s\n", host)
 
 			default:
-				fmt.Printf("packet: unexpected udp %s %s\n", udp, host)
+				fmt.Printf("proto : warning unexpected udp %s %s\n", udp, host)
 			}
 
 		case syscall.ETH_P_ARP: // ARP - 0x0806
