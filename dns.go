@@ -31,12 +31,29 @@ type DNSEntry struct {
 	PTRRecords   map[string]IPResourceRecord
 }
 
-var dnsMutex sync.RWMutex // dns table mutex
+// copy returns a deep copy of DNSEntry
+func (d DNSEntry) copy() DNSEntry {
+	e := DNSEntry{Name: d.Name}
+	e.IP4Records = make(map[netaddr.IP]IPResourceRecord, len(d.IP4Records))
+	e.IP6Records = make(map[netaddr.IP]IPResourceRecord, len(d.IP6Records))
+	e.CNameRecords = make(map[string]NameResourceRecord, len(d.CNameRecords))
+	e.PTRRecords = make(map[string]IPResourceRecord, len(d.PTRRecords))
+	for k, v := range d.IP4Records {
+		e.IP4Records[k] = v
+	}
+	for k, v := range d.IP6Records {
+		e.IP6Records[k] = v
+	}
+	for k, v := range d.CNameRecords {
+		e.CNameRecords[k] = v
+	}
+	for k, v := range d.PTRRecords {
+		e.PTRRecords[k] = v
+	}
+	return e
+}
 
 func (d DNSEntry) IP4List() []netaddr.IP {
-	dnsMutex.RLock()
-	defer dnsMutex.RUnlock()
-
 	list := make([]netaddr.IP, 0, len(d.IP4Records))
 	for _, v := range d.IP4Records {
 		list = append(list, v.IP)
@@ -45,9 +62,6 @@ func (d DNSEntry) IP4List() []netaddr.IP {
 }
 
 func (d DNSEntry) IP6List() []netaddr.IP {
-	dnsMutex.RLock()
-	defer dnsMutex.RUnlock()
-
 	list := make([]netaddr.IP, 0, len(d.IP6Records))
 	for _, v := range d.IP6Records {
 		list = append(list, v.IP)
@@ -56,9 +70,6 @@ func (d DNSEntry) IP6List() []netaddr.IP {
 }
 
 func (d DNSEntry) CNameList() []string {
-	dnsMutex.RLock()
-	defer dnsMutex.RUnlock()
-
 	list := make([]string, 0, len(d.CNameRecords))
 	for _, v := range d.CNameRecords {
 		list = append(list, v.CName)
@@ -100,13 +111,20 @@ func (d DNSEntry) print() {
 
 // DNS is specified in RFC 1034 / RFC 1035
 // see : https://github.com/google/gopacket/blob/master/layers/dns.go
+//
+// We maintain a table of all DNS entries in the session.
+var dnsMutex sync.RWMutex // dns table mutex
 
 // DNS maps a domain name server frame
 type DNS []byte
 
-func (p DNS) IsValid() bool {
-	return len(p) >= 12
+func (p DNS) IsValid() error {
+	if len(p) >= 12 {
+		return nil
+	}
+	return ErrFrameLen
 }
+
 func (p DNS) String() string {
 	return fmt.Sprintf("qr=%v tc=%v rcode=%v qdcount=%v ancount=%v", p.QR(), p.TC(), p.ResponseCode(), p.QDCount(), p.ANCount())
 }
@@ -124,7 +142,16 @@ func (p DNS) QDCount() uint16       { return binary.BigEndian.Uint16(p[4:6]) }  
 func (p DNS) ANCount() uint16       { return binary.BigEndian.Uint16(p[6:8]) }   // answer count
 func (p DNS) NSCount() uint16       { return binary.BigEndian.Uint16(p[8:10]) }  // Authority record count
 func (p DNS) ARCount() uint16       { return binary.BigEndian.Uint16(p[10:12]) } // Additional information count
-func (p DNS) Decode() (e DNSEntry, err error) {
+
+func newDNSEntry() (entry DNSEntry) {
+	entry.IP4Records = make(map[netaddr.IP]IPResourceRecord)
+	entry.IP6Records = make(map[netaddr.IP]IPResourceRecord)
+	entry.CNameRecords = make(map[string]NameResourceRecord)
+	entry.PTRRecords = make(map[string]IPResourceRecord)
+	return entry
+}
+
+func (p DNS) decode() (e DNSEntry, err error) {
 	// buffer for doing name decoding.  We use a single reusable buffer to avoid
 	// name decoding on a single object via multiple DecodeFromBytes calls
 	// requiring constant allocation of small byte slices.
@@ -150,22 +177,14 @@ func (p DNS) Decode() (e DNSEntry, err error) {
 	return e, nil
 }
 
-func newDNSEntry() (entry DNSEntry) {
-	entry.IP4Records = make(map[netaddr.IP]IPResourceRecord)
-	entry.IP6Records = make(map[netaddr.IP]IPResourceRecord)
-	entry.CNameRecords = make(map[string]NameResourceRecord)
-	entry.PTRRecords = make(map[string]IPResourceRecord)
-	return entry
-}
-
 func (e *DNSEntry) decodeQuestion(p DNS, index int, buffer *[]byte) (int, error) {
 	if p.QDCount() != 1 { // assume a single question
-		return -1, ErrParseMessage
+		return -1, ErrParseFrame
 	}
 
 	// get first answer
 	if index+6 > len(p) { // must have at least 2 bytes name, 4 bytes type and class
-		return -1, ErrParseMessage
+		return -1, ErrParseFrame
 	}
 	name, endq, err := decodeName(p, index, buffer, 1)
 	if err != nil {
@@ -279,11 +298,11 @@ const maxRecursionLevel = 255
 // decodeName extracted from https://github.com/google/gopacket/blob/master/layers/dns.go
 func decodeName(data []byte, offset int, buffer *[]byte, level int) ([]byte, int, error) {
 	if level > maxRecursionLevel {
-		return nil, 0, ErrParseMessage
+		return nil, 0, ErrParseFrame
 	} else if offset >= len(data) {
-		return nil, 0, ErrParseMessage
+		return nil, 0, ErrParseFrame
 	} else if offset < 0 {
-		return nil, 0, ErrParseMessage
+		return nil, 0, ErrParseFrame
 	}
 	start := len(*buffer)
 	index := offset
@@ -304,9 +323,9 @@ loop:
 			*/
 			index2 := index + int(data[index]) + 1
 			if index2-offset > 255 {
-				return nil, 0, ErrParseMessage
+				return nil, 0, ErrParseFrame
 			} else if index2 < index+1 || index2 > len(data) {
-				return nil, 0, ErrParseMessage
+				return nil, 0, ErrParseFrame
 			}
 			*buffer = append(*buffer, '.')
 			*buffer = append(*buffer, data[index+1:index2]...)
@@ -331,11 +350,11 @@ loop:
 			      - a sequence of labels ending with a pointer
 			*/
 			if index+2 > len(data) {
-				return nil, 0, ErrParseMessage
+				return nil, 0, ErrParseFrame
 			}
 			offsetp := int(binary.BigEndian.Uint16(data[index:index+2]) & 0x3fff)
 			if offsetp > len(data) {
-				return nil, 0, ErrParseMessage
+				return nil, 0, ErrParseFrame
 			}
 			// This looks a little tricky, but actually isn't.  Because of how
 			// decodeName is written, calling it appends the decoded name to the
@@ -357,7 +376,7 @@ loop:
 				data[index], index)
 		}
 		if index >= len(data) {
-			return nil, 0, ErrParseMessage
+			return nil, 0, ErrParseFrame
 		}
 	}
 	if len(*buffer) <= start {
@@ -410,6 +429,15 @@ func (h *Session) DNSExist(ip netaddr.IP) bool {
 	return false
 }
 
+func (h *Session) DNSFind(name string) DNSEntry {
+	dnsMutex.RLock()
+	defer dnsMutex.RUnlock()
+	if e, found := h.DNSTable[name]; found {
+		return e.copy()
+	}
+	return DNSEntry{}
+}
+
 func (h *Session) DNSLookupPTR(ip netaddr.IP) {
 	if err := h.reverseDNS(ip); errors.Is(err, ErrNotFound) {
 		dnsMutex.Lock()
@@ -449,16 +477,15 @@ func (h *Session) DNSLookupPTR(ip netaddr.IP) {
 
 }
 
-func (h *Session) findDNSWithLock(name string) DNSEntry {
-	dnsMutex.RLock()
-	defer dnsMutex.RUnlock()
-	return h.DNSTable[name]
-}
-
-func (h *Session) ProcessDNS(host *Host, ether Ether, payload []byte) (e DNSEntry, err error) {
+// DNSProcess parse the DNS packet and record in DNS table.
+//
+// It returns a copy of the DNSEntry that is free from race conditions. The caller has a unique copy.
+//
+// TODO: optimise copy only on new values
+func (h *Session) DNSProcess(host *Host, ether Ether, payload []byte) (e DNSEntry, err error) {
 	p := DNS(payload)
-	if !p.IsValid() {
-		return DNSEntry{}, ErrParseMessage
+	if err := p.IsValid(); err != nil {
+		return DNSEntry{}, err
 	}
 
 	// buffer for doing name decoding.  We use a single reusable buffer to avoid
@@ -497,7 +524,7 @@ func (h *Session) ProcessDNS(host *Host, ether Ether, payload []byte) (e DNSEntr
 			e.print()
 		}
 		h.DNSTable[e.Name] = e
-		return e, nil
+		return e.copy(), nil // return a copy to avoid race on maps
 	}
 	return DNSEntry{}, nil
 }

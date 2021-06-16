@@ -45,11 +45,11 @@ func TestDNS_DecodeFacebook(t *testing.T) {
 	fmt.Println("udp", udp)
 	p := DNS(udp.Payload())
 	fmt.Println("dns", p)
-	if !p.IsValid() {
+	if p.IsValid() != nil {
 		t.Fatal("invalid dns packet")
 	}
 
-	entry, err := p.Decode()
+	entry, err := p.decode()
 	if err != nil {
 		t.Fatal("cannot decode", err)
 	}
@@ -115,11 +115,11 @@ func TestDNS_DecodeYouTube(t *testing.T) {
 	fmt.Println("udp", udp)
 	p := DNS(udp.Payload())
 	fmt.Println("dns", p)
-	if !p.IsValid() {
+	if p.IsValid() != nil {
 		t.Fatal("invalid dns packet")
 	}
 
-	entry, err := p.Decode()
+	entry, err := p.decode()
 	if err != nil {
 		t.Fatal("cannot decode", err)
 	}
@@ -176,11 +176,11 @@ func TestDNS_DecodeBlockTheKids(t *testing.T) {
 	ip := IP4(wwwBlockthekidsComResponse)
 	udp := UDP(ip.Payload())
 	p := DNS(udp.Payload())
-	if !p.IsValid() {
+	if p.IsValid() != nil {
 		t.Fatal("invalid dns packet")
 	}
 
-	entry, err := p.Decode()
+	entry, err := p.decode()
 	if err != nil {
 		t.Fatal("cannot decode", err)
 	}
@@ -232,11 +232,11 @@ func TestDNS_DecodePTR(t *testing.T) {
 	ip := IP4(wwwPTRResponse)
 	udp := UDP(ip.Payload())
 	p := DNS(udp.Payload())
-	if !p.IsValid() {
+	if p.IsValid() != nil {
 		t.Fatal("invalid dns packet")
 	}
 
-	entry, err := p.Decode()
+	entry, err := p.decode()
 	if err != nil {
 		t.Fatal("cannot decode", err)
 	}
@@ -254,7 +254,7 @@ func TestDNS_ProcessDNS(t *testing.T) {
 		ip := IP4(v)
 		udp := UDP(ip.Payload())
 
-		r, err := session.ProcessDNS(nil, nil, udp.Payload())
+		r, err := session.DNSProcess(nil, nil, udp.Payload())
 		if err != nil {
 			t.Fatalf("invalid process packet bltk %+v %s", r, err)
 		}
@@ -295,6 +295,8 @@ func TestDNS_reverseDNS(t *testing.T) {
 
 }
 
+// Benchmark_DNSConcurrentAccess test concurrent access performance
+// Benchmark_DNSConcurrentAccess-8   	  114400	     10260 ns/op	    6267 B/op	      52 allocs/op
 func Benchmark_DNSConcurrentAccess(b *testing.B) {
 	session := setupTestHandler()
 
@@ -304,20 +306,20 @@ func Benchmark_DNSConcurrentAccess(b *testing.B) {
 				ip := IP4(v)
 				udp := UDP(ip.Payload())
 
-				r, err := session.ProcessDNS(nil, nil, udp.Payload())
+				r, err := session.DNSProcess(nil, nil, udp.Payload())
 				if err != nil {
 					b.Fatalf("invalid process packet bltk %+v %s\n", r, err)
 				}
 			}
-			e := session.findDNSWithLock("www.blockthekids.com")
+			e := session.DNSFind("www.blockthekids.com")
 			if e.Name != "www.blockthekids.com" {
 				b.Fatal("invalid blockthekids name", e)
 			}
-			e = session.findDNSWithLock("www.youtube.com")
+			e = session.DNSFind("www.youtube.com")
 			if e.Name != "www.youtube.com" {
 				b.Fatal("invalid youtube name", e)
 			}
-			e = session.findDNSWithLock("facebook.com")
+			e = session.DNSFind("facebook.com")
 			if e.Name != "facebook.com" {
 				session.PrintDNSTable()
 				b.Fatal("invalid facebook name", e)
