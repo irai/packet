@@ -258,7 +258,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (pac
 
 	dhcpFrame := DHCP4(udp.Payload())
 	if !dhcpFrame.IsValid() {
-		return packet.Result{}, packet.ErrParseMessage
+		return packet.Result{}, packet.ErrParseFrame
 	}
 	if Debug {
 		fmt.Printf("dhcp4 : ether %s\n", ether)
@@ -276,12 +276,12 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (pac
 	var reqType MessageType
 	if t := options[OptionDHCPMessageType]; len(t) != 1 {
 		log.Warn("dhcp4 : skiping dhcp packet with len not 1")
-		return packet.Result{}, packet.ErrParseMessage
+		return packet.Result{}, packet.ErrParseFrame
 	} else {
 		reqType = MessageType(t[0])
 		if reqType < Discover || reqType > Inform {
 			log.Warn("dhcp4 : skiping dhcp packet invalid type ", reqType)
-			return packet.Result{}, packet.ErrParseMessage
+			return packet.Result{}, packet.ErrParseFrame
 		}
 	}
 

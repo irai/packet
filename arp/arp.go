@@ -156,7 +156,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (pac
 	ether := packet.Ether(b)
 	frame := ARP(header)
 	if !frame.IsValid() {
-		return packet.Result{}, packet.ErrParseMessage
+		return packet.Result{}, packet.ErrParseFrame
 	}
 
 	// skip link local packets

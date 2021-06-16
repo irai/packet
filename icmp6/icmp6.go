@@ -234,7 +234,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 		frame := ICMP6NeighborAdvertisement(icmp6Frame)
 		if !frame.IsValid() {
 			fmt.Println("icmp6 : invalid NS msg")
-			return packet.Result{}, packet.ErrParseMessage
+			return packet.Result{}, packet.ErrParseFrame
 		}
 		fmt.Printf("icmp6 : neighbor advertisement from ip=%s %s\n", ip6Frame.Src(), frame)
 
@@ -252,7 +252,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 		frame := ICMP6NeighborSolicitation(icmp6Frame)
 		if !frame.IsValid() {
 			fmt.Println("icmp6 : invalid NS msg")
-			return packet.Result{}, packet.ErrParseMessage
+			return packet.Result{}, packet.ErrParseFrame
 		}
 		fmt.Printf("icmp6 : neighbor solicitation from ip=%s %s\n", ip6Frame.Src(), frame)
 
@@ -286,7 +286,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 		frame := ICMP6RouterAdvertisement(icmp6Frame)
 		if !frame.IsValid() {
 			fmt.Println("icmp6 : invalid icmp6 ra msg")
-			return packet.Result{}, packet.ErrParseMessage
+			return packet.Result{}, packet.ErrParseFrame
 		}
 
 		// wakeup all pending spoof goroutines
@@ -349,7 +349,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 	case ipv6.ICMPTypeRouterSolicitation:
 		frame := ICMP6RouterSolicitation(icmp6Frame)
 		if !frame.IsValid() {
-			return packet.Result{}, packet.ErrParseMessage
+			return packet.Result{}, packet.ErrParseFrame
 		}
 		if Debug {
 			fmt.Printf("icmp6 : router solicitation from ip=%s %s\n", ip6Frame.Src(), frame)

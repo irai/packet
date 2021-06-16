@@ -109,7 +109,7 @@ func (h *Session) ProcessIP6HopByHopExtension(host *Host, b []byte, header []byt
 	// ip6Frame := IP6(ether.Payload())
 	ip6HopExtensionHeader := HopByHopExtensionHeader(header)
 	if !ip6HopExtensionHeader.IsValid() {
-		return 0, ErrParseMessage
+		return 0, ErrParseFrame
 	}
 
 	data := ip6HopExtensionHeader.Data()
@@ -118,7 +118,7 @@ func (h *Session) ProcessIP6HopByHopExtension(host *Host, b []byte, header []byt
 		buffer := data[pos:]
 		if len(buffer) < 1 {
 			fmt.Printf("ip6   : error in extension index=%d pos=%d len=%d data=\"% x\"\n", i, pos, len(buffer), ip6HopExtensionHeader.Data())
-			return 0, ErrParseMessage
+			return 0, ErrParseFrame
 		}
 
 		// for IANA option types: see https://www.iana.org/assignments/ipv6-parameters/ipv6-parameters.xhtml
@@ -129,7 +129,7 @@ func (h *Session) ProcessIP6HopByHopExtension(host *Host, b []byte, header []byt
 		case 1: // pad N
 			if len(buffer) < 2 {
 				fmt.Printf("ip6   : error in extension pad N len=%d\n", len(buffer))
-				return 0, ErrParseMessage
+				return 0, ErrParseFrame
 			}
 
 			// for n bytes of padding, len contains n - 2 (i.e. it discounts type and len bytes)
@@ -138,7 +138,7 @@ func (h *Session) ProcessIP6HopByHopExtension(host *Host, b []byte, header []byt
 			// See https://tools.ietf.org/html/rfc2711
 			if len(buffer) < 4 {
 				fmt.Printf("ip6   : error in router alert option len=%d\n", n)
-				return 0, ErrParseMessage
+				return 0, ErrParseFrame
 			}
 			value := binary.BigEndian.Uint16(buffer[2 : 2+2])
 			pos = pos + 4 // fixed len 4
@@ -159,7 +159,7 @@ func (h *Session) ProcessIP6HopByHopExtension(host *Host, b []byte, header []byt
 			fmt.Printf("ip6   : unexpected hop by hop option type=%d data=\"% x\"\n", t, ip6HopExtensionHeader.Data())
 			if len(buffer) < 2 {
 				fmt.Printf("ip6   : error in unexpected extension len=%d", len(buffer))
-				return 0, ErrParseMessage
+				return 0, ErrParseFrame
 			}
 			pos = pos + int(buffer[1]) + 2
 		}

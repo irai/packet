@@ -527,7 +527,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				}
 			case udpSrcPort == 53: // DNS response
 				// TODO: move this to background goroutine
-				dnsEntry, err := h.session.ProcessDNS(host, ether, udp.Payload())
+				dnsEntry, err := h.session.DNSProcess(host, ether, udp.Payload())
 				if err != nil {
 					fmt.Printf("packet: error processing dns: %s\n", err)
 					break

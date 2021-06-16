@@ -39,7 +39,7 @@ func (p *bufferedPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
 
 func (p *bufferedPacketConn) WriteTo(b []byte, addr net.Addr) (int, error) {
 	if len(p.bufferChan) > maxBufSize-1 {
-		panic("buffered conn writing without read will block forever")
+		panic(fmt.Sprintf("buffered conn writing without read will block forever len=%d", len(p.bufferChan)))
 	}
 	t := make([]byte, len(b))
 	copy(t, b)

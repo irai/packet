@@ -114,7 +114,8 @@ const (
 var (
 	ErrInvalidLen    = errors.New("invalid len")
 	ErrPayloadTooBig = errors.New("payload too big")
-	ErrParseMessage  = errors.New("failed to parse message")
+	ErrParseFrame    = errors.New("failed to parse frame")
+	ErrFrameLen      = errors.New("invalid frame length")
 	ErrInvalidConn   = errors.New("invalid connection")
 	ErrInvalidIP     = errors.New("invalid ip")
 	ErrInvalidMAC    = errors.New("invalid mac")

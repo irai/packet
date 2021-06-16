@@ -152,14 +152,14 @@ func (h *Handler) processClientPacket(host *packet.Host, req DHCP4) error {
 	// req := DHCP4(buffer[:n])
 	if !req.IsValid() {
 		fmt.Println("dhcp4: clientLoop invalid packet len")
-		return packet.ErrParseMessage
+		return packet.ErrParseFrame
 	}
 
 	options := req.ParseOptions()
 	t := options[OptionDHCPMessageType]
 	if len(t) != 1 {
 		log.Warn("dhcp4: skiping dhcp packet with option len not 1")
-		return packet.ErrParseMessage
+		return packet.ErrParseFrame
 	}
 
 	clientID := getClientID(req, options)
@@ -172,7 +172,7 @@ func (h *Handler) processClientPacket(host *packet.Host, req DHCP4) error {
 	fields := log.Fields{"clientID": clientID, "ip": req.YIAddr(), "server": serverIP, "xid": req.XId()}
 	if serverIP.IsUnspecified() {
 		log.WithFields(fields).Error("dhcp4: client offer invalid serverIP")
-		return packet.ErrParseMessage
+		return packet.ErrParseFrame
 	}
 
 	reqType := MessageType(t[0])

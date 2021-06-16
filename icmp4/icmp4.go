@@ -121,12 +121,12 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (pac
 		}
 		if len(header) < 8+20 { // minimum 8 bytes icmp + 20 ip4
 			fmt.Println("icmp4 : invalid destination unreachable packet", ip4Frame.Src(), len(header))
-			return packet.Result{}, packet.ErrParseMessage
+			return packet.Result{}, packet.ErrParseFrame
 		}
 		originalIP4Frame := packet.IP4(header[8:]) // ip4 starts after icmp 8 bytes
 		if !originalIP4Frame.IsValid() {
 			fmt.Println("icmp4 : invalid destination unreachable packet", ip4Frame.Src(), len(header))
-			return packet.Result{}, packet.ErrParseMessage
+			return packet.Result{}, packet.ErrParseFrame
 		}
 		var port uint16
 		switch originalIP4Frame.Protocol() {
@@ -134,14 +134,14 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (pac
 			udp := packet.UDP(originalIP4Frame.Payload())
 			if !udp.IsValid() {
 				fmt.Println("icmp4 : invalid upd destination unreacheable", ip4Frame.Src(), originalIP4Frame)
-				return packet.Result{}, packet.ErrParseMessage
+				return packet.Result{}, packet.ErrParseFrame
 			}
 			port = udp.DstPort()
 		case syscall.IPPROTO_TCP:
 			tcp := packet.TCP(originalIP4Frame.Payload())
 			if !tcp.IsValid() {
 				fmt.Println("icmp4 : invalid tcp destination unreacheable", ip4Frame.Src(), originalIP4Frame)
-				return packet.Result{}, packet.ErrParseMessage
+				return packet.Result{}, packet.ErrParseFrame
 			}
 			port = tcp.DstPort()
 		}
