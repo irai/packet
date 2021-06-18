@@ -212,6 +212,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (pac
 	case probe:
 		// We are interested in probe ACD (Address Conflict Detection) packets for IPs that we have an open DHCP offer
 		// if this is a probe, the sender IP will be zeros; send ARP reply to stop sender from acquiring the IP
+		// but don't create host entry - the host has not claimed the IP yet
 		//
 		// +============+===+===========+===========+============+============+===================+===========+
 		// | Type       | op| dstMAC    | srcMAC    | SenderMAC  | SenderIP   | TargetMAC         |  TargetIP |
@@ -237,10 +238,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (pac
 				fmt.Printf("arp   : probe reject for ip=%s from mac=%s macentry=%s\n", frame.DstIP(), frame.SrcMAC(), macEntry)
 				h.reply(frame.SrcMAC(), packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: frame.DstIP()}, packet.Addr{MAC: frame.SrcMAC(), IP: net.IP(EthernetBroadcast)})
 			}
-			return packet.Result{}, nil
 		}
-
-		// don't continue
 		return packet.Result{}, nil
 
 	case announcement:

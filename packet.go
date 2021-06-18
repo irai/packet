@@ -198,7 +198,7 @@ func (p Ether) String() string {
 	var b strings.Builder
 	b.Grow(80)
 	b.WriteString("type=")
-	fmt.Fprintf(&b, "%d", p.EtherType())
+	fmt.Fprintf(&b, "%x", p.EtherType())
 	b.WriteString(" src=")
 	b.WriteString(p.Src().String())
 	b.WriteString(" dst=")

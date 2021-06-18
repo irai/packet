@@ -7,21 +7,23 @@ import (
 	"time"
 )
 
-const maxBufSize = 128
+const maxBufSize = 512
 
 // bufferPacketConn is a net.PacketConn pipe to enable testing
 type bufferedPacketConn struct {
-	bufferChan chan []byte
+	clientChan chan []byte
+	serverChan chan []byte
 }
 
 // TestNewBufferedConn create a mem conn for testing
 func TestNewBufferedConn() (a *bufferedPacketConn, b *bufferedPacketConn) {
-	a = &bufferedPacketConn{bufferChan: make(chan []byte, 128)}
-	return a, a
+	a = &bufferedPacketConn{clientChan: make(chan []byte, maxBufSize), serverChan: make(chan []byte, maxBufSize)}
+	b = &bufferedPacketConn{clientChan: a.serverChan, serverChan: a.clientChan}
+	return a, b
 }
 
 func (p *bufferedPacketConn) Close() error {
-	close(p.bufferChan)
+	close(p.clientChan)
 	return nil
 }
 
@@ -32,18 +34,18 @@ func (p *bufferedPacketConn) SetWriteDeadline(t time.Time) error { return nil }
 
 func (p *bufferedPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
 	// will lock and wait
-	buf := <-p.bufferChan
+	buf := <-p.serverChan
 	n := copy(b[:cap(b)], buf)
 	return n, nil, nil
 }
 
 func (p *bufferedPacketConn) WriteTo(b []byte, addr net.Addr) (int, error) {
-	if len(p.bufferChan) > maxBufSize-1 {
-		panic(fmt.Sprintf("buffered conn writing without read will block forever len=%d", len(p.bufferChan)))
+	if len(p.clientChan) > maxBufSize-1 {
+		panic(fmt.Sprintf("buffered conn writing without read will block forever len=%d", len(p.clientChan)))
 	}
 	t := make([]byte, len(b))
 	copy(t, b)
-	p.bufferChan <- t
+	p.clientChan <- t
 	return len(b), nil
 }
 

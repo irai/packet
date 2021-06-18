@@ -99,7 +99,7 @@ func (h *Handler) forceRelease(clientID []byte, serverIP net.IP, chAddr net.Hard
 func (h *Handler) SendDiscoverPacket(chAddr net.HardwareAddr, cIAddr net.IP, xID []byte, options Options) (err error) {
 
 	if Debug {
-		fmt.Printf("dhcp4: send discover packet from %s ciAddr=%v xID=%v", chAddr, cIAddr, xID)
+		fmt.Printf("dhcp4: send discover packet from %s ciAddr=%v xID=%v\n", chAddr, cIAddr, xID)
 	}
 	p := RequestPacket(Discover, chAddr, cIAddr, xID, false, options.SelectOrderOrAll(nil))
 	srcAddr := packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostIP4.IP, Port: packet.DHCP4ClientPort}

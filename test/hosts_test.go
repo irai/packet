@@ -16,6 +16,7 @@ func TestHandler_newHostSimple(t *testing.T) {
 	log.SetLevel(log.DebugLevel)
 	dhcp4.Debug = true
 	packet.Debug = true
+	packet.DebugIP4 = true
 	// arp.Debug = true
 
 	tests := NewHostEvents(packet.Addr{MAC: MAC1}, "mac1", 1, 1)

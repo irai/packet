@@ -327,7 +327,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (pac
 		}
 
 		if Debug {
-			log.Trace("dhcp4: send reply to ", dstAddr)
+			fmt.Println("dhcp4 : send reply to ", dstAddr, response)
 		}
 
 		srcAddr := packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostIP4.IP, Port: packet.DHCP4ServerPort}

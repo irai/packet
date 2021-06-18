@@ -2,10 +2,9 @@ package arp
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"time"
-
-	"log"
 
 	"github.com/irai/packet"
 )
@@ -21,7 +20,7 @@ func (h *Handler) ScanNetwork(ctx context.Context, lan net.IPNet) error {
 	}
 
 	if Debug {
-		log.Printf("arp Discovering IP - sending 254 ARP requests - lan %v", lan)
+		fmt.Printf("arp   : scan - sending 254 ARP requests - lan %v", lan)
 	}
 	hostAddr := packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostIP4.IP}
 	for host := 1; host < 255; host++ {
@@ -39,13 +38,13 @@ func (h *Handler) ScanNetwork(ctx context.Context, lan net.IPNet) error {
 		if err != nil {
 			if err1, ok := err.(net.Error); ok && err1.Temporary() {
 				if Debug {
-					log.Print("arp error in write socket is temporary - retry ", err1)
+					fmt.Println("arp   : error in write socket is temporary - retry ", err1)
 				}
 				continue
 			}
 
 			if Debug {
-				log.Print("arp request error ", err)
+				fmt.Println("arp   : request error ", err)
 			}
 			return err
 		}

@@ -58,8 +58,8 @@ func Test_requestSimple(t *testing.T) {
 
 func Test_requestExhaust(t *testing.T) {
 
-	packet.Debug = true
-	Debug = true
+	packet.Debug = false
+	Debug = false
 	os.Remove(testDHCPFilename)
 	tc := setupTestHandler()
 	defer tc.Close()
@@ -187,7 +187,7 @@ func exhaustAllIPs(t *testing.T, tc *testContext, mac net.HardwareAddr) {
 	for i := 0; i < 254; i++ {
 		mac[5] = byte(i)
 		newDHCPHost(t, tc, mac)
-		time.Sleep(time.Millisecond * 5)
+		time.Sleep(time.Microsecond * 200)
 	}
 	checkLeaseTable(t, tc, 254, 0, 0)
 }

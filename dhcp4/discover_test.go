@@ -107,7 +107,7 @@ func TestDHCPHandler_exhaust(t *testing.T) {
 					t.Errorf("DHCPHandler.handleDiscover() error sending packet error=%s", err)
 					return
 				}
-				time.Sleep(time.Millisecond * 10)
+				time.Sleep(time.Millisecond * 1)
 			}
 
 			if n := len(tc.h.table); n != tt.tableLen {

@@ -143,8 +143,6 @@ func (h *Session) ProcessIP6HopByHopExtension(host *Host, b []byte, header []byt
 			value := binary.BigEndian.Uint16(buffer[2 : 2+2])
 			pos = pos + 4 // fixed len 4
 
-			// fmt.Printf("TRACE ip6   : hop by hop option router alert value=%d\n", value)
-
 			switch value {
 			case 0: // packet contains MLD message
 			case 1: // packet contains RSVP message

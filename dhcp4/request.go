@@ -244,8 +244,8 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 	ret := ReplyPacket(p, ACK, lease.subnet.DHCPServer, lease.Addr.IP, lease.subnet.Duration, opts)
 
 	if Debug {
-		fmt.Printf("dhcp4 : request ack options recv %s %+v", fields, options[OptionParameterRequestList])
-		fmt.Printf("dhcp4 : request ack options sent %s %+v", fields, opts)
+		fmt.Printf("dhcp4 : request ack options recv %s %+v\n", fields, options[OptionParameterRequestList])
+		fmt.Printf("dhcp4 : request ack options sent %s %+v\n", fields, opts)
 	}
 
 	h.saveConfig(h.filename)

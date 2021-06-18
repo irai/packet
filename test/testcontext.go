@@ -77,7 +77,7 @@ func printResponseTable(tc *TestContext) {
 }
 
 var waitingResponse int // incremented when a goroutine is awaiting a response
-var waitChannel = make(chan string, 10)
+var waitChannel = make(chan string, 512)
 
 func waitResponse(tc *TestContext, action Action) error {
 	tc.mutex.Lock()
@@ -95,6 +95,7 @@ func waitResponse(tc *TestContext, action Action) error {
 
 func readResponse(ctx context.Context, tc *TestContext) error {
 	buffer := make([]byte, 2000)
+	count := 0
 	for {
 		buf := buffer[:]
 		n, _, err := tc.outConn.ReadFrom(buf)
@@ -107,6 +108,7 @@ func readResponse(ctx context.Context, tc *TestContext) error {
 			return nil
 		}
 
+		count++
 		buf = buf[:n]
 		ether := packet.Ether(buf)
 		if !ether.IsValid() {
@@ -115,8 +117,8 @@ func readResponse(ctx context.Context, tc *TestContext) error {
 		}
 
 		// used for debuging - disable to avoid verbose logging
-		if false {
-			fmt.Printf("test  : got test response=%s\n", ether)
+		if true {
+			fmt.Printf("test  : got test %d response=%s\n", count, ether)
 		}
 
 		notify := ""
@@ -128,6 +130,7 @@ func readResponse(ctx context.Context, tc *TestContext) error {
 			}
 			if ip4.Protocol() == syscall.IPPROTO_UDP { // UDP?
 				if udp := packet.UDP(ip4.Payload()); udp.DstPort() == packet.DHCP4ClientPort { // DHCP client port?
+					fmt.Printf("test  : got dhcp test %d response=%s\n", count, udp)
 					dhcp4Frame := dhcp4.DHCP4(udp.Payload())
 					options := dhcp4Frame.ParseOptions()
 					var reqType dhcp4.MessageType
@@ -142,7 +145,7 @@ func readResponse(ctx context.Context, tc *TestContext) error {
 							panic("ip is nil")
 						}
 						tc.IPOffer = ip
-						// fmt.Printf("raw: received dhcp offer=%s\n", ip)
+						fmt.Printf("raw: received dhcp offer=%s\n", ip)
 					}
 
 					// notify if required
@@ -162,7 +165,6 @@ func readResponse(ctx context.Context, tc *TestContext) error {
 		tc.mutex.Lock()
 		tc.responseTable = append(tc.responseTable, tmp)
 		if notify != "" {
-			// fmt.Println("test  : notification response", notify)
 			waitChannel <- notify
 			waitingResponse = waitingResponse - 1
 		}
@@ -383,8 +385,6 @@ func NewHostEvents(addr packet.Addr, hostName string, hostInc int, macInc int) [
 		},
 	}
 }
-
-var buf = make([]byte, packet.EthMaxSize)
 
 func runAction(t *testing.T, tc *TestContext, tt TestEvent) {
 	sendPacket := true

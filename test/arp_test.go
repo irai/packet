@@ -28,9 +28,9 @@ func TestHandler_arpcapture(t *testing.T) {
 			waitTimeAfter: time.Millisecond * 30,
 		},
 		{name: "arp-announcement-" + addr.MAC.String(),
-			action: "arpAnnouncement", hostTableInc: 1, macTableInc: 0, responsePos: -1, responseTableInc: -1,
+			action: "arpAnnouncement", hostTableInc: 0, macTableInc: 0, responsePos: -1, responseTableInc: -1,
 			srcAddr:       addr,
-			wantHost:      &packet.Host{Addr: addr, Online: true},
+			wantHost:      nil,
 			waitTimeAfter: time.Millisecond * 10,
 		},
 	}
@@ -40,10 +40,9 @@ func TestHandler_arpcapture(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			runAction(t, tc, tt)
 		})
-
 	}
-	checkOnlineCount(t, tc, 3, 0)
-	checkCaptureCount(t, tc, 1, 1)
+	checkOnlineCount(t, tc, 2, 0)
+	checkCaptureCount(t, tc, 0, 1)
 }
 
 // TODO: fix this

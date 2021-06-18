@@ -109,7 +109,7 @@ func readResponse(ctx context.Context, tc *testContext) error {
 		copy(tmp, buf)
 		tc.responseTable = append(tc.responseTable, tmp)
 		// used for debuging - disable to avoid verbose logging
-		if false {
+		if true {
 			fmt.Printf("received msg n=%d %s\n", len(tc.responseTable), ether)
 		}
 	}
