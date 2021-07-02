@@ -567,6 +567,12 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				// Web Services Discovery Protocol (WSD)
 				fmt.Printf("proto : WSD %s\n", host)
 
+			case udpDstPort == 32412 || udpDstPort == 32414:
+				// Plex application multicast on these ports to find players.
+				// G'Day Mate (GDM) multicast packets
+				// https://github.com/NineWorlds/serenity-android/wiki/Good-Day-Mate
+				fmt.Printf("proto : plex %s\n", host)
+
 			default:
 				fmt.Printf("proto : warning unexpected udp %s %s\n", udp, host)
 			}
