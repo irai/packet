@@ -5,8 +5,6 @@ import (
 	"net"
 	"time"
 
-	"log"
-
 	"github.com/irai/packet"
 )
 
@@ -79,7 +77,7 @@ func (h *Handler) spoofLoop(addr packet.Addr) {
 		if !hunting || h.closed {
 			fmt.Printf("arp   : hunt loop stop %s repeat=%v duration=%v\n", addr, nTimes, time.Since(startTime))
 			if err := h.announce(addr.MAC, h.session.NICInfo.RouterAddr4, EthernetBroadcast); err != nil {
-				log.Printf("arp error send announcement packet %s: %s", addr, err)
+				fmt.Printf("arp error send announcement packet %s: %s\n", addr, err)
 			}
 			return
 		}
@@ -116,7 +114,7 @@ func (h *Handler) forceSpoof(addr packet.Addr) error {
 	// This will update the target arp table with our mac
 	err := h.announce(addr.MAC, packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.RouterIP4.IP}, EthernetBroadcast)
 	if err != nil {
-		log.Printf("arp error send announcement packet %s: %s", addr, err)
+		fmt.Printf("arp error send announcement packet %s: %s\n", addr, err)
 		return err
 	}
 
@@ -125,7 +123,7 @@ func (h *Handler) forceSpoof(addr packet.Addr) error {
 	for i := 0; i < 1; i++ {
 		err = h.reply(addr.MAC, h.session.NICInfo.HostMAC, h.session.NICInfo.RouterIP4.IP, addr.MAC, addr.IP)
 		if err != nil {
-			log.Printf("arp error spoof client %s: %s", addr, err)
+			fmt.Printf("arp error spoof client %s: %s\n", addr, err)
 			return err
 		}
 		time.Sleep(time.Millisecond * 10)

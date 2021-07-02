@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"errors"
-	"log"
 
 	"github.com/irai/packet"
 )
@@ -47,9 +46,9 @@ func (h *Handler) Request(srcAddr packet.Addr, dstAddr packet.Addr) error {
 	}
 	if Debug {
 		if srcAddr.IP.Equal(dstAddr.IP) {
-			log.Printf("arp send announcement - I am ip=%s mac=%s", srcAddr.IP, srcAddr.MAC)
+			fmt.Printf("arp send announcement - I am ip=%s mac=%s\n", srcAddr.IP, srcAddr.MAC)
 		} else {
-			log.Printf("arp send request - who is ip=%s tell sip=%s smac=%s", dstAddr.IP, srcAddr.IP, srcAddr.MAC)
+			fmt.Printf("arp send request - who is ip=%s tell sip=%s smac=%s\n", dstAddr.IP, srcAddr.IP, srcAddr.MAC)
 		}
 	}
 
@@ -82,7 +81,7 @@ func (h *Handler) request(dstEther net.HardwareAddr, srcAddr packet.Addr, dstAdd
 // func (h *Handler) Reply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
 func (h *Handler) Reply(dstEther net.HardwareAddr, srcAddr packet.Addr, dstAddr packet.Addr) error {
 	if Debug {
-		log.Printf("arp send reply - ip=%s is at mac=%s", srcAddr.IP, srcAddr.MAC)
+		fmt.Printf("arp send reply - ip=%s is at mac=%s\n", srcAddr.IP, srcAddr.MAC)
 	}
 	return h.reply(dstEther, srcAddr, dstAddr)
 }
@@ -140,9 +139,9 @@ func (h *Handler) Probe(ip net.IP) error {
 func (h *Handler) announce(dstEther net.HardwareAddr, srcAddr packet.Addr, targetMac net.HardwareAddr) (err error) {
 	if Debug {
 		if bytes.Equal(dstEther, EthernetBroadcast) {
-			log.Printf("arp send announcement broadcast - I am %s\n", srcAddr)
+			fmt.Printf("arp send announcement broadcast - I am %s\n", srcAddr)
 		} else {
-			log.Printf("arp send announcement unicast - I am %s to=%s", srcAddr, dstEther)
+			fmt.Printf("arp send announcement unicast - I am %s to=%s\n", srcAddr, dstEther)
 		}
 	}
 
@@ -174,7 +173,7 @@ func (h *Handler) WhoIs(ip net.IP) (packet.Addr, error) {
 	}
 
 	if Debug {
-		log.Printf("arp ip=%s whois not found", ip)
+		fmt.Printf("arp ip=%s whois not found\n", ip)
 		h.session.PrintTable()
 	}
 	return packet.Addr{}, ErrNotFound

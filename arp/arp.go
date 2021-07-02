@@ -7,8 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"log"
-
 	"github.com/irai/packet"
 )
 
@@ -162,7 +160,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (pac
 	// skip link local packets
 	if frame.SrcIP().IsLinkLocalUnicast() || frame.DstIP().IsLinkLocalUnicast() {
 		if Debug {
-			log.Printf("arp   : skipping link local packet smac=%v sip=%v tmac=%v tip=%v", frame.SrcMAC(), frame.SrcIP(), frame.DstMAC(), frame.DstIP())
+			fmt.Printf("arp   : skipping link local packet smac=%v sip=%v tmac=%v tip=%v\n", frame.SrcMAC(), frame.SrcIP(), frame.DstMAC(), frame.DstIP())
 		}
 		return packet.Result{}, nil
 	}
@@ -181,7 +179,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (pac
 			operation = request
 		}
 	default:
-		log.Printf("arp   : invalid operation: %s", frame)
+		fmt.Printf("arp   : invalid operation: %s\n", frame)
 		return packet.Result{}, nil
 	}
 
@@ -203,7 +201,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (pac
 		h.arpMutex.Unlock()
 		if hunting && frame.DstIP().Equal(h.session.NICInfo.RouterIP4.IP) {
 			if Debug {
-				log.Printf("arp: router spoofing - send reply i am ip=%s", frame.DstIP())
+				fmt.Printf("arp: router spoofing - send reply i am ip=%s\n", frame.DstIP())
 			}
 			h.reply(frame.SrcMAC(), packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: frame.DstIP()}, packet.Addr{MAC: frame.SrcMAC(), IP: frame.SrcIP()})
 			return packet.Result{}, nil
