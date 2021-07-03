@@ -431,7 +431,12 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			// See frames here:
 			// http://realtek.info/pdf/rtl8324.pdf  page 43
 			//
-			fmt.Printf("packet: error invalid RRCP frame %s payload=\"% x\"\n", ether, ether.Payload())
+			fmt.Printf("packet: RRCP frame %s payload=\"% x\"\n", ether, ether.Payload())
+			continue
+
+		case 0x88cc: // Link Layer Discovery Protocol (LLDP)
+			// not sure if we will ever receive these in a home LAN!
+			fmt.Printf("packet: LLDP frame %s payload=\"% x\"\n", ether, ether.Payload())
 			continue
 
 		case 6:
