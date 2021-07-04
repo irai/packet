@@ -8,8 +8,8 @@ require (
 	github.com/sirupsen/logrus v1.4.2
 	github.com/vishvananda/netlink v1.1.0
 	gitlab.com/golang-commonmark/puny v0.0.0-20191124015043-9f83538fa04f
-	golang.org/x/net v0.0.0-20200707034311-ab3426394381
-	golang.org/x/sys v0.0.0-20200803210538-64077c9b5642
+	golang.org/x/net v0.0.0-20210226172049-e18ecbb05110
+	golang.org/x/sys v0.0.0-20210303074136-134d130e1a04
 	gopkg.in/yaml.v2 v2.4.0
 	inet.af/netaddr v0.0.0-20210313195008-843b4240e319
 )

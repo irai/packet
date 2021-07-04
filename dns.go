@@ -116,6 +116,20 @@ func (d DNSEntry) print() {
 var dnsMutex sync.RWMutex // dns table mutex
 
 // DNS maps a domain name server frame
+//  0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+//  +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+//  |                      ID                       |
+//  +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+//  |QR|   Opcode  |AA|TC|RD|RA|   Z    |   RCODE   |
+//  +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+//  |                    QDCOUNT                    |
+//  +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+//  |                    ANCOUNT                    |
+//  +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+//  |                    NSCOUNT                    |
+//  +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+//  |                    ARCOUNT                    |
+//  +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
 type DNS []byte
 
 func (p DNS) IsValid() error {
@@ -149,6 +163,27 @@ func newDNSEntry() (entry DNSEntry) {
 	entry.CNameRecords = make(map[string]NameResourceRecord)
 	entry.PTRRecords = make(map[string]IPResourceRecord)
 	return entry
+}
+
+func DNSQueryMarshal(tranID uint16, opcode byte, question string) []byte {
+	b := make([]byte, 512)
+	binary.BigEndian.PutUint16(b[0:2], tranID)
+	b[2] = 1 << 5 // query
+	b[2] |= opcode << 3
+	b[2] |= 1 << 2                        // AA answer
+	b[2] |= 0 << 1                        // Truncated answer
+	b[2] |= 0 << 0                        // Recursion desirable
+	binary.BigEndian.PutUint32(b[4:6], 1) // QD Count
+
+	// RFC 6762, section 18.12.  Repurposing of Top Bit of qclass in Question
+	// Section
+	//
+	// In the Question Section of a Multicast DNS query, the top bit of the qclass
+	// field is used to indicate that unicast responses are preferred for this
+	// particular question.  (See Section 5.4.)
+	qclass := uint16(1 << 15)
+	l := encode(1, qclass, []byte(question), b, 12)
+	return b[:12+l]
 }
 
 func (p DNS) decode() (e DNSEntry, err error) {
@@ -383,6 +418,39 @@ loop:
 		return (*buffer)[start:], index + 1, nil
 	}
 	return (*buffer)[start+1:], index + 1, nil
+}
+
+func encode(qType uint16, qClass uint16, qName []byte, data []byte, offset int) int {
+	noff := encodeName(qName, data, offset)
+	nSz := noff - offset
+	binary.BigEndian.PutUint16(data[noff:], uint16(qType))
+	binary.BigEndian.PutUint16(data[noff+2:], uint16(qClass))
+	return nSz + 4
+}
+
+// encodeName extracted from https://github.com/google/gopacket/blob/master/layers/dns.go
+func encodeName(name []byte, data []byte, offset int) int {
+	l := 0
+	for i := range name {
+		if name[i] == '.' {
+			data[offset+i-l] = byte(l)
+			l = 0
+		} else {
+			// skip one to write the length
+			data[offset+i+1] = name[i]
+			l++
+		}
+	}
+
+	if len(name) == 0 {
+		data[offset] = 0x00 // terminal
+		return offset + 1
+	}
+
+	// length for final portion
+	data[offset+len(name)-l] = byte(l)
+	data[offset+len(name)+1] = 0x00 // terminal
+	return offset + len(name) + 2
 }
 
 // reverseDNS query the PTR record for ip
