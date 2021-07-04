@@ -25,6 +25,9 @@ var (
 	// sender sends queries, is 224.0.0.252.  The IPv6 link-scope multicast
 	// address a given responder listens to, and to which a sender sends all
 	// queries, is FF02:0:0:0:0:0:1:3.
+	//
+	// Windows hosts will query a name on startup to prevent duplicates on the LAN
+	// https://docs.microsoft.com/en-us/previous-versions//bb878128(v=technet.10)?redirectedfrom=MSDN
 	llmnrIPv4Addr = packet.Addr{MAC: packet.EthBroadcast, IP: net.IPv4(224, 0, 0, 251), Port: 5355}
 	llmnrIPv6Addr = packet.Addr{MAC: packet.EthBroadcast, IP: net.ParseIP("FF02:0:0:0:0:0:1:3"), Port: 5355}
 

@@ -348,6 +348,22 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			continue
 		}
 
+		// In order to allow Ethernet II and IEEE 802.3 framing to be used on the same Ethernet segment,
+		// a unifying standard, IEEE 802.3x-1997, was introduced that required that EtherType values be greater than or equal to 1536.
+		// Thus, values of 1500 and below for this field indicate that the field is used as the size of the payload of the Ethernet frame
+		// while values of 1536 and above indicate that the field is used to represent an EtherType.
+		if ether.EtherType() < 1536 {
+			llc := packet.LLC(ether.Payload())
+			// SONOS - LLC, dsap STP (0x42) Individual, ssap STP (0x42) Command
+
+			// wifi mac notification -
+			// To see these:
+			//    sudo tcpdump -vv -x not ip6 and not ip and not arp
+			//    then switch a mobile phone to airplane mode to force a network reconnect
+			fmt.Printf("packet: rcvd 802.3 frame %s\n", llc)
+			continue
+		}
+
 		notify := false
 		var ip4Frame packet.IP4
 		var ip6Frame packet.IP6
@@ -444,23 +460,8 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			fmt.Printf("packet: LLDP frame %s payload=\"% x\"\n", ether, ether.Payload())
 			continue
 
-		case 6:
-			// TODO: identify this protocol
-			// wifi mac notification -
-			// if mac is not online, request full network scan at next interval; we have a new host on the network
-			// To see these:
-			//    sudo tcpdump -vv -x not ip6 and not ip and not arp
-			//    then switch a mobile phone to airplane mode to force a network reconnect
-			if macEntry := h.session.FindMACEntry(ether.Src()); macEntry != nil && !macEntry.Online {
-				if packet.Debug {
-					fmt.Printf("packet: rcvd onlink event when offline mac=%s\n", ether.Src())
-				}
-				h.forceScan = true
-			}
-			continue
-
 		default:
-			fmt.Printf("packet: error invalid ethernet frame %s\n", ether)
+			fmt.Printf("packet: error invalid ethernet type %s\n", ether)
 			continue
 		}
 		d1 = time.Since(startTime)
