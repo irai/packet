@@ -17,6 +17,16 @@ var (
 	mdnsIPv4Addr = packet.Addr{MAC: packet.EthBroadcast, IP: net.IPv4(224, 0, 0, 251), Port: 5353}
 	mdnsIPv6Addr = packet.Addr{MAC: packet.EthBroadcast, IP: net.ParseIP("ff02::fb"), Port: 5353}
 
+	// Link Local Multicast Name Resolution
+	// https://datatracker.ietf.org/doc/html/rfc4795
+	//
+	// LLMNR queries are sent to and received on port 5355.  The IPv4 link-
+	// scope multicast address a given responder listens to, and to which a
+	// sender sends queries, is 224.0.0.252.  The IPv6 link-scope multicast
+	// address a given responder listens to, and to which a sender sends all
+	// queries, is FF02:0:0:0:0:0:1:3.
+	llmnrIPv4Addr = packet.Addr{MAC: packet.EthBroadcast, IP: net.IPv4(224, 0, 0, 251), Port: 5353}
+
 	// ErrInvalidChannel nil channel passed for notification
 	ErrInvalidChannel = errors.New("invalid channel")
 )
@@ -111,9 +121,14 @@ func enableService(service string) int {
 	return 1
 }
 
-// SendQuery is used to send a multicast a query
+// SendMDNSQuery send a multicast DNS query
 func (h *DNSHandler) SendMDNSQuery(service string) (err error) {
 	return h.sendMDNSQuery(h.session.NICInfo.HostAddr4, mdnsIPv4Addr, service)
+}
+
+// SendLLMNRQuery send a multicast LLMNR query
+func (h *DNSHandler) SendLLMNRQuery(service string) (err error) {
+	return h.sendMDNSQuery(h.session.NICInfo.HostAddr4, llmnrIPv4Addr, service)
 }
 
 func (h *DNSHandler) sendMDNSQuery(srcAddr packet.Addr, dstAddr packet.Addr, service string) (err error) {
@@ -185,22 +200,6 @@ func (h *DNSHandler) QueryAll() error {
 	return nil
 }
 
-/*
-// TODO: do we need to register in the multicast group?
-func NewHandler(nic string) (c *Handler, err error) {
-
-		if client.mconn4, err = net.ListenMulticastUDP("udp4", nil, mdnsIPv4Addr); err != nil {
-			return nil, fmt.Errorf("failed to bind to multicast udp4 port: %w", err)
-		}
-		if client.mconn6, err = net.ListenMulticastUDP("udp6", nil, mdnsIPv6Addr); err != nil {
-			log.Printf("MDNS: Failed to bind to udp6 port: %v", err)
-		}
-	panic("should not call this")
-
-	return nil, nil
-}
-*/
-
 type HostName struct {
 	Name       string
 	Addr       packet.Addr
@@ -238,13 +237,21 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 			if err != nil {
 				return nil, err
 			}
-			hosts = append(hosts, HostName{Name: hdr.Name.String(), Addr: packet.Addr{IP: r.A[:]}})
+			entry := HostName{Name: hdr.Name.String(), Addr: packet.Addr{IP: r.A[:]}}
+			hosts = append(hosts, entry)
+			if Debug {
+				fmt.Printf("mdns  : A record name=%s %s\n", entry.Name, entry.Addr)
+			}
 		case dnsmessage.TypeAAAA:
 			r, err := p.AAAAResource()
 			if err != nil {
 				return nil, err
 			}
-			hosts = append(hosts, HostName{Name: hdr.Name.String(), Addr: packet.Addr{IP: r.AAAA[:]}})
+			entry := HostName{Name: hdr.Name.String(), Addr: packet.Addr{IP: r.AAAA[:]}}
+			hosts = append(hosts, entry)
+			if Debug {
+				fmt.Printf("mdns  : A record name=%s %s\n", entry.Name, entry.Addr)
+			}
 		case dnsmessage.TypePTR: // Reverse DNS lookup (opposite of A record)
 			r, err := p.PTRResource()
 			if err != nil {

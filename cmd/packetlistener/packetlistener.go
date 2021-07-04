@@ -16,6 +16,7 @@ import (
 	"github.com/irai/packet"
 	"github.com/irai/packet/arp"
 	"github.com/irai/packet/dhcp4"
+	"github.com/irai/packet/dns"
 	"github.com/irai/packet/engine"
 	"github.com/irai/packet/icmp4"
 	"github.com/irai/packet/icmp6"
@@ -372,13 +373,24 @@ func doMDNS(h *handlers, tokens []string) {
 	case "queryall":
 		if err := h.engine.DNSHandler.QueryAll(); err != nil {
 			fmt.Println("error:", err)
-
 		}
 	case "print":
 		h.engine.DNSHandler.PrintDNSTable()
 
 	default:
-		printHelp("invalid mdns syntax", dhcp4Syntax)
+		printHelp("invalid mdns syntax", mdnsSyntax)
+	}
+}
+
+func doLLMNR(h *handlers, tokens []string) {
+	switch getString(tokens, 1) {
+	case "query":
+		if err := h.engine.DNSHandler.SendLLMNRQuery(getString(tokens, 2)); err != nil {
+			fmt.Println("error:", err)
+
+		}
+	default:
+		printHelp("invalid llmnr syntax", mdnsSyntax)
 	}
 }
 
@@ -407,6 +419,7 @@ var icmp6Syntax = []string{
 var mdnsSyntax = []string{
 	"mdns    query <service>                 : query service name             ",
 	"        print                           : print ",
+	"llmnr   query <service>                 : query service name             ",
 }
 
 func printHelp(msg string, h []string) {
@@ -470,8 +483,10 @@ func cmd(h *handlers) {
 				arp.Debug = !arp.Debug
 			case "dhcp4":
 				dhcp4.Debug = !dhcp4.Debug
+			case "dns":
+				dns.Debug = !dns.Debug
 			default:
-				fmt.Println("invalid package - use 'g icmp4|icmp6|arp|engine|ip4|ip6|dhcp4'")
+				fmt.Println("invalid package - use 'g icmp4|icmp6|arp|engine|ip4|ip6|dhcp4|dns'")
 			}
 			fmt.Println("   ip4 debug:", packet.DebugIP4)
 			fmt.Println(" icmp4 debug:", icmp4.Debug)
@@ -525,6 +540,8 @@ func cmd(h *handlers) {
 		case "arp":
 			doARP(h, tokens)
 		case "mdns":
+			doMDNS(h, tokens)
+		case "llmnr":
 			doMDNS(h, tokens)
 		case "dhcp4":
 			doDHCP4(h, tokens)
