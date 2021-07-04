@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/dns"
 )
 
 type Notification struct {
@@ -99,11 +100,11 @@ func (h *Handler) GetNotificationChannel() <-chan Notification {
 	return h.nameChannel
 }
 
-func (h *Handler) GetDNSNotificationChannel() <-chan packet.DNSEntry {
+func (h *Handler) GetDNSNotificationChannel() <-chan dns.DNSEntry {
 	if h.dnsChannel != nil {
 		return h.dnsChannel
 	}
 
-	h.dnsChannel = make(chan packet.DNSEntry, 16)
+	h.dnsChannel = make(chan dns.DNSEntry, 16)
 	return h.dnsChannel
 }

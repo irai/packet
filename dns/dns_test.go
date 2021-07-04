@@ -1,9 +1,10 @@
-package packet
+package dns
 
 import (
 	"fmt"
 	"testing"
 
+	"github.com/irai/packet"
 	"inet.af/netaddr"
 )
 
@@ -39,9 +40,9 @@ var wwwFacebookComAnswer = []byte{
 
 func TestDNS_DecodeFacebook(t *testing.T) {
 
-	ip := IP4(wwwFacebookComAnswer)
+	ip := packet.IP4(wwwFacebookComAnswer)
 	fmt.Println("ip", ip)
-	udp := UDP(ip.Payload())
+	udp := packet.UDP(ip.Payload())
 	fmt.Println("udp", udp)
 	p := DNS(udp.Payload())
 	fmt.Println("dns", p)
@@ -109,9 +110,9 @@ var wwwYouTubeComResponse = []byte{
 
 func TestDNS_DecodeYouTube(t *testing.T) {
 
-	ip := IP4(wwwYouTubeComResponse)
+	ip := packet.IP4(wwwYouTubeComResponse)
 	fmt.Println("ip", ip)
-	udp := UDP(ip.Payload())
+	udp := packet.UDP(ip.Payload())
 	fmt.Println("udp", udp)
 	p := DNS(udp.Payload())
 	fmt.Println("dns", p)
@@ -173,8 +174,8 @@ var wwwBlockthekidsComResponse = []byte{
 
 func TestDNS_DecodeBlockTheKids(t *testing.T) {
 
-	ip := IP4(wwwBlockthekidsComResponse)
-	udp := UDP(ip.Payload())
+	ip := packet.IP4(wwwBlockthekidsComResponse)
+	udp := packet.UDP(ip.Payload())
 	p := DNS(udp.Payload())
 	if p.IsValid() != nil {
 		t.Fatal("invalid dns packet")
@@ -229,8 +230,8 @@ var wwwPTRResponse = []byte{
 
 func TestDNS_DecodePTR(t *testing.T) {
 
-	ip := IP4(wwwPTRResponse)
-	udp := UDP(ip.Payload())
+	ip := packet.IP4(wwwPTRResponse)
+	udp := packet.UDP(ip.Payload())
 	p := DNS(udp.Payload())
 	if p.IsValid() != nil {
 		t.Fatal("invalid dns packet")
@@ -247,49 +248,51 @@ func TestDNS_DecodePTR(t *testing.T) {
 }
 
 func TestDNS_ProcessDNS(t *testing.T) {
-	session := setupTestHandler()
+	session := packet.NewEmptySession()
+	dnsHandler, _ := New(session)
 	Debug = true
 
 	for _, v := range [][]byte{wwwYouTubeComResponse, wwwFacebookComAnswer, wwwBlockthekidsComResponse, wwwFacebookComAnswer} {
-		ip := IP4(v)
-		udp := UDP(ip.Payload())
+		ip := packet.IP4(v)
+		udp := packet.UDP(ip.Payload())
 
-		r, err := session.DNSProcess(nil, nil, udp.Payload())
+		r, err := dnsHandler.DNSProcess(nil, nil, udp.Payload())
 		if err != nil {
 			t.Fatalf("invalid process packet bltk %+v %s", r, err)
 		}
 	}
-	if n := len(session.DNSTable); n != 3 {
+	if n := len(dnsHandler.DNSTable); n != 3 {
 		t.Fatalf("invalid dns table len=%v want=3 ", n)
 	}
-	fmt.Printf("table %+v", session.DNSTable)
+	fmt.Printf("table %+v", dnsHandler.DNSTable)
 
 }
 
 func TestDNS_reverseDNS(t *testing.T) {
-	session := setupTestHandler()
+	session := packet.NewEmptySession()
+	dnsHandler, _ := New(session)
 	Debug = true
 
-	if err := session.reverseDNS(netaddr.IPv4(172, 217, 167, 118)); err != nil {
+	if err := ReverseDNS(netaddr.IPv4(172, 217, 167, 118)); err != nil {
 		t.Fatal(err)
 	}
 	// =13.76.219.18
-	if found := session.DNSExist(netaddr.IPv4(13, 76, 219, 18)); found {
+	if found := dnsHandler.DNSExist(netaddr.IPv4(13, 76, 219, 18)); found {
 		t.Fatal("invalid entry")
 	}
 
-	session.DNSLookupPTR(netaddr.IPv4(13, 76, 219, 18))
+	dnsHandler.DNSLookupPTR(netaddr.IPv4(13, 76, 219, 18))
 
-	if found := session.DNSExist(netaddr.IPv4(13, 76, 219, 18)); !found {
-		session.PrintDNSTable()
+	if found := dnsHandler.DNSExist(netaddr.IPv4(13, 76, 219, 18)); !found {
+		dnsHandler.PrintDNSTable()
 		t.Fatal("invalid entry")
 	}
 
-	session.DNSLookupPTR(netaddr.IPv4(13, 76, 219, 18))
+	dnsHandler.DNSLookupPTR(netaddr.IPv4(13, 76, 219, 18))
 
-	entry, found := session.DNSTable["ptrentryname"]
+	entry, found := dnsHandler.DNSTable["ptrentryname"]
 	if !found || len(entry.IP4Records) != 1 {
-		session.PrintDNSTable()
+		dnsHandler.PrintDNSTable()
 		t.Fatal("invalid entry")
 	}
 
@@ -298,30 +301,31 @@ func TestDNS_reverseDNS(t *testing.T) {
 // Benchmark_DNSConcurrentAccess test concurrent access performance
 // Benchmark_DNSConcurrentAccess-8   	  114400	     10260 ns/op	    6267 B/op	      52 allocs/op
 func Benchmark_DNSConcurrentAccess(b *testing.B) {
-	session := setupTestHandler()
+	session := packet.NewEmptySession()
+	dnsHandler, _ := New(session)
 
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			for _, v := range [][]byte{wwwYouTubeComResponse, wwwFacebookComAnswer, wwwBlockthekidsComResponse, wwwFacebookComAnswer, wwwPTRResponse} {
-				ip := IP4(v)
-				udp := UDP(ip.Payload())
+				ip := packet.IP4(v)
+				udp := packet.UDP(ip.Payload())
 
-				r, err := session.DNSProcess(nil, nil, udp.Payload())
+				r, err := dnsHandler.DNSProcess(nil, nil, udp.Payload())
 				if err != nil {
 					b.Fatalf("invalid process packet bltk %+v %s\n", r, err)
 				}
 			}
-			e := session.DNSFind("www.blockthekids.com")
+			e := dnsHandler.DNSFind("www.blockthekids.com")
 			if e.Name != "www.blockthekids.com" {
 				b.Fatal("invalid blockthekids name", e)
 			}
-			e = session.DNSFind("www.youtube.com")
+			e = dnsHandler.DNSFind("www.youtube.com")
 			if e.Name != "www.youtube.com" {
 				b.Fatal("invalid youtube name", e)
 			}
-			e = session.DNSFind("facebook.com")
+			e = dnsHandler.DNSFind("facebook.com")
 			if e.Name != "facebook.com" {
-				session.PrintDNSTable()
+				dnsHandler.PrintDNSTable()
 				b.Fatal("invalid facebook name", e)
 			}
 		}
@@ -334,5 +338,4 @@ func Benchmark_DNSConcurrentAccess(b *testing.B) {
 	b.RunParallel("youtube", func(b *testing.B) {
 	})
 	**/
-
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/irai/packet"
 	"github.com/irai/packet/arp"
 	"github.com/irai/packet/dhcp4"
+	"github.com/irai/packet/dns"
 	"github.com/irai/packet/icmp4"
 	"github.com/irai/packet/icmp6"
 	log "github.com/sirupsen/logrus"
@@ -39,6 +40,7 @@ type Handler struct {
 	ICMP6Handler            icmp6.ICMP6Handler
 	DHCP4Handler            dhcp4.DHCP4Handler
 	ARPHandler              arp.ARPHandler
+	DNSHandler              *dns.DNSHandler
 	FullNetworkScanInterval time.Duration // Set it to -1 if no scan required
 	ProbeInterval           time.Duration // how often to probe if IP is online
 	OfflineDeadline         time.Duration // mark offline if no updates
@@ -46,7 +48,7 @@ type Handler struct {
 	closed                  bool          // set to true when handler is closed
 	closeChan               chan bool     // close goroutines channel
 	nameChannel             chan Notification
-	dnsChannel              chan packet.DNSEntry
+	dnsChannel              chan dns.DNSEntry
 	forceScan               bool
 }
 
@@ -109,6 +111,9 @@ func (config Config) NewEngine(nic string) (*Handler, error) {
 	h.ICMP4Handler = icmp4.ICMP4NOOP{}
 	h.ICMP6Handler = icmp6.ICMP6NOOP{}
 	h.DHCP4Handler = packet.PacketNOOP{}
+
+	// default DNS handler
+	h.DNSHandler, _ = dns.New(h.session)
 
 	// create the host entry manually because we don't process host packets
 	host, _ := h.session.FindOrCreateHost(packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostIP4.IP})
@@ -492,9 +497,9 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				// in case the client is using an ip we don't know about
 				// perform a PTR lookup to attempt to discover the name
 				if tcp.SYN() && !h.session.NICInfo.HomeLAN4.Contains(ip4Frame.Dst()) {
-					if !h.session.DNSExist(ip4Frame.NetaddrDst()) {
+					if !h.DNSHandler.DNSExist(ip4Frame.NetaddrDst()) {
 						fmt.Printf("packet: dns entry does not exist for ip=%s\n", ip4Frame.Dst())
-						go h.session.DNSLookupPTR(ip4Frame.NetaddrDst())
+						go h.DNSHandler.DNSLookupPTR(ip4Frame.NetaddrDst())
 					}
 				}
 			}
@@ -532,7 +537,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				}
 			case udpSrcPort == 53: // DNS response
 				// TODO: move this to background goroutine
-				dnsEntry, err := h.session.DNSProcess(host, ether, udp.Payload())
+				dnsEntry, err := h.DNSHandler.DNSProcess(host, ether, udp.Payload())
 				if err != nil {
 					fmt.Printf("packet: error processing dns: %s\n", err)
 					break

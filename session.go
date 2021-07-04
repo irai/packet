@@ -10,10 +10,9 @@ import (
 type Session struct {
 	Conn         net.PacketConn
 	NICInfo      *NICInfo
-	HostTable    HostTable           // store IP list - one for each host
-	MACTable     MACTable            // store mac list
-	mutex        sync.RWMutex        // global session mutex
-	DNSTable     map[string]DNSEntry // store dns records
+	HostTable    HostTable    // store IP list - one for each host
+	MACTable     MACTable     // store mac list
+	mutex        sync.RWMutex // global session mutex
 	eventChannel chan NetEvent
 }
 
@@ -21,7 +20,6 @@ func NewEmptySession() *Session {
 	session := new(Session)
 	session.MACTable = NewMACTable()
 	session.HostTable = NewHostTable()
-	session.DNSTable = make(map[string]DNSEntry, 256)
 	return session
 }
 
@@ -63,15 +61,6 @@ func (h *Session) PrintTable() {
 	h.printMACTable()
 	fmt.Printf("hosts table len=%v\n", len(h.HostTable.Table))
 	h.printHostTable()
-}
-
-func (h *Session) PrintDNSTable() {
-	h.mutex.RLock()
-	defer h.mutex.RUnlock()
-	fmt.Printf("dns table len=%d\n", len(h.DNSTable))
-	for _, v := range h.DNSTable {
-		v.print()
-	}
 }
 
 func (h *Session) GlobalLock() {

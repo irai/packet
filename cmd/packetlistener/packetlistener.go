@@ -362,6 +362,26 @@ func doDHCP4(h *handlers, tokens []string) {
 	}
 }
 
+func doMDNS(h *handlers, tokens []string) {
+	switch getString(tokens, 1) {
+	case "query":
+		if err := h.engine.DNSHandler.SendMDNSQuery(getString(tokens, 2)); err != nil {
+			fmt.Println("error:", err)
+
+		}
+	case "queryall":
+		if err := h.engine.DNSHandler.QueryAll(); err != nil {
+			fmt.Println("error:", err)
+
+		}
+	case "print":
+		h.engine.DNSHandler.PrintDNSTable()
+
+	default:
+		printHelp("invalid mdns syntax", dhcp4Syntax)
+	}
+}
+
 var cmdSyntax = []string{
 	"<command>                              : valid commands arp, icmp4, icmp6, dhcp4, engine",
 	"log <plugin>                           : arp, icmp4, icmp6, dhcp4, engine, ip4, ip6, udp",
@@ -384,6 +404,11 @@ var icmp6Syntax = []string{
 	"        ns <ip6>                        : neighbour solicitation",
 }
 
+var mdnsSyntax = []string{
+	"mdns    query <service>                 : query service name             ",
+	"        print                           : print ",
+}
+
 func printHelp(msg string, h []string) {
 	if msg != "" {
 		fmt.Println(msg)
@@ -399,6 +424,7 @@ func help() {
 	all = append(all, engineSyntax...)
 	all = append(all, icmp6Syntax...)
 	all = append(all, arpSyntax...)
+	all = append(all, mdnsSyntax...)
 	fmt.Println("\n----")
 	for _, v := range all {
 		fmt.Println(v)
@@ -498,12 +524,14 @@ func cmd(h *handlers) {
 			doICMP6(h, tokens)
 		case "arp":
 			doARP(h, tokens)
+		case "mdns":
+			doMDNS(h, tokens)
 		case "dhcp4":
 			doDHCP4(h, tokens)
 		case "h", "help":
 			help()
 		case "dns":
-			h.engine.Session().PrintDNSTable()
+			h.engine.DNSHandler.PrintDNSTable()
 		default:
 			// do nothing
 		}

@@ -1,4 +1,4 @@
-package packet
+package dns
 
 import (
 	"errors"
@@ -9,12 +9,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/irai/packet"
 	"golang.org/x/net/dns/dnsmessage"
 )
 
 var (
-	mdnsIPv4Addr = Addr{MAC: EthBroadcast, IP: net.IPv4(224, 0, 0, 251), Port: 5353}
-	mdnsIPv6Addr = Addr{MAC: EthBroadcast, IP: net.ParseIP("ff02::fb"), Port: 5353}
+	mdnsIPv4Addr = packet.Addr{MAC: packet.EthBroadcast, IP: net.IPv4(224, 0, 0, 251), Port: 5353}
+	mdnsIPv6Addr = packet.Addr{MAC: packet.EthBroadcast, IP: net.ParseIP("ff02::fb"), Port: 5353}
 
 	// ErrInvalidChannel nil channel passed for notification
 	ErrInvalidChannel = errors.New("invalid channel")
@@ -105,18 +106,18 @@ func enableService(service string) int {
 	s := serviceDef{service: service, enabled: true}
 	serviceTable = append(serviceTable, s)
 	if Debug {
-		fmt.Print("mdns  : enabled new mdns service=%s\n", s.service)
+		fmt.Printf("mdns  : enabled new mdns service=%s\n", s.service)
 	}
 	return 1
 }
 
 // SendQuery is used to send a multicast a query
-func (h *Session) SendMDNSQuery(service string) (err error) {
-	return h.sendMDNSQuery(h.NICInfo.HostAddr4, mdnsIPv4Addr, service)
+func (h *DNSHandler) SendMDNSQuery(service string) (err error) {
+	return h.sendMDNSQuery(h.session.NICInfo.HostAddr4, mdnsIPv4Addr, service)
 }
 
-func (h *Session) sendMDNSQuery(srcAddr Addr, dstAddr Addr, service string) (err error) {
-	ether := Ether(make([]byte, EthMaxSize)) // Ping is called many times concurrently by client
+func (h *DNSHandler) sendMDNSQuery(srcAddr packet.Addr, dstAddr packet.Addr, service string) (err error) {
+	ether := packet.Ether(make([]byte, packet.EthMaxSize)) // Ping is called many times concurrently by client
 
 	msg := dnsmessage.Message{
 		Header: dnsmessage.Header{Response: true, Authoritative: true},
@@ -136,26 +137,26 @@ func (h *Session) sendMDNSQuery(srcAddr Addr, dstAddr Addr, service string) (err
 
 	// IP4
 	if srcAddr.IP.To4() != nil {
-		ether = EtherMarshalBinary(ether, syscall.ETH_P_IP, srcAddr.MAC, dstAddr.MAC)
-		ip4 := IP4MarshalBinary(ether.Payload(), 50, srcAddr.IP, dstAddr.IP)
+		ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IP, srcAddr.MAC, dstAddr.MAC)
+		ip4 := packet.IP4MarshalBinary(ether.Payload(), 50, srcAddr.IP, dstAddr.IP)
 		if ip4, err = ip4.AppendPayload(buf, syscall.IPPROTO_ICMP); err != nil {
 			return err
 		}
 		if ether, err = ether.SetPayload(ip4); err != nil {
 			return err
 		}
-		if _, err := h.Conn.WriteTo(ether, &dstAddr); err != nil {
+		if _, err := h.session.Conn.WriteTo(ether, &dstAddr); err != nil {
 			fmt.Printf("mdns  : error failed to write %s\n", err)
 		}
 		return err
 	}
 
 	// IP6
-	ether = EtherMarshalBinary(ether, syscall.ETH_P_IPV6, srcAddr.MAC, dstAddr.MAC)
-	ip6 := IP6MarshalBinary(ether.Payload(), 10, srcAddr.IP, dstAddr.IP)
+	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IPV6, srcAddr.MAC, dstAddr.MAC)
+	ip6 := packet.IP6MarshalBinary(ether.Payload(), 10, srcAddr.IP, dstAddr.IP)
 	ip6, _ = ip6.AppendPayload(buf, syscall.IPPROTO_ICMPV6)
 	ether, _ = ether.SetPayload(ip6)
-	if _, err := h.Conn.WriteTo(ether, &dstAddr); err != nil {
+	if _, err := h.session.Conn.WriteTo(ether, &dstAddr); err != nil {
 		fmt.Printf("mdns  : error failed to write %s\n", err)
 	}
 	return err
@@ -163,7 +164,7 @@ func (h *Session) sendMDNSQuery(srcAddr Addr, dstAddr Addr, service string) (err
 }
 
 // QueryAll send a mdns discovery packet plus a mdns query for each active service on the LAN
-func (h *Session) QueryAll() error {
+func (h *DNSHandler) QueryAll() error {
 
 	// Do a round of service discovery
 	// The listener will pickup responses and call enableService for each
@@ -202,11 +203,11 @@ func NewHandler(nic string) (c *Handler, err error) {
 
 type HostName struct {
 	Name       string
-	Addr       Addr
+	Addr       packet.Addr
 	Attributes map[string]string
 }
 
-func (h *Session) ProcessMDNS(host *Host, ether Ether, payload []byte) (hosts []HostName, err error) {
+func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload []byte) (hosts []HostName, err error) {
 	var p dnsmessage.Parser
 	if _, err := p.Start(payload); err != nil {
 		panic(err)
@@ -237,13 +238,13 @@ func (h *Session) ProcessMDNS(host *Host, ether Ether, payload []byte) (hosts []
 			if err != nil {
 				return nil, err
 			}
-			hosts = append(hosts, HostName{Name: hdr.Name.String(), Addr: Addr{IP: r.A[:]}})
+			hosts = append(hosts, HostName{Name: hdr.Name.String(), Addr: packet.Addr{IP: r.A[:]}})
 		case dnsmessage.TypeAAAA:
 			r, err := p.AAAAResource()
 			if err != nil {
 				return nil, err
 			}
-			hosts = append(hosts, HostName{Name: hdr.Name.String(), Addr: Addr{IP: r.AAAA[:]}})
+			hosts = append(hosts, HostName{Name: hdr.Name.String(), Addr: packet.Addr{IP: r.AAAA[:]}})
 		case dnsmessage.TypePTR: // Reverse DNS lookup (opposite of A record)
 			r, err := p.PTRResource()
 			if err != nil {

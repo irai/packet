@@ -1,16 +1,30 @@
-package packet
+package dns
 
 import (
 	"context"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"net"
 	"strings"
 	"sync"
 
+	"github.com/irai/packet"
 	"inet.af/netaddr"
 )
+
+var Debug bool
+
+type DNSHandler struct {
+	session  *packet.Session
+	DNSTable map[string]DNSEntry // store dns records
+	mutex    sync.RWMutex
+}
+
+func New(session *packet.Session) (*DNSHandler, error) {
+	h := new(DNSHandler)
+	h.DNSTable = make(map[string]DNSEntry, 256)
+	return h, nil
+}
 
 type NameResourceRecord struct {
 	Name  string
@@ -136,7 +150,7 @@ func (p DNS) IsValid() error {
 	if len(p) >= 12 {
 		return nil
 	}
-	return ErrFrameLen
+	return packet.ErrFrameLen
 }
 
 func (p DNS) String() string {
@@ -214,12 +228,12 @@ func (p DNS) decode() (e DNSEntry, err error) {
 
 func (e *DNSEntry) decodeQuestion(p DNS, index int, buffer *[]byte) (int, error) {
 	if p.QDCount() != 1 { // assume a single question
-		return -1, ErrParseFrame
+		return -1, packet.ErrParseFrame
 	}
 
 	// get first answer
 	if index+6 > len(p) { // must have at least 2 bytes name, 4 bytes type and class
-		return -1, ErrParseFrame
+		return -1, packet.ErrParseFrame
 	}
 	name, endq, err := decodeName(p, index, buffer, 1)
 	if err != nil {
@@ -253,13 +267,13 @@ func (e *DNSEntry) decodeAnswers(p DNS, offset int, buffer *[]byte) (int, bool, 
 		dataLen := binary.BigEndian.Uint16(p[endq+8 : endq+10])
 		offset = endq + 10 + int(dataLen)
 		if offset > len(p) {
-			return 0, false, fmt.Errorf("invalid resource record len: %w", ErrInvalidLen)
+			return 0, false, fmt.Errorf("invalid resource record len: %w", packet.ErrInvalidLen)
 		}
 
 		switch t {
 		case 1: // A
 			if dataLen != 4 {
-				return 0, false, fmt.Errorf("invalid A data len: %w", ErrInvalidLen)
+				return 0, false, fmt.Errorf("invalid A data len: %w", packet.ErrInvalidLen)
 			}
 			ip, _ := netaddr.FromStdIPRaw(net.IP(p[endq+10 : endq+10+4]))
 			if _, found := e.IP4Records[ip]; !found {
@@ -269,7 +283,7 @@ func (e *DNSEntry) decodeAnswers(p DNS, offset int, buffer *[]byte) (int, bool, 
 
 		case 28: // AAAA
 			if dataLen != 16 {
-				return 0, false, fmt.Errorf("invalid AAAA data len: %w", ErrInvalidLen)
+				return 0, false, fmt.Errorf("invalid AAAA data len: %w", packet.ErrInvalidLen)
 			}
 			ip, _ := netaddr.FromStdIPRaw(net.IP(p[endq+10 : endq+10+16]))
 			if _, found := e.IP6Records[ip]; !found {
@@ -333,11 +347,11 @@ const maxRecursionLevel = 255
 // decodeName extracted from https://github.com/google/gopacket/blob/master/layers/dns.go
 func decodeName(data []byte, offset int, buffer *[]byte, level int) ([]byte, int, error) {
 	if level > maxRecursionLevel {
-		return nil, 0, ErrParseFrame
+		return nil, 0, packet.ErrParseFrame
 	} else if offset >= len(data) {
-		return nil, 0, ErrParseFrame
+		return nil, 0, packet.ErrParseFrame
 	} else if offset < 0 {
-		return nil, 0, ErrParseFrame
+		return nil, 0, packet.ErrParseFrame
 	}
 	start := len(*buffer)
 	index := offset
@@ -358,9 +372,9 @@ loop:
 			*/
 			index2 := index + int(data[index]) + 1
 			if index2-offset > 255 {
-				return nil, 0, ErrParseFrame
+				return nil, 0, packet.ErrParseFrame
 			} else if index2 < index+1 || index2 > len(data) {
-				return nil, 0, ErrParseFrame
+				return nil, 0, packet.ErrParseFrame
 			}
 			*buffer = append(*buffer, '.')
 			*buffer = append(*buffer, data[index+1:index2]...)
@@ -385,11 +399,11 @@ loop:
 			      - a sequence of labels ending with a pointer
 			*/
 			if index+2 > len(data) {
-				return nil, 0, ErrParseFrame
+				return nil, 0, packet.ErrParseFrame
 			}
 			offsetp := int(binary.BigEndian.Uint16(data[index:index+2]) & 0x3fff)
 			if offsetp > len(data) {
-				return nil, 0, ErrParseFrame
+				return nil, 0, packet.ErrParseFrame
 			}
 			// This looks a little tricky, but actually isn't.  Because of how
 			// decodeName is written, calling it appends the decoded name to the
@@ -411,7 +425,7 @@ loop:
 				data[index], index)
 		}
 		if index >= len(data) {
-			return nil, 0, ErrParseFrame
+			return nil, 0, packet.ErrParseFrame
 		}
 	}
 	if len(*buffer) <= start {
@@ -455,7 +469,7 @@ func encodeName(name []byte, data []byte, offset int) int {
 
 // reverseDNS query the PTR record for ip
 // return ErrNotFound if there is no PTR record
-func (h *Session) reverseDNS(ip netaddr.IP) error {
+func ReverseDNS(ip netaddr.IP) error {
 	if Debug {
 		fmt.Printf("dns   : reverse lookup for ip=%s\n", ip)
 	}
@@ -463,7 +477,7 @@ func (h *Session) reverseDNS(ip netaddr.IP) error {
 		PreferGo: true,
 		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
 			d := net.Dialer{}
-			return d.DialContext(ctx, network, net.JoinHostPort(CloudFlareDNS1.String(), "53")) //CloudFlare
+			return d.DialContext(ctx, network, net.JoinHostPort(packet.CloudFlareDNS1.String(), "53")) //CloudFlare
 		},
 	}
 
@@ -475,7 +489,7 @@ func (h *Session) reverseDNS(ip netaddr.IP) error {
 			if Debug {
 				fmt.Printf("dns   : error in reverse lookup for ip=%s: %s %+v\n", ip, err, *dnsErr)
 			}
-			return ErrNotFound
+			return packet.ErrNotFound
 		}
 		return err
 	}
@@ -485,72 +499,12 @@ func (h *Session) reverseDNS(ip netaddr.IP) error {
 	return nil
 }
 
-func (h *Session) DNSExist(ip netaddr.IP) bool {
-	dnsMutex.RLock()
-	defer dnsMutex.RUnlock()
-
-	for _, entry := range h.DNSTable {
-		if _, found := entry.IP4Records[ip]; found {
-			return true
-		}
-	}
-	return false
-}
-
-func (h *Session) DNSFind(name string) DNSEntry {
-	dnsMutex.RLock()
-	defer dnsMutex.RUnlock()
-	if e, found := h.DNSTable[name]; found {
-		return e.copy()
-	}
-	return DNSEntry{}
-}
-
-func (h *Session) DNSLookupPTR(ip netaddr.IP) {
-	if err := h.reverseDNS(ip); errors.Is(err, ErrNotFound) {
-		dnsMutex.Lock()
-		defer dnsMutex.Unlock()
-
-		// cache IPs that do not have a PTR RR to prevent unnecessary lookups;
-		// it is likely the same IP will be used again and again.
-		// TODO: should we block unknown IPs?
-		entry, found := h.DNSTable["ptrentryname"]
-		if !found {
-			entry = newDNSEntry()
-			entry.Name = "ptrentryname"
-			h.DNSTable["ptrentryname"] = entry
-		}
-
-		// IPv4?
-		if ip.Is4() {
-			_, found = entry.IP4Records[ip]
-			if !found {
-				if Debug {
-					fmt.Printf("dns   : add ptr record not found for ip=%s\n", ip)
-				}
-				entry.IP4Records[ip] = IPResourceRecord{IP: ip}
-			}
-			return
-		}
-
-		// IPv6?
-		_, found = entry.IP6Records[ip]
-		if !found {
-			if Debug {
-				fmt.Printf("dns   : ptr record not found for ip=%s\n", ip)
-			}
-			entry.IP4Records[ip] = IPResourceRecord{IP: ip}
-		}
-	}
-
-}
-
 // DNSProcess parse the DNS packet and record in DNS table.
 //
 // It returns a copy of the DNSEntry that is free from race conditions. The caller has a unique copy.
 //
 // TODO: optimise copy only on new values
-func (h *Session) DNSProcess(host *Host, ether Ether, payload []byte) (e DNSEntry, err error) {
+func (h *DNSHandler) DNSProcess(host *packet.Host, ether packet.Ether, payload []byte) (e DNSEntry, err error) {
 	p := DNS(payload)
 	if err := p.IsValid(); err != nil {
 		return DNSEntry{}, err
