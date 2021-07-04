@@ -22,6 +22,7 @@ type DNSHandler struct {
 
 func New(session *packet.Session) (*DNSHandler, error) {
 	h := new(DNSHandler)
+	h.session = session
 	h.DNSTable = make(map[string]DNSEntry, 256)
 	return h, nil
 }
