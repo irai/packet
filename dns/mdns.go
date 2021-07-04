@@ -154,9 +154,11 @@ func (h *DNSHandler) sendMDNSQuery(srcAddr packet.Addr, dstAddr packet.Addr, ser
 	if srcAddr.IP.To4() != nil {
 		ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IP, srcAddr.MAC, dstAddr.MAC)
 		ip4 := packet.IP4MarshalBinary(ether.Payload(), 50, srcAddr.IP, dstAddr.IP)
-		if ip4, err = ip4.AppendPayload(buf, syscall.IPPROTO_ICMP); err != nil {
+		udp := packet.UDPMarshalBinary(ip4.Payload(), srcAddr.Port, dstAddr.Port)
+		if udp, err = udp.AppendPayload(buf); err != nil {
 			return err
 		}
+		ip4 = ip4.SetPayload(udp, syscall.IPPROTO_UDP)
 		if ether, err = ether.SetPayload(ip4); err != nil {
 			return err
 		}
@@ -169,13 +171,16 @@ func (h *DNSHandler) sendMDNSQuery(srcAddr packet.Addr, dstAddr packet.Addr, ser
 	// IP6
 	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IPV6, srcAddr.MAC, dstAddr.MAC)
 	ip6 := packet.IP6MarshalBinary(ether.Payload(), 10, srcAddr.IP, dstAddr.IP)
-	ip6, _ = ip6.AppendPayload(buf, syscall.IPPROTO_ICMPV6)
+	udp := packet.UDPMarshalBinary(ip6.Payload(), srcAddr.Port, dstAddr.Port)
+	if udp, err = udp.AppendPayload(buf); err != nil {
+		return err
+	}
+	ip6 = ip6.SetPayload(udp, syscall.IPPROTO_UDP)
 	ether, _ = ether.SetPayload(ip6)
 	if _, err := h.session.Conn.WriteTo(ether, &dstAddr); err != nil {
 		fmt.Printf("mdns  : error failed to write %s\n", err)
 	}
 	return err
-
 }
 
 // QueryAll send a mdns discovery packet plus a mdns query for each active service on the LAN
@@ -184,7 +189,7 @@ func (h *DNSHandler) QueryAll() error {
 	// Do a round of service discovery
 	// The listener will pickup responses and call enableService for each
 	if err := h.SendMDNSQuery("_services._dns-sd._udp.local."); err != nil {
-		return fmt.Errorf("mdns  : query fail _services._dns-sd._udp.local.: %w\n", err)
+		return err
 
 	}
 	time.Sleep(time.Millisecond * 5)
@@ -192,7 +197,7 @@ func (h *DNSHandler) QueryAll() error {
 	serviceTableMutex.Lock()
 	for i := range serviceTable {
 		if err := h.SendMDNSQuery(serviceTable[i].service); err != nil {
-			return fmt.Errorf("mdns  : error query fail %s: %w\n", serviceTable[i].service, err)
+			return err
 		}
 		time.Sleep(time.Millisecond * 5)
 	}
