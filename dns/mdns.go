@@ -155,8 +155,8 @@ func (h *DNSHandler) sendMDNSQuery(srcAddr packet.Addr, dstAddr packet.Addr, nam
 	// IP4
 	if srcAddr.IP.To4() != nil {
 		ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IP, srcAddr.MAC, dstAddr.MAC)
-		ip4 := packet.IP4MarshalBinary(ether.Payload(), 50, srcAddr.IP, dstAddr.IP)
-		udp := packet.UDPMarshalBinary(ip4.Payload(), srcAddr.Port, dstAddr.Port)
+		ip4 := packet.IP4MarshalBinary(ether.Payload(), 255, srcAddr.IP, dstAddr.IP)
+		udp := packet.UDPMarshalBinary(ip4.Payload(), dstAddr.Port, dstAddr.Port) // same port number for src and dst
 		if udp, err = udp.AppendPayload(buf); err != nil {
 			return err
 		}
@@ -172,8 +172,8 @@ func (h *DNSHandler) sendMDNSQuery(srcAddr packet.Addr, dstAddr packet.Addr, nam
 
 	// IP6
 	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IPV6, srcAddr.MAC, dstAddr.MAC)
-	ip6 := packet.IP6MarshalBinary(ether.Payload(), 10, srcAddr.IP, dstAddr.IP)
-	udp := packet.UDPMarshalBinary(ip6.Payload(), srcAddr.Port, dstAddr.Port)
+	ip6 := packet.IP6MarshalBinary(ether.Payload(), 255, srcAddr.IP, dstAddr.IP)
+	udp := packet.UDPMarshalBinary(ip6.Payload(), dstAddr.Port, dstAddr.Port) // same port number for src and dst
 	if udp, err = udp.AppendPayload(buf); err != nil {
 		return err
 	}
@@ -215,8 +215,12 @@ type HostName struct {
 
 func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload []byte) (hosts []HostName, err error) {
 	var p dnsmessage.Parser
-	if _, err := p.Start(payload); err != nil {
+	dnsHeader, err := p.Start(payload)
+	if err != nil {
 		panic(err)
+	}
+	if Debug {
+		fmt.Printf("mdns  : header %+v\n", dnsHeader)
 	}
 
 	// Not interested in questions
@@ -224,6 +228,7 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 		return nil, err
 	}
 
+	fmt.Printf("TRACE mdns  : error invalid header class %+v\n", p)
 	for {
 		hdr, err := p.AnswerHeader()
 		if err == dnsmessage.ErrSectionDone {
