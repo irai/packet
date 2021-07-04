@@ -247,7 +247,7 @@ func (p LLC) Payload() []byte {
 	return p[4:]
 }
 func (p LLC) String() string {
-	return fmt.Sprintf("dsap=%d ssap=%x type=%s control1=%x data=% x\n", p.DSAP(), p.SSAP(), p.Type(), p.Control1(), p.Payload())
+	return fmt.Sprintf("dsap=%x ssap=%x type=%s control1=%x payload=% x\n", p.DSAP(), p.SSAP(), p.Type(), p.Control1(), p.Payload())
 }
 
 func IsIP6(ip net.IP) bool {
