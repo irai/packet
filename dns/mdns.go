@@ -25,7 +25,8 @@ var (
 	// sender sends queries, is 224.0.0.252.  The IPv6 link-scope multicast
 	// address a given responder listens to, and to which a sender sends all
 	// queries, is FF02:0:0:0:0:0:1:3.
-	llmnrIPv4Addr = packet.Addr{MAC: packet.EthBroadcast, IP: net.IPv4(224, 0, 0, 251), Port: 5353}
+	llmnrIPv4Addr = packet.Addr{MAC: packet.EthBroadcast, IP: net.IPv4(224, 0, 0, 251), Port: 5355}
+	llmnrIPv6Addr = packet.Addr{MAC: packet.EthBroadcast, IP: net.ParseIP("FF02:0:0:0:0:0:1:3"), Port: 5355}
 
 	// ErrInvalidChannel nil channel passed for notification
 	ErrInvalidChannel = errors.New("invalid channel")
@@ -122,29 +123,30 @@ func enableService(service string) int {
 }
 
 // SendMDNSQuery send a multicast DNS query
-func (h *DNSHandler) SendMDNSQuery(service string) (err error) {
-	return h.sendMDNSQuery(h.session.NICInfo.HostAddr4, mdnsIPv4Addr, service)
+func (h *DNSHandler) SendMDNSQuery(name string) (err error) {
+	return h.sendMDNSQuery(h.session.NICInfo.HostAddr4, mdnsIPv4Addr, name)
 }
 
 // SendLLMNRQuery send a multicast LLMNR query
-func (h *DNSHandler) SendLLMNRQuery(service string) (err error) {
-	return h.sendMDNSQuery(h.session.NICInfo.HostAddr4, llmnrIPv4Addr, service)
+func (h *DNSHandler) SendLLMNRQuery(name string) (err error) {
+	return h.sendMDNSQuery(h.session.NICInfo.HostAddr4, llmnrIPv4Addr, name)
 }
 
-func (h *DNSHandler) sendMDNSQuery(srcAddr packet.Addr, dstAddr packet.Addr, service string) (err error) {
-	ether := packet.Ether(make([]byte, packet.EthMaxSize)) // Ping is called many times concurrently by client
-
+func (h *DNSHandler) sendMDNSQuery(srcAddr packet.Addr, dstAddr packet.Addr, name string) (err error) {
+	ether := packet.Ether(make([]byte, packet.EthMaxSize))
 	msg := dnsmessage.Message{
-		Header: dnsmessage.Header{Response: true, Authoritative: true},
+		Header: dnsmessage.Header{Response: false},
 		Questions: []dnsmessage.Question{
 			{
-				Name:  mustNewName(service),
-				Type:  dnsmessage.TypeA,
+				Name:  mustNewName(name),
+				Type:  dnsmessage.TypePTR,
 				Class: dnsmessage.ClassINET,
 			},
 		},
+		Answers:     []dnsmessage.Resource{},
+		Authorities: []dnsmessage.Resource{},
+		Additionals: []dnsmessage.Resource{},
 	}
-
 	buf, err := msg.Pack()
 	if err != nil {
 		return err

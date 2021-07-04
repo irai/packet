@@ -368,7 +368,6 @@ func doMDNS(h *handlers, tokens []string) {
 	case "query":
 		if err := h.engine.DNSHandler.SendMDNSQuery(getString(tokens, 2)); err != nil {
 			fmt.Println("error:", err)
-
 		}
 	case "queryall":
 		if err := h.engine.DNSHandler.QueryAll(); err != nil {
@@ -542,7 +541,7 @@ func cmd(h *handlers) {
 		case "mdns":
 			doMDNS(h, tokens)
 		case "llmnr":
-			doMDNS(h, tokens)
+			doLLMNR(h, tokens)
 		case "dhcp4":
 			doDHCP4(h, tokens)
 		case "h", "help":
