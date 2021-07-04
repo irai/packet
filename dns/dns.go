@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"log"
 	"net"
 	"strings"
 	"sync"
@@ -18,12 +19,22 @@ type DNSHandler struct {
 	session  *packet.Session
 	DNSTable map[string]DNSEntry // store dns records
 	mutex    sync.RWMutex
+	mconn4   *net.UDPConn
+	mconn6   *net.UDPConn
 }
 
-func New(session *packet.Session) (*DNSHandler, error) {
-	h := new(DNSHandler)
+func New(session *packet.Session) (h *DNSHandler, err error) {
+	h = new(DNSHandler)
 	h.session = session
 	h.DNSTable = make(map[string]DNSEntry, 256)
+
+	// Multicast
+	if h.mconn4, err = net.ListenMulticastUDP("udp4", nil, &net.UDPAddr{IP: mdnsIPv4Addr.IP, Port: int(mdnsIPv4Addr.Port)}); err != nil {
+		return nil, fmt.Errorf("failed to bind to multicast udp4 port: %w", err)
+	}
+	if h.mconn6, err = net.ListenMulticastUDP("udp6", nil, &net.UDPAddr{IP: mdnsIPv6Addr.IP, Port: int(mdnsIPv6Addr.Port)}); err != nil {
+		log.Printf("MDNS: Failed to bind to udp6 port: %v", err)
+	}
 	return h, nil
 }
 
