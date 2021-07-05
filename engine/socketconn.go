@@ -121,6 +121,12 @@ func NewServerConn(ifi *net.Interface, proto uint16, cfg SocketConfig) (*packetC
 	if err != nil {
 		return nil, err
 	}
+
+	if cfg.Promiscuous {
+		if err := pc.SetPromiscuous(true); err != nil {
+			return nil, err
+		}
+	}
 	if err := pc.bind(); err != nil {
 		return nil, err
 	}
@@ -406,4 +412,7 @@ type SocketConfig struct {
 	// only (0 - default) or bidirectional (1) packet processing.
 	// Has no effect on other operating systems.
 	BPFDirection int
+
+	// Set interface to promiscuous mode
+	Promiscuous bool
 }

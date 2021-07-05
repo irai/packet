@@ -219,7 +219,7 @@ func (h *Handler) setupConn() (conn net.PacketConn, err error) {
 	bpf = nil // remove bpf test - June 2021
 
 	// see: https://www.man7.org/linux/man-pages/man7/packet.7.html
-	conn, err = NewServerConn(h.session.NICInfo.IFI, syscall.ETH_P_ALL, SocketConfig{Filter: bpf})
+	conn, err = NewServerConn(h.session.NICInfo.IFI, syscall.ETH_P_ALL, SocketConfig{Filter: bpf, Promiscuous: true})
 	if err != nil {
 		return nil, fmt.Errorf("packet.ListenPacket error: %w", err)
 	}

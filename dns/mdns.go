@@ -45,9 +45,16 @@ type serviceDef struct {
 
 var serviceTableMutex sync.RWMutex
 
-// full IANA list here:
+// Service Discovery RFC
+// Given a type of service that a client is looking for, and a domain in which the client is
+// looking for that service, this mechanism allows clients to discover a
+// list of named instances of that desired service, using standard DNS
+// queries.  This mechanism is referred to as DNS-based Service Discovery, or DNS-SD.
+// https://datatracker.ietf.org/doc/html/rfc6763
 //
-// https://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.xhtml
+// see full service list here:
+// https://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.xml
+// previous: http://dns-sd.org/ServiceTypes.html
 //
 // Bonjour
 // see spec http://devimages.apple.com/opensource/BonjourPrinting.pdf
