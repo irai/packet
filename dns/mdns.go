@@ -136,14 +136,19 @@ func (h *DNSHandler) SendLLMNRQuery(name string) (err error) {
 }
 
 func (h *DNSHandler) sendMDNSQuery(srcAddr packet.Addr, dstAddr packet.Addr, name string) (err error) {
-	ether := packet.Ether(make([]byte, packet.EthMaxSize))
+
+	// Multicast DNS does not share this property that qtype "ANY" and
+	// qclass "ANY" queries return some undefined subset of the matching
+	// records.  When responding to queries using qtype "ANY" (255) and/or
+	// qclass "ANY" (255), a Multicast DNS responder MUST respond with *ALL*
+	// of its records that match the query.
 	msg := dnsmessage.Message{
 		Header: dnsmessage.Header{Response: false},
 		Questions: []dnsmessage.Question{
 			{
 				Name:  mustNewName(name),
-				Type:  dnsmessage.TypePTR,
-				Class: dnsmessage.ClassINET,
+				Type:  dnsmessage.TypeALL,
+				Class: dnsmessage.ClassANY,
 			},
 		},
 		Answers:     []dnsmessage.Resource{},
@@ -154,6 +159,19 @@ func (h *DNSHandler) sendMDNSQuery(srcAddr packet.Addr, dstAddr packet.Addr, nam
 	if err != nil {
 		return err
 	}
+
+	ether := packet.Ether(make([]byte, packet.EthMaxSize))
+
+	//  The source UDP port in all Multicast DNS responses MUST be 5353 (the
+	//  well-known port assigned to mDNS).  Multicast DNS implementations
+	//  MUST silently ignore any Multicast DNS responses they receive where
+	//  the source UDP port is not 5353.
+	//
+	//  The destination UDP port in all Multicast DNS responses MUST be 5353,
+	//  and the destination address MUST be the mDNS IPv4 link-local
+	//  multicast address 224.0.0.251 or its IPv6 equivalent FF02::FB, except
+	//  when generating a reply to a query that explicitly requested a
+	//  unicast response
 
 	// IP4
 	if srcAddr.IP.To4() != nil {
@@ -226,25 +244,57 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 		fmt.Printf("mdns  : header %+v\n", dnsHeader)
 	}
 
-	// Not interested in questions
+	dnsPacket := DNS(payload)
+	fmt.Println("TRACE: dns packet", dnsPacket)
+	// fmt.Printf("TRACE: dns packet % x\n", payload)
+
+	//  Multicast DNS responses MUST NOT contain any questions in the
+	//  Question Section.  Any questions in the Question Section of a
+	//  received Multicast DNS response MUST be silently ignored.  Multicast
+	//  DNS queriers receiving Multicast DNS responses do not care what
+	//  question elicited the response; they care only that the information
+	//  in the response is true and accurate.
+	//    see https://datatracker.ietf.org/doc/html/rfc6762 section 6
 	if err := p.SkipAllQuestions(); err != nil {
 		return nil, err
 	}
 
-	fmt.Printf("TRACE mdns  : error invalid header class %+v\n", p)
+	section := "answer"
 	for {
-		hdr, err := p.AnswerHeader()
-		if err == dnsmessage.ErrSectionDone {
-			break
+		var hdr dnsmessage.ResourceHeader
+		switch section {
+		case "answer":
+			fmt.Println("answers")
+			hdr, err = p.AnswerHeader()
+			if err == dnsmessage.ErrSectionDone {
+				section = "authority"
+				continue
+			}
+		case "authority":
+			fmt.Println("authorities")
+			hdr, err = p.AuthorityHeader()
+			if err == dnsmessage.ErrSectionDone {
+				section = "additional"
+				continue
+			}
+		case "additional":
+			fmt.Println("additionals")
+			hdr, err = p.AdditionalHeader()
+			if err == dnsmessage.ErrSectionDone {
+				return hosts, nil
+			}
 		}
 		if err != nil {
 			return nil, err
 		}
 
+		fmt.Println("resource ", hdr)
+		/**
 		if hdr.Class != dnsmessage.ClassINET {
 			fmt.Printf("mdns  : error invalid header class %+v\n", hdr)
 			continue
 		}
+		**/
 
 		switch hdr.Type {
 		case dnsmessage.TypeA:
@@ -268,12 +318,14 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 				fmt.Printf("mdns  : A record name=%s %s\n", entry.Name, entry.Addr)
 			}
 		case dnsmessage.TypePTR: // Reverse DNS lookup (opposite of A record)
+
 			r, err := p.PTRResource()
+			fmt.Println("ptr ", hdr, err)
 			if err != nil {
 				return nil, err
 			}
 			if Debug {
-				fmt.Printf("mdns  : PTR name=%s ptr=%s\n", hdr.Name, r.PTR)
+				fmt.Printf("mdns  : PTR name=%s %s\n", hdr.Name, r.PTR)
 			}
 
 			// if Name is a service discover then this is a pointer to a

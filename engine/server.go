@@ -551,7 +551,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			// do nothing
 
 			case udpSrcPort == 5353 || udpDstPort == 5353: // Multicast DNS
-				fmt.Printf("proto : MDNS %s\n", host)
+				fmt.Printf("proto : MDNS %s %s\n", host, udp)
 				hosts, err := h.DNSHandler.ProcessMDNS(host, ether, udp.Payload())
 				if err != nil {
 					fmt.Printf("packet: error processing mdns: %s\n", err)

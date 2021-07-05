@@ -166,7 +166,7 @@ func (p DNS) IsValid() error {
 }
 
 func (p DNS) String() string {
-	return fmt.Sprintf("qr=%v tc=%v rcode=%v qdcount=%v ancount=%v", p.QR(), p.TC(), p.ResponseCode(), p.QDCount(), p.ANCount())
+	return fmt.Sprintf("qr=%v tc=%v rcode=%v qdcount=%d ancount=%d nscount=%d arcount=%d", p.QR(), p.TC(), p.ResponseCode(), p.QDCount(), p.ANCount(), p.NSCount(), p.ARCount())
 }
 
 func (p DNS) TransactionID() uint16 { return binary.BigEndian.Uint16(p[:2]) }
