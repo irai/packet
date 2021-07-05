@@ -379,10 +379,9 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 
 		default:
 			fmt.Printf("mdns  : error type unexpected %+v", hdr)
+			return nil, packet.ErrParseFrame
 		}
 	}
-
-	return hosts, nil
 }
 
 func mustNewName(name string) dnsmessage.Name {
