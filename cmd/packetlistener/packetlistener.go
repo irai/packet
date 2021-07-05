@@ -495,6 +495,7 @@ func cmd(h *handlers) {
 			fmt.Println("   arp debug:", arp.Debug)
 			fmt.Println(" dhcp4 debug:", dhcp4.Debug)
 			fmt.Println("   udp debug:", packet.DebugUDP)
+			fmt.Println("   dns debug:", dns.Debug)
 		case "ping":
 			if ip = getIP(tokens, 1); ip == nil {
 				continue
