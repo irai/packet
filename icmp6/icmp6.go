@@ -236,7 +236,9 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 			fmt.Println("icmp6 : invalid NS msg")
 			return packet.Result{}, packet.ErrParseFrame
 		}
-		fmt.Printf("icmp6 : neighbor advertisement from ip=%s %s\n", ip6Frame.Src(), frame)
+		if Debug {
+			fmt.Printf("icmp6 : neighbor advertisement from ip=%s %s\n", ip6Frame.Src(), frame)
+		}
 
 		// Source IP is sometimes ff02::1 multicast, which means the host is nil
 		if host == nil {
@@ -254,7 +256,9 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 			fmt.Println("icmp6 : invalid NS msg")
 			return packet.Result{}, packet.ErrParseFrame
 		}
-		fmt.Printf("icmp6 : neighbor solicitation from ip=%s %s\n", ip6Frame.Src(), frame)
+		if Debug {
+			fmt.Printf("icmp6 : neighbor solicitation from ip=%s %s\n", ip6Frame.Src(), frame)
+		}
 
 		// Source address:
 		//   - Either an address assigned to the interface from which this message was sent or
@@ -267,7 +271,9 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 		// IP6 src=0x00 dst=solicited-node address (multicast)
 		//
 		if ip6Frame.Src().IsUnspecified() {
-			fmt.Printf("icmp6 : dad probe for target=%s srcip=%s srcmac=%s dstip=%s dstmac=%s\n", frame.TargetAddress(), ip6Frame.Src(), ether.Src(), ip6Frame.Dst(), ether.Dst())
+			if Debug {
+				fmt.Printf("icmp6 : dad probe for target=%s srcip=%s srcmac=%s dstip=%s dstmac=%s\n", frame.TargetAddress(), ip6Frame.Src(), ether.Src(), ip6Frame.Dst(), ether.Dst())
+			}
 			result.Update = true
 			result.FrameAddr = packet.Addr{MAC: ether.Src(), IP: frame.TargetAddress()} // ok to pass frame addr
 			return result, nil
@@ -336,8 +342,8 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 		if Debug {
 			fmt.Println("icmp6 : ether", ether)
 			fmt.Println("icmp6 : ip6", ip6Frame)
+			fmt.Printf("icmp6 : router advertisement from ip=%s %s %+v \n", ip6Frame.Src(), frame, router.Options)
 		}
-		fmt.Printf("icmp6 : router advertisement from ip=%s %s %+v \n", ip6Frame.Src(), frame, router.Options)
 
 		result := packet.Result{}
 		//notify if first time or if prefix changed
