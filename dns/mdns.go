@@ -250,10 +250,9 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 	if Debug {
 		fmt.Printf("mdns  : header %+v\n", dnsHeader)
 	}
-
-	dnsPacket := DNS(payload)
-	fmt.Println("TRACE: dns packet", dnsPacket)
-	// fmt.Printf("TRACE: dns packet % x\n", payload)
+	if !dnsHeader.Response {
+		return
+	}
 
 	//  Multicast DNS responses MUST NOT contain any questions in the
 	//  Question Section.  Any questions in the Question Section of a
@@ -271,21 +270,18 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 		var hdr dnsmessage.ResourceHeader
 		switch section {
 		case "answer":
-			fmt.Println("answers")
 			hdr, err = p.AnswerHeader()
 			if err == dnsmessage.ErrSectionDone {
 				section = "authority"
 				continue
 			}
 		case "authority":
-			fmt.Println("authorities")
 			hdr, err = p.AuthorityHeader()
 			if err == dnsmessage.ErrSectionDone {
 				section = "additional"
 				continue
 			}
 		case "additional":
-			fmt.Println("additionals")
 			hdr, err = p.AdditionalHeader()
 			if err == dnsmessage.ErrSectionDone {
 				return hosts, nil
@@ -294,14 +290,6 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 		if err != nil {
 			return nil, err
 		}
-
-		fmt.Println("resource ", hdr)
-		/**
-		if hdr.Class != dnsmessage.ClassINET {
-			fmt.Printf("mdns  : error invalid header class %+v\n", hdr)
-			continue
-		}
-		**/
 
 		switch hdr.Type {
 		case dnsmessage.TypeA:
@@ -314,6 +302,7 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 			if Debug {
 				fmt.Printf("mdns  : A record name=%s %s\n", entry.Name, entry.Addr)
 			}
+
 		case dnsmessage.TypeAAAA:
 			r, err := p.AAAAResource()
 			if err != nil {
@@ -322,10 +311,10 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 			entry := HostName{Name: hdr.Name.String(), Addr: packet.Addr{IP: r.AAAA[:]}}
 			hosts = append(hosts, entry)
 			if Debug {
-				fmt.Printf("mdns  : A record name=%s %s\n", entry.Name, entry.Addr)
+				fmt.Printf("mdns  : AAAA record name=%s %s\n", entry.Name, entry.Addr)
 			}
-		case dnsmessage.TypePTR: // Reverse DNS lookup (opposite of A record)
 
+		case dnsmessage.TypePTR:
 			r, err := p.PTRResource()
 			fmt.Println("ptr ", hdr, err)
 			if err != nil {
@@ -335,26 +324,6 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 				fmt.Printf("mdns  : PTR name=%s %s\n", hdr.Name, r.PTR)
 			}
 
-			// if Name is a service discover then this is a pointer to a
-			// service this client provides.
-			//
-			// An example from a Sonos Play3 speaker
-			//     dns.PTR name=_services._dns-sd._udp.local. ptr=_spotify-connect._tcp.local."
-			// Example spotify ptr answer
-			//     dns.PTR name=_spotify-connect._tcp.local. ptr=sonosB8E9372ACF56._spotify-connect._tcp.local.
-
-			// TODO: do we want to capture other MDNS services
-			/**
-			if hdr.Name.String() == "_services._dns-sd._udp.local." {
-				if enableService(r.PTR.String()) > 0 {
-					if Debug {
-						fmt.Printf("mdns  : send query ptr=%s\n", r.PTR)
-					}
-					h.SendMDNSQuery(r.PTR.String())
-				}
-				break
-			}
-			**/
 		case dnsmessage.TypeSRV:
 			// Service record :
 			//    _service._proto.name. TTL class SRV priority weight port target
@@ -367,9 +336,6 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 			if Debug {
 				fmt.Printf("mdns  : SRV name=%s target=%s port=%d\n", hdr.Name, r.Target, r.Port)
 			}
-
-			// r.Target is the host name and Hdr.Name contains the FQN
-			// entry.addSRV(rr.Hdr.Name, rr.Target, rr.Port)
 
 		case dnsmessage.TypeTXT:
 			r, err := p.TXTResource()
