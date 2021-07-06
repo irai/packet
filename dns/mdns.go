@@ -7,11 +7,12 @@ import (
 	"strings"
 	"sync"
 	"syscall"
-	"time"
 
 	"github.com/irai/packet"
 	"golang.org/x/net/dns/dnsmessage"
 )
+
+const MDNSServiceDiscovery = "_services._dns-sd._udp.local."
 
 var (
 	mdnsIPv4Addr = packet.Addr{MAC: packet.EthBroadcast, IP: net.IPv4(224, 0, 0, 251), Port: 5353}
@@ -213,28 +214,6 @@ func (h *DNSHandler) sendMDNSQuery(srcAddr packet.Addr, dstAddr packet.Addr, nam
 	return err
 }
 
-// QueryAll send a mdns discovery packet plus a mdns query for each active service on the LAN
-func (h *DNSHandler) QueryAll() error {
-
-	// Do a round of service discovery
-	// The listener will pickup responses and call enableService for each
-	if err := h.SendMDNSQuery("_services._dns-sd._udp.local."); err != nil {
-		return err
-
-	}
-	time.Sleep(time.Millisecond * 5)
-
-	serviceTableMutex.Lock()
-	for i := range serviceTable {
-		if err := h.SendMDNSQuery(serviceTable[i].service); err != nil {
-			return err
-		}
-		time.Sleep(time.Millisecond * 5)
-	}
-	serviceTableMutex.Unlock()
-	return nil
-}
-
 type HostName struct {
 	Name       string
 	Addr       packet.Addr
@@ -316,9 +295,10 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 
 		case dnsmessage.TypePTR:
 			r, err := p.PTRResource()
-			fmt.Println("ptr ", hdr, err)
 			if err != nil {
-				return nil, err
+				fmt.Printf("mdns  : error invalid PTR resource name=%s error=[%s]\n", hdr.Name, err)
+				p.SkipAnswer()
+				continue
 			}
 			if Debug {
 				fmt.Printf("mdns  : PTR name=%s %s\n", hdr.Name, r.PTR)
@@ -331,7 +311,9 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 			//	  dns.SRV name=sonosB8E9372ACF56._spotify-connect._tcp.local. target=sonosB8E9372ACF56.local. port=1400
 			r, err := p.SRVResource()
 			if err != nil {
-				return nil, err
+				fmt.Printf("mdns  : error invalid SRV resource name=%s error=[%s]\n", hdr.Name, err)
+				p.SkipAnswer()
+				continue
 			}
 			if Debug {
 				fmt.Printf("mdns  : SRV name=%s target=%s port=%d\n", hdr.Name, r.Target, r.Port)
@@ -340,10 +322,12 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 		case dnsmessage.TypeTXT:
 			r, err := p.TXTResource()
 			if err != nil {
-				return nil, err
+				fmt.Printf("mdns  : error invalid TXT resource name=%s error=[%s]\n", hdr.Name, err)
+				p.SkipAnswer()
+				continue
 			}
 			if Debug {
-				fmt.Printf("mdns  : TXT name=%s txt=%s", hdr.Name, r.TXT)
+				fmt.Printf("mdns  : TXT name=%s txt=%s\n", hdr.Name, r.TXT)
 			}
 
 			// Pull out the txt
@@ -351,8 +335,8 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 			// entry.addTXT(hdr.Name, r.TXT)
 
 		default:
-			fmt.Printf("mdns  : error type unexpected %+v", hdr)
-			return nil, packet.ErrParseFrame
+			fmt.Printf("mdns  : error unexpected resource type %+v\n", hdr)
+			p.SkipAnswer()
 		}
 	}
 }

@@ -370,7 +370,7 @@ func doMDNS(h *handlers, tokens []string) {
 			fmt.Println("error:", err)
 		}
 	case "queryall":
-		if err := h.engine.DNSHandler.QueryAll(); err != nil {
+		if err := h.engine.DNSHandler.SendMDNSQuery(dns.MDNSServiceDiscovery); err != nil {
 			fmt.Println("error:", err)
 		}
 	case "print":
