@@ -593,6 +593,12 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				// Microsoft Simple Service Discovery Protocol
 				// do nothing
 				fmt.Printf("proto : Microsoft SSDP %s\n", host)
+				hostName, err := h.DNSHandler.ProcessMDNS(host, ether, udp.Payload())
+				if err != nil {
+					fmt.Printf("packet: error processing ssdp: %s\n", err)
+					break
+				}
+				fmt.Printf("proto : ssdp hostname %v", hostName)
 
 			case udpDstPort == 3702:
 				// Web Services Discovery Protocol (WSD)
