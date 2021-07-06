@@ -44,7 +44,7 @@ func TestMDNSHandler_PTR(t *testing.T) {
 	}
 }
 
-// Sonos Play 3 responds with two packets
+// Sonos Play 3 packet
 // b8:e9:37:52:4e:2c > 01:00:5e:00:00:fb, ethertype IPv4 (0x0800), length 108: (tos 0x0, ttl 255, id 0, offset 0, flags [DF], proto UDP (17), length 94)
 // 192.168.0.101.5353 > 224.0.0.251.5353: [udp sum ok] 0*- [0q] 1/0/0 _services._dns-sd._udp.local. [1h15m] PTR _sonos._tcp.local. (66)
 var sonosResponse1 = []byte{
@@ -138,7 +138,7 @@ func TestMDNSHandler_Sonos(t *testing.T) {
 		{name: "sonos2", frame: sonosResponse2, wantErr: false,
 			wantHosts: []HostName{{Name: "sonosB8E93751898C.local.", Addr: packet.Addr{IP: net.IPv4(192, 168, 0, 103)}}},
 		},
-		{name: "sonos4", frame: sonosResponse3, wantErr: false,
+		{name: "sonos3", frame: sonosResponse3, wantErr: false,
 			wantHosts: []HostName{{Name: "sonosB8E93751898C.local.", Addr: packet.Addr{IP: net.IPv4(192, 168, 0, 103)}}},
 		},
 	}

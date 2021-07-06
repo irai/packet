@@ -1,23 +1,55 @@
 package dns
 
 import (
-	"errors"
 	"fmt"
 	"net"
-	"strings"
-	"sync"
 	"syscall"
 
 	"github.com/irai/packet"
 	"golang.org/x/net/dns/dnsmessage"
 )
 
+// MDNS RFC
+//    see https://datatracker.ietf.org/doc/html/rfc6762
+//
+//    One of the motivations for DNS-based Service Discovery is to enable a
+//    visiting client (e.g., a Wi-Fi-equipped [IEEEW] laptop computer,
+//    tablet, or mobile telephone) arriving on a new network to discover
+//    what services are available on that network, without any manual
+//    configuration.
+//
+//    This discovery is performed using DNS queries, using Unicast or
+//    Multicast DNS.  Five special RR names are reserved for this purpose:
+//
+//     b._dns-sd._udp.<domain>.
+//    db._dns-sd._udp.<domain>.
+//     r._dns-sd._udp.<domain>.
+//    dr._dns-sd._udp.<domain>.
+//    lb._dns-sd._udp.<domain>.
+//
+// TODO: investigate mdns domain resolution
+//    For example, if a host has the address 192.168.12.34, with
+//    the subnet mask 255.255.0.0, then the 'base' address of the subnet is
+//    192.168.0.0, and to discover the recommended automatic browsing
+//    domain(s) for devices on this subnet, the host issues a DNS PTR query
+//    for the name "lb._dns-sd._udp.0.0.168.192.in-addr.arpa."
+//
+// Service Discovery RFC
+//    see https://datatracker.ietf.org/doc/html/rfc6763
+//
+// Given a type of service that a client is looking for, and a domain in which the client is
+// looking for that service, this mechanism allows clients to discover a
+// list of named instances of that desired service, using standard DNS
+// queries.  This mechanism is referred to as DNS-based Service Discovery, or DNS-SD.
 const MDNSServiceDiscovery = "_services._dns-sd._udp.local."
 
 var (
+	// Any DNS query for a name ending with ".local." MUST be sent to the
+	// mDNS IPv4 link-local multicast address 224.0.0.251 (or its IPv6 equivalent FF02::FB).
 	mdnsIPv4Addr = packet.Addr{MAC: packet.EthBroadcast, IP: net.IPv4(224, 0, 0, 251), Port: 5353}
 	mdnsIPv6Addr = packet.Addr{MAC: packet.EthBroadcast, IP: net.ParseIP("ff02::fb"), Port: 5353}
 
+	// TODO: do we need LLMNR?
 	// Link Local Multicast Name Resolution
 	// https://datatracker.ietf.org/doc/html/rfc4795
 	//
@@ -31,9 +63,6 @@ var (
 	// https://docs.microsoft.com/en-us/previous-versions//bb878128(v=technet.10)?redirectedfrom=MSDN
 	llmnrIPv4Addr = packet.Addr{MAC: packet.EthBroadcast, IP: net.IPv4(224, 0, 0, 251), Port: 5355}
 	llmnrIPv6Addr = packet.Addr{MAC: packet.EthBroadcast, IP: net.ParseIP("FF02:0:0:0:0:0:1:3"), Port: 5355}
-
-	// ErrInvalidChannel nil channel passed for notification
-	ErrInvalidChannel = errors.New("invalid channel")
 )
 
 type serviceDef struct {
@@ -44,15 +73,6 @@ type serviceDef struct {
 	keyName       string
 }
 
-var serviceTableMutex sync.RWMutex
-
-// Service Discovery RFC
-// Given a type of service that a client is looking for, and a domain in which the client is
-// looking for that service, this mechanism allows clients to discover a
-// list of named instances of that desired service, using standard DNS
-// queries.  This mechanism is referred to as DNS-based Service Discovery, or DNS-SD.
-// https://datatracker.ietf.org/doc/html/rfc6763
-//
 // see full service list here:
 // https://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.xml
 // previous: http://dns-sd.org/ServiceTypes.html
@@ -97,40 +117,6 @@ func PrintServices() {
 	for i := range serviceTable {
 		fmt.Printf("service=%v poll=%v\n", serviceTable[i].service, serviceTable[i].enabled)
 	}
-}
-
-func findServiceIndex(service string) int {
-	serviceTableMutex.RLock()
-	defer serviceTableMutex.RUnlock()
-
-	for i := range serviceTable {
-		if strings.Contains(service, serviceTable[i].service) {
-			return i
-		}
-	}
-	return -1
-}
-
-func enableService(service string) int {
-	serviceTableMutex.Lock()
-	defer serviceTableMutex.Unlock()
-
-	for i := range serviceTable {
-		if serviceTable[i].service == service {
-			if !serviceTable[i].enabled {
-				serviceTable[i].enabled = true
-				return 1
-			}
-			return 0
-		}
-	}
-
-	s := serviceDef{service: service, enabled: true}
-	serviceTable = append(serviceTable, s)
-	if Debug {
-		fmt.Printf("mdns  : enabled new mdns service=%s\n", s.service)
-	}
-	return 1
 }
 
 // SendMDNSQuery send a multicast DNS query
@@ -276,7 +262,7 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 			if err != nil {
 				return nil, err
 			}
-			entry := HostName{Name: hdr.Name.String(), Addr: packet.Addr{IP: r.A[:]}}
+			entry := HostName{Name: hdr.Name.String(), Addr: packet.Addr{IP: packet.CopyIP(r.A[:])}}
 			hosts = append(hosts, entry)
 			if Debug {
 				fmt.Printf("mdns  : A record name=%s %s\n", entry.Name, entry.Addr)
@@ -287,7 +273,7 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 			if err != nil {
 				return nil, err
 			}
-			entry := HostName{Name: hdr.Name.String(), Addr: packet.Addr{IP: r.AAAA[:]}}
+			entry := HostName{Name: hdr.Name.String(), Addr: packet.Addr{IP: packet.CopyIP(r.AAAA[:])}}
 			hosts = append(hosts, entry)
 			if Debug {
 				fmt.Printf("mdns  : AAAA record name=%s %s\n", entry.Name, entry.Addr)
@@ -347,115 +333,4 @@ func mustNewName(name string) dnsmessage.Name {
 		panic(err)
 	}
 	return n
-}
-
-func ExampleParser() {
-	msg := dnsmessage.Message{
-		Header: dnsmessage.Header{Response: true, Authoritative: true},
-		Questions: []dnsmessage.Question{
-			{
-				Name:  mustNewName("foo.bar.example.com."),
-				Type:  dnsmessage.TypeA,
-				Class: dnsmessage.ClassINET,
-			},
-			{
-				Name:  mustNewName("bar.example.com."),
-				Type:  dnsmessage.TypeA,
-				Class: dnsmessage.ClassINET,
-			},
-		},
-		Answers: []dnsmessage.Resource{
-			{
-				Header: dnsmessage.ResourceHeader{
-					Name:  mustNewName("foo.bar.example.com."),
-					Type:  dnsmessage.TypeA,
-					Class: dnsmessage.ClassINET,
-				},
-				Body: &dnsmessage.AResource{A: [4]byte{127, 0, 0, 1}},
-			},
-			{
-				Header: dnsmessage.ResourceHeader{
-					Name:  mustNewName("bar.example.com."),
-					Type:  dnsmessage.TypeA,
-					Class: dnsmessage.ClassINET,
-				},
-				Body: &dnsmessage.AResource{A: [4]byte{127, 0, 0, 2}},
-			},
-		},
-	}
-
-	buf, err := msg.Pack()
-	if err != nil {
-		panic(err)
-	}
-
-	wantName := "bar.example.com."
-
-	var p dnsmessage.Parser
-	if _, err := p.Start(buf); err != nil {
-		panic(err)
-	}
-
-	for {
-		q, err := p.Question()
-		if err == dnsmessage.ErrSectionDone {
-			break
-		}
-		if err != nil {
-			panic(err)
-		}
-
-		if q.Name.String() != wantName {
-			continue
-		}
-
-		fmt.Println("Found question for name", wantName)
-		if err := p.SkipAllQuestions(); err != nil {
-			panic(err)
-		}
-		break
-	}
-
-	var gotIPs []net.IP
-	for {
-		h, err := p.AnswerHeader()
-		if err == dnsmessage.ErrSectionDone {
-			break
-		}
-		if err != nil {
-			panic(err)
-		}
-
-		if (h.Type != dnsmessage.TypeA && h.Type != dnsmessage.TypeAAAA) || h.Class != dnsmessage.ClassINET {
-			continue
-		}
-
-		if !strings.EqualFold(h.Name.String(), wantName) {
-			if err := p.SkipAnswer(); err != nil {
-				panic(err)
-			}
-			continue
-		}
-
-		switch h.Type {
-		case dnsmessage.TypeA:
-			r, err := p.AResource()
-			if err != nil {
-				panic(err)
-			}
-			gotIPs = append(gotIPs, r.A[:])
-		case dnsmessage.TypeAAAA:
-			r, err := p.AAAAResource()
-			if err != nil {
-				panic(err)
-			}
-			gotIPs = append(gotIPs, r.AAAA[:])
-		}
-	}
-
-	fmt.Printf("Found A/AAAA records for name %s: %v\n", wantName, gotIPs)
-
-	// Output:
-	// Found question for name bar.example.com.
-	// Found A/AAAA records for name bar.example.com.: [127.0.0.2]
 }
