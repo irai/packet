@@ -550,6 +550,8 @@ func cmd(h *handlers) {
 			doMDNS(h, tokens)
 		case "llmnr":
 			doLLMNR(h, tokens)
+		case "ssdp":
+			doLLMNR(h, tokens) // hack to use the same handler "ssdp search"
 		case "dhcp4":
 			doDHCP4(h, tokens)
 		case "h", "help":
