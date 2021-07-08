@@ -104,9 +104,7 @@ func handleSearch(raw []byte) error {
 	if man != `"ssdp:discover"` {
 		return packet.ErrParseFrame
 	}
-	if Debug {
-		fmt.Printf("ssdp  : recv discover packet %s", string(raw))
-	}
+	// fmt.Printf("ssdp  : recv discover packet %s", string(raw))
 	return nil
 }
 
