@@ -389,7 +389,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			// To see these:
 			//    sudo tcpdump -vv -x not ip6 and not ip and not arp
 			//    then switch a mobile phone to airplane mode to force a network reconnect
-			if packet.Debug {
+			if false {
 				fmt.Printf("packet: rcvd 802.3 frame %s\n", llc)
 			}
 			continue
