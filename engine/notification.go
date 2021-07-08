@@ -10,11 +10,14 @@ import (
 )
 
 type Notification struct {
-	Addr     packet.Addr
-	Online   bool
-	DHCPName string
-	MDNSName string
-	IsRouter bool
+	Addr         packet.Addr
+	Online       bool
+	DHCPName     string
+	MDNSName     string
+	UPNPName     string
+	Model        string
+	Manufacturer string
+	IsRouter     bool
 }
 
 func (n Notification) String() string {

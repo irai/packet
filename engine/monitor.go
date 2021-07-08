@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/dns"
 )
 
 // lockAndMonitorRoute monitors the default gateway is still pointing to us
@@ -67,12 +68,31 @@ func (h *Handler) minuteChecker(now time.Time) {
 
 }
 
+// hourly runs every 60 minutes
+func (h *Handler) hourly() {
+	// send MDNS service discovery
+	if err := h.DNSHandler.SendMDNSQuery(dns.MDNSServiceDiscovery); err != nil {
+		fmt.Printf("engine: error in hourly dns query %s\n", err)
+	}
+
+	// send SSDP service search
+	if err := h.DNSHandler.SendSSDPSearch(); err != nil {
+		fmt.Printf("engine: error in hourly dns query %s\n", err)
+	}
+}
+
 func (h *Handler) minuteLoop() {
 	ticker := time.NewTicker(time.Minute)
+	counter := 60
 	for {
 		select {
 		case <-ticker.C:
 			h.minuteChecker(time.Now())
+			counter--
+			if counter <= 0 {
+				h.hourly()
+				counter = 60
+			}
 
 		case <-h.closeChan:
 			return

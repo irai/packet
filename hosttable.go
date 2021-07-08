@@ -29,6 +29,7 @@ type Host struct {
 	LastSeen     time.Time // keep last packet time
 	DHCP4Name    string
 	UPNPName     string
+	MDNSName     string
 	Model        string
 	Manufacturer string
 }

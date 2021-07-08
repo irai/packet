@@ -130,19 +130,6 @@ func (config Config) NewEngine(nic string) (*Handler, error) {
 
 	// create service discovery goroutine
 	h.serviceDiscoveryChan = make(chan discoverAction, 32)
-	go func() {
-		for {
-			select {
-			case action := <-h.serviceDiscoveryChan:
-				if err := h.upnpServiceDiscovery(action); err != nil {
-					fmt.Printf("engine: error in service discovery location=%s error=%s\n", action.location, err)
-					continue
-				}
-			case <-h.closeChan:
-				return
-			}
-		}
-	}()
 
 	return h, nil
 }
@@ -309,6 +296,27 @@ func (h *Handler) stopPlugins() error {
 	return nil
 }
 
+func (h *Handler) serviceDiscoveryLoop() {
+	for {
+		select {
+		case action := <-h.serviceDiscoveryChan:
+			notification, err := h.upnpServiceDiscovery(action)
+			if err != nil {
+				fmt.Printf("engine: error in service discovery location=%s error=%s\n", action.location, err)
+				continue
+			}
+			if packet.Debug {
+				fmt.Printf("engine: sending upnp notification %s\n", notification)
+			}
+			if notification.UPNPName != "" {
+				h.nameChannel <- notification
+			}
+		case <-h.closeChan:
+			return
+		}
+	}
+}
+
 func (h *Handler) FindIP6Router(ip net.IP) icmp6.Router {
 	return h.ICMP6Handler.FindRouter(ip)
 }
@@ -320,7 +328,11 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 	go h.startPlugins()
 	defer h.stopPlugins()
 
+	// minute ticker
 	go h.minuteLoop()
+
+	// service discovery goroutine
+	go h.serviceDiscoveryLoop()
 
 	var d1, d2, d3 time.Duration
 	var startTime time.Time
@@ -569,15 +581,25 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			case udpDstPort == 53: // DNS request
 			// do nothing
 
-			case udpSrcPort == 5353 || udpDstPort == 5353: // Multicast DNS
-				fmt.Printf("proto : MDNS %s %s\n", host, udp)
-				hosts, err := h.DNSHandler.ProcessMDNS(host, ether, udp.Payload())
-				if err != nil {
-					fmt.Printf("packet: error processing mdns: %s\n", err)
-					break
-				}
-				for _, v := range hosts {
-					fmt.Printf("mdns host %+v\n", v)
+			case udpSrcPort == 5353 || udpDstPort == 5353:
+				// Multicast DNS
+				if host != nil {
+					hosts, err := h.DNSHandler.ProcessMDNS(host, ether, udp.Payload())
+					if err != nil {
+						fmt.Printf("packet: error processing mdns: %s\n", err)
+						break
+					}
+					if len(hosts) > 0 {
+						host.MACEntry.Row.Lock()
+						if host.MDNSName != "" {
+							host.MDNSName = hosts[0].Name
+							notify = true
+							if packet.Debug {
+								fmt.Printf("packet : mdns update name=%s\n", hosts[0].Name)
+							}
+						}
+						host.MACEntry.Row.Unlock()
+					}
 				}
 
 			case udpSrcPort == 5252 || udpDstPort == 5252:
@@ -589,7 +611,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 					break
 				}
 				for _, v := range hosts {
-					fmt.Printf("mdns host %+v\n", v)
+					fmt.Printf("llmnr : host %+v\n", v)
 				}
 
 			case udpSrcPort == 137 || udpDstPort == 137:

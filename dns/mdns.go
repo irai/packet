@@ -215,7 +215,7 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 		panic(err)
 	}
 	if Debug {
-		fmt.Printf("mdns  : header %+v\n", dnsHeader)
+		fmt.Printf("mdns  : new packet %s %+v\n", host, dnsHeader)
 	}
 	if !dnsHeader.Response {
 		return
