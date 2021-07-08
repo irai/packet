@@ -50,6 +50,7 @@ type Handler struct {
 	nameChannel             chan Notification
 	dnsChannel              chan dns.DNSEntry
 	forceScan               bool
+	serviceDiscoveryChan    chan discoverAction // channel used for delayed service discovery
 }
 
 // New creates an ICMPv6 handler with default values
@@ -126,6 +127,22 @@ func (config Config) NewEngine(nic string) (*Handler, error) {
 	host.MACEntry.IsRouter = true
 	host.Online = true
 	host.MACEntry.Online = true
+
+	// create service discovery goroutine
+	h.serviceDiscoveryChan = make(chan discoverAction, 32)
+	go func() {
+		for {
+			select {
+			case action := <-h.serviceDiscoveryChan:
+				if err := h.upnpServiceDiscovery(action); err != nil {
+					fmt.Printf("engine: error in service discovery location=%s error=%s\n", action.location, err)
+					continue
+				}
+			case <-h.closeChan:
+				return
+			}
+		}
+	}()
 
 	return h, nil
 }
@@ -591,14 +608,15 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 			case udpDstPort == 1900:
 				// Microsoft Simple Service Discovery Protocol
-				// do nothing
-				fmt.Printf("proto : Microsoft SSDP %s\n", host)
-				hostName, err := h.DNSHandler.ProcessMDNS(host, ether, udp.Payload())
-				if err != nil {
-					fmt.Printf("packet: error processing ssdp: %s\n", err)
-					break
+				if host != nil {
+					location, err := h.DNSHandler.ProcessSSDP(host, ether, udp.Payload())
+					if err != nil {
+						fmt.Printf("packet: error processing ssdp: %s\n", err)
+						break
+					}
+					// Put in queue for service discovery
+					h.serviceDiscoveryChan <- discoverAction{addr: host.Addr, location: location}
 				}
-				fmt.Printf("proto : ssdp hostname %v\n", hostName)
 
 			case udpDstPort == 3702:
 				// Web Services Discovery Protocol (WSD)

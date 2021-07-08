@@ -5,9 +5,11 @@ import (
 	"bytes"
 	"encoding/xml"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"syscall"
+	"time"
 
 	"github.com/irai/packet"
 )
@@ -17,7 +19,7 @@ import (
 // the receiver should assume the default SSDP port number of 1900.
 var ssdpIPv4Addr = packet.Addr{MAC: packet.EthBroadcast, IP: net.IPv4(239, 255, 255, 250), Port: 1900}
 
-func ProcessSSDP(host *packet.Host, ether packet.Ether, payload []byte) (location string, err error) {
+func (h *DNSHandler) ProcessSSDP(host *packet.Host, ether packet.Ether, payload []byte) (location string, err error) {
 
 	/*
 				// Add newline to workaround buggy SSDP responses
@@ -54,8 +56,6 @@ func handleNotify(raw []byte) (location string, err error) {
 		return location, err
 	}
 
-	fmt.Printf("TRACE: ssdp frame %+v\n", req)
-
 	switch nts := req.Header.Get("NTS"); nts {
 	case "ssdp:alive":
 		// When a device is added to the network, it must send a multicast request with
@@ -72,6 +72,9 @@ func handleNotify(raw []byte) (location string, err error) {
 			return location, packet.ErrParseFrame
 		}
 		location = req.Header.Get("LOCATION")
+		if Debug {
+			fmt.Printf("ssdp  : Microsoft SSDP service location=%s\n", location)
+		}
 		return location, nil
 	case "ssdp:byebye":
 		// When a device is about to be removed from the network, it should explicitly revoke its discovery messages by sending one
@@ -82,9 +85,11 @@ func handleNotify(raw []byte) (location string, err error) {
 		//    NT: search target
 		//    NTS: ssdp:byebye
 		//    USN: uuid:advertisement UUID
-		fmt.Printf("ssdp  : byebye %s", raw)
+		if Debug {
+			fmt.Printf("ssdp  : byebye %s", string(raw))
+		}
 	default:
-		fmt.Printf("ssdp  : error invalid NTS header %s\n", nts)
+		fmt.Printf("ssdp  : error unexpected NTS header %s\n", nts)
 		return location, packet.ErrParseFrame
 	}
 	return location, nil
@@ -97,19 +102,22 @@ func handleSearch(raw []byte) error {
 	}
 	man := req.Header.Get("MAN")
 	if man != `"ssdp:discover"` {
-		return fmt.Errorf("unexpected MAN: %s", man)
+		return packet.ErrParseFrame
 	}
-	fmt.Printf("ssdp  : discover %s", raw)
+	if Debug {
+		fmt.Printf("ssdp  : recv discover packet %s", string(raw))
+	}
 	return nil
 }
 
-// When a control point is added to the network, it should send a multicast request with method M-SEARCH in the following format.
-//  M-SEARCH * HTTP/1.1
-//  HOST: 239.255.255.250:1900
-//  MAN: "ssdp:discover"
-//  MX: seconds to delay response
-//  ST: "ssdp:all"
+//SendSSDPSearch transmit a multicast SSDP M-SEARCH discovery packet
 func (h *DNSHandler) SendSSDPSearch() (err error) {
+	// When a control point is added to the network, it should send a multicast request with method M-SEARCH in the following format.
+	//  M-SEARCH * HTTP/1.1
+	//  HOST: 239.255.255.250:1900
+	//  MAN: "ssdp:discover"
+	//  MX: seconds to delay response
+	//  ST: "ssdp:all"
 	buf := []byte(`
 M-SEARCH * HTTP/1.1
 HOST: 239.255.255.250:1900
@@ -133,7 +141,6 @@ ST: "ssdp:all"
 		fmt.Printf("mdns  : error failed to write %s\n", err)
 	}
 	return err
-
 }
 
 // example XML
@@ -175,4 +182,29 @@ func UnmarshalSSDPService(b []byte) (v UPNPService, err error) {
 			v.Device.Name, v.Device.Model, v.Device.Manufacturer, v.Device.ModelNumber, v.Device.ModelDescription)
 	}
 	return v, nil
+}
+
+func GetUPNPServiceDescription(location string) ([]byte, error) {
+	client := &http.Client{
+		Timeout: time.Second * 3,
+	}
+	req, err := http.NewRequest("GET", location, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Printf("packet: error lookup vendor name resp=%+v error=\"%s\"\n", resp, err)
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, packet.ErrNoReader
+	}
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	return body, nil
 }

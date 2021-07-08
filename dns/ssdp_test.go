@@ -46,6 +46,8 @@ var ssdpFrame = []byte{
 }
 
 func TestDNSHandler_ProcessSSDP(t *testing.T) {
+	session := packet.NewEmptySession()
+	dnsHandler, _ := New(session)
 
 	Debug = true
 	tests := []struct {
@@ -62,7 +64,7 @@ func TestDNSHandler_ProcessSSDP(t *testing.T) {
 			fmt.Println("ip", ip)
 			udp := packet.UDP(ip.Payload())
 			fmt.Println("udp", udp)
-			location, err := ProcessSSDP(nil, nil, udp.Payload())
+			location, err := dnsHandler.ProcessSSDP(nil, nil, udp.Payload())
 			if (err != nil) != tt.wantErr {
 				t.Errorf("DNSHandler.ProcessSSDP() error = %v, wantErr %v", err, tt.wantErr)
 				return

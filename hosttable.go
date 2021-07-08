@@ -22,13 +22,15 @@ type HostTable struct {
 // Host has a RWMutex used to sync access to the record. This must be read locked to access fields or write locked for updating
 // When locking the engine, you must lock the engine first then row lock to avoid deadlocks
 type Host struct {
-	// Addr.IP   net.IP    // either IP6 or ip4
-	Addr      Addr      // MAC and IP
-	MACEntry  *MACEntry // pointer to mac entry
-	Online    bool      // keep host online / offline state
-	HuntStage HuntStage // keep host overall huntStage
-	LastSeen  time.Time // keep last packet time
-	DHCP4Name string
+	Addr         Addr      // MAC and IP
+	MACEntry     *MACEntry // pointer to mac entry
+	Online       bool      // keep host online / offline state
+	HuntStage    HuntStage // keep host overall huntStage
+	LastSeen     time.Time // keep last packet time
+	DHCP4Name    string
+	UPNPName     string
+	Model        string
+	Manufacturer string
 }
 
 func (e *Host) String() string {
