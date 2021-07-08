@@ -598,7 +598,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 					fmt.Printf("packet: error processing ssdp: %s\n", err)
 					break
 				}
-				fmt.Printf("proto : ssdp hostname %v", hostName)
+				fmt.Printf("proto : ssdp hostname %v\n", hostName)
 
 			case udpDstPort == 3702:
 				// Web Services Discovery Protocol (WSD)

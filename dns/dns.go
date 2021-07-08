@@ -16,11 +16,12 @@ import (
 var Debug bool
 
 type DNSHandler struct {
-	session  *packet.Session
-	DNSTable map[string]DNSEntry // store dns records
-	mutex    sync.RWMutex
-	mconn4   *net.UDPConn
-	mconn6   *net.UDPConn
+	session   *packet.Session
+	DNSTable  map[string]DNSEntry // store dns records
+	mutex     sync.RWMutex
+	mconn4    *net.UDPConn
+	mconn6    *net.UDPConn
+	ssdpconn4 *net.UDPConn
 }
 
 func New(session *packet.Session) (h *DNSHandler, err error) {
@@ -28,12 +29,17 @@ func New(session *packet.Session) (h *DNSHandler, err error) {
 	h.session = session
 	h.DNSTable = make(map[string]DNSEntry, 256)
 
-	// Multicast
+	// Resgiter for MDNS multicast
 	if h.mconn4, err = net.ListenMulticastUDP("udp4", nil, &net.UDPAddr{IP: mdnsIPv4Addr.IP, Port: int(mdnsIPv4Addr.Port)}); err != nil {
 		return nil, fmt.Errorf("failed to bind to multicast udp4 port: %w", err)
 	}
 	if h.mconn6, err = net.ListenMulticastUDP("udp6", nil, &net.UDPAddr{IP: mdnsIPv6Addr.IP, Port: int(mdnsIPv6Addr.Port)}); err != nil {
 		log.Printf("MDNS: Failed to bind to udp6 port: %v", err)
+	}
+
+	// Register for ssdp multicast
+	if h.ssdpconn4, err = net.ListenMulticastUDP("udp4", nil, &net.UDPAddr{IP: ssdpIPv4Addr.IP, Port: int(ssdpIPv4Addr.Port)}); err != nil {
+		return nil, fmt.Errorf("failed to bind to ssdp ipv4 port: %w", err)
 	}
 	return h, nil
 }

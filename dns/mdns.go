@@ -136,6 +136,8 @@ func (h *DNSHandler) sendMDNSQuery(srcAddr packet.Addr, dstAddr packet.Addr, nam
 	// records.  When responding to queries using qtype "ANY" (255) and/or
 	// qclass "ANY" (255), a Multicast DNS responder MUST respond with *ALL*
 	// of its records that match the query.
+	//
+	// TODO: mdns request unicast for response messages to minimise traffic. How???
 	msg := dnsmessage.Message{
 		Header: dnsmessage.Header{Response: false},
 		Questions: []dnsmessage.Question{
