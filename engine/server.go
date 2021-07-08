@@ -305,10 +305,10 @@ func (h *Handler) serviceDiscoveryLoop() {
 				fmt.Printf("engine: error in service discovery location=%s error=%s\n", action.location, err)
 				continue
 			}
-			if packet.Debug {
-				fmt.Printf("engine: sending upnp notification %s\n", notification)
-			}
 			if notification.UPNPName != "" {
+				if packet.Debug {
+					fmt.Printf("engine: sending upnp notification %s\n", notification)
+				}
 				h.nameChannel <- notification
 			}
 		case <-h.closeChan:
