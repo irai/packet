@@ -3,6 +3,7 @@ package dns
 import (
 	"fmt"
 	"net"
+	"strings"
 	"syscall"
 
 	"github.com/irai/packet"
@@ -264,7 +265,8 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 			if err != nil {
 				return nil, err
 			}
-			entry := HostName{Name: hdr.Name.String(), Addr: packet.Addr{IP: packet.CopyIP(r.A[:])}}
+			name := strings.TrimSuffix(hdr.Name.String(), ".local.")
+			entry := HostName{Name: name, Addr: packet.Addr{IP: packet.CopyIP(r.A[:])}}
 			hosts = append(hosts, entry)
 			if Debug {
 				fmt.Printf("mdns  : A record name=%s %s\n", entry.Name, entry.Addr)
@@ -275,7 +277,8 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 			if err != nil {
 				return nil, err
 			}
-			entry := HostName{Name: hdr.Name.String(), Addr: packet.Addr{IP: packet.CopyIP(r.AAAA[:])}}
+			name := strings.TrimSuffix(hdr.Name.String(), ".local.")
+			entry := HostName{Name: name, Addr: packet.Addr{IP: packet.CopyIP(r.AAAA[:])}}
 			hosts = append(hosts, entry)
 			if Debug {
 				fmt.Printf("mdns  : AAAA record name=%s %s\n", entry.Name, entry.Addr)
