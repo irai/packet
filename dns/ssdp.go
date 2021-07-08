@@ -20,7 +20,6 @@ import (
 var ssdpIPv4Addr = packet.Addr{MAC: packet.EthBroadcast, IP: net.IPv4(239, 255, 255, 250), Port: 1900}
 
 func (h *DNSHandler) ProcessSSDP(host *packet.Host, ether packet.Ether, payload []byte) (location string, err error) {
-
 	/*
 				// Add newline to workaround buggy SSDP responses
 		var endOfHeader = []byte{'\r', '\n', '\r', '\n'}
@@ -36,7 +35,8 @@ func (h *DNSHandler) ProcessSSDP(host *packet.Host, ether packet.Ether, payload 
 	if bytes.HasPrefix(payload, []byte("NOTIFY ")) {
 		return handleNotify(payload)
 	}
-	return location, packet.ErrParseFrame
+
+	return handleResponse(payload)
 }
 
 // handleNotify process notify ssdp messages
@@ -108,6 +108,24 @@ func handleSearch(raw []byte) error {
 		fmt.Printf("ssdp  : recv discover packet %s", string(raw))
 	}
 	return nil
+}
+
+// handleResponse process a M-SEARCH http response
+func handleResponse(raw []byte) (location string, err error) {
+	resp, err := http.ReadResponse(bufio.NewReader(bytes.NewReader(raw)), nil)
+	if err != nil {
+		return location, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", packet.ErrParseFrame
+	}
+	location = resp.Header.Get("LOCATION")
+	if Debug {
+		fmt.Printf("ssdp  : Microsoft SSDP service location=%s\n", location)
+	}
+	return location, nil
+
 }
 
 //SendSSDPSearch transmit a multicast SSDP M-SEARCH discovery packet
