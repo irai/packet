@@ -14,7 +14,6 @@ type discoverAction struct {
 }
 
 func (h *Handler) upnpServiceDiscovery(d discoverAction) (Notification, error) {
-	fmt.Printf("TRACE upnp service discover %+v\n", d)
 	host := h.session.FindIP(d.addr.IP)
 	if host == nil {
 		return Notification{}, packet.ErrInvalidIP
