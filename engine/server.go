@@ -302,7 +302,7 @@ func (h *Handler) serviceDiscoveryLoop() {
 		case action := <-h.serviceDiscoveryChan:
 			notification, err := h.upnpServiceDiscovery(action)
 			if err != nil {
-				fmt.Printf("engine: error in service discovery location=%s error=%s\n", action.location, err)
+				fmt.Printf("engine: error in service discovery %s location=%s error=%s\n", action.addr, action.location, err)
 				continue
 			}
 			if notification.UPNPName != "" {
@@ -637,7 +637,9 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 						break
 					}
 					// Put in queue for service discovery
-					h.serviceDiscoveryChan <- discoverAction{addr: host.Addr, location: location}
+					if location != "" {
+						h.serviceDiscoveryChan <- discoverAction{addr: host.Addr, location: location}
+					}
 				}
 
 			case udpDstPort == 3702:
