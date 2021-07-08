@@ -35,9 +35,12 @@ type Host struct {
 }
 
 func (e *Host) String() string {
-	// return fmt.Sprintf("mac=%s ip=%v online=%v capture=%v stage4=%s lastSeen=%s", e.MACEntry.MAC, e.IP, e.Online, e.MACEntry.Captured, e.HuntStage, time.Since(e.LastSeen))
+	return e.toString(false) // summary fields
+}
+
+func (e *Host) toString(all bool) string {
 	var b strings.Builder
-	b.Grow(120)
+	b.Grow(180)
 	b.WriteString("mac=")
 	b.WriteString(e.MACEntry.MAC.String())
 	b.WriteString(" ip=")
@@ -53,10 +56,31 @@ func (e *Host) String() string {
 		b.WriteString(" captured=false stage4=")
 	}
 	b.WriteString(e.HuntStage.String())
-	b.WriteString(" name=")
-	b.WriteString(e.DHCP4Name)
+	if e.DHCP4Name != "" {
+		b.WriteString(" name=")
+		b.WriteString(e.DHCP4Name)
+	}
 	b.WriteString(" lastSeen=")
 	b.WriteString(time.Since(e.LastSeen).String())
+	if !all {
+		return b.String()
+	}
+	if e.MDNSName != "" {
+		b.WriteString(" mdnsname=")
+		b.WriteString(e.MDNSName)
+	}
+	if e.UPNPName != "" {
+		b.WriteString(" upnpname=")
+		b.WriteString(e.UPNPName)
+	}
+	if e.Model != "" {
+		b.WriteString(" model=")
+		b.WriteString(e.Model)
+	}
+	if e.Manufacturer != "" {
+		b.WriteString(" manufacturer=")
+		b.WriteString(e.Manufacturer)
+	}
 	return b.String()
 }
 
@@ -107,7 +131,7 @@ func (h *Session) printHostTable() {
 	count := 0
 	for _, v := range h.MACTable.Table {
 		for _, host := range v.HostList {
-			fmt.Printf("host %s upnpname=%s model=%s manufacturer=%s\n", host, host.UPNPName, host.Model, host.Manufacturer)
+			fmt.Printf("host %s\n", host.toString(true)) // all fields available
 			count++
 		}
 	}
