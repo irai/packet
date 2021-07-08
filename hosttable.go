@@ -106,7 +106,7 @@ func (h *Session) printHostTable() {
 	count := 0
 	for _, v := range h.MACTable.Table {
 		for _, host := range v.HostList {
-			fmt.Printf("host %s\n", host)
+			fmt.Printf("host %s upnpname=%s model=%s manufacturer=%s\n", host, host.UPNPName, host.Model, host.Manufacturer)
 			count++
 		}
 	}

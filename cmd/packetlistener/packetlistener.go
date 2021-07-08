@@ -386,7 +386,10 @@ func doLLMNR(h *handlers, tokens []string) {
 	case "query":
 		if err := h.engine.DNSHandler.SendLLMNRQuery(getString(tokens, 2)); err != nil {
 			fmt.Println("error:", err)
-
+		}
+	case "search": // hack to send ssdp search with "ssdp search"
+		if err := h.engine.DNSHandler.SendSSDPSearch(); err != nil {
+			fmt.Println("error:", err)
 		}
 	default:
 		printHelp("invalid llmnr syntax", mdnsSyntax)
@@ -417,8 +420,10 @@ var icmp6Syntax = []string{
 
 var mdnsSyntax = []string{
 	"mdns    query <service>                 : query service name             ",
+	"        queryall                        : send dns-sd request            ",
 	"        print                           : print ",
 	"llmnr   query <service>                 : query service name             ",
+	"ssdp    search                          : send ssdp search multicast     ",
 }
 
 func printHelp(msg string, h []string) {
