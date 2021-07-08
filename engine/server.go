@@ -591,14 +591,14 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 					}
 					if len(hosts) > 0 {
 						host.MACEntry.Row.Lock()
-						if host.MDNSName != "" {
+						if hosts[0].Name != "" && host.MDNSName != hosts[0].Name {
 							host.MDNSName = hosts[0].Name
 							notify = true
-							if packet.Debug {
-								fmt.Printf("packet : mdns update name=%s\n", hosts[0].Name)
-							}
 						}
 						host.MACEntry.Row.Unlock()
+						if packet.Debug && notify {
+							fmt.Printf("packet : mdns update name=%s\n", hosts[0].Name)
+						}
 					}
 				}
 
