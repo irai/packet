@@ -362,18 +362,28 @@ var serviceDefinitionTPLink = []byte(`
 func TestDNSHandler_ProcessSSDPDescription(t *testing.T) {
 	Debug = true
 	tests := []struct {
-		name    string
-		service []byte
-		wantErr bool
+		name      string
+		service   []byte
+		wantErr   bool
+		wantName  string
+		wantModel string
 	}{
-		{name: "ssdp-sonos", service: serviceDefinitionSonos, wantErr: false},
-		{name: "ssdp-tplink", service: serviceDefinitionTPLink, wantErr: false},
+		{name: "ssdp-sonos", service: serviceDefinitionSonos, wantErr: false, wantName: "192.168.0.103 - Sonos Play:1", wantModel: "Sonos Play:1"},
+		{name: "ssdp-tplink", service: serviceDefinitionTPLink, wantErr: false, wantName: "Archer_VR1600v", wantModel: "Archer_VR1600v"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := UnmarshalSSDPService(tt.service)
+			v, err := UnmarshalSSDPService(tt.service)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("DNSHandler.ProcessSSDPDescription() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if v.Device.Name != tt.wantName {
+				t.Errorf("DNSHandler.ProcessSSDPDescription() name=%v, want=%v", v.Device.Name, tt.wantName)
+				return
+			}
+			if v.Device.Model != tt.wantModel {
+				t.Errorf("DNSHandler.ProcessSSDPDescription() model=%v, want=%v", v.Device.Model, tt.wantModel)
 				return
 			}
 		})

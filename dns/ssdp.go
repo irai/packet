@@ -136,41 +136,43 @@ ST: "ssdp:all"
 
 }
 
+// example XML
+// <root xmlns="urn:schemas-upnp-org:device-1-0">
+//   <specVersion>
+//     <major>1</major>
+//     <minor>0</minor>
+//   </specVersion>
+//   <device>
+//     <friendlyName>192.168.0.103 - Sonos Play:1</friendlyName>
+//     <manufacturer>Sonos, Inc.</manufacturer>
+//     <modelNumber>S1</modelNumber>
+//     <modelDescription>Sonos Play:1</modelDescription>
+//     <modelName>Sonos Play:1</modelName>
+type UPNPDevice struct {
+	Name             string `xml:"friendlyName"`
+	Model            string `xml:"modelName"`
+	ModelNumber      string `xml:"modelNumber"`
+	ModelDescription string `xml:"modelDescription"`
+	Manufacturer     string `xml:"manufacturer"`
+}
+type UPNPService struct {
+	XMLName xml.Name   `xml:"root"`
+	Device  UPNPDevice `xml:"device"`
+}
+
 // UnmarshalSSDPService process a UPNP service description XML
 //
 // For a format and list of fields see section 2.3 service description
 //    http://www.upnp.org/specs/arch/UPnP-arch-DeviceArchitecture-v1.0.pdf
-func UnmarshalSSDPService(b []byte) (err error) {
-	// example XML
-	// <root xmlns="urn:schemas-upnp-org:device-1-0">
-	//   <specVersion>
-	//     <major>1</major>
-	//     <minor>0</minor>
-	//   </specVersion>
-	//   <device>
-	//     <friendlyName>192.168.0.103 - Sonos Play:1</friendlyName>
-	//     <manufacturer>Sonos, Inc.</manufacturer>
-	//     <modelNumber>S1</modelNumber>
-	//     <modelDescription>Sonos Play:1</modelDescription>
-	//     <modelName>Sonos Play:1</modelName>
-	type Device struct {
-		Name             string `xml:"friendlyName"`
-		Model            string `xml:"modelName"`
-		ModelNumber      string `xml:"modelNumber"`
-		ModelDescription string `xml:"modelDescription"`
-		Manufacturer     string `xml:"manufacturer"`
-	}
-	type Result struct {
-		XMLName xml.Name `xml:"root"`
-		Device  Device   `xml:"device"`
-	}
-	v := Result{}
-
+func UnmarshalSSDPService(b []byte) (v UPNPService, err error) {
+	v = UPNPService{}
 	if err := xml.Unmarshal(b, &v); err != nil {
-		fmt.Printf("error: %v", err)
-		return err
+		fmt.Printf("ssdp: error unmarshal message %v [%+x]", err, b)
+		return v, err
 	}
-
-	fmt.Printf("ssdp  : service description %+v\n", v)
-	return nil
+	if Debug {
+		fmt.Printf("ssdp  : upnp service description name=%s model=%s manufacturer=%s mnumber=%s description=%s\n",
+			v.Device.Name, v.Device.Model, v.Device.Manufacturer, v.Device.ModelNumber, v.Device.ModelDescription)
+	}
+	return v, nil
 }
