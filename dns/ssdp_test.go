@@ -114,7 +114,7 @@ func TestDNSHandler_ProcessSSDPFrame(t *testing.T) {
 		wantErr      bool
 	}{
 		{name: "ssdp1", frame: ssdpFrame, wantErr: false, wantLocation: "http://192.168.0.103:1400/xml/device_description.xml"},
-		{name: "ssdpSearchRequest", frame: frameMSearchResponse, wantErr: false, wantLocation: "http://192.168.0.1:1900/gatedesc.xml"},
+		{name: "ssdpSearchRequest", frame: frameMSearchRequest, wantErr: false, wantLocation: ""},
 		{name: "ssdpSearchResponse", frame: frameMSearchResponse, wantErr: false, wantLocation: "http://192.168.0.1:1900/gatedesc.xml"},
 	}
 	for _, tt := range tests {

@@ -126,27 +126,26 @@ func handleResponse(raw []byte) (location string, err error) {
 
 }
 
-//SendSSDPSearch transmit a multicast SSDP M-SEARCH discovery packet
-func (h *DNSHandler) SendSSDPSearch() (err error) {
-	// When a control point is added to the network, it should send a multicast request with method M-SEARCH in the following format.
-	//  M-SEARCH * HTTP/1.1
-	//  HOST: 239.255.255.250:1900
-	//  MAN: "ssdp:discover"
-	//  MX: seconds to delay response
-	//  ST: "ssdp:all"
-	buf := []byte(`
+// When a control point is added to the network, it should send a multicast request with method M-SEARCH in the following format.
+//  M-SEARCH * HTTP/1.1
+//  HOST: 239.255.255.250:1900
+//  MAN: "ssdp:discover"
+//  MX: seconds to delay response
+//  ST: "ssdp:all"
+var mSearchString = append([]byte(`
 M-SEARCH * HTTP/1.1
 HOST: 239.255.255.250:1900
 MAN: "ssdp:discover"
 MX: 3
-ST: "ssdp:all"
+ST: "ssdp:all"`), []byte{0x0d, 0x0a, 0x0d, 0x0a}...) // must have 0d0a,0d0a at the end
 
-`)
+//SendSSDPSearch transmit a multicast SSDP M-SEARCH discovery packet
+func (h *DNSHandler) SendSSDPSearch() (err error) {
 	ether := packet.Ether(make([]byte, packet.EthMaxSize))
 	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IP, h.session.NICInfo.HostMAC, ssdpIPv4Addr.MAC)
 	ip4 := packet.IP4MarshalBinary(ether.Payload(), 255, h.session.NICInfo.HostIP4.IP, ssdpIPv4Addr.IP)
 	udp := packet.UDPMarshalBinary(ip4.Payload(), 1900, 1900)
-	if udp, err = udp.AppendPayload(buf); err != nil {
+	if udp, err = udp.AppendPayload(mSearchString); err != nil {
 		return err
 	}
 	ip4 = ip4.SetPayload(udp, syscall.IPPROTO_UDP)
