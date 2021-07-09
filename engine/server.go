@@ -381,9 +381,15 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		// a unifying standard, IEEE 802.3x-1997, was introduced that required that EtherType values be greater than or equal to 1536.
 		// Thus, values of 1500 and below for this field indicate that the field is used as the size of the payload of the Ethernet frame
 		// while values of 1536 and above indicate that the field is used to represent an EtherType.
+		// see https://macaddress.io/faq/how-to-recognise-an-ieee-802-1x-mac-address-application
+		// see https://networkengineering.stackexchange.com/questions/64757/unknown-ethertype
+		// see https://www.mit.edu/~map/Ethernet/multicast.html
 		if ether.EtherType() < 1536 {
+
 			llc := packet.LLC(ether.Payload())
 			// SONOS - LLC, dsap STP (0x42) Individual, ssap STP (0x42) Command
+			// uses "01:80:c2:00:00:00" destination MAC
+			// http://www.netrounds.com/wp-content/uploads/public/layer-2-control-protocol-handling.pdf
 
 			// wifi mac notification -
 			// To see these:

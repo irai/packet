@@ -14,7 +14,9 @@ import (
 	"github.com/irai/packet"
 )
 
-// SSDP
+// SSDP draft here
+// see : https://datatracker.ietf.org/doc/html/draft-cai-ssdp-v1-03
+//
 // Must be 239.255.255.250:1900. If the port number (“:1900”) is omitted,
 // the receiver should assume the default SSDP port number of 1900.
 var ssdpIPv4Addr = packet.Addr{MAC: packet.EthBroadcast, IP: net.IPv4(239, 255, 255, 250), Port: 1900}
@@ -141,7 +143,7 @@ var mSearchString = append([]byte(`
 M-SEARCH * HTTP/1.1
 HOST: 239.255.255.250:1900
 MAN: "ssdp:discover"
-MX: 3
+MX: 1
 ST: "ssdp:all"`), []byte{0x0d, 0x0a, 0x0d, 0x0a}...) // must have 0d0a,0d0a at the end
 
 //SendSSDPSearch transmit a multicast SSDP M-SEARCH discovery packet

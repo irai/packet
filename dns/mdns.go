@@ -50,7 +50,8 @@ var (
 	mdnsIPv4Addr = packet.Addr{MAC: packet.EthBroadcast, IP: net.IPv4(224, 0, 0, 251), Port: 5353}
 	mdnsIPv6Addr = packet.Addr{MAC: packet.EthBroadcast, IP: net.ParseIP("ff02::fb"), Port: 5353}
 
-	// TODO: do we need LLMNR?
+	// TODO: do we need LLMNR? perhaps useful when a new windows machine is pluggedin?
+
 	// Link Local Multicast Name Resolution
 	// https://datatracker.ietf.org/doc/html/rfc4795
 	//
@@ -61,7 +62,7 @@ var (
 	// queries, is FF02:0:0:0:0:0:1:3.
 	//
 	// Windows hosts will query a name on startup to prevent duplicates on the LAN
-	// https://docs.microsoft.com/en-us/previous-versions//bb878128(v=technet.10)?redirectedfrom=MSDN
+	// https://docs.microsoft.com/en-us/previous-versions//bb878128(v=technet.10)
 	llmnrIPv4Addr = packet.Addr{MAC: packet.EthBroadcast, IP: net.IPv4(224, 0, 0, 251), Port: 5355}
 	llmnrIPv6Addr = packet.Addr{MAC: packet.EthBroadcast, IP: net.ParseIP("FF02:0:0:0:0:0:1:3"), Port: 5355}
 )
