@@ -122,23 +122,25 @@ func PrintServices() {
 
 // SendMDNSQuery send a multicast DNS query
 func (h *DNSHandler) SendMDNSQuery(name string) (err error) {
-	return h.sendMDNSQuery(h.session.NICInfo.HostAddr4, mdnsIPv4Addr, name)
+	// When responding to queries using qtype "ANY" (255) and/or
+	// qclass "ANY" (255), a Multicast DNS responder MUST respond with *ALL*
+	// of its records that match the query.
+	return h.sendMDNSQuery(h.session.NICInfo.HostAddr4, mdnsIPv4Addr, dnsmessage.TypeALL, name)
 }
 
 // SendLLMNRQuery send a multicast LLMNR query
 func (h *DNSHandler) SendLLMNRQuery(name string) (err error) {
-	return h.sendMDNSQuery(h.session.NICInfo.HostAddr4, llmnrIPv4Addr, name)
+	return h.sendMDNSQuery(h.session.NICInfo.HostAddr4, llmnrIPv4Addr, dnsmessage.TypePTR, name)
 }
 
-func (h *DNSHandler) sendMDNSQuery(srcAddr packet.Addr, dstAddr packet.Addr, name string) (err error) {
-
-	// Multicast DNS does not share this property that qtype "ANY" and
-	// qclass "ANY" queries return some undefined subset of the matching
-	// records.  When responding to queries using qtype "ANY" (255) and/or
-	// qclass "ANY" (255), a Multicast DNS responder MUST respond with *ALL*
-	// of its records that match the query.
-	//
+func (h *DNSHandler) sendMDNSQuery(srcAddr packet.Addr, dstAddr packet.Addr, mtype dnsmessage.Type, name string) (err error) {
 	// TODO: mdns request unicast for response messages to minimise traffic. How???
+	//    To avoid large floods of potentially unnecessary responses in these
+	//    cases, Multicast DNS defines the top bit in the class field of a DNS
+	//    question as the unicast-response bit.  When this bit is set in a
+	//    question, it indicates that the querier is willing to accept unicast
+	//    replies in response to this specific query, as well as the usual
+	//    multicast responses.
 	msg := dnsmessage.Message{
 		Header: dnsmessage.Header{Response: false},
 		Questions: []dnsmessage.Question{

@@ -19,7 +19,12 @@ import (
 // the receiver should assume the default SSDP port number of 1900.
 var ssdpIPv4Addr = packet.Addr{MAC: packet.EthBroadcast, IP: net.IPv4(239, 255, 255, 250), Port: 1900}
 
+// Web Discovery Protocol - WSD
+var wsd4IPv4Addr = packet.Addr{MAC: packet.EthBroadcast, IP: net.IPv4(239, 255, 255, 250), Port: 3702}
+
 func (h *DNSHandler) ProcessSSDP(host *packet.Host, ether packet.Ether, payload []byte) (location string, err error) {
+
+	// TODO: test ssdp packet without endline
 	/*
 				// Add newline to workaround buggy SSDP responses
 		var endOfHeader = []byte{'\r', '\n', '\r', '\n'}
