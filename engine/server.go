@@ -58,7 +58,7 @@ func NewEngine(nic string) (*Handler, error) {
 	return Config{}.NewEngine(nic)
 }
 
-const notificationChannelCap = 16
+const notificationChannelCap = 64 // we can receive a large number of nofifications during start (i.e. 3+ per device mdns, upnp, etc)
 
 // NewEngine creates an packet handler with config values
 func (config Config) NewEngine(nic string) (*Handler, error) {
@@ -309,7 +309,9 @@ func (h *Handler) serviceDiscoveryLoop() {
 				if packet.Debug {
 					fmt.Printf("engine: sending upnp notification %s\n", notification)
 				}
-				h.notificationChannel <- notification
+				if h.notificationChannel != nil {
+					h.notificationChannel <- notification
+				}
 			}
 		case <-h.closeChan:
 			return
