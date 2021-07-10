@@ -21,7 +21,8 @@ type Notification struct {
 }
 
 func (n Notification) String() string {
-	return fmt.Sprintf("%s online=%t dhcp4name=%s mdnsname=%s router=%v", n.Addr, n.Online, n.DHCPName, n.MDNSName, n.IsRouter)
+	return fmt.Sprintf("%s online=%t dhcp4name=%s mdnsname=%s upnpname=%s model=%s manufacturer=%s router=%v",
+		n.Addr, n.Online, n.DHCPName, n.MDNSName, n.UPNPName, n.Model, n.Manufacturer, n.IsRouter)
 }
 
 // purge is called each minute by the minute goroutine
@@ -86,7 +87,11 @@ func (h *Handler) GetNotificationChannel() <-chan Notification {
 	h.session.GlobalRLock()
 	for _, host := range h.session.HostTable.Table {
 		host.MACEntry.Row.RLock()
-		list = append(list, Notification{Addr: host.Addr, Online: host.Online, DHCPName: host.DHCP4Name, IsRouter: host.MACEntry.IsRouter})
+		notification := Notification{Addr: host.Addr, Online: host.Online,
+			DHCPName: host.DHCP4Name, MDNSName: host.MDNSName, UPNPName: host.UPNPName,
+			Model: host.Model, Manufacturer: host.Manufacturer,
+			IsRouter: host.MACEntry.IsRouter}
+		list = append(list, notification)
 		host.MACEntry.Row.RUnlock()
 	}
 	h.session.GlobalRUnlock()

@@ -276,7 +276,7 @@ func (h *Handler) lockAndSetOnline(host *packet.Host, notify bool) {
 		fmt.Printf("packet: IP is online %s\n", host)
 	}
 
-	// in goroutine - cannot access host fields
+	// CAUTION: in goroutine - must not access host fields without lock
 	go func() {
 		if captured {
 			if notification.Addr.IP.To4() != nil {

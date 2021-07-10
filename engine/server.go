@@ -590,20 +590,20 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			case udpSrcPort == 5353 || udpDstPort == 5353:
 				// Multicast DNS
 				if host != nil {
-					hosts, err := h.DNSHandler.ProcessMDNS(host, ether, udp.Payload())
+					names, err := h.DNSHandler.ProcessMDNS(host, ether, udp.Payload())
 					if err != nil {
 						fmt.Printf("packet: error processing mdns: %s\n", err)
 						break
 					}
-					if len(hosts) > 0 {
+					if len(names) > 0 {
 						host.MACEntry.Row.Lock()
-						if hosts[0].Name != "" && host.MDNSName != hosts[0].Name {
-							host.MDNSName = hosts[0].Name
+						if names[0].Name != "" && host.MDNSName != names[0].Name {
+							host.MDNSName = names[0].Name
 							notify = true
 						}
 						host.MACEntry.Row.Unlock()
 						if packet.Debug && notify {
-							fmt.Printf("packet : mdns update name=%s\n", hosts[0].Name)
+							fmt.Printf("packet: mdns update name=%s\n", names[0].Name)
 						}
 					}
 				}
