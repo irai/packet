@@ -144,13 +144,12 @@ func (h *Handler) Close() error {
 		fmt.Println("packet: close() called. closing....")
 	}
 	h.closed = true
-	if h.notificationChannel != nil {
-		close(h.notificationChannel)
-	}
-	if h.dnsChannel != nil {
-		close(h.dnsChannel)
-	}
-	close(h.closeChan) // will terminate goroutines
+
+	// Don't close external channels as they will result in a loop in the caller.
+	//   i.e. a goroutine waiting on x <-nofificationEngine will return continuosly if the channel is closed
+
+	// close the internal channel to terminate internal goroutines
+	close(h.closeChan)
 	if h.session.Conn != nil {
 		h.session.Conn.Close()
 	}
