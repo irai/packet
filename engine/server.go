@@ -691,7 +691,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		 **
 		***/
 		if packet.Debug {
-			fmt.Println("Check engine lock")
+			fmt.Println("Check engine lock", ether)
 			h.session.GlobalLock()
 			fmt.Println("Check engine lock pass")
 			for _, host := range h.session.HostTable.Table {
