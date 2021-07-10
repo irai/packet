@@ -688,7 +688,6 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		/****
 		 ** Uncomment this to help identify deadlocks
 		 **
-		***/
 		if packet.Debug {
 			fmt.Println("Check engine lock", ether)
 			h.session.GlobalLock()
@@ -704,5 +703,6 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			h.session.GlobalUnlock()
 			fmt.Println("Check engine unlock pass ")
 		}
+		***/
 	}
 }
