@@ -687,21 +687,21 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		/****
 		 ** Uncomment this to help identify deadlocks
 		 **
-		if packet.Debug {
-			fmt.Println("Check engine")
-			h.session.GlobalLock()
-			fmt.Println("Check lock engine pass")
-			for _, host := range h.session.HostTable.Table {
-				fmt.Println("Check row ", host.IP)
-				host.MACEntry.Row.Lock()
-				fmt.Println("Check lock row pass ", host.IP)
-				host.MACEntry.Row.Unlock()
-				fmt.Println("Check unlock row pass ", host.IP)
-			}
-			fmt.Println("Check lock pass rows")
-			h.session.GlobalUnlock()
-			fmt.Println("Check unlock engine pass ")
-		}
 		***/
+		if packet.Debug {
+			fmt.Println("Check engine lock")
+			h.session.GlobalLock()
+			fmt.Println("Check engine lock pass")
+			for _, host := range h.session.HostTable.Table {
+				fmt.Println("Check row ", host.Addr)
+				host.MACEntry.Row.Lock()
+				fmt.Println("Check row lock pass ", host.Addr)
+				host.MACEntry.Row.Unlock()
+				fmt.Println("Check row unlock pass ", host.Addr)
+			}
+			fmt.Println("Check engine unlock")
+			h.session.GlobalUnlock()
+			fmt.Println("Check engine unlock pass ")
+		}
 	}
 }
