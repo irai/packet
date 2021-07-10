@@ -47,7 +47,7 @@ type Handler struct {
 	PurgeDeadline           time.Duration // purge entry if no updates
 	closed                  bool          // set to true when handler is closed
 	closeChan               chan bool     // close goroutines channel
-	nameChannel             chan Notification
+	notificationChannel     chan Notification
 	dnsChannel              chan dns.DNSEntry
 	forceScan               bool
 	serviceDiscoveryChan    chan discoverAction // channel used for delayed service discovery
@@ -144,8 +144,8 @@ func (h *Handler) Close() error {
 		fmt.Println("packet: close() called. closing....")
 	}
 	h.closed = true
-	if h.nameChannel != nil {
-		close(h.nameChannel)
+	if h.notificationChannel != nil {
+		close(h.notificationChannel)
 	}
 	if h.dnsChannel != nil {
 		close(h.dnsChannel)
@@ -309,7 +309,7 @@ func (h *Handler) serviceDiscoveryLoop() {
 				if packet.Debug {
 					fmt.Printf("engine: sending upnp notification %s\n", notification)
 				}
-				h.nameChannel <- notification
+				h.notificationChannel <- notification
 			}
 		case <-h.closeChan:
 			return

@@ -298,8 +298,8 @@ func (h *Handler) lockAndSetOnline(host *packet.Host, notify bool) {
 				}
 			}
 		}
-		if h.nameChannel != nil {
-			h.nameChannel <- notification
+		if h.notificationChannel != nil {
+			h.notificationChannel <- notification
 		}
 	}()
 }
@@ -314,7 +314,10 @@ func (h *Handler) lockAndSetOffline(host *packet.Host) {
 		fmt.Printf("packet: IP is offline %s\n", host)
 	}
 	host.Online = false
-	notification := Notification{Addr: packet.Addr{MAC: host.MACEntry.MAC, IP: host.Addr.IP}, Online: false}
+	notification := Notification{Addr: packet.Addr{MAC: host.MACEntry.MAC, IP: host.Addr.IP}, Online: false,
+		DHCPName: host.DHCP4Name, MDNSName: host.MDNSName, UPNPName: host.UPNPName,
+		Model: host.Model, Manufacturer: host.Manufacturer,
+		IsRouter: host.MACEntry.IsRouter}
 
 	// Update mac online status if all hosts are offline
 	macOnline := false
@@ -330,8 +333,8 @@ func (h *Handler) lockAndSetOffline(host *packet.Host) {
 
 	h.lockAndStopHunt(host, packet.StageNormal)
 
-	if h.nameChannel != nil {
-		h.nameChannel <- notification
+	if h.notificationChannel != nil {
+		h.notificationChannel <- notification
 	}
 }
 

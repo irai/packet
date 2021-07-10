@@ -78,8 +78,8 @@ func (h *Handler) purge(now time.Time, probeDur time.Duration, offlineDur time.D
 }
 
 func (h *Handler) GetNotificationChannel() <-chan Notification {
-	if h.nameChannel != nil {
-		return h.nameChannel
+	if h.notificationChannel != nil {
+		return h.notificationChannel
 	}
 
 	// Notify of all existing hosts
@@ -96,16 +96,16 @@ func (h *Handler) GetNotificationChannel() <-chan Notification {
 	}
 	h.session.GlobalRUnlock()
 
-	h.nameChannel = make(chan Notification, notificationChannelCap)
+	h.notificationChannel = make(chan Notification, notificationChannelCap)
 
 	go func() {
 		for _, n := range list {
-			h.nameChannel <- n
+			h.notificationChannel <- n
 			time.Sleep(time.Millisecond * 5) // time for reader to process
 		}
 	}()
 
-	return h.nameChannel
+	return h.notificationChannel
 }
 
 func (h *Handler) GetDNSNotificationChannel() <-chan dns.DNSEntry {
