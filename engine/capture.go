@@ -298,9 +298,7 @@ func (h *Handler) lockAndSetOnline(host *packet.Host, notify bool) {
 				}
 			}
 		}
-		if h.notificationChannel != nil {
-			h.notificationChannel <- notification
-		}
+		h.sendNotification(notification)
 	}()
 }
 
@@ -328,14 +326,10 @@ func (h *Handler) lockAndSetOffline(host *packet.Host) {
 		}
 	}
 	host.MACEntry.Online = macOnline
-
 	host.MACEntry.Row.Unlock()
 
 	h.lockAndStopHunt(host, packet.StageNormal)
-
-	if h.notificationChannel != nil {
-		h.notificationChannel <- notification
-	}
+	h.sendNotification(notification)
 }
 
 // lockAndProcessDHCP4Update updates the DHCP4 fields and transition to/from hunt stage

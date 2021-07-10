@@ -58,8 +58,6 @@ func NewEngine(nic string) (*Handler, error) {
 	return Config{}.NewEngine(nic)
 }
 
-const notificationChannelCap = 64 // we can receive a large number of nofifications during start (i.e. 3+ per device mdns, upnp, etc)
-
 // NewEngine creates an packet handler with config values
 func (config Config) NewEngine(nic string) (*Handler, error) {
 
@@ -69,6 +67,8 @@ func (config Config) NewEngine(nic string) (*Handler, error) {
 
 	// session holds shared data for all plugins
 	h.session = packet.NewEmptySession()
+	h.dnsChannel = make(chan dns.DNSEntry, 64)           // plenty of capacity to prevent blocking
+	h.notificationChannel = make(chan Notification, 128) // plenty of capacity to prevent blocking
 
 	h.session.NICInfo = config.NICInfo
 	if h.session.NICInfo == nil {
@@ -308,9 +308,7 @@ func (h *Handler) serviceDiscoveryLoop() {
 				if packet.Debug {
 					fmt.Printf("engine: sending upnp notification %s\n", notification)
 				}
-				if h.notificationChannel != nil {
-					h.notificationChannel <- notification
-				}
+				h.sendNotification(notification)
 			}
 		case <-h.closeChan:
 			return
@@ -581,8 +579,8 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 					fmt.Printf("packet: error processing dns: %s\n", err)
 					break
 				}
-				if dnsEntry.Name != "" && h.dnsChannel != nil {
-					h.dnsChannel <- dnsEntry
+				if dnsEntry.Name != "" {
+					h.sendDNSNotification(dnsEntry)
 				}
 
 			case udpDstPort == 53: // DNS request

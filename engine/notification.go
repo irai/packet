@@ -77,42 +77,26 @@ func (h *Handler) purge(now time.Time, probeDur time.Duration, offlineDur time.D
 	return nil
 }
 
+func (h *Handler) sendNotification(notification Notification) {
+	if len(h.notificationChannel) < cap(h.notificationChannel) {
+		h.notificationChannel <- notification
+		return
+	}
+	fmt.Printf("packet: error notification channel is full len=%d %v\n", len(h.notificationChannel), notification)
+}
+
 func (h *Handler) GetNotificationChannel() <-chan Notification {
-	if h.notificationChannel != nil {
-		return h.notificationChannel
-	}
-
-	// Notify of all existing hosts
-	list := []Notification{}
-	h.session.GlobalRLock()
-	for _, host := range h.session.HostTable.Table {
-		host.MACEntry.Row.RLock()
-		notification := Notification{Addr: host.Addr, Online: host.Online,
-			DHCPName: host.DHCP4Name, MDNSName: host.MDNSName, UPNPName: host.UPNPName,
-			Model: host.Model, Manufacturer: host.Manufacturer,
-			IsRouter: host.MACEntry.IsRouter}
-		list = append(list, notification)
-		host.MACEntry.Row.RUnlock()
-	}
-	h.session.GlobalRUnlock()
-
-	h.notificationChannel = make(chan Notification, notificationChannelCap)
-
-	go func() {
-		for _, n := range list {
-			h.notificationChannel <- n
-			time.Sleep(time.Millisecond * 5) // time for reader to process
-		}
-	}()
-
 	return h.notificationChannel
 }
 
 func (h *Handler) GetDNSNotificationChannel() <-chan dns.DNSEntry {
-	if h.dnsChannel != nil {
-		return h.dnsChannel
-	}
-
-	h.dnsChannel = make(chan dns.DNSEntry, 16)
 	return h.dnsChannel
+}
+
+func (h *Handler) sendDNSNotification(dnsEntry dns.DNSEntry) {
+	if len(h.dnsChannel) < cap(h.dnsChannel) { // protect from blocking
+		h.dnsChannel <- dnsEntry
+		return
+	}
+	fmt.Printf("packet: error dns channel is full len=%d %v\n", len(h.dnsChannel), dnsEntry)
 }
