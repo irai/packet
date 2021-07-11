@@ -9,14 +9,16 @@ import (
 type NICInfo struct {
 	IFI *net.Interface
 
-	HostMAC      net.HardwareAddr
-	HostIP4      net.IPNet
+	// TODO: remove individual fields and replace with addr fields
+	//       perhaps change to Addr to use new IP and mask
+	HostMAC      net.HardwareAddr // should delete this in favour of HostAddr4
+	HostIP4      net.IPNet        // should delete this in favour of HostAddr4
 	HomeLAN4     net.IPNet
 	HostLLA      net.IPNet
 	HostGUA      net.IPNet
-	RouterMAC    net.HardwareAddr
-	RouterIP4    net.IPNet
-	RouterLLA    net.IPNet
+	RouterMAC    net.HardwareAddr // should delete this in favour of RouterAddr4
+	RouterIP4    net.IPNet        // should delete this in favour of HostAddr4
+	RouterLLA    net.IPNet        // should delete this in favour of RouterAddr4
 	RouterGUA    net.IPNet
 	RouterPrefix net.IP
 	HostAddr4    Addr
