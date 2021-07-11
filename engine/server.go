@@ -587,7 +587,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			// do nothing
 
 			case udpSrcPort == 5353 || udpDstPort == 5353:
-				// Multicast DNS
+				// Multicast DNS (MDNS)
 				if host != nil {
 					ipv4Host, ipv6Host, err := h.DNSHandler.ProcessMDNS(host, ether, udp.Payload())
 					if err != nil {
@@ -608,7 +608,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 						if packet.Debug && notify {
 							fmt.Printf("packet: mdns update %s name=%s model=%s\n", host.Addr, ipv4Host.MDNSName, ipv4Host.Model)
 							if ipv6Host.Addr.IP != nil {
-								fmt.Printf("llmnr : ipv6 host %s\n", ipv6Host.ToString(true))
+								fmt.Printf("packet : mdns ipv6 ignoring host %s\n", ipv6Host.ToString(true))
 							}
 						}
 					}
