@@ -35,10 +35,10 @@ type Host struct {
 }
 
 func (e *Host) String() string {
-	return e.toString(false) // summary fields
+	return e.ToString(false) // summary fields
 }
 
-func (e *Host) toString(all bool) string {
+func (e *Host) ToString(all bool) string {
 	var b strings.Builder
 	b.Grow(180)
 	b.WriteString("mac=")
@@ -131,7 +131,7 @@ func (h *Session) printHostTable() {
 	count := 0
 	for _, v := range h.MACTable.Table {
 		for _, host := range v.HostList {
-			fmt.Printf("host %s\n", host.toString(true)) // all fields available
+			fmt.Printf("host %s\n", host.ToString(true)) // all fields available
 			count++
 		}
 	}

@@ -67,60 +67,6 @@ var (
 	llmnrIPv6Addr = packet.Addr{MAC: packet.EthBroadcast, IP: net.ParseIP("FF02:0:0:0:0:0:1:3"), Port: 5355}
 )
 
-type serviceDef struct {
-	service       string
-	enabled       bool
-	defaultModel  string
-	authoritative bool
-	keyName       string
-}
-
-// see full service list here:
-// https://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.xml
-// previous: http://dns-sd.org/ServiceTypes.html
-//
-// Bonjour
-// see spec http://devimages.apple.com/opensource/BonjourPrinting.pdf
-var serviceTable = []serviceDef{
-	{"_http._tcp.local.", false, "Network server", false, ""},
-	{"_workstation._tcp.local.", false, "", false, ""},
-	{"_ipp._tcp.local.", false, "printer", true, "ty"},
-	{"_ipps._tcp.local.", false, "printer", true, "ty"},
-	{"_printer._tcp.local.", false, "printer", true, "ty"},
-	{"_pdl-datastream._tcp.local.", false, "printer", false, "ty"},
-	{"_privet._tcp.local.", false, "printer", false, "ty"},
-	{"_scanner._tcp.local.", false, "scanner", false, "ty"},
-	{"_uscan._tcp.local.", false, "scanner", false, "ty"},
-	{"_uscans._tcp.local.", false, "scanner", false, "ty"},
-	{"_smb._tcp.local.", false, "", false, "model"},
-	{"_device-info._udp.local.", false, "computer", false, "model"},
-	{"_device-info._tcp.local.", false, "computer", false, "model"},
-	{"_netbios-ns._udp.local.", false, "", false, ""},
-	{"_spotify-connect._tcp.local.", false, "Spotify speaker", false, ""},
-	{"_sonos._tcp.local.", false, "Sonos speaker", true, ""},
-	{"_snmp._udp.local.", false, "", false, ""},
-	{"_music._tcp.local.", false, "", false, ""},
-	{"_raop._tcp.local.", false, "Apple device", false, ""},           // Remote Audio Output Protocol (AirTunes) - Apple
-	{"_apple-mobdev2._tcp.local.", false, "Apple device", false, ""},  // Apple Mobile Device Protocol - Apple
-	{"_airplay._tcp.local.", false, "Apple TV", true, "model"},        //Protocol for streaming of audio/video content - Apple
-	{"_touch-able._tcp.local.", false, "Apple device", false, "DvTy"}, //iPhone and iPod touch Remote Controllable - Apple
-	{"_nvstream._tcp.local.", false, "", false, ""},
-	{"_googlecast._tcp.local.", false, "Chromecast", true, "md"},
-	{"_googlezone._tcp.local.", false, "Google device", false, ""},
-	{"_sleep-proxy._udp.local.", false, "Apple", false, ""},
-	{"_xbox._tcp.local.", false, "xbox", true, ""},
-	{"_xbox._udp.local.", false, "xbox", true, ""},
-	{"_psams._tcp.local.", false, "playstation", true, ""}, // play station
-	{"_psams._udp.local.", false, "playstation", true, ""}, // play station
-}
-
-// PrintServices log the services table
-func PrintServices() {
-	for i := range serviceTable {
-		fmt.Printf("service=%v poll=%v\n", serviceTable[i].service, serviceTable[i].enabled)
-	}
-}
-
 // SendMDNSQuery send a multicast DNS query
 func (h *DNSHandler) SendMDNSQuery(name string) (err error) {
 	// When responding to queries using qtype "ANY" (255) and/or
@@ -212,7 +158,7 @@ type HostName struct {
 	Attributes map[string]string
 }
 
-func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload []byte) (hosts []HostName, err error) {
+func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload []byte) (ipv4 packet.Host, ipv6 packet.Host, err error) {
 	var p dnsmessage.Parser
 	dnsHeader, err := p.Start(payload)
 	if err != nil {
@@ -233,7 +179,7 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 	//  in the response is true and accurate.
 	//    see https://datatracker.ietf.org/doc/html/rfc6762 section 6
 	if err := p.SkipAllQuestions(); err != nil {
-		return nil, err
+		return ipv4, ipv6, err
 	}
 
 	section := "answer"
@@ -255,36 +201,36 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 		case "additional":
 			hdr, err = p.AdditionalHeader()
 			if err == dnsmessage.ErrSectionDone {
-				return hosts, nil
+				return ipv4, ipv6, nil
 			}
 		}
 		if err != nil {
-			return nil, err
+			return ipv4, ipv6, err
 		}
 
 		switch hdr.Type {
 		case dnsmessage.TypeA:
 			r, err := p.AResource()
 			if err != nil {
-				return nil, err
+				return ipv4, ipv6, err
 			}
-			name := strings.TrimSuffix(hdr.Name.String(), ".local.")
-			entry := HostName{Name: name, Addr: packet.Addr{IP: packet.CopyIP(r.A[:])}}
-			hosts = append(hosts, entry)
+			ipv4.MDNSName = strings.TrimSuffix(hdr.Name.String(), ".local.")
+			ipv4.Addr.MAC = packet.CopyMAC(ether.Src())
+			ipv4.Addr.IP = packet.CopyIP(r.A[:])
 			if Debug {
-				fmt.Printf("mdns  : A record name=%s %s\n", entry.Name, entry.Addr)
+				fmt.Printf("mdns  : A record name=%s %s\n", ipv4.MDNSName, ipv4.Addr)
 			}
 
 		case dnsmessage.TypeAAAA:
 			r, err := p.AAAAResource()
 			if err != nil {
-				return nil, err
+				return ipv4, ipv6, err
 			}
-			name := strings.TrimSuffix(hdr.Name.String(), ".local.")
-			entry := HostName{Name: name, Addr: packet.Addr{IP: packet.CopyIP(r.AAAA[:])}}
-			hosts = append(hosts, entry)
+			ipv6.MDNSName = strings.TrimSuffix(hdr.Name.String(), ".local.")
+			ipv6.Addr.MAC = packet.CopyMAC(ether.Src())
+			ipv6.Addr.IP = packet.CopyIP(r.AAAA[:])
 			if Debug {
-				fmt.Printf("mdns  : AAAA record name=%s %s\n", entry.Name, entry.Addr)
+				fmt.Printf("mdns  : AAAA record name=%s %s\n", ipv6.MDNSName, ipv6.Addr)
 			}
 
 		case dnsmessage.TypePTR:
@@ -320,13 +266,13 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 				p.SkipAnswer()
 				continue
 			}
-			if Debug {
-				fmt.Printf("mdns  : TXT name=%s txt=%s\n", hdr.Name, r.TXT)
+			if model := parseTXT(r.TXT); model != "" {
+				ipv4.Model = model
+				ipv6.Model = model
 			}
-
-			// Pull out the txt
-			//   dns.TXT name=sonosB8E9372ACF56._spotify-connect._tcp.local. txt=[VERSION=1.0 CPath=/spotifyzc]"
-			// entry.addTXT(hdr.Name, r.TXT)
+			if Debug {
+				fmt.Printf("mdns  : TXT name=%s txt=%s model=%s\n", hdr.Name, r.TXT, ipv4.Model)
+			}
 
 		default:
 			fmt.Printf("mdns  : error unexpected resource type %+v\n", hdr)

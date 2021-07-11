@@ -589,20 +589,27 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			case udpSrcPort == 5353 || udpDstPort == 5353:
 				// Multicast DNS
 				if host != nil {
-					names, err := h.DNSHandler.ProcessMDNS(host, ether, udp.Payload())
+					ipv4Host, ipv6Host, err := h.DNSHandler.ProcessMDNS(host, ether, udp.Payload())
 					if err != nil {
 						fmt.Printf("packet: error processing mdns: %s\n", err)
 						break
 					}
-					if len(names) > 0 {
+					if ipv4Host.MDNSName != "" {
 						host.MACEntry.Row.Lock()
-						if names[0].Name != "" && host.MDNSName != names[0].Name {
-							host.MDNSName = names[0].Name
+						if host.MDNSName != ipv4Host.MDNSName {
+							host.MDNSName = ipv4Host.MDNSName
+							notify = true
+						}
+						if host.Model == "" { // only update if no model yet
+							host.Model = ipv4Host.Model
 							notify = true
 						}
 						host.MACEntry.Row.Unlock()
 						if packet.Debug && notify {
-							fmt.Printf("packet: mdns update name=%s\n", names[0].Name)
+							fmt.Printf("packet: mdns update %s name=%s model=%s\n", host.Addr, ipv4Host.MDNSName, ipv4Host.Model)
+							if ipv6Host.Addr.IP != nil {
+								fmt.Printf("llmnr : ipv6 host %s\n", ipv6Host.ToString(true))
+							}
 						}
 					}
 				}
@@ -610,13 +617,16 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			case udpSrcPort == 5252 || udpDstPort == 5252:
 				// Link Local Multicast Name Resolution (LLMNR)
 				fmt.Printf("proto : LLMNR %s\n", host)
-				hosts, err := h.DNSHandler.ProcessMDNS(host, ether, udp.Payload())
+				ipv4Host, ipv6Host, err := h.DNSHandler.ProcessMDNS(host, ether, udp.Payload())
 				if err != nil {
 					fmt.Printf("packet: error processing mdns: %s\n", err)
 					break
 				}
-				for _, v := range hosts {
-					fmt.Printf("llmnr : host %+v\n", v)
+				if ipv4Host.MDNSName != "" {
+					fmt.Printf("llmnr : ipv4 host %s\n", ipv4Host.ToString(true))
+				}
+				if ipv6Host.MDNSName != "" {
+					fmt.Printf("llmnr : ipv6 host %s\n", ipv6Host.ToString(true))
 				}
 
 			case udpSrcPort == 137 || udpDstPort == 137:
