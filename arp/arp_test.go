@@ -131,7 +131,7 @@ func readResponse(ctx context.Context, tc *testContext) error {
 		tc.Lock()
 		tc.countResponse++
 		tc.Unlock()
-		if true {
+		if false {
 			fmt.Printf("test  : got test number=%d response=%s\n", tc.countResponse, arpFrame)
 		}
 

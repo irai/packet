@@ -117,7 +117,7 @@ func readResponse(ctx context.Context, tc *TestContext) error {
 		}
 
 		// used for debuging - disable to avoid verbose logging
-		if true {
+		if false {
 			fmt.Printf("test  : got test %d response=%s\n", count, ether)
 		}
 
@@ -186,11 +186,12 @@ func NewTestContext() *TestContext {
 	go packet.TestReadAndDiscardLoop(tc.ctx, tc.clientOutConn) // must read to avoid blocking
 
 	nicInfo := packet.NICInfo{
-		HostMAC:   HostMAC,
-		HostIP4:   net.IPNet{IP: HostIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
-		RouterIP4: net.IPNet{IP: RouterIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
-		RouterMAC: RouterMAC,
-		HomeLAN4:  HomeLAN,
+		HostMAC:     HostMAC,
+		HostIP4:     net.IPNet{IP: HostIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
+		RouterIP4:   net.IPNet{IP: RouterIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
+		RouterMAC:   RouterMAC,
+		RouterAddr4: packet.Addr{MAC: RouterMAC, IP: RouterIP4},
+		HomeLAN4:    HomeLAN,
 	}
 
 	// override handler with conn and nicInfo
