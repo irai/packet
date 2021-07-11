@@ -8,7 +8,6 @@ import (
 )
 
 type discoverAction struct {
-	action   string
 	addr     packet.Addr
 	location string
 }
