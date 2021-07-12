@@ -158,6 +158,8 @@ type HostName struct {
 	Attributes map[string]string
 }
 
+var macEntryInvalid = packet.MACEntry{}
+
 func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload []byte) (ipv4 packet.Host, ipv6 packet.Host, err error) {
 	var p dnsmessage.Parser
 	dnsHeader, err := p.Start(payload)
@@ -217,6 +219,7 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 			ipv4.MDNSName = strings.TrimSuffix(hdr.Name.String(), ".local.")
 			ipv4.Addr.MAC = packet.CopyMAC(ether.Src())
 			ipv4.Addr.IP = packet.CopyIP(r.A[:])
+			ipv4.MACEntry = &macEntryInvalid // host must have a mac entry
 			if Debug {
 				fmt.Printf("mdns  : A record name=%s %s\n", ipv4.MDNSName, ipv4.Addr)
 			}
@@ -229,6 +232,7 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 			ipv6.MDNSName = strings.TrimSuffix(hdr.Name.String(), ".local.")
 			ipv6.Addr.MAC = packet.CopyMAC(ether.Src())
 			ipv6.Addr.IP = packet.CopyIP(r.AAAA[:])
+			ipv6.MACEntry = &macEntryInvalid // host must have a mac entry
 			if Debug {
 				fmt.Printf("mdns  : AAAA record name=%s %s\n", ipv6.MDNSName, ipv6.Addr)
 			}
