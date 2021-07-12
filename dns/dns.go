@@ -517,12 +517,12 @@ func ReverseDNS(ip netaddr.IP) error {
 	return nil
 }
 
-// DNSProcess parse the DNS packet and record in DNS table.
+// ProcessDNS parse the DNS packet and record in DNS table.
 //
 // It returns a copy of the DNSEntry that is free from race conditions. The caller has a unique copy.
 //
 // TODO: optimise copy only on new values
-func (h *DNSHandler) DNSProcess(host *packet.Host, ether packet.Ether, payload []byte) (e DNSEntry, err error) {
+func (h *DNSHandler) ProcessDNS(host *packet.Host, ether packet.Ether, payload []byte) (e DNSEntry, err error) {
 	p := DNS(payload)
 	if err := p.IsValid(); err != nil {
 		return DNSEntry{}, err

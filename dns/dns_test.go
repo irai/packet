@@ -256,7 +256,7 @@ func TestDNS_ProcessDNS(t *testing.T) {
 		ip := packet.IP4(v)
 		udp := packet.UDP(ip.Payload())
 
-		r, err := dnsHandler.DNSProcess(nil, nil, udp.Payload())
+		r, err := dnsHandler.ProcessDNS(nil, nil, udp.Payload())
 		if err != nil {
 			t.Fatalf("invalid process packet bltk %+v %s", r, err)
 		}
@@ -310,7 +310,7 @@ func Benchmark_DNSConcurrentAccess(b *testing.B) {
 				ip := packet.IP4(v)
 				udp := packet.UDP(ip.Payload())
 
-				r, err := dnsHandler.DNSProcess(nil, nil, udp.Payload())
+				r, err := dnsHandler.ProcessDNS(nil, nil, udp.Payload())
 				if err != nil {
 					b.Fatalf("invalid process packet bltk %+v %s\n", r, err)
 				}
