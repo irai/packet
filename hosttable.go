@@ -42,7 +42,7 @@ func (e *Host) ToString(all bool) string {
 	var b strings.Builder
 	b.Grow(180)
 	b.WriteString("mac=")
-	b.WriteString(e.MACEntry.MAC.String())
+	b.WriteString(e.Addr.MAC.String())
 	b.WriteString(" ip=")
 	b.WriteString(e.Addr.IP.String())
 	if e.Online {
