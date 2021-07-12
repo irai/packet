@@ -67,7 +67,7 @@ func (config Config) NewEngine(nic string) (*Handler, error) {
 
 	// session holds shared data for all plugins
 	h.session = packet.NewEmptySession()
-	h.dnsChannel = make(chan dns.DNSEntry, 64)           // plenty of capacity to prevent blocking
+	h.dnsChannel = make(chan dns.DNSEntry, 128)          // plenty of capacity to prevent blocking
 	h.notificationChannel = make(chan Notification, 128) // plenty of capacity to prevent blocking
 
 	h.session.NICInfo = config.NICInfo
