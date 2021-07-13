@@ -656,16 +656,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			case udpSrcPort == 123:
 				// Network time synchonization protocol
 				// do nothing
-				if host == nil { // multicast or broadcast packet
-					fmt.Printf("ether : %s", ether)
-					if ip4Frame != nil {
-						fmt.Printf("ip4   : %s\n", ip4Frame)
-					} else {
-						fmt.Printf("ip6   : %s\n", ip6Frame)
-					}
-					fmt.Printf("udp   : %s\n", udp)
-				}
-				fmt.Printf("proto : NTP %s\n", host)
+				fmt.Printf("proto : NTP %s %s\n", ether, host)
 
 			case udpSrcPort == 433 || udpDstPort == 433:
 				// ssl udp - likely quic?
