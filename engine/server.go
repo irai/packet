@@ -496,6 +496,14 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			fmt.Printf("packet: LLDP frame %s payload=\"% x\"\n", ether, ether.Payload())
 			continue
 
+		case 0x890d: // Fast Roaming Remote Request (802.11r)
+			// Fast roaming, also known as IEEE 802.11r or Fast BSS Transition (FT),
+			// allows a client device to roam quickly in environments implementing WPA2 Enterprise security,
+			// by ensuring that the client device does not need to re-authenticate to the RADIUS server
+			// every time it roams from one access point to another.
+			fmt.Printf("packet: 802.11r Fast Roaming frame %s payload=\"% x\"\n", ether, ether.Payload())
+			continue
+
 		default:
 			fmt.Printf("packet: error invalid ethernet type %s\n", ether)
 			continue
@@ -572,6 +580,17 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 						notify = true
 					}
 				}
+
+			case udpDstPort == 546 || udpDstPort == 547: // DHCP6
+				fmt.Printf("ether : %s", ether)
+				if ip4Frame != nil {
+					fmt.Printf("ip4   : %s\n", ip4Frame)
+				} else {
+					fmt.Printf("ip6   : %s\n", ip6Frame)
+				}
+				fmt.Printf("udp   : %s payload=[% x]\n", udp, udp.Payload())
+				fmt.Printf("packet: dhcp6 packet - do nothing %s\n", host)
+
 			case udpSrcPort == 53: // DNS response
 				// TODO: move this to background goroutine
 				dnsEntry, err := h.DNSHandler.ProcessDNS(host, ether, udp.Payload())
