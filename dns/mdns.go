@@ -255,7 +255,13 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 			//	  dns.SRV name=sonosB8E9372ACF56._spotify-connect._tcp.local. target=sonosB8E9372ACF56.local. port=1400
 			r, err := p.SRVResource()
 			if err != nil {
-				fmt.Printf("mdns  : error invalid SRV resource name=%s error=[%s]\n", hdr.Name, err)
+				// Don't log if compressed error.
+				// It is invalid to compress SRV name but some do. In particular Google Chromecast.
+				// This polutes the log with constant errors for each SRV.
+				// see https://github.com/golang/go/issues/10622
+				if err.Error() != "compressed name in SRV resource data" || Debug {
+					fmt.Printf("mdns  : error invalid SRV resource name=%s error=[%s]\n", hdr.Name, err)
+				}
 				p.SkipAnswer()
 				continue
 			}
