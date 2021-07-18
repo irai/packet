@@ -320,6 +320,9 @@ func (h *Handler) FindIP6Router(ip net.IP) icmp6.Router {
 	return h.ICMP6Handler.FindRouter(ip)
 }
 
+var stpCount int
+var stpNextLog time.Time
+
 // process8023Frame handle general layer 2 packets in Ethernet 802.3 format.
 //
 // see https://macaddress.io/faq/how-to-recognise-an-ieee-802-1x-mac-address-application
@@ -337,7 +340,12 @@ func (h *Handler) process8023Frame(ether packet.Ether) {
 	// http://www.netrounds.com/wp-content/uploads/public/layer-2-control-protocol-handling.pdf
 	// https://techhub.hpe.com/eginfolib/networking/docs/switches/5980/5200-3921_l2-lan_cg/content/499036672.htm#:~:text=STP%20protocol%20frames%20STP%20uses%20bridge%20protocol%20data,devices%20exchange%20BPDUs%20to%20establish%20a%20spanning%20tree.
 	if llc.DSAP() == 0x42 && llc.SSAP() == 0x42 {
-		fmt.Printf("packet: LLC STP protocol %s %s payload=[% x]\n", ether, llc, llc.Payload())
+		stpCount++
+		now := time.Now()
+		if stpNextLog.Before(now) {
+			fmt.Printf("packet: LLC STP protocol %s %s count=%d payload=[% x]\n", ether, llc, stpCount, llc.Payload())
+			stpNextLog = now.Add(time.Minute * 5)
+		}
 		return
 	}
 
