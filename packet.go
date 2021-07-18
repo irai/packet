@@ -221,35 +221,6 @@ func EtherMarshalBinary(b []byte, hType uint16, srcMAC net.HardwareAddr, dstMAC 
 	return Ether(b)
 }
 
-// Local Link Control
-type LLC []byte
-
-func (p LLC) IsValid() error {
-	if len(p) < 3 {
-		return ErrFrameLen
-	}
-	return nil
-}
-
-func (p LLC) DSAP() uint8     { return p[0] }
-func (p LLC) SSAP() uint8     { return p[1] }
-func (p LLC) Control1() uint8 { return p[2] }
-func (p LLC) Type() string {
-	if p[2]&0x3 == 0x03 {
-		return "u" // u-format 8 bits
-	}
-	return "i_or_s" // not sure how to
-}
-func (p LLC) Payload() []byte {
-	if p.Type() == "u" {
-		return p[3:]
-	}
-	return p[4:]
-}
-func (p LLC) String() string {
-	return fmt.Sprintf("dsap=%x ssap=%x type=%s control1=%x payload=% x\n", p.DSAP(), p.SSAP(), p.Type(), p.Control1(), p.Payload())
-}
-
 func IsIP6(ip net.IP) bool {
 	if ip.To16() != nil && ip.To4() == nil {
 		return true

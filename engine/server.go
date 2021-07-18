@@ -320,6 +320,44 @@ func (h *Handler) FindIP6Router(ip net.IP) icmp6.Router {
 	return h.ICMP6Handler.FindRouter(ip)
 }
 
+// process8023Frame handle general layer 2 packets in Ethernet 802.3 format.
+//
+// see https://macaddress.io/faq/how-to-recognise-an-ieee-802-1x-mac-address-application
+// see https://networkengineering.stackexchange.com/questions/64757/unknown-ethertype
+// see https://www.mit.edu/~map/Ethernet/multicast.html
+func (h *Handler) process8023Frame(ether packet.Ether) {
+	llc := packet.LLC(ether.Payload())
+	if err := llc.IsValid(); err != nil {
+		fmt.Printf("packet: err invalid LLC err=%s\n", err)
+		return
+	}
+
+	// SONOS - LLC, dsap STP (0x42) Individual, ssap STP (0x42) Command
+	// uses "01:80:c2:00:00:00" destination MAC
+	// http://www.netrounds.com/wp-content/uploads/public/layer-2-control-protocol-handling.pdf
+	// https://techhub.hpe.com/eginfolib/networking/docs/switches/5980/5200-3921_l2-lan_cg/content/499036672.htm#:~:text=STP%20protocol%20frames%20STP%20uses%20bridge%20protocol%20data,devices%20exchange%20BPDUs%20to%20establish%20a%20spanning%20tree.
+	if llc.DSAP() == 0x42 && llc.SSAP() == 0x42 {
+		fmt.Printf("packet: LLC STP protocol %s %s payload=[%x]\n", ether, llc, llc.Payload())
+		return
+	}
+
+	if llc.DSAP() == 0xaa && llc.SSAP() == 0xaa && llc.Control() == 0x03 {
+		snap := packet.SNAP(llc)
+		if err := snap.IsValid(); err != nil {
+			fmt.Printf("packet: err invalid SNAP packet err=%s\n", err)
+			return
+		}
+		fmt.Printf("packet: LLC SNAP protocol %s %s payload=[%x]\n", ether, snap, snap.Payload())
+		return
+	}
+
+	// wifi mac notification -
+	// To see these:
+	//    sudo tcpdump -vv -x not ip6 and not ip and not arp
+	//    then switch a mobile phone to airplane mode to force a network reconnect
+	fmt.Printf("packet: rcvd 802.3 frame %s %s\n", ether, llc)
+}
+
 // ListenAndServe listen for raw packets and invoke hooks as required
 func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
@@ -380,23 +418,8 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		// a unifying standard, IEEE 802.3x-1997, was introduced that required that EtherType values be greater than or equal to 1536.
 		// Thus, values of 1500 and below for this field indicate that the field is used as the size of the payload of the Ethernet frame
 		// while values of 1536 and above indicate that the field is used to represent an EtherType.
-		// see https://macaddress.io/faq/how-to-recognise-an-ieee-802-1x-mac-address-application
-		// see https://networkengineering.stackexchange.com/questions/64757/unknown-ethertype
-		// see https://www.mit.edu/~map/Ethernet/multicast.html
 		if ether.EtherType() < 1536 {
-
-			llc := packet.LLC(ether.Payload())
-			// SONOS - LLC, dsap STP (0x42) Individual, ssap STP (0x42) Command
-			// uses "01:80:c2:00:00:00" destination MAC
-			// http://www.netrounds.com/wp-content/uploads/public/layer-2-control-protocol-handling.pdf
-
-			// wifi mac notification -
-			// To see these:
-			//    sudo tcpdump -vv -x not ip6 and not ip and not arp
-			//    then switch a mobile phone to airplane mode to force a network reconnect
-			if false {
-				fmt.Printf("packet: rcvd 802.3 frame %s\n", llc)
-			}
+			h.process8023Frame(ether)
 			continue
 		}
 
