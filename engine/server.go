@@ -337,7 +337,7 @@ func (h *Handler) process8023Frame(ether packet.Ether) {
 	// http://www.netrounds.com/wp-content/uploads/public/layer-2-control-protocol-handling.pdf
 	// https://techhub.hpe.com/eginfolib/networking/docs/switches/5980/5200-3921_l2-lan_cg/content/499036672.htm#:~:text=STP%20protocol%20frames%20STP%20uses%20bridge%20protocol%20data,devices%20exchange%20BPDUs%20to%20establish%20a%20spanning%20tree.
 	if llc.DSAP() == 0x42 && llc.SSAP() == 0x42 {
-		fmt.Printf("packet: LLC STP protocol %s %s payload=[%x]\n", ether, llc, llc.Payload())
+		fmt.Printf("packet: LLC STP protocol %s %s payload=[% x]\n", ether, llc, llc.Payload())
 		return
 	}
 
@@ -347,7 +347,7 @@ func (h *Handler) process8023Frame(ether packet.Ether) {
 			fmt.Printf("packet: err invalid SNAP packet err=%s\n", err)
 			return
 		}
-		fmt.Printf("packet: LLC SNAP protocol %s %s payload=[%x]\n", ether, snap, snap.Payload())
+		fmt.Printf("packet: LLC SNAP protocol %s %s payload=[% x]\n", ether, snap, snap.Payload())
 		return
 	}
 

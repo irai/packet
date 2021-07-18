@@ -39,7 +39,7 @@ func (p LLC) Payload() []byte {
 }
 
 func (p LLC) String() string {
-	return fmt.Sprintf("dsap=%x ssap=%x type=%s control1=%x payload=% x\n", p.DSAP(), p.SSAP(), p.Type(), p.Control(), p.Payload())
+	return fmt.Sprintf("dsap=%x ssap=%x type=%s control1=%x", p.DSAP(), p.SSAP(), p.Type(), p.Control())
 }
 
 // Local Link Control - SNAP extension
@@ -69,5 +69,5 @@ func (p SNAP) OrganisationID() []byte { return p[3:6] }
 func (p SNAP) EtherType() uint16      { return binary.BigEndian.Uint16(p[6:8]) }
 func (p SNAP) Payload() []byte        { return p[8:] }
 func (p SNAP) String() string {
-	return fmt.Sprintf("dsap=0x%x orgid=0x%x type=0x%x payload=% x\n", p.DSAP(), p.OrganisationID(), p.EtherType(), p.Payload())
+	return fmt.Sprintf("dsap=0x%x orgid=0x%x type=0x%x", p.DSAP(), p.OrganisationID(), p.EtherType())
 }
