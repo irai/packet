@@ -403,7 +403,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		startTime = time.Now()
 
 		ether := packet.Ether(buf[:n])
-		if !ether.IsValid() {
+		if err := ether.IsValid(); err != nil {
 			log.Error("icmp invalid ethernet packet ", ether.EtherType())
 			continue
 		}

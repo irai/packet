@@ -42,7 +42,7 @@ func TestMarshalUnmarshall(t *testing.T) {
 	n := len(ether) + len(arpFrame)
 	ether = packet.Ether(ether[:n])
 	arpFrame = ARP(ether.Payload())
-	if !ether.IsValid() {
+	if err := ether.IsValid(); err != nil {
 		t.Errorf("invalid ether=%s", ether)
 	}
 	if !arpFrame.IsValid() {

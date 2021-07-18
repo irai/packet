@@ -142,16 +142,19 @@ var (
 
 type Ether []byte
 
-func (p Ether) IsValid() bool {
-	// Minimum len to contain two hardware address and EtherType (2 bytes)
-	return len(p) >= 14
+func (p Ether) IsValid() error {
+	// Minimum len to contain two hardware address and EtherType (2 bytes) + 1 byte payload
+	if len(p) >= 14 {
+		return nil
+	}
+	return ErrFrameLen
 }
 
 func (p Ether) Dst() net.HardwareAddr { return net.HardwareAddr(p[:6]) }
 func (p Ether) Src() net.HardwareAddr { return net.HardwareAddr(p[6 : 6+6]) }
 func (p Ether) EtherType() uint16     { return binary.BigEndian.Uint16(p[12:14]) } // same pos as PayloadLen
-func (p Ether) Payload() []byte {
 
+func (p Ether) Payload() []byte {
 	if p.EtherType() == syscall.ETH_P_IP || p.EtherType() == syscall.ETH_P_IPV6 || p.EtherType() == syscall.ETH_P_ARP {
 		// fmt.Println("DEBUG: arp payload ", len(p), cap(p))
 		if len(p) <= 14 { // change p in case the payload is empty

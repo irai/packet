@@ -110,7 +110,7 @@ func readResponse(ctx context.Context, tc *testContext) error {
 
 		buf = buf[:n]
 		ether := packet.Ether(buf)
-		if !ether.IsValid() {
+		if err := ether.IsValid(); err != nil {
 			s := fmt.Sprintf("error ether client packet %s", ether)
 			panic(s)
 		}

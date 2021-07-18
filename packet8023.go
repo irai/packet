@@ -52,7 +52,7 @@ func (p LLC) String() string {
 //    +--------+--------+---------+--------+--------+
 //    The total length of the LLC Header and the SNAP header is 8-octets.
 //    An organizationally unique identifier (OUI) is a 24-bit number that uniquely identifies a vendor, manufacturer, or other organization.
-
+//    EtherType is zero if not carrying an registered EtherType
 type SNAP []byte
 
 func (p SNAP) IsValid() error {
