@@ -12,6 +12,7 @@ import (
 	"github.com/irai/packet/arp"
 	"github.com/irai/packet/dhcp4"
 	"github.com/irai/packet/dns"
+	"github.com/irai/packet/fastlog"
 	"github.com/irai/packet/icmp4"
 	"github.com/irai/packet/icmp6"
 	log "github.com/sirupsen/logrus"
@@ -404,7 +405,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 		ether := packet.Ether(buf[:n])
 		if err := ether.IsValid(); err != nil {
-			log.Error("icmp invalid ethernet packet ", ether.EtherType())
+			fmt.Printf("packet: invalid ethernet packet type=0x%x\n", ether.EtherType())
 			continue
 		}
 
@@ -613,7 +614,8 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				}
 
 			case udpDstPort == 546 || udpDstPort == 547: // DHCP6
-				fmt.Printf("ether : %s", ether)
+				// fmt.Printf("ether : %s", ether)
+				fastlog.Strings("ether : ", ether.String())
 				if ip4Frame != nil {
 					fmt.Printf("ip4   : %s\n", ip4Frame)
 				} else {
@@ -740,7 +742,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 		d3 = time.Since(startTime)
 		if d3 > time.Microsecond*400 {
-			fmt.Printf("packet: warning > 400 microseconds: etherType=%x l4proto=%x l3=%v l4=%v total=%v\n", ether.EtherType(), l4Proto, d1, d2, d3)
+			fastlog.Strings("packet: warning > 400 microseconds: ", ether.String(), " l3=", d1.String(), " l4=", d2.String(), " total=", d3.String(), fmt.Sprintf("l4proto=%x", l4Proto))
 		}
 
 		/****

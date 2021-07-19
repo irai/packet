@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/fastlog"
 	"github.com/irai/packet/icmp4"
 	log "github.com/sirupsen/logrus"
 	"inet.af/netaddr"
@@ -224,9 +225,9 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 
 	t := ipv6.ICMPType(icmp6Frame.Type())
 	if Debug && t != ipv6.ICMPTypeRouterAdvertisement {
-		fmt.Println("icmp6 : ether", ether)
-		fmt.Println("icmp6 : ip6 ", ip6Frame)
-		fmt.Println("icmp6 : icmp ", icmp6Frame)
+		fastlog.Strings("icmp6 : ether", ether.String())
+		fastlog.Strings("icmp6 : ip6 ", ip6Frame.String())
+		fastlog.Strings("icmp6 : icmp ", icmp6Frame.String())
 	}
 
 	switch t {
@@ -237,7 +238,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 			return packet.Result{}, packet.ErrParseFrame
 		}
 		if Debug {
-			fmt.Printf("icmp6 : neighbor advertisement from ip=%s %s\n", ip6Frame.Src(), frame)
+			fastlog.Strings("icmp6 : neighbor advertisement from ip=", ip6Frame.Src().String(), frame.String())
 		}
 
 		// Source IP is sometimes ff02::1 multicast, which means the host is nil
@@ -257,7 +258,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 			return packet.Result{}, packet.ErrParseFrame
 		}
 		if Debug {
-			fmt.Printf("icmp6 : neighbor solicitation from ip=%s %s\n", ip6Frame.Src(), frame)
+			fastlog.Strings("icmp6 : neighbor solicitation from ip=%s ", ip6Frame.Src().String(), frame.String())
 		}
 
 		// Source address:
@@ -340,9 +341,9 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 		h.Unlock()
 
 		if Debug {
-			fmt.Println("icmp6 : ether", ether)
-			fmt.Println("icmp6 : ip6", ip6Frame)
-			fmt.Printf("icmp6 : router advertisement from ip=%s %s %+v \n", ip6Frame.Src(), frame, router.Options)
+			fastlog.Strings("icmp6 : ether", ether.String())
+			fastlog.Strings("icmp6 : ip6 ", ip6Frame.String())
+			fastlog.Strings("icmp6 : router advertisement from ip=", ip6Frame.Src().String(), frame.String(), fmt.Sprintf("%+v", router.Options))
 		}
 
 		result := packet.Result{}
@@ -358,7 +359,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 			return packet.Result{}, packet.ErrParseFrame
 		}
 		if Debug {
-			fmt.Printf("icmp6 : router solicitation from ip=%s %s\n", ip6Frame.Src(), frame)
+			fastlog.Strings("icmp6 : router solicitation from ip=", ip6Frame.Src().String(), frame.String())
 		}
 
 		// Source address:
