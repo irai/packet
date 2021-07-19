@@ -238,7 +238,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 			return packet.Result{}, packet.ErrParseFrame
 		}
 		if Debug {
-			fastlog.Strings("icmp6 : neighbor advertisement from ip=", ip6Frame.Src().String(), frame.String())
+			fastlog.Strings("icmp6 : neighbor advertisement from ip=", ip6Frame.Src().String(), " ", frame.String())
 		}
 
 		// Source IP is sometimes ff02::1 multicast, which means the host is nil
@@ -258,7 +258,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 			return packet.Result{}, packet.ErrParseFrame
 		}
 		if Debug {
-			fastlog.Strings("icmp6 : neighbor solicitation from ip=%s ", ip6Frame.Src().String(), frame.String())
+			fastlog.Strings("icmp6 : neighbor solicitation from ip=", ip6Frame.Src().String(), " ", frame.String())
 		}
 
 		// Source address:
@@ -343,7 +343,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 		if Debug {
 			fastlog.Strings("icmp6 : ether", ether.String())
 			fastlog.Strings("icmp6 : ip6 ", ip6Frame.String())
-			fastlog.Strings("icmp6 : router advertisement from ip=", ip6Frame.Src().String(), frame.String(), fmt.Sprintf("%+v", router.Options))
+			fastlog.Strings("icmp6 : router advertisement from ip=", ip6Frame.Src().String(), " ", frame.String(), fmt.Sprintf("%+v", router.Options))
 		}
 
 		result := packet.Result{}

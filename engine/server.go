@@ -742,7 +742,8 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 		d3 = time.Since(startTime)
 		if d3 > time.Microsecond*400 {
-			fastlog.Strings("packet: warning > 400 microseconds: ", ether.String(), " l3=", d1.String(), " l4=", d2.String(), " total=", d3.String(), fmt.Sprintf("l4proto=%x", l4Proto))
+			fastlog.Strings("packet: warning > 400 microseconds: l3=", d1.String(), " l4=", d2.String(), " total=", d3.String(),
+				fmt.Sprintf(" l4proto=%x ethertype=%x", l4Proto, ether.EtherType()))
 		}
 
 		/****
