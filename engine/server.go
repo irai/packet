@@ -451,8 +451,8 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				continue
 			}
 			if packet.DebugIP4 {
-				fmt.Println("packet: ether", ether)
-				fmt.Println("packet: ip4", ip4Frame)
+				fastlog.Strings("packet: ether ", ether.String())
+				fastlog.Strings("packet: ip4 ", ip4Frame.String())
 			}
 
 			// Create host only if on same subnet
@@ -470,8 +470,8 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				continue
 			}
 			if packet.DebugIP6 {
-				fmt.Printf("packet: ether %s\n", ether)
-				fmt.Printf("packet: ip6 %s\n", ip6Frame)
+				fastlog.Strings("packet: ether ", ether.String())
+				fastlog.Strings("packet: ip6 ", ip6Frame.String())
 			}
 
 			l4Proto = ip6Frame.NextHeader()
@@ -587,13 +587,13 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				continue
 			}
 			if packet.DebugUDP {
-				fmt.Printf("packet: ether %s\n", ether)
+				fastlog.Strings("packet: ether ", ether.String())
 				if ip4Frame != nil {
-					fmt.Printf("packet: ip4 %s\n", ip4Frame)
+					fastlog.Strings("packet: ip4 ", ip4Frame.String())
 				} else {
-					fmt.Printf("packet: ip6 %s\n", ip6Frame)
+					fastlog.Strings("packet: ip6 ", ip6Frame.String())
 				}
-				fmt.Printf("packet: udp %s\n", udp)
+				fastlog.Strings("packet: udp ", udp.String())
 			}
 
 			udpSrcPort := udp.SrcPort()
@@ -617,12 +617,12 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				// fmt.Printf("ether : %s", ether)
 				fastlog.Strings("ether : ", ether.String())
 				if ip4Frame != nil {
-					fmt.Printf("ip4   : %s\n", ip4Frame)
+					fastlog.Strings("ip4   : ", ip4Frame.String())
 				} else {
-					fmt.Printf("ip6   : %s\n", ip6Frame)
+					fastlog.Strings("ip6   : ", ip6Frame.String())
 				}
-				fmt.Printf("udp   : %s payload=[% x]\n", udp, udp.Payload())
-				fmt.Printf("packet: dhcp6 packet - do nothing %s\n", host)
+				fastlog.Strings("udp   : ", udp.String(), fmt.Sprintf(" payload=[% x]\n", udp.Payload()))
+				fastlog.Strings("packet: dhcp6 packet - do nothing ", host.String())
 
 			case udpSrcPort == 53: // DNS response
 				// TODO: move this to background goroutine
