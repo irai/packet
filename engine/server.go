@@ -344,7 +344,7 @@ func (h *Handler) process8023Frame(ether packet.Ether) {
 		stpCount++
 		now := time.Now()
 		if stpNextLog.Before(now) {
-			fmt.Printf("packet: LLC STP protocol %s %s count=%d payload=[% x]\n", ether, llc, stpCount, llc.Payload())
+			fmt.Printf("packet: LLC STP protocol %s %s count=%d payload=[% x]\n", ether, llc, stpCount, ether[:])
 			stpNextLog = now.Add(time.Minute * 5)
 		}
 		return
@@ -356,7 +356,7 @@ func (h *Handler) process8023Frame(ether packet.Ether) {
 			fmt.Printf("packet: err invalid SNAP packet err=%s\n", err)
 			return
 		}
-		fmt.Printf("packet: LLC SNAP protocol %s %s payload=[% x]\n", ether, snap, snap.Payload())
+		fmt.Printf("packet: LLC SNAP protocol %s %s payload=[% x]\n", ether, snap, ether[:])
 		return
 	}
 
@@ -364,7 +364,7 @@ func (h *Handler) process8023Frame(ether packet.Ether) {
 	// To see these:
 	//    sudo tcpdump -vv -x not ip6 and not ip and not arp
 	//    then switch a mobile phone to airplane mode to force a network reconnect
-	fmt.Printf("packet: rcvd 802.3 LLC frame %s %s payload=[% x]\n", ether, llc, llc.Payload())
+	fmt.Printf("packet: rcvd 802.3 LLC frame %s %s payload=[% x]\n", ether, llc, ether[:])
 }
 
 // ListenAndServe listen for raw packets and invoke hooks as required
@@ -520,12 +520,12 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			// See frames here:
 			// http://realtek.info/pdf/rtl8324.pdf  page 43
 			//
-			fmt.Printf("packet: RRCP frame %s payload=\"% x\"\n", ether, ether.Payload())
+			fmt.Printf("packet: RRCP frame %s payload=[% x]\n", ether, ether[:])
 			continue
 
 		case 0x88cc: // Link Layer Discovery Protocol (LLDP)
 			// not sure if we will ever receive these in a home LAN!
-			fmt.Printf("packet: LLDP frame %s payload=\"% x\"\n", ether, ether.Payload())
+			fmt.Printf("packet: LLDP frame %s payload=[% x]\n", ether, ether[:])
 			continue
 
 		case 0x890d: // Fast Roaming Remote Request (802.11r)
@@ -533,7 +533,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			// allows a client device to roam quickly in environments implementing WPA2 Enterprise security,
 			// by ensuring that the client device does not need to re-authenticate to the RADIUS server
 			// every time it roams from one access point to another.
-			fmt.Printf("packet: 802.11r Fast Roaming frame %s payload=\"% x\"\n", ether, ether.Payload())
+			fmt.Printf("packet: 802.11r Fast Roaming frame %s payload=[% x]\n", ether, ether[:])
 			continue
 
 		default:
