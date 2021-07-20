@@ -331,7 +331,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (pac
 		}
 
 		srcAddr := packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostIP4.IP, Port: packet.DHCP4ServerPort}
-		if err := sendDHCP4Packet(h.session.Conn, srcAddr, dstAddr, response); err != nil {
+		if err := h.sendDHCP4Packet(srcAddr, dstAddr, response); err != nil {
 			fmt.Printf("dhcp4: failed sending packet error=%s", err)
 			return packet.Result{}, err
 		}

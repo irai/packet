@@ -2,14 +2,17 @@ package dhcp4
 
 import (
 	"fmt"
-	"net"
 	"syscall"
 
 	"github.com/irai/packet"
 )
 
-func sendDHCP4Packet(conn net.PacketConn, srcAddr packet.Addr, dstAddr packet.Addr, p DHCP4) (err error) {
-	ether := packet.Ether(make([]byte, packet.EthMaxSize))
+func (h *Handler) sendDHCP4Packet(srcAddr packet.Addr, dstAddr packet.Addr, p DHCP4) (err error) {
+	buf := h.session.EtherPool.Get().(*[packet.EthMaxSize]byte) // reuse buffers
+	defer h.session.EtherPool.Put(buf)
+	ether := packet.Ether(buf[:])
+	// ether := packet.Ether(make([]byte, packet.EthMaxSize))
+
 	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IP, srcAddr.MAC, dstAddr.MAC)
 	ip4 := packet.IP4MarshalBinary(ether.Payload(), 50, srcAddr.IP, dstAddr.IP)
 	udp := packet.UDPMarshalBinary(ip4.Payload(), srcAddr.Port, dstAddr.Port)
@@ -25,7 +28,7 @@ func sendDHCP4Packet(conn net.PacketConn, srcAddr packet.Addr, dstAddr packet.Ad
 
 	// fmt.Printf("dhcp4: DEBUG: send packet %s %s\n", dstAddr, p)
 
-	if _, err := conn.WriteTo(ether, &dstAddr); err != nil {
+	if _, err := h.session.Conn.WriteTo(ether, &dstAddr); err != nil {
 		fmt.Println("icmp failed to write ", err)
 		return err
 	}

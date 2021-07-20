@@ -173,9 +173,8 @@ func (h *Handler) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
 func (h *Handler) sendPacket(srcAddr packet.Addr, dstAddr packet.Addr, b []byte) error {
 	buf := h.session.EtherPool.Get().(*[packet.EthMaxSize]byte) // reuse buffers
 	defer h.session.EtherPool.Put(buf)
-
-	// ether := packet.Ether(make([]byte, packet.EthMaxSize))
 	ether := packet.Ether(buf[:])
+	// ether := packet.Ether(make([]byte, packet.EthMaxSize))
 
 	// All Neighbor Discovery packets must use link-local addresses (FE80::/64)
 	// and a hop limit of 255. Linux discards ND messages with hop limits different than 255.

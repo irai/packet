@@ -8,7 +8,11 @@ import (
 )
 
 func (h *Handler) sendPacket(srcAddr packet.Addr, dstAddr packet.Addr, p packet.ICMP4) (err error) {
-	ether := packet.Ether(make([]byte, packet.EthMaxSize))
+	buf := h.session.EtherPool.Get().(*[packet.EthMaxSize]byte) // reuse buffers
+	defer h.session.EtherPool.Put(buf)
+	ether := packet.Ether(buf[:])
+	// ether := packet.Ether(make([]byte, packet.EthMaxSize))
+
 	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IP, srcAddr.MAC, dstAddr.MAC)
 	ip4 := packet.IP4MarshalBinary(ether.Payload(), 50, srcAddr.IP, dstAddr.IP)
 	if ip4, err = ip4.AppendPayload(p, syscall.IPPROTO_ICMP); err != nil {
