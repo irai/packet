@@ -171,7 +171,11 @@ func (h *Handler) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
 }
 
 func (h *Handler) sendPacket(srcAddr packet.Addr, dstAddr packet.Addr, b []byte) error {
-	ether := packet.Ether(make([]byte, packet.EthMaxSize)) // Ping is called many times concurrently by client
+	buf := h.session.EtherPool.Get().(*[packet.EthMaxSize]byte) // reuse buffers
+	defer h.session.EtherPool.Put(buf)
+
+	// ether := packet.Ether(make([]byte, packet.EthMaxSize))
+	ether := packet.Ether(buf[:])
 
 	// All Neighbor Discovery packets must use link-local addresses (FE80::/64)
 	// and a hop limit of 255. Linux discards ND messages with hop limits different than 255.
@@ -193,10 +197,16 @@ func (h *Handler) sendPacket(srcAddr packet.Addr, dstAddr packet.Addr, b []byte)
 	//   - 4 bytes high endian payload length (the same value as in the IPv6 header)
 	//   - 3 bytes zero
 	//   - 1 byte nextheader (so, 58 decimal)
-	psh := make([]byte, 40+len(b))
+	buf2 := h.session.EtherPool.Get().(*[packet.EthMaxSize]byte) // reuse buffers
+	defer h.session.EtherPool.Put(buf2)
+	// psh := make([]byte, 40+len(b))
+	psh := buf2[:40+len(b)]
 	copy(psh[0:16], ip6.Src())
 	copy(psh[16:32], ip6.Dst())
 	binary.BigEndian.PutUint32(psh[32:36], uint32(len(b)))
+	psh[36] = 0
+	psh[37] = 0
+	psh[38] = 0
 	psh[39] = 58
 	copy(psh[40:], b)
 	ICMP6(ip6.Payload()).SetChecksum(packet.Checksum(psh))

@@ -13,6 +13,7 @@ type Session struct {
 	HostTable    HostTable    // store IP list - one for each host
 	MACTable     MACTable     // store mac list
 	mutex        sync.RWMutex // global session mutex
+	EtherPool    sync.Pool
 	eventChannel chan NetEvent
 }
 
@@ -20,6 +21,14 @@ func NewEmptySession() *Session {
 	session := new(Session)
 	session.MACTable = NewMACTable()
 	session.HostTable = NewHostTable()
+	session.EtherPool = sync.Pool{
+		New: func() interface{} {
+			// The Pool's New function should generally only return pointer
+			// types, since a pointer can be put into the return interface
+			// value without an allocation:
+			return new([EthMaxSize]byte)
+		},
+	}
 	return session
 }
 
