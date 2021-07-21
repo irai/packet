@@ -3,18 +3,43 @@ package fastlog
 import (
 	"io"
 	"os"
+	"sync"
 )
 
 type Logger struct {
-	out io.Writer
+	out  io.Writer
+	pool sync.Pool
 }
 
-var std = &Logger{out: os.Stderr}
+// var std = &Logger{out: os.Stderr}
+var std = &Logger{out: os.Stderr, pool: sync.Pool{New: func() interface{} { return new([512]byte) }}}
 
 func Strings(data ...string) error {
+	// buffer := [512]byte{}
+	// buffer := std.buffer
+	buffer := std.pool.Get().(*[512]byte)
+	defer std.pool.Put(buffer)
+	pos := 0
 	for _, v := range data {
-		std.out.Write([]byte(v))
+		if pos+len(v) <= cap(buffer) {
+			copy(buffer[pos:], v)
+			pos = pos + len(v)
+			continue
+		}
+		copy(buffer[0:], "MSG TRUNCATED")
+		break
 	}
-	_, err := std.out.Write([]byte{'\n'})
+	buffer[pos] = '\n'
+	_, err := std.out.Write(buffer[:pos+1])
+	return err
+}
+
+func Strings2(str1 string, str2 string) error {
+	buffer := std.pool.Get().(*[512]byte)
+	defer std.pool.Put(buffer)
+	pos := copy(buffer[0:], str1)
+	pos = pos + copy(buffer[pos:], str2)
+	buffer[pos] = '\n'
+	_, err := std.out.Write(buffer[:pos+1])
 	return err
 }
