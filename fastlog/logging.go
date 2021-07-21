@@ -11,13 +11,14 @@ type Logger struct {
 	pool sync.Pool
 }
 
-// var std = &Logger{out: os.Stderr}
-var std = &Logger{out: os.Stderr, pool: sync.Pool{New: func() interface{} { return new([512]byte) }}}
+const bufSize = 1024
+
+var std = &Logger{out: os.Stderr, pool: sync.Pool{New: func() interface{} { return new([bufSize]byte) }}}
 
 func Strings(data ...string) error {
 	// buffer := [512]byte{}
 	// buffer := std.buffer
-	buffer := std.pool.Get().(*[512]byte)
+	buffer := std.pool.Get().(*[bufSize]byte)
 	defer std.pool.Put(buffer)
 	pos := 0
 	for _, v := range data {
@@ -35,7 +36,7 @@ func Strings(data ...string) error {
 }
 
 func Strings2(str1 string, str2 string) error {
-	buffer := std.pool.Get().(*[512]byte)
+	buffer := std.pool.Get().(*[bufSize]byte)
 	defer std.pool.Put(buffer)
 	pos := copy(buffer[0:], str1)
 	pos = pos + copy(buffer[pos:], str2)
