@@ -411,6 +411,15 @@ func (p UDP) String() string {
 	return fmt.Sprintf("srcport=%d dstport=%d len=%d payloadlen=%d", p.SrcPort(), p.DstPort(), p.Len(), len(p.Payload()))
 }
 
+// Print implements fastlog interface
+func (p UDP) Print(line *fastlog.Line) *fastlog.Line {
+	line.Int("srcport", int(p.SrcPort()))
+	line.Int("dstport", int(p.DstPort()))
+	line.Int("len", int(p.Len()))
+	line.Int("payloadlen", len(p.Payload()))
+	return line
+}
+
 func (p UDP) SrcPort() uint16  { return binary.BigEndian.Uint16(p[0:2]) }
 func (p UDP) DstPort() uint16  { return binary.BigEndian.Uint16(p[2:4]) }
 func (p UDP) Len() uint16      { return binary.BigEndian.Uint16(p[4:6]) }

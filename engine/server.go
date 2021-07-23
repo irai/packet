@@ -451,9 +451,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				continue
 			}
 			if packet.DebugIP4 {
-				fastlog.NewLine("ether", "").Struct(ether).Write()
-				// fastlog.Strings("packet: ether ", ether.String())
-				fastlog.Strings("packet: ip4 ", ip4Frame.String())
+				fastlog.NewLine("ether", "").Struct(ether).LF().Module("ip4", "").Struct(ip4Frame).Write()
 			}
 
 			// Create host only if on same subnet
@@ -471,9 +469,9 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				continue
 			}
 			if packet.DebugIP6 {
-				fastlog.NewLine("ether", "").Struct(ether).Write()
+				fastlog.NewLine("ether", "").Struct(ether).LF().Module("ip6", "").Struct(ip6Frame).Write()
 				// fastlog.Strings("packet: ether ", ether.String())
-				fastlog.Strings("packet: ip6 ", ip6Frame.String())
+				// fastlog.Strings("packet: ip6 ", ip6Frame.String())
 			}
 
 			l4Proto = ip6Frame.NextHeader()
@@ -589,13 +587,11 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				continue
 			}
 			if packet.DebugUDP {
-				fastlog.Strings("packet: ether ", ether.String())
 				if ip4Frame != nil {
-					fastlog.Strings("packet: ip4 ", ip4Frame.String())
+					fastlog.NewLine("ether", "").Struct(ether).LF().Module("ip4", "").Struct(ip4Frame).Module("udp", "").Struct(udp).Write()
 				} else {
-					fastlog.Strings("packet: ip6 ", ip6Frame.String())
+					fastlog.NewLine("ether", "").Struct(ether).LF().Module("ip6", "").Struct(ip6Frame).Module("udp", "").Struct(udp).Write()
 				}
-				fastlog.Strings("packet: udp ", udp.String())
 			}
 
 			udpSrcPort := udp.SrcPort()
@@ -744,8 +740,10 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 		d3 = time.Since(startTime)
 		if d3 > time.Microsecond*400 {
-			fastlog.Strings("packet: warning > 400 microseconds: l3=", d1.String(), " l4=", d2.String(), " total=", d3.String(),
-				fmt.Sprintf(" l4proto=%x ethertype=%x", l4Proto, ether.EtherType()))
+			fastlog.NewLine("packet", "warning > 400microseconds").String("l3", d1.String()).String("l4", d2.String()).String("total", d3.String()).
+				Int("l4proto", l4Proto).Uint16Hex("ethertype", ether.EtherType())
+			// fastlog.Strings("packet: warning > 400 microseconds: l3=", d1.String(), " l4=", d2.String(), " total=", d3.String(),
+			// fmt.Sprintf(" l4proto=%x ethertype=%x", l4Proto, ether.EtherType()))
 		}
 
 		/****
