@@ -36,13 +36,13 @@ func NewLine(module string, msg string) *Line {
 
 func (logger *Logger) NewLine(module string, msg string) *Line {
 	l := Std.lines.Get().(*Line)
+	l.index = 0
 	return l.newModule(module, msg)
 }
 
 func (l *Line) newModule(module string, msg string) *Line {
-	copy(l.buffer[0:], "      :")
-	copy(l.buffer[0:6], module)
-	l.index = 8
+	l.index = l.index + copy(l.buffer[0:], "      :")
+	l.index = l.index + copy(l.buffer[0:6], module)
 	if msg != "" {
 		l.index = l.index + copy(l.buffer[l.index:], " msg=\"")
 		l.index = l.index + copy(l.buffer[l.index:], msg)
