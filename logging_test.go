@@ -16,13 +16,13 @@ import (
 goos: linux
 goarch: amd64
 pkg: github.com/irai/packet
-Benchmark_FastLogPrintf-8                1393280               776 ns/op             274 B/op          8 allocs/op
-Benchmark_FastLogByteBuffer-8            2183492               538 ns/op             242 B/op          7 allocs/op
-Benchmark_FastLogStrings-8               2291196               524 ns/op             242 B/op          7 allocs/op
-Benchmark_FastLogString2-8               2279028               516 ns/op             242 B/op          7 allocs/op
-Benchmark_FastLogLinePrint-8             2992369               394 ns/op             162 B/op          6 allocs/op
+Benchmark_FastLogPrintf-8                1454368               780 ns/op             274 B/op          8 allocs/op
+Benchmark_FastLogByteBuffer-8            2184068               550 ns/op             242 B/op          7 allocs/op
+Benchmark_FastLogStrings-8               2242190               527 ns/op             242 B/op          7 allocs/op
+Benchmark_FastLogString2-8               2241307               517 ns/op             242 B/op          7 allocs/op
+Benchmark_FastLogLinePrint-8             4046708               282 ns/op              34 B/op          2 allocs/op
 PASS
-ok      github.com/irai/packet  8.737s
+ok      github.com/irai/packet  8.619s
 */
 var testPool = sync.Pool{New: func() interface{} { return new(bytes.Buffer) }}
 

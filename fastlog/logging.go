@@ -42,8 +42,9 @@ func (logger *Logger) NewLine(module string, msg string) *Line {
 }
 
 func (l *Line) newModule(module string, msg string) *Line {
-	l.index = l.index + copy(l.buffer[0:], "      :")
-	l.index = l.index + copy(l.buffer[0:6], module)
+	copy(l.buffer[l.index:], "      :")
+	copy(l.buffer[l.index:l.index+6], module)
+	l.index = l.index + 7
 	if msg != "" {
 		l.index = l.index + copy(l.buffer[l.index:], " msg=\"")
 		l.index = l.index + copy(l.buffer[l.index:], msg)
@@ -107,11 +108,10 @@ func (l *Line) Struct(value LineLog) *Line {
 }
 
 func (l *Line) Uint8(name string, value uint8) *Line {
-	l.buffer[l.index] = ' '
-	l.index++
+	l.appendByte(' ')
 	l.index = l.index + copy(l.buffer[l.index:], name)
-	l.buffer[l.index] = '='
-	l.appendByte(value)
+	l.appendByte('=')
+	l.index = l.index + copy(l.buffer[l.index:], byteAscii[value])
 	return l
 }
 
@@ -160,7 +160,6 @@ func (l *Line) IP(name string, value net.IP) *Line {
 			l.index = l.index + copy(l.buffer[l.index:], byteAscii[ip[2]])
 			l.appendByte('.')
 			l.index = l.index + copy(l.buffer[l.index:], byteAscii[ip[3]])
-			l.appendByte('.')
 			return l
 		}
 		l.index = l.index + copy(l.buffer[l.index:], value.String())
