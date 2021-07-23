@@ -41,6 +41,10 @@ func (logger *Logger) NewLine(module string, msg string) *Line {
 	return l.newModule(module, msg)
 }
 
+func (l *Line) Module(name string, msg string) *Line {
+	return l.newModule(name, msg)
+}
+
 func (l *Line) newModule(module string, msg string) *Line {
 	copy(l.buffer[l.index:], "      :")
 	copy(l.buffer[l.index:l.index+6], module)
@@ -54,13 +58,9 @@ func (l *Line) newModule(module string, msg string) *Line {
 	return l
 }
 
-func (l *Line) Module(name string, msg string) *Line {
-	return l.newModule(name, msg)
-}
-
-func (l *Line) Byte(value byte) *Line {
-	l.buffer[l.index] = value
-	l.index++
+// LF append a line feed to line
+func (l *Line) LF() *Line {
+	l.appendByte('\n')
 	return l
 }
 

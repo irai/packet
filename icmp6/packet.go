@@ -160,8 +160,18 @@ type ICMP6NeighborSolicitation []byte
 
 func (p ICMP6NeighborSolicitation) IsValid() bool { return len(p) >= 24 }
 func (p ICMP6NeighborSolicitation) String() string {
-	return fmt.Sprintf("type=na code=%d targetIP=%s sourceLLA=%s", p.Code(), p.TargetAddress(), p.SourceLLA())
+	return fmt.Sprintf("type=ns code=%d targetIP=%s sourceLLA=%s", p.Code(), p.TargetAddress(), p.SourceLLA())
 }
+
+// Print implements fastlog interface
+func (p ICMP6NeighborSolicitation) Print(line *fastlog.Line) *fastlog.Line {
+	line.String("type", "ns")
+	line.Uint8("code", p.Code())
+	line.IP("targetIP", p.TargetAddress())
+	line.MAC("sourceLLA", p.SourceLLA())
+	return line
+}
+
 func (p ICMP6NeighborSolicitation) Type() uint8           { return uint8(p[0]) }
 func (p ICMP6NeighborSolicitation) Code() byte            { return p[1] }
 func (p ICMP6NeighborSolicitation) Checksum() int         { return int(binary.BigEndian.Uint16(p[2:4])) }

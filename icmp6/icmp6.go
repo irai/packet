@@ -227,8 +227,8 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 	if Debug && t != ipv6.ICMPTypeRouterAdvertisement {
 		// fastlog.Strings("icmp6 : ether", ether.String())
 		// fastlog.Strings("icmp6 : ip6 ", ip6Frame.String())
-		l := fastlog.NewLine("icmp6", "ether").Struct(ether).Byte('\n')
-		l.Module("icmp6", "ip6").Struct(ip6Frame)
+		l := fastlog.NewLine("icmp6", "ether").Struct(ether).LF()
+		l.Module("icmp6", "ip6").Struct(ip6Frame).LF()
 		l.Module("icmp6", "icmp").Struct(icmp6Frame)
 		l.Write()
 		// fastlog.NewLine("icmp6", "ip6").Struct(ip6Frame).Write()
@@ -263,7 +263,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 			return packet.Result{}, packet.ErrParseFrame
 		}
 		if Debug {
-			fastlog.Strings("icmp6 : neighbor solicitation from ip=", ip6Frame.Src().String(), " ", frame.String())
+			fastlog.NewLine("icmp6", "neighbor solicitation").IP("ip", ip6Frame.Src()).Struct(frame).Write()
 		}
 
 		// Source address:
@@ -346,8 +346,8 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 		h.Unlock()
 
 		if Debug {
-			l := fastlog.NewLine("icmp6", "ether").Struct(ether).Byte('\n')
-			l.Module("icmp6", "ip6").Struct(ip6Frame).Byte('\n')
+			l := fastlog.NewLine("icmp6", "ether").Struct(ether).LF()
+			l.Module("icmp6", "ip6").Struct(ip6Frame).LF()
 			l.Module("icmp6", "router advertisement").Struct(icmp6Frame).String("options", fmt.Sprintf("%+v", router.Options))
 			l.Write()
 			// fastlog.Strings("icmp6 : ip6 ", ip6Frame.String())
