@@ -451,7 +451,8 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				continue
 			}
 			if packet.DebugIP4 {
-				fastlog.Strings("packet: ether ", ether.String())
+				fastlog.NewLine("ether", "").Struct(ether).Write()
+				// fastlog.Strings("packet: ether ", ether.String())
 				fastlog.Strings("packet: ip4 ", ip4Frame.String())
 			}
 
@@ -470,7 +471,8 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				continue
 			}
 			if packet.DebugIP6 {
-				fastlog.Strings("packet: ether ", ether.String())
+				fastlog.NewLine("ether", "").Struct(ether).Write()
+				// fastlog.Strings("packet: ether ", ether.String())
 				fastlog.Strings("packet: ip6 ", ip6Frame.String())
 			}
 

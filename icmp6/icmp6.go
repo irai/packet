@@ -225,8 +225,10 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 
 	t := ipv6.ICMPType(icmp6Frame.Type())
 	if Debug && t != ipv6.ICMPTypeRouterAdvertisement {
-		fastlog.Strings("icmp6 : ether", ether.String())
-		fastlog.Strings("icmp6 : ip6 ", ip6Frame.String())
+		// fastlog.Strings("icmp6 : ether", ether.String())
+		// fastlog.Strings("icmp6 : ip6 ", ip6Frame.String())
+		fastlog.NewLine("icmp6", "ether").Struct(ether).Byte('\n').Struct(ip6Frame).Write()
+		// fastlog.NewLine("icmp6", "ip6").Struct(ip6Frame).Write()
 		fastlog.Strings("icmp6 : icmp ", icmp6Frame.String())
 	}
 
@@ -341,8 +343,8 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 		h.Unlock()
 
 		if Debug {
-			fastlog.Strings("icmp6 : ether", ether.String())
-			fastlog.Strings("icmp6 : ip6 ", ip6Frame.String())
+			fastlog.NewLine("icmp6", "ether").Struct(ether).Byte('\n').Struct(ip6Frame).Write()
+			// fastlog.Strings("icmp6 : ip6 ", ip6Frame.String())
 			fastlog.Strings("icmp6 : router advertisement from ip=", ip6Frame.Src().String(), " ", frame.String(), fmt.Sprintf("%+v", router.Options))
 		}
 

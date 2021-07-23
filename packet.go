@@ -8,6 +8,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/irai/packet/fastlog"
 	"github.com/mdlayher/netx/rfc4193"
 	"golang.org/x/net/ipv4"
 	"inet.af/netaddr"
@@ -209,6 +210,15 @@ func (p Ether) String() string {
 	b.WriteString(" len=")
 	fmt.Fprintf(&b, "%d", len(p))
 	return b.String()
+}
+
+// Print implements fastlog struct interface
+func (p Ether) Print(line *fastlog.Line) *fastlog.Line {
+	line.Uint16Hex("type", p.EtherType())
+	line.String("src", p.Src().String())
+	line.String("dst", p.Dst().String())
+	line.Int("len", len(p))
+	return line
 }
 
 // EtherMarshalBinary creates a ethernet frame in at b using the values
