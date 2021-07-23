@@ -92,13 +92,11 @@ func Benchmark_FastLogString2(b *testing.B) {
 	}
 }
 
-//  348084	      3067 ns/op	     274 B/op	       8 allocs/op
-
 func Benchmark_FastLogLinePrint(b *testing.B) {
 	fastlog.Std.Out = ioutil.Discard
 	buf := make([]byte, EthMaxSize)
 	var err error
-	mac2 := net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x03}
+	mac2 := net.HardwareAddr{0xaf, 0x02, 0x03, 0x04, 0x05, 0x03}
 	for i := 0; i < b.N; i++ {
 		ether := EtherMarshalBinary(buf, syscall.ETH_P_IPV6, mac2, mac2)
 		err = fastlog.Std.NewLine("ether", "").Struct(ether).Write()

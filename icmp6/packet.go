@@ -6,6 +6,7 @@ import (
 	"net"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/fastlog"
 	"golang.org/x/net/ipv6"
 )
 
@@ -27,6 +28,15 @@ func (p ICMP6) RestOfHeader() []byte  { return p[4:8] }
 func (p ICMP6) Payload() []byte       { return p[8:] }
 func (p ICMP6) String() string {
 	return fmt.Sprintf("type=%v code=%v checksum=%x payloadLen=%v\n", p.Type(), p.Code(), p.Checksum(), len(p.Payload()))
+}
+
+// Print implements fastlog interface
+func (p ICMP6) Print(line *fastlog.Line) *fastlog.Line {
+	line.Uint8("type", p.Type())
+	line.Uint8("code", p.Code())
+	line.Uint16Hex("checksum", p.Checksum())
+	line.Int("len", len(p.Payload()))
+	return line
 }
 
 type ICMPEcho []byte

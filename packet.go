@@ -215,8 +215,8 @@ func (p Ether) String() string {
 // Print implements fastlog struct interface
 func (p Ether) Print(line *fastlog.Line) *fastlog.Line {
 	line.Uint16Hex("type", p.EtherType())
-	line.String("src", p.Src().String())
-	line.String("dst", p.Dst().String())
+	line.MAC("src", p.Src())
+	line.MAC("dst", p.Dst())
 	line.Int("len", len(p))
 	return line
 }
@@ -270,6 +270,17 @@ func (p IP4) TotalLen() int          { return int(binary.BigEndian.Uint16(p[2:4]
 func (p IP4) Payload() []byte        { return p[p.IHL():] }
 func (p IP4) String() string {
 	return fmt.Sprintf("version=%v src=%v dst=%v proto=%v ttl=%v tos=%v", p.Version(), p.Src(), p.Dst(), p.Protocol(), p.TTL(), p.TOS())
+}
+
+// Print implements fastlog struct interface
+func (p IP4) Print(line *fastlog.Line) *fastlog.Line {
+	line.Int("version", p.Version())
+	line.IP("src", p.Src())
+	line.IP("dst", p.Dst())
+	line.Int("proto", p.Protocol())
+	line.Int("ttl", p.TTL())
+	line.Int("tos", p.TOS())
+	return line
 }
 
 func IP4MarshalBinary(p []byte, ttl byte, src net.IP, dst net.IP) IP4 {

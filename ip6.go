@@ -52,8 +52,8 @@ func (p IP6) String() string {
 // Print implements fastlog struct interface
 func (p IP6) Print(line *fastlog.Line) *fastlog.Line {
 	line.Int("version", p.Version())
-	line.String("src", p.Src().String())
-	line.String("dst", p.Dst().String())
+	line.IP("src", p.Src())
+	line.IP("dst", p.Dst())
 	line.Int("nextHeader", p.NextHeader())
 	line.Int("len", p.PayloadLen())
 	line.Int("hopLimit", p.HopLimit())
