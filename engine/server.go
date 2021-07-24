@@ -613,14 +613,13 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 			case udpDstPort == 546 || udpDstPort == 547: // DHCP6
 				// fmt.Printf("ether : %s", ether)
-				fastlog.Strings("ether : ", ether.String())
 				if ip4Frame != nil {
-					fastlog.Strings("ip4   : ", ip4Frame.String())
+					fastlog.NewLine("ether", "").Struct(ether).LF().Module("ip4", "").Struct(ip4Frame).Module("udp", "").Struct(udp).Write()
 				} else {
-					fastlog.Strings("ip6   : ", ip6Frame.String())
+					fastlog.NewLine("ether", "").Struct(ether).LF().Module("ip6", "").Struct(ip6Frame).Module("udp", "").Struct(udp).Write()
 				}
-				fastlog.Strings("udp   : ", udp.String(), fmt.Sprintf(" payload=[% x]\n", udp.Payload()))
-				fastlog.Strings("packet: dhcp6 packet - do nothing ", host.String())
+				fastlog.NewLine("packet", "ignore dhcp6 packet").ByteArray("payload", udp.Payload()).Write()
+				// fastlog.Strings("packet: dhcp6 packet - do nothing ", host.String())
 
 			case udpSrcPort == 53: // DNS response
 				// TODO: move this to background goroutine

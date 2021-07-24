@@ -58,8 +58,8 @@ func Benchmark_FastLogPrintf(b *testing.B) {
 func Benchmark_FastLogByteBuffer(b *testing.B) {
 	fastlog.Std.Out = ioutil.Discard
 	buf := make([]byte, EthMaxSize)
+	mac2 := net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x03}
 	for i := 0; i < b.N; i++ {
-		mac2 := net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, byte(i)}
 		ether := EtherMarshalBinary(buf, syscall.ETH_P_IPV6, mac2, mac2)
 		withBuffer("ether: ", ether.String())
 	}
@@ -82,8 +82,8 @@ func Benchmark_FastLogString2(b *testing.B) {
 	fastlog.Std.Out = ioutil.Discard
 	buf := make([]byte, EthMaxSize)
 	var err error
+	mac2 := net.HardwareAddr{0xaf, 0x02, 0x03, 0x04, 0x05, 0x03}
 	for i := 0; i < b.N; i++ {
-		mac2 := net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, byte(i)}
 		ether := EtherMarshalBinary(buf, syscall.ETH_P_IPV6, mac2, mac2)
 		err = fastlog.Strings2("ether: ", ether.String())
 	}

@@ -25,3 +25,42 @@ func TestLine_Write(t *testing.T) {
 	}
 
 }
+
+func TestLine_ByteArray(t *testing.T) {
+	tests := []struct {
+		name          string
+		module        string
+		msg           string
+		payload       []byte
+		wantBytes     []byte
+		wantEndMarker bool
+		wantLen       int
+	}{
+		{name: "ok", module: "module", msg: "", payload: make([]byte, 300), wantBytes: []byte(`module:`), wantLen: 917, wantEndMarker: true},
+		{name: "truncated", module: "module", msg: "", payload: make([]byte, 500), wantBytes: []byte(`module:`), wantLen: 1023, wantEndMarker: false},
+		{name: "boundary", module: "module", msg: "", payload: make([]byte, 500), wantBytes: []byte(`module:`), wantLen: 1023, wantEndMarker: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := NewLine(tt.module, tt.msg)
+			tt.payload[0] = 0xaa                 // just a marker
+			tt.payload[len(tt.payload)-1] = 0xff // just a marker
+			l = l.ByteArray("payload", tt.payload)
+			if l.index != tt.wantLen {
+				t.Errorf("ByteArray() invalid len got=%v, want=%v", l.index, tt.wantLen)
+			}
+			if !bytes.Contains(l.buffer[:l.index], tt.wantBytes) {
+				t.Errorf("ByteArray() invalid buffer got=% x", l.buffer[:l.index])
+			}
+			if tt.wantEndMarker && !bytes.Equal(l.buffer[l.index-3:l.index], []byte("ff]")) {
+				t.Errorf("ByteArray() invalid end marker got=%s", string(l.buffer[l.index-3:l.index]))
+			}
+			/**
+			if !tt.wantEndMarker && !bytes.Equal(l.buffer[l.index-11:l.index], []byte("]TRUNCATED")) {
+				t.Errorf("ByteArray() invalid truncated marker got=%s|", string(l.buffer[l.index-11:l.index]))
+			}
+			*/
+			l.Write()
+		})
+	}
+}
