@@ -134,7 +134,9 @@ func (l *Line) Uint8(name string, value uint8) *Line {
 func (l *Line) Uint16Hex(name string, value uint16) *Line {
 	l.appendByte(' ')
 	l.index = l.index + copy(l.buffer[l.index:], name)
-	l.index = l.index + copy(l.buffer[l.index:], "=0x")
+	l.appendByte('=')
+	l.appendByte('0')
+	l.appendByte('x')
 	l.appendByte(hexAscii[(value>>12)&0x0f])
 	l.appendByte(hexAscii[(value>>8)&0x0f])
 	l.appendByte(hexAscii[(value>>4)&0x0f])
@@ -214,6 +216,7 @@ func (l *Line) ByteArray(name string, value []byte) *Line {
 	return l
 }
 
+/**
 func Strings(data ...string) error {
 	buffer := Std.pool.Get().(*[bufSize]byte)
 	defer Std.pool.Put(buffer)
@@ -241,3 +244,4 @@ func Strings2(str1 string, str2 string) error {
 	_, err := Std.Out.Write(buffer[:pos+1])
 	return err
 }
+*/

@@ -243,7 +243,8 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 			return packet.Result{}, packet.ErrParseFrame
 		}
 		if Debug {
-			fastlog.Strings("icmp6 : neighbor advertisement from ip=", ip6Frame.Src().String(), " ", frame.String())
+			fastlog.NewLine("icmp6", "neigbor advertisement").IP("ip", ip6Frame.Src()).Struct(frame).Write()
+			// fastlog.Strings("icmp6 : neighbor advertisement from ip=", ip6Frame.Src().String(), " ", frame.String())
 		}
 
 		// Source IP is sometimes ff02::1 multicast, which means the host is nil
@@ -367,7 +368,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 			return packet.Result{}, packet.ErrParseFrame
 		}
 		if Debug {
-			fastlog.Strings("icmp6 : router solicitation from ip=", ip6Frame.Src().String(), frame.String())
+			fastlog.NewLine("icmp6", "router solicitation").IP("ip", ip6Frame.Src()).Struct(frame).Write()
 		}
 
 		// Source address:

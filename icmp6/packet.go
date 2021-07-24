@@ -68,8 +68,16 @@ type ICMP6RouterSolicitation []byte
 
 func (p ICMP6RouterSolicitation) IsValid() bool { return len(p) >= 8 }
 func (p ICMP6RouterSolicitation) String() string {
-	return fmt.Sprintf("type=na code=%d sourceLLA=%s", p.Code(), p.SourceLLA())
+	return fmt.Sprintf("type=ra code=%d sourceLLA=%s", p.Code(), p.SourceLLA())
 }
+
+func (p ICMP6RouterSolicitation) Print(line *fastlog.Line) *fastlog.Line {
+	line.String("type", "ra")
+	line.Uint8("code", p.Code())
+	line.MAC("targetLLA", p.SourceLLA())
+	return line
+}
+
 func (p ICMP6RouterSolicitation) Type() uint8   { return uint8(p[0]) }
 func (p ICMP6RouterSolicitation) Code() byte    { return p[1] }
 func (p ICMP6RouterSolicitation) Checksum() int { return int(binary.BigEndian.Uint16(p[2:4])) }
@@ -125,6 +133,16 @@ func (p ICMP6NeighborAdvertisement) IsValid() bool { return len(p) >= 24 }
 func (p ICMP6NeighborAdvertisement) String() string {
 	return fmt.Sprintf("type=na code=%d targetIP=%s targetLLA=%s", p.Code(), p.TargetAddress(), p.TargetLLA())
 }
+
+// Print implements fastlog interface
+func (p ICMP6NeighborAdvertisement) Print(line *fastlog.Line) *fastlog.Line {
+	line.String("type", "na")
+	line.Uint8("code", p.Code())
+	line.IP("targetIP", p.TargetAddress())
+	line.MAC("targetLLA", p.TargetLLA())
+	return line
+}
+
 func (p ICMP6NeighborAdvertisement) Type() uint8           { return uint8(p[0]) }
 func (p ICMP6NeighborAdvertisement) Code() byte            { return p[1] }
 func (p ICMP6NeighborAdvertisement) Checksum() int         { return int(binary.BigEndian.Uint16(p[2:4])) }

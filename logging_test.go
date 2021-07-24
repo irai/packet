@@ -64,6 +64,8 @@ func Benchmark_FastLogByteBuffer(b *testing.B) {
 		withBuffer("ether: ", ether.String())
 	}
 }
+
+/*
 func Benchmark_FastLogStrings(b *testing.B) {
 	fastlog.Std.Out = ioutil.Discard
 	buf := make([]byte, EthMaxSize)
@@ -91,6 +93,7 @@ func Benchmark_FastLogString2(b *testing.B) {
 		fmt.Print(err)
 	}
 }
+*/
 
 func Benchmark_FastLogLinePrint(b *testing.B) {
 	fastlog.Std.Out = ioutil.Discard
