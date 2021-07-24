@@ -66,7 +66,8 @@ func (l *Line) newModule(module string, msg string) *Line {
 	copy(l.buffer[l.index:l.index+6], module)
 	l.index = l.index + 7
 	if msg != "" {
-		l.index = l.index + copy(l.buffer[l.index:], " msg=\"")
+		// l.index = l.index + copy(l.buffer[l.index:], " msg=\"")
+		l.buffer[l.index] = '"'
 		l.index = l.index + copy(l.buffer[l.index:], msg)
 		l.buffer[l.index] = '"'
 		l.index++
