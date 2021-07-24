@@ -2,6 +2,7 @@ package fastlog
 
 import (
 	"bytes"
+	"io/ioutil"
 	"net"
 	"testing"
 )
@@ -27,6 +28,7 @@ func TestLine_Write(t *testing.T) {
 }
 
 func TestLine_ByteArray(t *testing.T) {
+	Std.Out = ioutil.Discard
 	tests := []struct {
 		name          string
 		module        string
@@ -61,6 +63,39 @@ func TestLine_ByteArray(t *testing.T) {
 			}
 			*/
 			l.Write()
+		})
+	}
+}
+
+func TestLine_appendIP6(t *testing.T) {
+	tests := []struct {
+		name   string
+		wantIP string
+	}{
+		{name: "ok", wantIP: "2001:4479:1e00:8202:42:15ff:fee6:1008"},
+		{name: "ok", wantIP: "2001:4479:1e00:8202:42:15ff:fee6:0"},
+		{name: "empy", wantIP: "::"},
+		{name: "one", wantIP: "::1"},
+		{name: "middle", wantIP: "234::1"},
+		{name: "middle", wantIP: "0:0:2::1"},
+		{name: "middle", wantIP: "0:0:2::"},
+		{name: "middle", wantIP: "fffd:1001:2002::2:1"},
+		{name: "middle", wantIP: "0:1:2:3:4:5:6:7"},
+		{name: "middle", wantIP: "0:1:2:3:4:5:6:7"},
+		{name: "middle", wantIP: "0:1:2:3:4::"},
+		{name: "middle", wantIP: "0:1:2002:3003:4004:5005:6006:7007"},
+		{name: "middle", wantIP: "1:0:2002:3003:4004:5005:6006:7007"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := NewLine("test", "")
+			ip := net.ParseIP(tt.wantIP)
+			l.appendIP6(ip)
+
+			if txt := l.buffer[l.index-len(tt.wantIP) : l.index]; !bytes.Equal(txt, []byte(ip.String())) {
+				t.Errorf("appendIP6() invalid IP got=%s want=%s|", string(txt), tt.wantIP)
+
+			}
 		})
 	}
 }
