@@ -11,7 +11,6 @@ import (
 	"github.com/irai/packet"
 	"github.com/irai/packet/fastlog"
 	"github.com/irai/packet/icmp4"
-	log "github.com/sirupsen/logrus"
 	"inet.af/netaddr"
 
 	"golang.org/x/net/ipv6"
@@ -202,7 +201,7 @@ func (h *Handler) sendPacket(srcAddr packet.Addr, dstAddr packet.Addr, b []byte)
 	ICMP6(ip6.Payload()).SetChecksum(packet.Checksum(psh))
 
 	if _, err := h.session.Conn.WriteTo(ether, &dstAddr); err != nil {
-		log.Error("icmp failed to write ", err)
+		fmt.Println("icmp failed to write ", err)
 		return err
 	}
 
@@ -416,7 +415,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 		return packet.Result{}, nil
 
 	default:
-		log.Printf("icmp6 : type not implemented from ip=%s type=%v\n", ip6Frame.Src(), t)
+		fmt.Printf("icmp6 : type not implemented from ip=%s type=%v\n", ip6Frame.Src(), t)
 		return packet.Result{}, fmt.Errorf("unrecognized icmp6 type=%d: %w", t, errParseMessage)
 	}
 

@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/irai/packet"
-	log "github.com/sirupsen/logrus"
 )
 
 var (
@@ -89,7 +88,7 @@ func readResponse(ctx context.Context, tc *testContext) error {
 		options := dhcp4Frame.ParseOptions()
 		var reqType MessageType
 		if t := options[OptionDHCPMessageType]; len(t) != 1 {
-			log.Warn("dhcp4: skiping dhcp packet with len not 1")
+			fmt.Println("dhcp4: skiping dhcp packet with len not 1")
 			continue
 		} else {
 			reqType = MessageType(t[0])

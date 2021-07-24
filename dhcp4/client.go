@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/irai/packet"
-	log "github.com/sirupsen/logrus"
+	"github.com/irai/packet/fastlog"
 )
 
 var (
@@ -41,11 +41,12 @@ func (h *Handler) attackDHCPServer(options Options) {
 // In most cases the home dhcp will mark the entry but keep the entry in the table
 // This is an error state and the DHCP server should tell the administrator
 func (h *Handler) forceDecline(clientID []byte, serverIP net.IP, chAddr net.HardwareAddr, clientIP net.IP, xid []byte) {
-	fields := log.Fields{"clientID": clientID, "ip": clientIP, "xid": xid, "serverIP": serverIP}
-	if Debug {
-		fields["mac"] = chAddr
-	}
-	log.WithFields(fields).Info("dhcp4: client send decline to server")
+	// fields := log.Fields{"clientID": clientID, "ip": clientIP, "xid": xid, "serverIP": serverIP}
+	// if Debug {
+	// fields["mac"] = chAddr
+	// }
+	// fmt.Printf("dhcp4: client send decline to server clientID=%v\n", clientID)
+	fastlog.NewLine("dhcp4", "client send declien to server").ByteArray("clientid", clientID).IP("ip", clientIP).ByteArray("xid", xid).Write()
 
 	// use a copy in the goroutine
 	clientID = dupBytes(clientID)
@@ -60,7 +61,7 @@ func (h *Handler) forceDecline(clientID []byte, serverIP net.IP, chAddr net.Hard
 	go func() {
 		err := h.sendDeclineReleasePacket(Decline, clientID, serverIP, chAddr, ciAddr, xid, options)
 		if err != nil {
-			log.Error("dhcp4: error in send decline packet ", err)
+			fmt.Println("dhcp4: error in send decline packet ", err)
 		}
 
 	}()
@@ -73,11 +74,12 @@ func (h *Handler) forceDecline(clientID []byte, serverIP net.IP, chAddr net.Hard
 //
 // Jan 21 - NOT working; the test router does not drop the entry. WHY?
 func (h *Handler) forceRelease(clientID []byte, serverIP net.IP, chAddr net.HardwareAddr, clientIP net.IP, xid []byte) {
-	fields := log.Fields{"clientID": clientID, "ip": clientIP, "xid": xid, "serverIP": serverIP}
-	if Debug {
-		fields["mac"] = chAddr
-	}
-	log.WithFields(fields).Info("dhcp4: sent force release to server")
+	// fields := log.Fields{"clientID": clientID, "ip": clientIP, "xid": xid, "serverIP": serverIP}
+	// if Debug {
+	// fields["mac"] = chAddr
+	// }
+	// fmt.Printf("dhcp4: sent force release to server clientID=%v\n", clientID)
+	fastlog.NewLine("dhcp4", "client send declien to server").ByteArray("clientid", clientID).IP("ip", clientIP).ByteArray("xid", xid).Write()
 
 	// use a copy in the goroutine
 	clientIP = dupIP(clientIP)
@@ -89,7 +91,7 @@ func (h *Handler) forceRelease(clientID []byte, serverIP net.IP, chAddr net.Hard
 	go func() {
 		err := h.sendDeclineReleasePacket(Release, clientID, serverIP, chAddr, clientIP, xid, nil)
 		if err != nil {
-			log.Error("dhcp4: error in send release packet ", err)
+			fmt.Println("dhcp4: error in send release packet ", err)
 		}
 
 	}()
@@ -97,7 +99,6 @@ func (h *Handler) forceRelease(clientID []byte, serverIP net.IP, chAddr net.Hard
 
 // SendDiscoverPacket send a DHCP discover packet to target
 func (h *Handler) SendDiscoverPacket(chAddr net.HardwareAddr, cIAddr net.IP, xID []byte, options Options) (err error) {
-
 	if Debug {
 		fmt.Printf("dhcp4: send discover packet from %s ciAddr=%v xID=%v\n", chAddr, cIAddr, xID)
 	}
@@ -135,19 +136,6 @@ func (h *Handler) sendDeclineReleasePacket(msgType MessageType, clientID []byte,
 	return err
 }
 
-/***
-func (h *Handler) sendDHCPPacket(srcAddr packet.Addr, dstAddr packet.Addr, packet DHCP4) (err error) {
-	// dstAddr := packet.Addr{MAC: h.engine.NICInfo.RouterMAC, IP: h.engine.NICInfo.RouterIP4, Port: 67}
-	// _, err = h.clientConn.WriteTo(packet, &dstAddr)
-	sendPacket(h.clientConn, srcAddr, dstAddr, packet)
-	if err != nil {
-		log.Debug("DHCPClient failed to dial UDP ", err)
-		return err
-	}
-	return nil
-}
-***/
-
 func (h *Handler) processClientPacket(host *packet.Host, req DHCP4) error {
 	// req := DHCP4(buffer[:n])
 	if !req.IsValid() {
@@ -158,7 +146,7 @@ func (h *Handler) processClientPacket(host *packet.Host, req DHCP4) error {
 	options := req.ParseOptions()
 	t := options[OptionDHCPMessageType]
 	if len(t) != 1 {
-		log.Warn("dhcp4: skiping dhcp packet with option len not 1")
+		fmt.Println("dhcp4: skiping dhcp packet with option len not 1")
 		return packet.ErrParseFrame
 	}
 
@@ -169,9 +157,9 @@ func (h *Handler) processClientPacket(host *packet.Host, req DHCP4) error {
 		serverIP = net.IP(tmp)
 	}
 
-	fields := log.Fields{"clientID": clientID, "ip": req.YIAddr(), "server": serverIP, "xid": req.XId()}
+	// fields := log.Fields{"clientID": clientID, "ip": req.YIAddr(), "server": serverIP, "xid": req.XId()}
 	if serverIP.IsUnspecified() {
-		log.WithFields(fields).Error("dhcp4: client offer invalid serverIP")
+		fmt.Printf("dhcp4: error client offer invalid serverIP=%v clientID=%v\n", serverIP, clientID)
 		return packet.ErrParseFrame
 	}
 
@@ -187,18 +175,19 @@ func (h *Handler) processClientPacket(host *packet.Host, req DHCP4) error {
 		return nil
 	}
 
-	if Debug {
-		fields["msgType"] = reqType
-		fields["mac"] = req.CHAddr()
-		log.WithFields(fields).Debug("dhcp4: client dhcp received")
-	}
+	// if Debug {
+	// fields["msgType"] = reqType
+	// fields["mac"] = req.CHAddr()
+	// log.WithFields(fields).Debug("dhcp4: client dhcp received")
+	// }
 
 	// only interested in offer packets
 	if reqType != Offer {
 		return nil
 	}
 
-	log.WithFields(fields).Info("dhcp4: client offer from another dhcp server")
+	// fmt.Printf("dhcp4: client offer from another dhcp server")
+	fastlog.NewLine("dhcp4", "client offer from another dhcp server").ByteArray("clientid", clientID).IP("ip", req.YIAddr()).Write()
 
 	// Force dhcp server to release the IP
 	if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && h.session.IsCaptured(req.CHAddr())) {

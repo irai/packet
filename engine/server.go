@@ -15,7 +15,6 @@ import (
 	"github.com/irai/packet/fastlog"
 	"github.com/irai/packet/icmp4"
 	"github.com/irai/packet/icmp6"
-	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/bpf"
 )
 
@@ -217,7 +216,7 @@ func (h *Handler) setupConn() (conn net.PacketConn, err error) {
 		bpf.RetConstant{Val: 0},
 	})
 	if err != nil {
-		log.Fatal("bpf assemble error", err)
+		panic(err)
 	}
 
 	bpf = nil // remove bpf test - June 2021
