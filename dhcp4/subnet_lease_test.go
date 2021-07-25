@@ -7,8 +7,6 @@ import (
 	"net"
 	"os"
 	"testing"
-
-	log "github.com/sirupsen/logrus"
 )
 
 const testDHCPFilename = "./testDHCPConfig.yml"
@@ -116,7 +114,7 @@ func setupSubnets() (net1 *dhcpSubnet, net2 *dhcpSubnet) {
 	// net2.printSubnet()
 
 	if net1 == nil || net2 == nil {
-		log.Fatal("cannot create subnets", err1, err2)
+		panic(fmt.Sprint("cannot create subnets", err1, err2))
 	}
 
 	return net1, net2

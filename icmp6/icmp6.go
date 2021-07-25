@@ -11,7 +11,6 @@ import (
 	"github.com/irai/packet"
 	"github.com/irai/packet/fastlog"
 	"github.com/irai/packet/icmp4"
-	log "github.com/sirupsen/logrus"
 	"inet.af/netaddr"
 
 	"golang.org/x/net/ipv6"
@@ -211,7 +210,7 @@ func (h *Handler) sendPacket(srcAddr packet.Addr, dstAddr packet.Addr, b []byte)
 	ICMP6(ip6.Payload()).SetChecksum(packet.Checksum(psh))
 
 	if _, err := h.session.Conn.WriteTo(ether, &dstAddr); err != nil {
-		log.Error("icmp failed to write ", err)
+		fmt.Println("icmp failed to write ", err)
 		return err
 	}
 
@@ -234,9 +233,14 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 
 	t := ipv6.ICMPType(icmp6Frame.Type())
 	if Debug && t != ipv6.ICMPTypeRouterAdvertisement {
-		fastlog.Strings("icmp6 : ether", ether.String())
-		fastlog.Strings("icmp6 : ip6 ", ip6Frame.String())
-		fastlog.Strings("icmp6 : icmp ", icmp6Frame.String())
+		// fastlog.Strings("icmp6 : ether", ether.String())
+		// fastlog.Strings("icmp6 : ip6 ", ip6Frame.String())
+		l := fastlog.NewLine("icmp6", "ether").Struct(ether).LF()
+		l.Module("icmp6", "ip6").Struct(ip6Frame).LF()
+		l.Module("icmp6", "icmp").Struct(icmp6Frame)
+		l.Write()
+		// fastlog.NewLine("icmp6", "ip6").Struct(ip6Frame).Write()
+		// fastlog.Strings("icmp6 : icmp ", icmp6Frame.String())
 	}
 
 	switch t {
@@ -247,7 +251,8 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 			return packet.Result{}, packet.ErrParseFrame
 		}
 		if Debug {
-			fastlog.Strings("icmp6 : neighbor advertisement from ip=", ip6Frame.Src().String(), " ", frame.String())
+			fastlog.NewLine("icmp6", "neigbor advertisement").IP("ip", ip6Frame.Src()).Struct(frame).Write()
+			// fastlog.Strings("icmp6 : neighbor advertisement from ip=", ip6Frame.Src().String(), " ", frame.String())
 		}
 
 		// Source IP is sometimes ff02::1 multicast, which means the host is nil
@@ -267,7 +272,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 			return packet.Result{}, packet.ErrParseFrame
 		}
 		if Debug {
-			fastlog.Strings("icmp6 : neighbor solicitation from ip=", ip6Frame.Src().String(), " ", frame.String())
+			fastlog.NewLine("icmp6", "neighbor solicitation").IP("ip", ip6Frame.Src()).Struct(frame).Write()
 		}
 
 		// Source address:
@@ -350,9 +355,12 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 		h.Unlock()
 
 		if Debug {
-			fastlog.Strings("icmp6 : ether", ether.String())
-			fastlog.Strings("icmp6 : ip6 ", ip6Frame.String())
-			fastlog.Strings("icmp6 : router advertisement from ip=", ip6Frame.Src().String(), " ", frame.String(), fmt.Sprintf("%+v", router.Options))
+			l := fastlog.NewLine("icmp6", "ether").Struct(ether).LF()
+			l.Module("icmp6", "ip6").Struct(ip6Frame).LF()
+			l.Module("icmp6", "router advertisement").Struct(icmp6Frame).String("options", fmt.Sprintf("%+v", router.Options))
+			l.Write()
+			// fastlog.Strings("icmp6 : ip6 ", ip6Frame.String())
+			// fastlog.Strings("icmp6 : router advertisement from ip=", ip6Frame.Src().String(), " ", frame.String(), fmt.Sprintf("%+v", router.Options))
 		}
 
 		result := packet.Result{}
@@ -368,7 +376,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 			return packet.Result{}, packet.ErrParseFrame
 		}
 		if Debug {
-			fastlog.Strings("icmp6 : router solicitation from ip=", ip6Frame.Src().String(), frame.String())
+			fastlog.NewLine("icmp6", "router solicitation").IP("ip", ip6Frame.Src()).Struct(frame).Write()
 		}
 
 		// Source address:
@@ -416,7 +424,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 		return packet.Result{}, nil
 
 	default:
-		log.Printf("icmp6 : type not implemented from ip=%s type=%v\n", ip6Frame.Src(), t)
+		fmt.Printf("icmp6 : type not implemented from ip=%s type=%v\n", ip6Frame.Src(), t)
 		return packet.Result{}, fmt.Errorf("unrecognized icmp6 type=%d: %w", t, errParseMessage)
 	}
 

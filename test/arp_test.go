@@ -8,14 +8,13 @@ import (
 	"github.com/irai/packet"
 	"github.com/irai/packet/arp"
 	"github.com/irai/packet/dhcp4"
-	log "github.com/sirupsen/logrus"
 )
 
 func TestHandler_arpcapture(t *testing.T) {
 	tc := NewTestContext()
 	defer tc.Close()
 
-	log.SetLevel(log.DebugLevel)
+	// log.SetLevel(log.DebugLevel)
 	dhcp4.Debug = true
 	packet.Debug = true
 	arp.Debug = true

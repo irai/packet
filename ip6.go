@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net"
 	"strings"
+
+	"github.com/irai/packet/fastlog"
 )
 
 // IP6 structure: see https://github.com/golang/net/blob/master/ipv6/header.go
@@ -45,6 +47,18 @@ func (p IP6) String() string {
 	b.WriteString(" class=")
 	fmt.Fprintf(&b, "%d", p.TrafficClass())
 	return b.String()
+}
+
+// Print implements fastlog struct interface
+func (p IP6) Print(line *fastlog.Line) *fastlog.Line {
+	line.Int("version", p.Version())
+	line.IP("src", p.Src())
+	line.IP("dst", p.Dst())
+	line.Int("nextHeader", p.NextHeader())
+	line.Int("len", p.PayloadLen())
+	line.Int("hopLimit", p.HopLimit())
+	line.Int("class", p.TrafficClass())
+	return line
 }
 
 func IP6MarshalBinary(p []byte, hopLimit uint8, srcIP net.IP, dstIP net.IP) IP6 {

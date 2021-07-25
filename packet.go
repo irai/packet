@@ -8,6 +8,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/irai/packet/fastlog"
 	"github.com/mdlayher/netx/rfc4193"
 	"golang.org/x/net/ipv4"
 	"inet.af/netaddr"
@@ -211,6 +212,15 @@ func (p Ether) String() string {
 	return b.String()
 }
 
+// Print implements fastlog struct interface
+func (p Ether) Print(line *fastlog.Line) *fastlog.Line {
+	line.Uint16Hex("type", p.EtherType())
+	line.MAC("src", p.Src())
+	line.MAC("dst", p.Dst())
+	line.Int("len", len(p))
+	return line
+}
+
 // EtherMarshalBinary creates a ethernet frame in at b using the values
 // It automatically allocates a buffer if b is nil or not sufficient to store a full len ethernet packet
 func EtherMarshalBinary(b []byte, hType uint16, srcMAC net.HardwareAddr, dstMAC net.HardwareAddr) Ether {
@@ -260,6 +270,17 @@ func (p IP4) TotalLen() int          { return int(binary.BigEndian.Uint16(p[2:4]
 func (p IP4) Payload() []byte        { return p[p.IHL():] }
 func (p IP4) String() string {
 	return fmt.Sprintf("version=%v src=%v dst=%v proto=%v ttl=%v tos=%v", p.Version(), p.Src(), p.Dst(), p.Protocol(), p.TTL(), p.TOS())
+}
+
+// Print implements fastlog struct interface
+func (p IP4) Print(line *fastlog.Line) *fastlog.Line {
+	line.Int("version", p.Version())
+	line.IP("src", p.Src())
+	line.IP("dst", p.Dst())
+	line.Int("proto", p.Protocol())
+	line.Int("ttl", p.TTL())
+	line.Int("tos", p.TOS())
+	return line
 }
 
 func IP4MarshalBinary(p []byte, ttl byte, src net.IP, dst net.IP) IP4 {
@@ -388,6 +409,15 @@ type UDP []byte
 
 func (p UDP) String() string {
 	return fmt.Sprintf("srcport=%d dstport=%d len=%d payloadlen=%d", p.SrcPort(), p.DstPort(), p.Len(), len(p.Payload()))
+}
+
+// Print implements fastlog interface
+func (p UDP) Print(line *fastlog.Line) *fastlog.Line {
+	line.Int("srcport", int(p.SrcPort()))
+	line.Int("dstport", int(p.DstPort()))
+	line.Int("len", int(p.Len()))
+	line.Int("payloadlen", len(p.Payload()))
+	return line
 }
 
 func (p UDP) SrcPort() uint16  { return binary.BigEndian.Uint16(p[0:2]) }

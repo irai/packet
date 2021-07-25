@@ -15,7 +15,6 @@ import (
 	"github.com/irai/packet/fastlog"
 	"github.com/irai/packet/icmp4"
 	"github.com/irai/packet/icmp6"
-	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/bpf"
 )
 
@@ -217,7 +216,7 @@ func (h *Handler) setupConn() (conn net.PacketConn, err error) {
 		bpf.RetConstant{Val: 0},
 	})
 	if err != nil {
-		log.Fatal("bpf assemble error", err)
+		panic(err)
 	}
 
 	bpf = nil // remove bpf test - June 2021
@@ -344,7 +343,7 @@ func (h *Handler) process8023Frame(ether packet.Ether) {
 		stpCount++
 		now := time.Now()
 		if stpNextLog.Before(now) {
-			fmt.Printf("packet: LLC STP protocol %s %s count=%d payload=[% x]\n", ether, llc, stpCount, llc.Payload())
+			fmt.Printf("packet: LLC STP protocol %s %s count=%d payload=[% x]\n", ether, llc, stpCount, ether[:])
 			stpNextLog = now.Add(time.Minute * 5)
 		}
 		return
@@ -356,7 +355,7 @@ func (h *Handler) process8023Frame(ether packet.Ether) {
 			fmt.Printf("packet: err invalid SNAP packet err=%s\n", err)
 			return
 		}
-		fmt.Printf("packet: LLC SNAP protocol %s %s payload=[% x]\n", ether, snap, snap.Payload())
+		fmt.Printf("packet: LLC SNAP protocol %s %s payload=[% x]\n", ether, snap, ether[:])
 		return
 	}
 
@@ -364,7 +363,7 @@ func (h *Handler) process8023Frame(ether packet.Ether) {
 	// To see these:
 	//    sudo tcpdump -vv -x not ip6 and not ip and not arp
 	//    then switch a mobile phone to airplane mode to force a network reconnect
-	fmt.Printf("packet: rcvd 802.3 LLC frame %s %s payload=[% x]\n", ether, llc, llc.Payload())
+	fmt.Printf("packet: rcvd 802.3 LLC frame %s %s payload=[% x]\n", ether, llc, ether[:])
 }
 
 // ListenAndServe listen for raw packets and invoke hooks as required
@@ -451,8 +450,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				continue
 			}
 			if packet.DebugIP4 {
-				fastlog.Strings("packet: ether ", ether.String())
-				fastlog.Strings("packet: ip4 ", ip4Frame.String())
+				fastlog.NewLine("ether", "").Struct(ether).LF().Module("ip4", "").Struct(ip4Frame).Write()
 			}
 
 			// Create host only if on same subnet
@@ -470,8 +468,9 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				continue
 			}
 			if packet.DebugIP6 {
-				fastlog.Strings("packet: ether ", ether.String())
-				fastlog.Strings("packet: ip6 ", ip6Frame.String())
+				fastlog.NewLine("ether", "").Struct(ether).LF().Module("ip6", "").Struct(ip6Frame).Write()
+				// fastlog.Strings("packet: ether ", ether.String())
+				// fastlog.Strings("packet: ip6 ", ip6Frame.String())
 			}
 
 			l4Proto = ip6Frame.NextHeader()
@@ -520,12 +519,12 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			// See frames here:
 			// http://realtek.info/pdf/rtl8324.pdf  page 43
 			//
-			fmt.Printf("packet: RRCP frame %s payload=\"% x\"\n", ether, ether.Payload())
+			fmt.Printf("packet: RRCP frame %s payload=[% x]\n", ether, ether[:])
 			continue
 
 		case 0x88cc: // Link Layer Discovery Protocol (LLDP)
 			// not sure if we will ever receive these in a home LAN!
-			fmt.Printf("packet: LLDP frame %s payload=\"% x\"\n", ether, ether.Payload())
+			fmt.Printf("packet: LLDP frame %s payload=[% x]\n", ether, ether[:])
 			continue
 
 		case 0x890d: // Fast Roaming Remote Request (802.11r)
@@ -533,7 +532,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			// allows a client device to roam quickly in environments implementing WPA2 Enterprise security,
 			// by ensuring that the client device does not need to re-authenticate to the RADIUS server
 			// every time it roams from one access point to another.
-			fmt.Printf("packet: 802.11r Fast Roaming frame %s payload=\"% x\"\n", ether, ether.Payload())
+			fmt.Printf("packet: 802.11r Fast Roaming frame %s payload=[% x]\n", ether, ether[:])
 			continue
 
 		default:
@@ -587,13 +586,11 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				continue
 			}
 			if packet.DebugUDP {
-				fastlog.Strings("packet: ether ", ether.String())
 				if ip4Frame != nil {
-					fastlog.Strings("packet: ip4 ", ip4Frame.String())
+					fastlog.NewLine("ether", "").Struct(ether).LF().Module("ip4", "").Struct(ip4Frame).Module("udp", "").Struct(udp).Write()
 				} else {
-					fastlog.Strings("packet: ip6 ", ip6Frame.String())
+					fastlog.NewLine("ether", "").Struct(ether).LF().Module("ip6", "").Struct(ip6Frame).Module("udp", "").Struct(udp).Write()
 				}
-				fastlog.Strings("packet: udp ", udp.String())
 			}
 
 			udpSrcPort := udp.SrcPort()
@@ -615,14 +612,13 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 			case udpDstPort == 546 || udpDstPort == 547: // DHCP6
 				// fmt.Printf("ether : %s", ether)
-				fastlog.Strings("ether : ", ether.String())
 				if ip4Frame != nil {
-					fastlog.Strings("ip4   : ", ip4Frame.String())
+					fastlog.NewLine("ether", "").Struct(ether).LF().Module("ip4", "").Struct(ip4Frame).Module("udp", "").Struct(udp).Write()
 				} else {
-					fastlog.Strings("ip6   : ", ip6Frame.String())
+					fastlog.NewLine("ether", "").Struct(ether).LF().Module("ip6", "").Struct(ip6Frame).Module("udp", "").Struct(udp).Write()
 				}
-				fastlog.Strings("udp   : ", udp.String(), fmt.Sprintf(" payload=[% x]\n", udp.Payload()))
-				fastlog.Strings("packet: dhcp6 packet - do nothing ", host.String())
+				fastlog.NewLine("packet", "ignore dhcp6 packet").ByteArray("payload", udp.Payload()).Write()
+				// fastlog.Strings("packet: dhcp6 packet - do nothing ", host.String())
 
 			case udpSrcPort == 53: // DNS response
 				// TODO: move this to background goroutine
@@ -742,8 +738,10 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 		d3 = time.Since(startTime)
 		if d3 > time.Microsecond*400 {
-			fastlog.Strings("packet: warning > 400 microseconds: l3=", d1.String(), " l4=", d2.String(), " total=", d3.String(),
-				fmt.Sprintf(" l4proto=%x ethertype=%x", l4Proto, ether.EtherType()))
+			fastlog.NewLine("packet", "warning > 400microseconds").String("l3", d1.String()).String("l4", d2.String()).String("total", d3.String()).
+				Int("l4proto", l4Proto).Uint16Hex("ethertype", ether.EtherType()).Write()
+			// fastlog.Strings("packet: warning > 400 microseconds: l3=", d1.String(), " l4=", d2.String(), " total=", d3.String(),
+			// fmt.Sprintf(" l4proto=%x ethertype=%x", l4Proto, ether.EtherType()))
 		}
 
 		/****

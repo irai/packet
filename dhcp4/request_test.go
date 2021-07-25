@@ -7,15 +7,13 @@ import (
 	"testing"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/irai/packet"
 	"github.com/irai/packet/arp"
 )
 
 func Test_requestSimple(t *testing.T) {
 
-	log.SetLevel(log.DebugLevel)
+	// log.SetLevel(log.DebugLevel)
 	packet.DebugIP4 = false
 	packet.Debug = true
 	Debug = true

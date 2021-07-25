@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/irai/packet"
-	log "github.com/sirupsen/logrus"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -97,7 +96,7 @@ func newSubnet(config SubnetConfig) (*dhcpSubnet, error) {
 	subnet.nextIP = uint(subnet.FirstIP[3])
 
 	if Debug {
-		log.Tracef("dhcp4: createSubnet %+v", config)
+		fmt.Printf("dhcp4: createSubnet %+v", config)
 	}
 
 	// Common options request:
@@ -115,7 +114,7 @@ func newSubnet(config SubnetConfig) (*dhcpSubnet, error) {
 	}
 
 	if Debug {
-		log.Infof("dhcp4: subnet lan=%s gw=%s dhcp=%s dns=%s dur=%v options=%+v",
+		fmt.Printf("dhcp4: subnet lan=%s gw=%s dhcp=%s dns=%s dur=%v options=%+v",
 			subnet.LAN, subnet.DefaultGW, subnet.DHCPServer, subnet.DNSServer, subnet.Duration, subnet.options)
 	}
 
@@ -313,13 +312,13 @@ func (h *Handler) saveConfig(fname string) (err error) {
 
 	stream, err := yaml.Marshal(&table)
 	if err != nil {
-		log.Errorf("Cannot marshall dhcp file: %s error %s", fname, err)
+		fmt.Printf("error cannot marshall dhcp file: %s error %s", fname, err)
 		return err
 	}
 
 	err = ioutil.WriteFile(fname, stream, os.ModePerm)
 	if err != nil {
-		log.Errorf("Cannot write dhcp file: %s error %s", fname, err)
+		fmt.Printf("error cannot write dhcp file: %s error %s", fname, err)
 		return err
 	}
 

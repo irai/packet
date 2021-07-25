@@ -8,14 +8,13 @@ import (
 	"github.com/irai/packet"
 	"github.com/irai/packet/arp"
 	"github.com/irai/packet/dhcp4"
-	log "github.com/sirupsen/logrus"
 )
 
 func TestHandler_captureNormal(t *testing.T) {
 	tc := NewTestContext()
 	defer tc.Close()
 
-	log.SetLevel(log.DebugLevel)
+	// log.SetLevel(log.DebugLevel)
 	dhcp4.Debug = false
 	packet.Debug = true
 	arp.Debug = true
@@ -71,7 +70,7 @@ func TestHandler_captureDHCP(t *testing.T) {
 	tc := NewTestContext()
 	defer tc.Close()
 
-	log.SetLevel(log.DebugLevel)
+	// log.SetLevel(log.DebugLevel)
 	dhcp4.Debug = false
 	packet.Debug = true
 	arp.Debug = true

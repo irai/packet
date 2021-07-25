@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/irai/packet"
-	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -70,8 +69,8 @@ func configChanged(config SubnetConfig, current SubnetConfig) bool {
 		(config.Duration != 0 && config.Duration != current.Duration) ||
 		(config.FirstIP != nil && !config.FirstIP.Equal(current.FirstIP)) ||
 		(config.LastIP != nil && !config.LastIP.Equal(current.LastIP)) {
-		log.Infof("dhcp4: config parameters changed  config=%+v", config)
-		log.Infof("dhcp4: config parameters changed current=%+v", current)
+		fmt.Printf("dhcp4: config parameters changed  config=%+v", config)
+		fmt.Printf("dhcp4: config parameters changed current=%+v", current)
 		return true
 	}
 	return false
@@ -159,10 +158,10 @@ func (config Config) New(session *packet.Session, netfilterIP net.IPNet, dnsServ
 	// Add static and classless route options
 	h.net2.appendRouteOptions(h.net1.DefaultGW, h.net1.LAN.Mask, h.net2.DefaultGW)
 
-	if Debug {
-		log.WithFields(log.Fields{"netfilterLAN": h.net2.LAN.String(), "netfilterGW": h.net2.DefaultGW, "firstIP": h.net2.FirstIP,
-			"lastIP": h.net2.LastIP}).Debug("dhcp4: Server Config")
-	}
+	// if Debug {
+	// log.WithFields(log.Fields{"netfilterLAN": h.net2.LAN.String(), "netfilterGW": h.net2.DefaultGW, "firstIP": h.net2.FirstIP,
+	// "lastIP": h.net2.LastIP}).Debug("dhcp4: Server Config")
+	// }
 
 	h.session = session
 	// session.HandlerDHCP4 = h
@@ -275,12 +274,12 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (pac
 	options := dhcpFrame.ParseOptions()
 	var reqType MessageType
 	if t := options[OptionDHCPMessageType]; len(t) != 1 {
-		log.Warn("dhcp4 : skiping dhcp packet with len not 1")
+		fmt.Println("dhcp4 : skiping dhcp packet with len not 1")
 		return packet.Result{}, packet.ErrParseFrame
 	} else {
 		reqType = MessageType(t[0])
 		if reqType < Discover || reqType > Inform {
-			log.Warn("dhcp4 : skiping dhcp packet invalid type ", reqType)
+			fmt.Println("dhcp4 : skiping dhcp packet invalid type ", reqType)
 			return packet.Result{}, packet.ErrParseFrame
 		}
 	}
@@ -308,10 +307,10 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (pac
 		response = h.handleRelease(dhcpFrame, options)
 
 	case Offer:
-		log.Error("dhcp4: got dhcp offer")
+		fmt.Println("dhcp4: error got dhcp offer")
 
 	default:
-		log.Warnf("dhcp4: message type not supported %v", reqType)
+		fmt.Printf("dhcp4: message type not supported %v", reqType)
 	}
 
 	h.Unlock()

@@ -6,6 +6,7 @@ import (
 	"net"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/fastlog"
 	"golang.org/x/net/ipv6"
 )
 
@@ -27,6 +28,15 @@ func (p ICMP6) RestOfHeader() []byte  { return p[4:8] }
 func (p ICMP6) Payload() []byte       { return p[8:] }
 func (p ICMP6) String() string {
 	return fmt.Sprintf("type=%v code=%v checksum=%x payloadLen=%v\n", p.Type(), p.Code(), p.Checksum(), len(p.Payload()))
+}
+
+// Print implements fastlog interface
+func (p ICMP6) Print(line *fastlog.Line) *fastlog.Line {
+	line.Uint8("type", p.Type())
+	line.Uint8("code", p.Code())
+	line.Uint16Hex("checksum", p.Checksum())
+	line.Int("len", len(p.Payload()))
+	return line
 }
 
 type ICMPEcho []byte
@@ -58,8 +68,16 @@ type ICMP6RouterSolicitation []byte
 
 func (p ICMP6RouterSolicitation) IsValid() bool { return len(p) >= 8 }
 func (p ICMP6RouterSolicitation) String() string {
-	return fmt.Sprintf("type=na code=%d sourceLLA=%s", p.Code(), p.SourceLLA())
+	return fmt.Sprintf("type=ra code=%d sourceLLA=%s", p.Code(), p.SourceLLA())
 }
+
+func (p ICMP6RouterSolicitation) Print(line *fastlog.Line) *fastlog.Line {
+	line.String("type", "ra")
+	line.Uint8("code", p.Code())
+	line.MAC("targetLLA", p.SourceLLA())
+	return line
+}
+
 func (p ICMP6RouterSolicitation) Type() uint8   { return uint8(p[0]) }
 func (p ICMP6RouterSolicitation) Code() byte    { return p[1] }
 func (p ICMP6RouterSolicitation) Checksum() int { return int(binary.BigEndian.Uint16(p[2:4])) }
@@ -115,6 +133,16 @@ func (p ICMP6NeighborAdvertisement) IsValid() bool { return len(p) >= 24 }
 func (p ICMP6NeighborAdvertisement) String() string {
 	return fmt.Sprintf("type=na code=%d targetIP=%s targetLLA=%s", p.Code(), p.TargetAddress(), p.TargetLLA())
 }
+
+// Print implements fastlog interface
+func (p ICMP6NeighborAdvertisement) Print(line *fastlog.Line) *fastlog.Line {
+	line.String("type", "na")
+	line.Uint8("code", p.Code())
+	line.IP("targetIP", p.TargetAddress())
+	line.MAC("targetLLA", p.TargetLLA())
+	return line
+}
+
 func (p ICMP6NeighborAdvertisement) Type() uint8           { return uint8(p[0]) }
 func (p ICMP6NeighborAdvertisement) Code() byte            { return p[1] }
 func (p ICMP6NeighborAdvertisement) Checksum() int         { return int(binary.BigEndian.Uint16(p[2:4])) }
@@ -150,8 +178,18 @@ type ICMP6NeighborSolicitation []byte
 
 func (p ICMP6NeighborSolicitation) IsValid() bool { return len(p) >= 24 }
 func (p ICMP6NeighborSolicitation) String() string {
-	return fmt.Sprintf("type=na code=%d targetIP=%s sourceLLA=%s", p.Code(), p.TargetAddress(), p.SourceLLA())
+	return fmt.Sprintf("type=ns code=%d targetIP=%s sourceLLA=%s", p.Code(), p.TargetAddress(), p.SourceLLA())
 }
+
+// Print implements fastlog interface
+func (p ICMP6NeighborSolicitation) Print(line *fastlog.Line) *fastlog.Line {
+	line.String("type", "ns")
+	line.Uint8("code", p.Code())
+	line.IP("targetIP", p.TargetAddress())
+	line.MAC("sourceLLA", p.SourceLLA())
+	return line
+}
+
 func (p ICMP6NeighborSolicitation) Type() uint8           { return uint8(p[0]) }
 func (p ICMP6NeighborSolicitation) Code() byte            { return p[1] }
 func (p ICMP6NeighborSolicitation) Checksum() int         { return int(binary.BigEndian.Uint16(p[2:4])) }

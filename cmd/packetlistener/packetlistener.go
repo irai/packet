@@ -8,10 +8,9 @@ import (
 	"net"
 	"net/http"
 	_ "net/http/pprof"
+	"os"
 	"runtime"
 	"time"
-
-	log "github.com/sirupsen/logrus"
 
 	"github.com/irai/packet"
 	"github.com/irai/packet/arp"
@@ -53,7 +52,7 @@ type handlers struct {
 // 		go tool pprof http://localhost:6060/debug/pprof/mutex
 func pprof() {
 	runtime.SetMutexProfileFraction(5)
-	log.Error("profile http server terminated: ", http.ListenAndServe("localhost:6060", nil))
+	fmt.Println("profile http server terminated: ", http.ListenAndServe("localhost:6060", nil))
 }
 
 func main() {
@@ -62,7 +61,6 @@ func main() {
 	go pprof()
 
 	packet.Debug = true
-	log.SetLevel(log.DebugLevel)
 
 	fmt.Printf("packetlistener: Listen and send lan packets\n")
 	fmt.Printf("Using interface %v \n", *nic)
@@ -118,28 +116,32 @@ func main() {
 	// ARP
 	handlers.arp, err = arp.New(handlers.engine.Session())
 	if err != nil {
-		log.Fatalf("Failed to create arp handler nic=%s handler: %s", *nic, err)
+		fmt.Printf("Failed to create arp handler nic=%s handler: %s", *nic, err)
+		os.Exit(-1)
 	}
 	handlers.engine.AttachARP(handlers.arp)
 
 	// ICMPv4
 	handlers.icmp4, err = icmp4.New(handlers.engine.Session())
 	if err != nil {
-		log.Fatalf("Failed to create icmp nic=%s handler: %s", *nic, err)
+		fmt.Printf("Failed to create icmp nic=%s handler: %s", *nic, err)
+		os.Exit(-1)
 	}
 	handlers.engine.AttachICMP4(handlers.icmp4)
 
 	// ICMPv6
 	handlers.icmp6, err = icmp6.New(handlers.engine.Session())
 	if err != nil {
-		log.Fatalf("Failed to create icmp6 nic=%s handler: %s", *nic, err)
+		fmt.Printf("Failed to create icmp6 nic=%s handler: %s", *nic, err)
+		os.Exit(-1)
 	}
 	handlers.engine.AttachICMP6(handlers.icmp6)
 
 	// DHCP4
 	handlers.dhcp4, err = dhcp4.New(handlers.engine.Session(), handlers.netfilterIP, packet.CloudFlareDNS1, "./dhcpconfig.yaml")
 	if err != nil {
-		log.Fatalf("Failed to create dhcp4 handler: netfilterIP=%s error=%s", handlers.netfilterIP, err)
+		fmt.Printf("Failed to create dhcp4 handler: netfilterIP=%s error=%s", handlers.netfilterIP, err)
+		os.Exit(-1)
 	}
 	handlers.engine.AttachDHCP4(handlers.dhcp4)
 
