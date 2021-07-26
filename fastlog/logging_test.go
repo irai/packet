@@ -2,10 +2,40 @@ package fastlog
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"net"
 	"testing"
 )
+
+func TestLine_PrintUint32(t *testing.T) {
+	tests := []uint32{
+		4294967295,
+		65535,
+		0,
+		1,
+		10,
+		100,
+		1000,
+		10000,
+		100000,
+		1000000,
+		10000000,
+		100000000,
+		1000000000,
+		324,
+		304,
+		320,
+	}
+
+	for _, test := range tests {
+		l := &Line{buffer: [1024]byte{}}
+		l = l.printUint32(test)
+		if want := fmt.Sprint(test); string(l.buffer[:l.index]) != want {
+			t.Errorf("got printUint32(%d) got=%s, want=%s", test, l.buffer[:l.index], want)
+		}
+	}
+}
 
 func TestLine_Write(t *testing.T) {
 	mac2 := net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0xaf}

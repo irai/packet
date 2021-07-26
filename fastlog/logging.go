@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"reflect"
 	"sync"
 )
 
@@ -89,11 +90,9 @@ func (l *Line) Write() error {
 }
 
 func (l *Line) String(name string, value string) *Line {
-	l.buffer[l.index] = ' '
-	l.index++
+	l.appendByte(' ')
 	l.index = l.index + copy(l.buffer[l.index:], name)
-	l.buffer[l.index] = '='
-	l.index++
+	l.appendByte('=')
 	l.index = l.index + copy(l.buffer[l.index:], value)
 	return l
 }
@@ -121,7 +120,41 @@ func (l *Line) MAC(name string, value net.HardwareAddr) *Line {
 }
 
 func (l *Line) Struct(value LineLog) *Line {
-	return value.Print(l)
+	if value != nil {
+		return value.Print(l)
+	}
+	return l
+}
+
+func (l *Line) Stringer(value fmt.Stringer) *Line {
+	if value == nil || reflect.ValueOf(value).IsNil() {
+		return l
+	}
+	l.appendByte(' ')
+	l.index = l.index + copy(l.buffer[l.index:], value.String())
+	return l
+}
+
+func (l *Line) Any(value interface{}) *Line {
+	l.appendByte(' ')
+	l.index = l.index + copy(l.buffer[l.index:], fmt.Sprintf("%v", value))
+	return l
+}
+
+// printUint32 copied from https://cs.opensource.google/go/x/net/+/master:dns/dnsmessage/message.go
+func (l *Line) printUint32(value uint32) *Line {
+	// Max value is 4294967295.
+	buf := make([]byte, 10)
+	for b, d := buf, uint32(1000000000); d > 0; d /= 10 {
+		b[0] = byte(value/d%10 + '0')
+		if b[0] == '0' && len(b) == len(buf) && len(buf) > 1 {
+			buf = buf[1:]
+		}
+		b = b[1:]
+		value %= d
+	}
+	l.index = l.index + copy(l.buffer[l.index:], buf)
+	return l
 }
 
 func (l *Line) Uint8(name string, value uint8) *Line {
@@ -129,6 +162,22 @@ func (l *Line) Uint8(name string, value uint8) *Line {
 	l.index = l.index + copy(l.buffer[l.index:], name)
 	l.appendByte('=')
 	l.index = l.index + copy(l.buffer[l.index:], byteAscii[value])
+	return l
+}
+
+func (l *Line) Uint16(name string, value uint16) *Line {
+	l.appendByte(' ')
+	l.index = l.index + copy(l.buffer[l.index:], name)
+	l.appendByte('=')
+	l.printUint32(uint32(value))
+	return l
+}
+
+func (l *Line) Uint32(name string, value uint32) *Line {
+	l.appendByte(' ')
+	l.index = l.index + copy(l.buffer[l.index:], name)
+	l.appendByte('=')
+	l.printUint32(uint32(value))
 	return l
 }
 
