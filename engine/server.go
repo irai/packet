@@ -677,10 +677,16 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 					fmt.Printf("llmnr : ipv6 host %s\n", ipv6Host.ToString(true))
 				}
 
-			case udpSrcPort == 137 || udpDstPort == 137:
-				// NBNS
-				// do nothing
-				fmt.Printf("proto : NBNS %s\n", host)
+			case udpDstPort == 137 || udpDstPort == 138:
+				// Netbions NBNS
+				entry, err := h.DNSHandler.ProcessNBNS(host, ether, udp.Payload())
+				if err != nil {
+					fmt.Printf("packet: error processing ssdp: %s\n", err)
+					break
+				}
+				if entry.Name != "" {
+					fmt.Printf("proto : NBNS %s %s\n", host, entry.Name)
+				}
 
 			case udpSrcPort == 123:
 				// Network time synchonization protocol

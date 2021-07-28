@@ -131,12 +131,12 @@ func (h *DNSHandler) SendNBNSQuery(srcAddr packet.Addr, dstAddr packet.Addr, nam
 //
 // node status request is a standard dns question packet
 // with class set to 0x21 (NBNS node status request).
-func (h *DNSHandler) SendNBNSNodeStatus(srcAddr packet.Addr, dstAddr packet.Addr) (err error) {
+func (h *DNSHandler) SendNBNSNodeStatus() (err error) {
 	const name = `*               `
 	const word = uint16(responseRequest | opcodeQuery | nmflagsUnicast | rcodeOK)
 	sequence++
 	p := dnsQueryMarshal(sequence, word, encodeNBNSName(name), questionTypeNodeStatus)
-	return h.sendNBNS(srcAddr, dstAddr, p)
+	return h.sendNBNS(h.session.NICInfo.HostAddr4, packet.IP4BroadcastAddr, p)
 }
 
 func (h *DNSHandler) sendNBNS(srcAddr packet.Addr, dstAddr packet.Addr, p DNS) (err error) {
