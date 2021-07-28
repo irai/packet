@@ -10,8 +10,11 @@ import (
 	"sync"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/fastlog"
 	"inet.af/netaddr"
 )
+
+const module = "dns"
 
 var Debug bool
 
@@ -61,6 +64,13 @@ type DNSEntry struct {
 	IP6Records   map[netaddr.IP]IPResourceRecord
 	CNameRecords map[string]NameResourceRecord
 	PTRRecords   map[string]IPResourceRecord
+}
+
+// NameEntry holds a name entry
+type NameEntry struct {
+	Addr  packet.Addr
+	Name  string
+	Model string
 }
 
 // copy returns a deep copy of DNSEntry
@@ -175,6 +185,18 @@ func (p DNS) String() string {
 	return fmt.Sprintf("qr=%v tc=%v rcode=%v qdcount=%d ancount=%d nscount=%d arcount=%d", p.QR(), p.TC(), p.ResponseCode(), p.QDCount(), p.ANCount(), p.NSCount(), p.ARCount())
 }
 
+func (p DNS) Print(l *fastlog.Line) *fastlog.Line {
+	l.Uint16("tranid", p.TransactionID())
+	l.Bool("qr", p.QR())
+	l.Bool("rc", p.TC())
+	l.Int("rcode", p.ResponseCode())
+	l.Uint16("qdcount", p.QDCount())
+	l.Uint16("ancount", p.ANCount())
+	l.Uint16("nscount", p.NSCount())
+	l.Uint16("arcount", p.ARCount())
+	return l
+}
+
 func (p DNS) TransactionID() uint16 { return binary.BigEndian.Uint16(p[:2]) }
 func (p DNS) QR() bool              { return p[2]&0x80 != 0 }                    // 1 - query ; 0 - response
 func (p DNS) OpCode() int           { return int(p[2]>>3) & 0x0F }               // OpCode
@@ -197,25 +219,18 @@ func newDNSEntry() (entry DNSEntry) {
 	return entry
 }
 
-func DNSQueryMarshal(tranID uint16, opcode byte, question string) []byte {
+func dnsQueryMarshal(tranID uint16, flags uint16, name string, questionType uint16) DNS {
 	b := make([]byte, 512)
 	binary.BigEndian.PutUint16(b[0:2], tranID)
-	b[2] = 1 << 5 // query
-	b[2] |= opcode << 3
-	b[2] |= 1 << 2                        // AA answer
-	b[2] |= 0 << 1                        // Truncated answer
-	b[2] |= 0 << 0                        // Recursion desirable
-	binary.BigEndian.PutUint32(b[4:6], 1) // QD Count
-
-	// RFC 6762, section 18.12.  Repurposing of Top Bit of qclass in Question
-	// Section
-	//
-	// In the Question Section of a Multicast DNS query, the top bit of the qclass
-	// field is used to indicate that unicast responses are preferred for this
-	// particular question.  (See Section 5.4.)
-	qclass := uint16(1 << 15)
-	l := encode(1, qclass, []byte(question), b, 12)
-	return b[:12+l]
+	binary.BigEndian.PutUint16(b[2:4], flags)
+	binary.BigEndian.PutUint16(b[4:6], 1) // QDcount
+	// binary.BigEndian.PutUint16(b[6:8], 0)   // ANCount
+	// binary.BigEndian.PutUint16(b[8:10], 0)  // NScount
+	// binary.BigEndian.PutUint16(b[10:12], 0) // ARcount
+	n := copy(b[14:], []byte(name))
+	binary.BigEndian.PutUint16(b[14+n:], questionType)
+	binary.BigEndian.PutUint16(b[16+n:], questionClassInternet)
+	return b
 }
 
 func (p DNS) decode() (e DNSEntry, err error) {

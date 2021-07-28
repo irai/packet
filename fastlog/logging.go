@@ -137,7 +137,7 @@ func (l *Line) Stringer(value fmt.Stringer) *Line {
 
 func (l *Line) Any(value interface{}) *Line {
 	l.appendByte(' ')
-	l.index = l.index + copy(l.buffer[l.index:], fmt.Sprintf("%v", value))
+	l.index = l.index + copy(l.buffer[l.index:], fmt.Sprintf("%+v", value))
 	return l
 }
 
@@ -154,6 +154,18 @@ func (l *Line) printUint32(value uint32) *Line {
 		value %= d
 	}
 	l.index = l.index + copy(l.buffer[l.index:], buf)
+	return l
+}
+
+func (l *Line) Bool(name string, value bool) *Line {
+	l.appendByte(' ')
+	l.index = l.index + copy(l.buffer[l.index:], name)
+	l.appendByte('=')
+	if value {
+		l.index = l.index + copy(l.buffer[l.index:], "true")
+	} else {
+		l.index = l.index + copy(l.buffer[l.index:], "false")
+	}
 	return l
 }
 
