@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net"
 	"strings"
+
+	"github.com/irai/packet/fastlog"
 )
 
 // Addr is a common type to hold the IP and MAC pair
@@ -30,6 +32,15 @@ func (a Addr) String() string {
 		fmt.Fprintf(&b, "%d", a.Port)
 	}
 	return b.String()
+}
+
+func (a Addr) Print(l *fastlog.Line) *fastlog.Line {
+	l.MAC("mac", a.MAC)
+	l.IP("ip", a.IP)
+	if a.Port != 0 {
+		l.Uint16("port", a.Port)
+	}
+	return l
 }
 
 // Network returns the address's network name, "raw".

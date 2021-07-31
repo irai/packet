@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"fmt"
 	"net"
-	"strings"
 	"time"
 
+	"github.com/irai/packet/fastlog"
 	"inet.af/netaddr"
 )
 
@@ -35,53 +35,34 @@ type Host struct {
 }
 
 func (e *Host) String() string {
-	return e.ToString(false) // summary fields
+	line := fastlog.NewLine("", "")
+	e.Print(line)
+	return line.ToString()
 }
 
-func (e *Host) ToString(all bool) string {
-	var b strings.Builder
-	b.Grow(180)
-	b.WriteString("mac=")
-	b.WriteString(e.Addr.MAC.String())
-	b.WriteString(" ip=")
-	b.WriteString(e.Addr.IP.String())
-	if e.Online {
-		b.WriteString(" online=true")
-	} else {
-		b.WriteString(" online=false")
-	}
-	if e.MACEntry.Captured {
-		b.WriteString(" captured=true stage4=")
-	} else {
-		b.WriteString(" captured=false stage4=")
-	}
-	b.WriteString(e.HuntStage.String())
+func (e Host) Print(l *fastlog.Line) *fastlog.Line {
+	l.MAC("mac", e.Addr.MAC)
+	l.IP("ip", e.Addr.IP)
+	l.Bool("online", e.Online)
+	l.Bool("captured", e.MACEntry.Captured)
+	l.String("stage", e.HuntStage.String())
 	if e.DHCP4Name != "" {
-		b.WriteString(" name=")
-		b.WriteString(e.DHCP4Name)
+		l.String("name", e.DHCP4Name)
 	}
-	b.WriteString(" lastSeen=")
-	b.WriteString(time.Since(e.LastSeen).String())
-	if !all {
-		return b.String()
-	}
+	l.String("lastSeen", time.Since(e.LastSeen).String())
 	if e.MDNSName != "" {
-		b.WriteString(" mdnsname=")
-		b.WriteString(e.MDNSName)
+		l.String("mdnsname", e.MDNSName)
 	}
 	if e.UPNPName != "" {
-		b.WriteString(" upnpname=")
-		b.WriteString(e.UPNPName)
+		l.String("upnpname", e.UPNPName)
 	}
 	if e.Model != "" {
-		b.WriteString(" model=")
-		b.WriteString(e.Model)
+		l.String("model", e.Model)
 	}
 	if e.Manufacturer != "" {
-		b.WriteString(" manufacturer=")
-		b.WriteString(e.Manufacturer)
+		l.String("manufaturer", e.Manufacturer)
 	}
-	return b.String()
+	return l
 }
 
 // HuntStage holds the host hunt stage
@@ -131,7 +112,7 @@ func (h *Session) printHostTable() {
 	count := 0
 	for _, v := range h.MACTable.Table {
 		for _, host := range v.HostList {
-			fmt.Printf("host %s\n", host.ToString(true)) // all fields available
+			fastlog.NewLine("packet", "host").Struct(host).Write()
 			count++
 		}
 	}

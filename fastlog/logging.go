@@ -63,9 +63,11 @@ func (l *Line) Module(name string, msg string) *Line {
 }
 
 func (l *Line) newModule(module string, msg string) *Line {
-	copy(l.buffer[l.index:], "      :")
-	copy(l.buffer[l.index:l.index+6], module)
-	l.index = l.index + 7
+	if module != "" {
+		copy(l.buffer[l.index:], "      :")
+		copy(l.buffer[l.index:l.index+6], module)
+		l.index = l.index + 7
+	}
 	if msg != "" {
 		// l.index = l.index + copy(l.buffer[l.index:], " msg=\"")
 		l.appendByte(' ')
@@ -82,9 +84,19 @@ func (l *Line) LF() *Line {
 	return l
 }
 
+// ToString converts the buffer to string and return the buffer to the pool
+func (l *Line) ToString() string {
+	str := string(l.buffer[:l.index])
+	l.index = copy(l.buffer[:], "invalid buffer freed via ToString()") // guarding against reuse by caller
+	Std.lines.Put(l)
+	return str
+}
+
+// Write writes the buffer and return the buffer to the pool
 func (l *Line) Write() error {
 	l.buffer[l.index] = '\n'
 	_, err := Std.Out.Write(l.buffer[:l.index+1])
+	l.index = copy(l.buffer[:], "invalid buffer freed via Write()") // guarding against reuse by caller
 	Std.lines.Put(l)
 	return err
 }
@@ -94,6 +106,13 @@ func (l *Line) String(name string, value string) *Line {
 	l.index = l.index + copy(l.buffer[l.index:], name)
 	l.appendByte('=')
 	l.index = l.index + copy(l.buffer[l.index:], value)
+	return l
+}
+
+func (l *Line) Error(value error) *Line {
+	l.index = l.index + copy(l.buffer[l.index:], " error=[")
+	l.index = l.index + copy(l.buffer[l.index:], value.Error())
+	l.appendByte(']')
 	return l
 }
 

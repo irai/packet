@@ -366,6 +366,152 @@ func (h *Handler) process8023Frame(ether packet.Ether) {
 	fmt.Printf("packet: rcvd 802.3 LLC frame %s %s payload=[% x]\n", ether, llc, ether[:])
 }
 
+func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.UDP) (*packet.Host, bool, error) {
+	udpSrcPort := udp.SrcPort()
+	udpDstPort := udp.DstPort()
+	var err error
+	var notify bool
+	var result packet.Result
+
+	/**
+	var ip4Frame packet.IP4
+	var ip6Frame packet.IP6
+	if ether.EtherType() == syscall.ETH_P_IP {
+		ip4Frame = packet.IP4(ether.Payload())
+	} else {
+		ip6Frame = packet.IP6(ether.Payload())
+	}
+	**/
+
+	switch {
+	case udpDstPort == packet.DHCP4ServerPort || udpDstPort == packet.DHCP4ClientPort: // DHCP4 packet?
+		// if udp.DstPort() == packet.DHCP4ServerPort || udp.DstPort() == packet.DHCP4ClientPort {
+		if result, err = h.DHCP4Handler.ProcessPacket(host, ether, udp.Payload()); err != nil {
+			fmt.Printf("packet: error processing dhcp4: %s\n", err)
+		}
+		if result.Update {
+			if result.IsRouter { // IsRouter is true if this is a new host from a DHCP request
+				host, _ = h.session.FindOrCreateHost(result.FrameAddr)
+			}
+			if h.lockAndProcessDHCP4Update(host, result) {
+				notify = true
+			}
+		}
+
+	case udpDstPort == 546 || udpDstPort == 547: // DHCP6
+		fastlog.NewLine("ether", "dhcp6 packet").Struct(ether).LF().Module("udp", "dhcp6 packet").Struct(udp).Write()
+		fastlog.NewLine("packet", "ignore dhcp6 packet").ByteArray("payload", udp.Payload()).Write()
+
+	case udpSrcPort == 53: // DNS response
+		dnsEntry, err := h.DNSHandler.ProcessDNS(host, ether, udp.Payload())
+		if err != nil {
+			fmt.Printf("packet: error processing dns: %s\n", err)
+			break
+		}
+		if dnsEntry.Name != "" {
+			h.sendDNSNotification(dnsEntry)
+		}
+
+	case udpDstPort == 53: // DNS request
+	// do nothing
+
+	case udpSrcPort == 5353 || udpDstPort == 5353:
+		// Multicast DNS (MDNS)
+		if host != nil {
+			ipv4Host, ipv6Host, err := h.DNSHandler.ProcessMDNS(host, ether, udp.Payload())
+			if err != nil {
+				fmt.Printf("packet: error processing mdns: %s\n", err)
+				break
+			}
+			if ipv4Host.MDNSName != "" {
+				host.MACEntry.Row.Lock()
+				if host.MDNSName != ipv4Host.MDNSName {
+					host.MDNSName = ipv4Host.MDNSName
+					notify = true
+				}
+				if host.Model == "" { // only update if no model yet
+					host.Model = ipv4Host.Model
+					notify = true
+				}
+				host.MACEntry.Row.Unlock()
+				if packet.Debug && notify {
+					fastlog.NewLine("packet", "mdns update").Struct(host.Addr).String("name", ipv4Host.MDNSName).String("model", ipv4Host.Model).Write()
+					if ipv6Host.Addr.IP != nil {
+						fastlog.NewLine("packet", "mdns ipv6 ignoring host").Struct(ipv6Host).Write()
+					}
+				}
+			}
+		}
+
+	case udpSrcPort == 5252 || udpDstPort == 5252:
+		// Link Local Multicast Name Resolution (LLMNR)
+		fastlog.NewLine("proto", "LLMNR").Struct(host).Write()
+		ipv4Host, ipv6Host, err := h.DNSHandler.ProcessMDNS(host, ether, udp.Payload())
+		if err != nil {
+			fmt.Printf("packet: error processing mdns: %s\n", err)
+			break
+		}
+		if ipv4Host.MDNSName != "" {
+			fastlog.NewLine("llmnr", "ipv4 host").Struct(ipv4Host).Write()
+		}
+		if ipv6Host.MDNSName != "" {
+			fastlog.NewLine("llmnr", "ipv6 host").Struct(ipv6Host).Write()
+		}
+
+	case udpDstPort == 137 || udpDstPort == 138:
+		// Netbions NBNS
+		entry, err := h.DNSHandler.ProcessNBNS(host, ether, udp.Payload())
+		if err != nil {
+			fmt.Printf("packet: error processing ssdp: %s\n", err)
+			break
+		}
+		if entry.Name != "" {
+			fmt.Printf("proto : NBNS %s %s\n", host, entry.Name)
+		}
+
+	case udpSrcPort == 123:
+		// Network time synchonization protocol
+		// do nothing
+		fmt.Printf("proto : NTP %s %s\n", ether, host)
+
+	case udpSrcPort == 433 || udpDstPort == 433:
+		// ssl udp - likely quic?
+		// do nothing
+
+	case udpDstPort == 1900:
+		// Microsoft Simple Service Discovery Protocol
+		if host != nil {
+			location, err := h.DNSHandler.ProcessSSDP(host, ether, udp.Payload())
+			if err != nil {
+				fmt.Printf("packet: error processing ssdp: %s\n", err)
+				break
+			}
+			// Put in queue for service discovery
+			if location != "" {
+				h.serviceDiscoveryChan <- discoverAction{addr: host.Addr, location: location}
+			}
+		}
+
+	case udpDstPort == 3702:
+		// Web Services Discovery Protocol (WSD)
+		fastlog.NewLine("ether", "wsd packet").Struct(ether).LF().Module("udp", "wsd packet").Struct(udp).Write()
+		fastlog.NewLine("proto", "wsd packet").Struct(host).ByteArray("payload", udp.Payload()).Write()
+		fmt.Printf("proto : WSD %s\n", host)
+
+	case udpDstPort == 32412 || udpDstPort == 32414:
+		// Plex application multicast on these ports to find players.
+		// G'Day Mate (GDM) multicast packets
+		// https://github.com/NineWorlds/serenity-android/wiki/Good-Day-Mate
+		fmt.Printf("proto : plex %s\n", host)
+
+	default:
+		fastlog.NewLine("proto", "error unexpected udp type").Struct(udp).Struct(host).Write()
+		fastlog.NewLine("proto", "error payload").ByteArray("payload", udp.Payload()).Write()
+	}
+
+	return host, notify, nil
+}
+
 // ListenAndServe listen for raw packets and invoke hooks as required
 func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
@@ -601,137 +747,9 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 					fastlog.NewLine("ether", "").Struct(ether).LF().Module("ip6", "").Struct(ip6Frame).Module("udp", "").Struct(udp).Write()
 				}
 			}
-
-			udpSrcPort := udp.SrcPort()
-			udpDstPort := udp.DstPort()
-			switch {
-			case udpDstPort == packet.DHCP4ServerPort || udpDstPort == packet.DHCP4ClientPort: // DHCP4 packet?
-				// if udp.DstPort() == packet.DHCP4ServerPort || udp.DstPort() == packet.DHCP4ClientPort {
-				if result, err = h.DHCP4Handler.ProcessPacket(host, ether, udp.Payload()); err != nil {
-					fmt.Printf("packet: error processing dhcp4: %s\n", err)
-				}
-				if result.Update {
-					if result.IsRouter { // IsRouter is true if this is a new host from a DHCP request
-						host, _ = h.session.FindOrCreateHost(result.FrameAddr)
-					}
-					if h.lockAndProcessDHCP4Update(host, result) {
-						notify = true
-					}
-				}
-
-			case udpDstPort == 546 || udpDstPort == 547: // DHCP6
-				// fmt.Printf("ether : %s", ether)
-				if ip4Frame != nil {
-					fastlog.NewLine("ether", "").Struct(ether).LF().Module("ip4", "").Struct(ip4Frame).Module("udp", "").Struct(udp).Write()
-				} else {
-					fastlog.NewLine("ether", "").Struct(ether).LF().Module("ip6", "").Struct(ip6Frame).Module("udp", "").Struct(udp).Write()
-				}
-				fastlog.NewLine("packet", "ignore dhcp6 packet").ByteArray("payload", udp.Payload()).Write()
-				// fastlog.Strings("packet: dhcp6 packet - do nothing ", host.String())
-
-			case udpSrcPort == 53: // DNS response
-				// TODO: move this to background goroutine
-				dnsEntry, err := h.DNSHandler.ProcessDNS(host, ether, udp.Payload())
-				if err != nil {
-					fmt.Printf("packet: error processing dns: %s\n", err)
-					break
-				}
-				if dnsEntry.Name != "" {
-					h.sendDNSNotification(dnsEntry)
-				}
-
-			case udpDstPort == 53: // DNS request
-			// do nothing
-
-			case udpSrcPort == 5353 || udpDstPort == 5353:
-				// Multicast DNS (MDNS)
-				if host != nil {
-					ipv4Host, ipv6Host, err := h.DNSHandler.ProcessMDNS(host, ether, udp.Payload())
-					if err != nil {
-						fmt.Printf("packet: error processing mdns: %s\n", err)
-						break
-					}
-					if ipv4Host.MDNSName != "" {
-						host.MACEntry.Row.Lock()
-						if host.MDNSName != ipv4Host.MDNSName {
-							host.MDNSName = ipv4Host.MDNSName
-							notify = true
-						}
-						if host.Model == "" { // only update if no model yet
-							host.Model = ipv4Host.Model
-							notify = true
-						}
-						host.MACEntry.Row.Unlock()
-						if packet.Debug && notify {
-							fmt.Printf("packet: mdns update %s name=%s model=%s\n", host.Addr, ipv4Host.MDNSName, ipv4Host.Model)
-							if ipv6Host.Addr.IP != nil {
-								fmt.Printf("packet : mdns ipv6 ignoring host %s\n", ipv6Host.ToString(true))
-							}
-						}
-					}
-				}
-
-			case udpSrcPort == 5252 || udpDstPort == 5252:
-				// Link Local Multicast Name Resolution (LLMNR)
-				fmt.Printf("proto : LLMNR %s\n", host)
-				ipv4Host, ipv6Host, err := h.DNSHandler.ProcessMDNS(host, ether, udp.Payload())
-				if err != nil {
-					fmt.Printf("packet: error processing mdns: %s\n", err)
-					break
-				}
-				if ipv4Host.MDNSName != "" {
-					fmt.Printf("llmnr : ipv4 host %s\n", ipv4Host.ToString(true))
-				}
-				if ipv6Host.MDNSName != "" {
-					fmt.Printf("llmnr : ipv6 host %s\n", ipv6Host.ToString(true))
-				}
-
-			case udpDstPort == 137 || udpDstPort == 138:
-				// Netbions NBNS
-				entry, err := h.DNSHandler.ProcessNBNS(host, ether, udp.Payload())
-				if err != nil {
-					fmt.Printf("packet: error processing ssdp: %s\n", err)
-					break
-				}
-				if entry.Name != "" {
-					fmt.Printf("proto : NBNS %s %s\n", host, entry.Name)
-				}
-
-			case udpSrcPort == 123:
-				// Network time synchonization protocol
-				// do nothing
-				fmt.Printf("proto : NTP %s %s\n", ether, host)
-
-			case udpSrcPort == 433 || udpDstPort == 433:
-				// ssl udp - likely quic?
-				// do nothing
-
-			case udpDstPort == 1900:
-				// Microsoft Simple Service Discovery Protocol
-				if host != nil {
-					location, err := h.DNSHandler.ProcessSSDP(host, ether, udp.Payload())
-					if err != nil {
-						fmt.Printf("packet: error processing ssdp: %s\n", err)
-						break
-					}
-					// Put in queue for service discovery
-					if location != "" {
-						h.serviceDiscoveryChan <- discoverAction{addr: host.Addr, location: location}
-					}
-				}
-
-			case udpDstPort == 3702:
-				// Web Services Discovery Protocol (WSD)
-				fmt.Printf("proto : WSD %s\n", host)
-
-			case udpDstPort == 32412 || udpDstPort == 32414:
-				// Plex application multicast on these ports to find players.
-				// G'Day Mate (GDM) multicast packets
-				// https://github.com/NineWorlds/serenity-android/wiki/Good-Day-Mate
-				fmt.Printf("proto : plex %s\n", host)
-
-			default:
-				fmt.Printf("proto : warning unexpected udp %s %s\n", udp, host)
+			if host, notify, err = h.processUDP(host, ether, udp); err != nil {
+				fastlog.NewLine("packet", "error processing udp").Error(err).Write()
+				continue
 			}
 
 		default:
