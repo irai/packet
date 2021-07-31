@@ -373,16 +373,6 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 	var notify bool
 	var result packet.Result
 
-	/**
-	var ip4Frame packet.IP4
-	var ip6Frame packet.IP6
-	if ether.EtherType() == syscall.ETH_P_IP {
-		ip4Frame = packet.IP4(ether.Payload())
-	} else {
-		ip6Frame = packet.IP6(ether.Payload())
-	}
-	**/
-
 	switch {
 	case udpDstPort == packet.DHCP4ServerPort || udpDstPort == packet.DHCP4ClientPort: // DHCP4 packet?
 		// if udp.DstPort() == packet.DHCP4ServerPort || udp.DstPort() == packet.DHCP4ClientPort {
@@ -765,8 +755,6 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		if d3 > time.Microsecond*400 {
 			fastlog.NewLine("packet", "warning > 400microseconds").String("l3", d1.String()).String("l4", d2.String()).String("total", d3.String()).
 				Int("l4proto", l4Proto).Uint16Hex("ethertype", ether.EtherType()).Write()
-			// fastlog.Strings("packet: warning > 400 microseconds: l3=", d1.String(), " l4=", d2.String(), " total=", d3.String(),
-			// fmt.Sprintf(" l4proto=%x ethertype=%x", l4Proto, ether.EtherType()))
 		}
 
 		/****
