@@ -378,7 +378,25 @@ func doMDNS(h *handlers, tokens []string) {
 			fmt.Println("error:", err)
 		}
 	case "print":
-		h.engine.DNSHandler.PrintDNSTable()
+		h.engine.PrintTable()
+
+	default:
+		printHelp("invalid mdns syntax", mdnsSyntax)
+	}
+}
+
+func doNBNS(h *handlers, tokens []string) {
+	switch getString(tokens, 1) {
+	case "query":
+		if err := h.engine.DNSHandler.SendNBNSQuery(h.engine.Session().NICInfo.HostAddr4, packet.IP4BroadcastAddr, getString(tokens, 2)); err != nil {
+			fmt.Println("error:", err)
+		}
+	case "nodestatus":
+		if err := h.engine.DNSHandler.SendNBNSNodeStatus(); err != nil {
+			fmt.Println("error:", err)
+		}
+	case "print":
+		h.engine.PrintTable()
 
 	default:
 		printHelp("invalid mdns syntax", mdnsSyntax)
@@ -430,6 +448,12 @@ var mdnsSyntax = []string{
 	"ssdp    search                          : send ssdp search multicast     ",
 }
 
+var nbnsSyntax = []string{
+	"nbns    query <service>                 : query service name             ",
+	"        nodestatus                      : send node status broadcast     ",
+	"        print                           : print ",
+}
+
 func printHelp(msg string, h []string) {
 	if msg != "" {
 		fmt.Println(msg)
@@ -446,6 +470,7 @@ func help() {
 	all = append(all, icmp6Syntax...)
 	all = append(all, arpSyntax...)
 	all = append(all, mdnsSyntax...)
+	all = append(all, nbnsSyntax...)
 	fmt.Println("\n----")
 	for _, v := range all {
 		fmt.Println(v)
@@ -550,6 +575,8 @@ func cmd(h *handlers) {
 			doARP(h, tokens)
 		case "mdns":
 			doMDNS(h, tokens)
+		case "nbns":
+			doNBNS(h, tokens)
 		case "llmnr":
 			doLLMNR(h, tokens)
 		case "ssdp":
