@@ -48,7 +48,7 @@ var sequence uint16 = 1 // incremented for every packet sent
 
 // encodeNBNSName creates a 34 byte string = 1 char length + 32 char netbios name + 1 final length (0x00).
 // Netbios names are 16 bytes long = 16 characters (two bytes per character)
-func encodeNBNSName(name string) string {
+func encodeNBNSName(name string) []byte {
 	// Netbios name is limited to 16 characters long
 	if len(name) > netbiosMaxNameLen {
 		name = name[:netbiosMaxNameLen-1] // truncate if name too long
@@ -76,7 +76,7 @@ func encodeNBNSName(name string) string {
 		log.Printf("nbns encode netbios name=%s len=%v", string(buffer.Bytes()), len(buffer.Bytes()))
 	}
 
-	return buffer.String()
+	return buffer.Bytes()
 }
 
 func decodeNBNSName(buf []byte) (n int, name string, err error) {

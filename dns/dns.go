@@ -226,18 +226,18 @@ func newDNSEntry() (entry DNSEntry) {
 	return entry
 }
 
-func dnsQueryMarshal(tranID uint16, flags uint16, name string, questionType uint16) DNS {
+func dnsQueryMarshal(tranID uint16, flags uint16, encodedName []byte, questionType uint16) DNS {
 	b := make([]byte, 512)
 	binary.BigEndian.PutUint16(b[0:2], tranID)
 	binary.BigEndian.PutUint16(b[2:4], flags)
-	binary.BigEndian.PutUint16(b[4:6], 1) // QDcount
-	// binary.BigEndian.PutUint16(b[6:8], 0)   // ANCount
-	// binary.BigEndian.PutUint16(b[8:10], 0)  // NScount
-	// binary.BigEndian.PutUint16(b[10:12], 0) // ARcount
-	n := copy(b[14:], []byte(name))
-	binary.BigEndian.PutUint16(b[14+n:], questionType)
-	binary.BigEndian.PutUint16(b[16+n:], questionClassInternet)
-	return b
+	binary.BigEndian.PutUint16(b[4:6], 1)   // QDcount
+	binary.BigEndian.PutUint16(b[6:8], 0)   // ANCount
+	binary.BigEndian.PutUint16(b[8:10], 0)  // NScount
+	binary.BigEndian.PutUint16(b[10:12], 0) // ARcount
+	n := copy(b[12:], []byte(encodedName))
+	binary.BigEndian.PutUint16(b[12+n:], questionType)
+	binary.BigEndian.PutUint16(b[14+n:], questionClassInternet)
+	return b[:n]
 }
 
 func (p DNS) decode() (e DNSEntry, err error) {
