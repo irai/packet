@@ -129,3 +129,24 @@ func TestLine_appendIP6(t *testing.T) {
 		})
 	}
 }
+
+type testType struct{}
+
+func (t testType) Print(l *Line) *Line {
+	return l
+}
+func (t testType) String() string {
+	return "test"
+}
+
+func TestLine_Nil(t *testing.T) {
+	l := NewLine("test", "")
+	var line testType
+	var ptr *testType
+	l.Struct(nil)
+	l.Struct(line)
+	l.Struct(ptr)
+	l.Stringer(nil)
+	l.Stringer(line)
+	l.Stringer(ptr)
+}
