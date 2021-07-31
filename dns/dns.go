@@ -237,7 +237,7 @@ func dnsQueryMarshal(tranID uint16, flags uint16, encodedName []byte, questionTy
 	n := copy(b[12:], []byte(encodedName))
 	binary.BigEndian.PutUint16(b[12+n:], questionType)
 	binary.BigEndian.PutUint16(b[14+n:], questionClassInternet)
-	return b[:n]
+	return b[:16+n]
 }
 
 func (p DNS) decode() (e DNSEntry, err error) {
