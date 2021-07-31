@@ -47,6 +47,13 @@ func New(session *packet.Session) (h *DNSHandler, err error) {
 	return h, nil
 }
 
+func (h *DNSHandler) Start() error {
+	if err := h.SendNBNSNodeStatus(); err != nil {
+		return err
+	}
+	return nil
+}
+
 type NameResourceRecord struct {
 	Name  string
 	CName string

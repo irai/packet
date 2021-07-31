@@ -270,6 +270,9 @@ func (h *Handler) startPlugins() error {
 	if err := h.DHCP4Handler.Start(); err != nil {
 		fmt.Println("error: in DHCP4 start:", err)
 	}
+
+	h.DNSHandler.Start()
+
 	return nil
 }
 
