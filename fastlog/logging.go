@@ -141,7 +141,7 @@ func (l *Line) MAC(name string, value net.HardwareAddr) *Line {
 }
 
 func (l *Line) Struct(value LineLog) *Line {
-	if value != nil {
+	if value != nil && !reflect.ValueOf(value).IsNil() {
 		return value.Print(l)
 	}
 	return l
