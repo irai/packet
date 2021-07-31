@@ -73,6 +73,13 @@ type NameEntry struct {
 	Model string
 }
 
+func (n NameEntry) Print(l *fastlog.Line) *fastlog.Line {
+	l.Struct(n.Addr)
+	l.String("name", n.Name)
+	l.String("model", n.Model)
+	return l
+}
+
 // copy returns a deep copy of DNSEntry
 func (d DNSEntry) copy() DNSEntry {
 	e := DNSEntry{Name: d.Name}

@@ -266,11 +266,15 @@ func (h *Handler) lockAndSetOnline(host *packet.Host, notify bool) {
 
 	host.MACEntry.Online = true
 	host.Online = true
-	addr := packet.Addr{IP: host.Addr.IP, MAC: host.MACEntry.MAC}
+	// addr := packet.Addr{IP: host.Addr.IP, MAC: host.MACEntry.MAC}
+	addr := host.Addr
+	notification := toNotification(host)
+	/**
 	notification := Notification{Addr: addr, Online: true,
-		DHCPName: host.DHCP4Name, MDNSName: host.MDNSName, UPNPName: host.UPNPName,
+		DHCPName: host.DHCP4Name, MDNSName: host.MDNSName, UPNPName: host.UPNPName, NBNSName: host.NBNSName,
 		Model: host.Model, Manufacturer: host.Manufacturer,
 		IsRouter: host.MACEntry.IsRouter}
+	*/
 
 	if packet.Debug {
 		fmt.Printf("packet: IP is online %s\n", host)
@@ -312,10 +316,7 @@ func (h *Handler) lockAndSetOffline(host *packet.Host) {
 		fmt.Printf("packet: IP is offline %s\n", host)
 	}
 	host.Online = false
-	notification := Notification{Addr: packet.Addr{MAC: host.MACEntry.MAC, IP: host.Addr.IP}, Online: false,
-		DHCPName: host.DHCP4Name, MDNSName: host.MDNSName, UPNPName: host.UPNPName,
-		Model: host.Model, Manufacturer: host.Manufacturer,
-		IsRouter: host.MACEntry.IsRouter}
+	notification := toNotification(host)
 
 	// Update mac online status if all hosts are offline
 	macOnline := false

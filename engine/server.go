@@ -450,13 +450,26 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 
 	case udpDstPort == 137 || udpDstPort == 138:
 		// Netbions NBNS
+		fastlog.NewLine("proto", "NBNS").Struct(host).Write()
 		entry, err := h.DNSHandler.ProcessNBNS(host, ether, udp.Payload())
 		if err != nil {
 			fmt.Printf("packet: error processing ssdp: %s\n", err)
 			break
 		}
+		fastlog.NewLine("TRACE", "NBNS").Struct(entry).Write()
 		if entry.Name != "" {
-			fmt.Printf("proto : NBNS %s %s\n", host, entry.Name)
+			host.MACEntry.Row.Lock()
+			if host.NBNSName != entry.Name {
+				host.NBNSName = entry.Name
+				notify = true
+				if host.Model == "" { // only update if no model yet
+					host.Model = entry.Model
+				}
+				host.MACEntry.Row.Unlock()
+				if packet.Debug && notify {
+					fastlog.NewLine("packet", "nbns update").Struct(host.Addr).Struct(entry).Write()
+				}
+			}
 		}
 
 	case udpSrcPort == 123:

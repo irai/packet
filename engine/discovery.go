@@ -46,10 +46,7 @@ func (h *Handler) upnpServiceDiscovery(d discoverAction) (Notification, error) {
 	host.UPNPName = service.Device.Name
 	host.Model = service.Device.Model
 	host.Manufacturer = service.Device.Manufacturer
-	return Notification{Addr: host.Addr, Online: host.Online,
-		UPNPName: host.UPNPName, DHCPName: host.DHCP4Name, MDNSName: host.MDNSName,
-		Model: host.Model, Manufacturer: host.Manufacturer}, nil
-
+	return toNotification(host), nil
 }
 
 func (h *Handler) SSDPSearchAll() error {

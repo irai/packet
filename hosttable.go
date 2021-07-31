@@ -30,6 +30,7 @@ type Host struct {
 	DHCP4Name    string
 	UPNPName     string
 	MDNSName     string
+	NBNSName     string
 	Model        string
 	Manufacturer string
 }

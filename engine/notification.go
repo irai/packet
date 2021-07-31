@@ -7,6 +7,7 @@ import (
 
 	"github.com/irai/packet"
 	"github.com/irai/packet/dns"
+	"github.com/irai/packet/fastlog"
 )
 
 type Notification struct {
@@ -15,14 +16,41 @@ type Notification struct {
 	DHCPName     string
 	MDNSName     string
 	UPNPName     string
+	NBNSName     string
 	Model        string
 	Manufacturer string
 	IsRouter     bool
 }
 
 func (n Notification) String() string {
-	return fmt.Sprintf("%s online=%t dhcp4name=%s mdnsname=%s upnpname=%s model=%s manufacturer=%s router=%v",
-		n.Addr, n.Online, n.DHCPName, n.MDNSName, n.UPNPName, n.Model, n.Manufacturer, n.IsRouter)
+	line := fastlog.NewLine("", "")
+	n.Print(line)
+	return line.ToString()
+}
+
+func (n Notification) Print(l *fastlog.Line) *fastlog.Line {
+	l.Struct(n.Addr)
+	l.Bool("online", n.Online)
+	if n.DHCPName != "" {
+		l.String("dhcp4name", n.DHCPName)
+	}
+	if n.MDNSName != "" {
+		l.String("mdnsname", n.MDNSName)
+	}
+	if n.UPNPName != "" {
+		l.String("upnpname", n.UPNPName)
+	}
+	if n.NBNSName != "" {
+		l.String("nbnsname", n.NBNSName)
+	}
+	if n.Model != "" {
+		l.String("model", n.Model)
+	}
+	if n.Manufacturer != "" {
+		l.String("manufacturer", n.Manufacturer)
+	}
+	l.Bool("router", n.IsRouter)
+	return l
 }
 
 // purge is called each minute by the minute goroutine
@@ -75,6 +103,13 @@ func (h *Handler) purge(now time.Time, probeDur time.Duration, offlineDur time.D
 	}
 
 	return nil
+}
+
+func toNotification(host *packet.Host) Notification {
+	return Notification{Addr: host.Addr, Online: false,
+		DHCPName: host.DHCP4Name, MDNSName: host.MDNSName, UPNPName: host.UPNPName, NBNSName: host.NBNSName,
+		Model: host.Model, Manufacturer: host.Manufacturer,
+		IsRouter: host.MACEntry.IsRouter}
 }
 
 func (h *Handler) sendNotification(notification Notification) {

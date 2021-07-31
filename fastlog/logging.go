@@ -84,7 +84,8 @@ func (l *Line) LF() *Line {
 	return l
 }
 
-// ToString converts the buffer to string and return the buffer to the pool
+// ToString converts the buffer to string and return the buffer to the pool.
+// The buffer is no longer available after calling this function.
 func (l *Line) ToString() string {
 	str := string(l.buffer[:l.index])
 	l.index = copy(l.buffer[:], "invalid buffer freed via ToString()") // guarding against reuse by caller
@@ -92,7 +93,8 @@ func (l *Line) ToString() string {
 	return str
 }
 
-// Write writes the buffer and return the buffer to the pool
+// Write writes the buffer and return the buffer to the pool.
+// The buffer is no longer available after calling this function.
 func (l *Line) Write() error {
 	l.buffer[l.index] = '\n'
 	_, err := Std.Out.Write(l.buffer[:l.index+1])
