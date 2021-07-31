@@ -50,12 +50,14 @@ func (e Host) Print(l *fastlog.Line) *fastlog.Line {
 	if e.DHCP4Name != "" {
 		l.String("name", e.DHCP4Name)
 	}
-	l.String("lastSeen", time.Since(e.LastSeen).String())
 	if e.MDNSName != "" {
 		l.String("mdnsname", e.MDNSName)
 	}
 	if e.UPNPName != "" {
 		l.String("upnpname", e.UPNPName)
+	}
+	if e.NBNSName != "" {
+		l.String("nbnsname", e.NBNSName)
 	}
 	if e.Model != "" {
 		l.String("model", e.Model)
@@ -63,6 +65,7 @@ func (e Host) Print(l *fastlog.Line) *fastlog.Line {
 	if e.Manufacturer != "" {
 		l.String("manufaturer", e.Manufacturer)
 	}
+	l.String("lastSeen", time.Since(e.LastSeen).String())
 	return l
 }
 

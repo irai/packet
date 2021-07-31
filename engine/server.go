@@ -456,7 +456,6 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 			fmt.Printf("packet: error processing ssdp: %s\n", err)
 			break
 		}
-		fastlog.NewLine("TRACE", "NBNS").Struct(entry).Write()
 		if entry.Name != "" {
 			host.MACEntry.Row.Lock()
 			if host.NBNSName != entry.Name {
