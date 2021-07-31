@@ -152,9 +152,9 @@ func (h *DNSHandler) sendNBNS(srcAddr packet.Addr, dstAddr packet.Addr, p DNS) (
 		return err
 	}
 	if _, err := h.session.Conn.WriteTo(ether, &dstAddr); err != nil {
-		fmt.Printf("mdns  : error failed to write %s\n", err)
+		return err
 	}
-	return err
+	return nil
 }
 
 // parseNodeNameArray process a name arra in the status node response packet

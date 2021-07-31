@@ -1,6 +1,7 @@
 package dns
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/irai/packet"
@@ -139,3 +140,13 @@ current nbns frame sent by us
         0x0040:  4143 4143 4143 4143 4143 4143 4143 4143  ACACACACACACACAC
         0x0050:  4143 4143 4143 4100 0021 0001            ACACACA..!..
 		***/
+
+func TestDNSHandler_SendNBNSNodeStatus(t *testing.T) {
+	session := packet.NewEmptySession()
+	dnsHandler, _ := New(session)
+
+	if err := dnsHandler.SendNBNSNodeStatus(); err != nil {
+		// TODO: need to fix empty session conn to prevent error when writing test
+		fmt.Println("TODO need to fix empty conn", err)
+	}
+}

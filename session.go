@@ -20,6 +20,11 @@ func NewEmptySession() *Session {
 	session := new(Session)
 	session.MACTable = NewMACTable()
 	session.HostTable = NewHostTable()
+	session.NICInfo = &NICInfo{HostAddr4: Addr{MAC: EthBroadcast, IP: IP4Broadcast}}
+
+	// TODO: fix this to discard writes like ioutil.Discard
+	session.Conn, _ = net.ListenPacket("udp4", "127.0.0.1:0")
+
 	return session
 }
 
