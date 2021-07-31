@@ -415,7 +415,6 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		if bytes.Equal(ether.Src(), h.session.NICInfo.HostMAC) {
 			continue
 		}
-		// fmt.Println("DEBUG ether ", ether)
 
 		// Only interested in unicast ethernet
 		if !isUnicastMAC(ether.Src()) {
@@ -439,9 +438,10 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		var host *packet.Host
 		var result packet.Result
 
-		// Process layer 3 - IP4, IP6 and ARP
+		// Everything from here is encapsulated in an Ethernet II frame format
+		// First, lets process layer 3 - IP4, IP6, ARP and some weird protocols
 		//
-		// This will set host if the sender is a local IP and not multicast.
+		// This will set the variable host if the sender is a local IP and not multicast.
 		switch ether.EtherType() {
 		case syscall.ETH_P_IP: // 0x0800
 			ip4Frame = packet.IP4(ether.Payload())
@@ -508,7 +508,13 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			}
 
 		case syscall.ETH_P_ARP: // 0x806
-			l4Proto = syscall.ETH_P_ARP // treat arp as l4 proto; similar to IP6 ICMP NDP
+			l4Proto = 0 // skip layer 4 processing below
+			if result, err = h.ARPHandler.ProcessPacket(host, ether, ether.Payload()); err != nil {
+				fmt.Printf("packet: error processing arp: %s\n", err)
+			}
+			if result.Update {
+				host, _ = h.session.FindOrCreateHost(result.FrameAddr)
+			}
 
 		case 0x8899: // Realtek Remote Control Protocol (RRCP)
 			// This protocol allows an expernal application to control a dumb switch.
@@ -544,6 +550,9 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		// Process level 4 and 5 protocols: ICMP4, ICMP6, IGMP, TCP, UDP, DHCP4, DNS
 		//
 		switch l4Proto {
+		case 0:
+			// Do nothing; likely ARP
+
 		case syscall.IPPROTO_ICMP:
 			if result, err = h.ICMP4Handler.ProcessPacket(host, ether, l4Payload); err != nil {
 				fmt.Printf("packet: error processing icmp4: %s\n", err)
@@ -723,14 +732,6 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 			default:
 				fmt.Printf("proto : warning unexpected udp %s %s\n", udp, host)
-			}
-
-		case syscall.ETH_P_ARP: // ARP - 0x0806
-			if result, err = h.ARPHandler.ProcessPacket(host, ether, ether.Payload()); err != nil {
-				fmt.Printf("packet: error processing arp: %s\n", err)
-			}
-			if result.Update {
-				host, _ = h.session.FindOrCreateHost(result.FrameAddr)
 			}
 
 		default:
