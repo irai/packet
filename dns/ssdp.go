@@ -102,6 +102,20 @@ func handleNotify(raw []byte) (location string, err error) {
 	return location, nil
 }
 
+// handleSearch process M-SEARCH SSDP packet
+//
+// TODO: identify system from Chrome
+// By default, Google Chrome sends SSDP network broadcast traffic on the LAN.
+// Chrome then appends a USERAGENT: field and we can use this to identify the OS.
+//
+// USER-AGENT: Chromium/74.0.3729.131 Linux
+// USER-AGENT: Microsoft Edge/91.0.864.64 Windows
+// USE-AGENT: Google Chrome/92.0.4515.107 Windows
+// USER-AGENT: My App/4 (iPhone; iOS 12.4) CocoaSSDP/0.1.0/1
+//
+// According to section 1.3.2 of the UPnP Device Architecture 1.1 the value should have the following syntax:
+//   USER-AGENT: OS/version UPnP/1.1 product/version
+// but clearly not many follow this format.
 func handleSearch(raw []byte) error {
 	req, err := http.ReadRequest(bufio.NewReader(bytes.NewReader(raw)))
 	if err != nil {
