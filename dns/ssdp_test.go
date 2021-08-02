@@ -9,7 +9,7 @@ import (
 
 // b8:e9:37:51:89:8c > ff:ff:ff:ff:ff:ff, ethertype IPv4 (0x0800), length 530: (tos 0x0, ttl 64, id 0, offset 0, flags [DF], proto UDP (17), length 516)
 // 192.168.0.103.54582 > 255.255.255.255.1900: [udp sum ok] UDP, length 488
-var ssdpFrame = []byte{
+var ssdpNotifyFrame = []byte{
 	0x45, 0x00, 0x02, 0x04, 0x00, 0x00, 0x40, 0x00, 0x40, 0x11, 0x77, 0xda, 0xc0, 0xa8, 0x00, 0x67, //  E.....@.@.w....g
 	0xff, 0xff, 0xff, 0xff, 0xd5, 0x36, 0x07, 0x6c, 0x01, 0xf0, 0xe9, 0xe3, 0x4e, 0x4f, 0x54, 0x49, //  .....6.l....NOTI
 	0x46, 0x59, 0x20, 0x2a, 0x20, 0x48, 0x54, 0x54, 0x50, 0x2f, 0x31, 0x2e, 0x31, 0x0d, 0x0a, 0x48, //  FY.*.HTTP/1.1..H
@@ -69,21 +69,23 @@ var frameMSearchRequest = []byte{
 // Google Chrome sends same M-SEARCH packet as Microfot Edge  (Chromium feature?)
 4c:bb:58:f4:b2:d7 > 01:00:5e:7f:ff:fa, ethertype IPv4 (0x0800), length 216: (tos 0x0, ttl 1, id 36554, offset 0, flags [none], proto UDP (17), length 202)
     192.168.0.104.61313 > 239.255.255.250.1900: UDP, length 174
-        0x0000:  0100 5e7f fffa 4cbb 58f4 b2d7 0800 4500  ..^...L.X.....E.
-        0x0010:  00ca 8eca 0000 0111 794e c0a8 0068 efff  ........yN...h..
-        0x0020:  fffa ef81 076c 00b6 5dd0 4d2d 5345 4152  .....l..].M-SEAR
-        0x0030:  4348 202a 2048 5454 502f 312e 310d 0a48  CH.*.HTTP/1.1..H
-        0x0040:  4f53 543a 2032 3339 2e32 3535 2e32 3535  OST:.239.255.255
-        0x0050:  2e32 3530 3a31 3930 300d 0a4d 414e 3a20  .250:1900..MAN:.
-        0x0060:  2273 7364 703a 6469 7363 6f76 6572 220d  "ssdp:discover".
-        0x0070:  0a4d 583a 2031 0d0a 5354 3a20 7572 6e3a  .MX:.1..ST:.urn:
-        0x0080:  6469 616c 2d6d 756c 7469 7363 7265 656e  dial-multiscreen
-        0x0090:  2d6f 7267 3a73 6572 7669 6365 3a64 6961  -org:service:dia
-        0x00a0:  6c3a 310d 0a55 5345 522d 4147 454e 543a  l:1..USER-AGENT:
-        0x00b0:  2047 6f6f 676c 6520 4368 726f 6d65 2f39  .Google.Chrome/9
-        0x00c0:  322e 302e 3435 3135 2e31 3037 2057 696e  2.0.4515.107.Win
-        0x00d0:  646f 7773 0d0a 0d0a                      dows....
 */
+var frameMSearchRequestChrome = []byte{
+	0x45, 0x00, //  E.   - removed Ethernet frame
+	0x00, 0xca, 0x8e, 0xca, 0x00, 0x00, 0x01, 0x11, 0x79, 0x4e, 0xc0, 0xa8, 0x00, 0x68, 0xef, 0xff, //  ........yN...h..
+	0xff, 0xfa, 0xef, 0x81, 0x07, 0x6c, 0x00, 0xb6, 0x5d, 0xd0, 0x4d, 0x2d, 0x53, 0x45, 0x41, 0x52, //  .....l..].M-SEAR
+	0x43, 0x48, 0x20, 0x2a, 0x20, 0x48, 0x54, 0x54, 0x50, 0x2f, 0x31, 0x2e, 0x31, 0x0d, 0x0a, 0x48, //  CH.*.HTTP/1.1..H
+	0x4f, 0x53, 0x54, 0x3a, 0x20, 0x32, 0x33, 0x39, 0x2e, 0x32, 0x35, 0x35, 0x2e, 0x32, 0x35, 0x35, //  OST:.239.255.255
+	0x2e, 0x32, 0x35, 0x30, 0x3a, 0x31, 0x39, 0x30, 0x30, 0x0d, 0x0a, 0x4d, 0x41, 0x4e, 0x3a, 0x20, //  .250:1900..MAN:.
+	0x22, 0x73, 0x73, 0x64, 0x70, 0x3a, 0x64, 0x69, 0x73, 0x63, 0x6f, 0x76, 0x65, 0x72, 0x22, 0x0d, //  "ssdp:discover".
+	0x0a, 0x4d, 0x58, 0x3a, 0x20, 0x31, 0x0d, 0x0a, 0x53, 0x54, 0x3a, 0x20, 0x75, 0x72, 0x6e, 0x3a, //  .MX:.1..ST:.urn:
+	0x64, 0x69, 0x61, 0x6c, 0x2d, 0x6d, 0x75, 0x6c, 0x74, 0x69, 0x73, 0x63, 0x72, 0x65, 0x65, 0x6e, //  dial-multiscreen
+	0x2d, 0x6f, 0x72, 0x67, 0x3a, 0x73, 0x65, 0x72, 0x76, 0x69, 0x63, 0x65, 0x3a, 0x64, 0x69, 0x61, //  -org:service:dia
+	0x6c, 0x3a, 0x31, 0x0d, 0x0a, 0x55, 0x53, 0x45, 0x52, 0x2d, 0x41, 0x47, 0x45, 0x4e, 0x54, 0x3a, //  l:1..USER-AGENT:
+	0x20, 0x47, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x20, 0x43, 0x68, 0x72, 0x6f, 0x6d, 0x65, 0x2f, 0x39, //  .Google.Chrome/9
+	0x32, 0x2e, 0x30, 0x2e, 0x34, 0x35, 0x31, 0x35, 0x2e, 0x31, 0x30, 0x37, 0x20, 0x57, 0x69, 0x6e, //  2.0.4515.107.Win
+	0x64, 0x6f, 0x77, 0x73, 0x0d, 0x0a, 0x0d, 0x0a, //  dows....
+}
 
 // M-SEARCH response frame sent by respondents
 // 34:e8:94:42:29:a9 > 02:42:15:e6:10:08, ethertype IPv4 (0x0800), length 522: (tos 0x0, ttl 64, id 0, offset 0, flags [DF], proto UDP (17), length 508)
@@ -131,11 +133,13 @@ func TestDNSHandler_ProcessSSDPFrame(t *testing.T) {
 	tests := []struct {
 		name         string
 		frame        []byte
+		wantName     NameEntry
 		wantLocation string
 		wantErr      bool
 	}{
-		{name: "ssdp1", frame: ssdpFrame, wantErr: false, wantLocation: "http://192.168.0.103:1400/xml/device_description.xml"},
-		{name: "ssdpSearchRequest", frame: frameMSearchRequest, wantErr: false, wantLocation: ""},
+		{name: "ssddpNotify", frame: ssdpNotifyFrame, wantErr: false, wantLocation: "http://192.168.0.103:1400/xml/device_description.xml"},
+		{name: "ssdpSearchRequest", frame: frameMSearchRequest, wantErr: false, wantLocation: "", wantName: NameEntry{OS: "Windows"}},
+		{name: "ssdpSearchRequestChrome", frame: frameMSearchRequestChrome, wantErr: false, wantLocation: "", wantName: NameEntry{OS: "Windows"}},
 		{name: "ssdpSearchResponse", frame: frameMSearchResponse, wantErr: false, wantLocation: "http://192.168.0.1:1900/gatedesc.xml"},
 	}
 	for _, tt := range tests {
@@ -144,13 +148,16 @@ func TestDNSHandler_ProcessSSDPFrame(t *testing.T) {
 			fmt.Println("ip", ip)
 			udp := packet.UDP(ip.Payload())
 			fmt.Println("udp", udp)
-			location, err := dnsHandler.ProcessSSDP(nil, nil, udp.Payload())
+			nameEntry, location, err := dnsHandler.ProcessSSDP(nil, nil, udp.Payload())
 			if (err != nil) != tt.wantErr {
 				t.Errorf("DNSHandler.ProcessSSDP() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if location != tt.wantLocation {
 				t.Errorf("DNSHandler.ProcessSSDP() invalid name = %+v, want %v", location, tt.wantLocation)
+			}
+			if tt.wantName.OS != nameEntry.OS {
+				t.Errorf("DNSHandler.ProcessSSDP() invalid OS = %+v, want %+v", nameEntry, tt.wantName)
 			}
 		})
 	}
@@ -455,7 +462,7 @@ func TestDNSHandler_ProcessSSDPDescription(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v, err := UnmarshalSSDPService(tt.service)
+			v, err := unmarshalUPNPServiceDescriptor(tt.service)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("DNSHandler.ProcessSSDPDescription() error = %v, wantErr %v", err, tt.wantErr)
 				return

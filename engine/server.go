@@ -50,7 +50,6 @@ type Handler struct {
 	notificationChannel     chan Notification
 	dnsChannel              chan dns.DNSEntry
 	forceScan               bool
-	serviceDiscoveryChan    chan discoverAction // channel used for delayed service discovery
 }
 
 // New creates an ICMPv6 handler with default values
@@ -127,9 +126,6 @@ func (config Config) NewEngine(nic string) (*Handler, error) {
 	host.MACEntry.IsRouter = true
 	host.Online = true
 	host.MACEntry.Online = true
-
-	// create service discovery goroutine
-	h.serviceDiscoveryChan = make(chan discoverAction, 32)
 
 	return h, nil
 }
@@ -296,27 +292,6 @@ func (h *Handler) stopPlugins() error {
 		fmt.Println("error: in DHCP4 stop:", err)
 	}
 	return nil
-}
-
-func (h *Handler) serviceDiscoveryLoop() {
-	for {
-		select {
-		case action := <-h.serviceDiscoveryChan:
-			notification, err := h.upnpServiceDiscovery(action)
-			if err != nil {
-				fmt.Printf("engine: error in service discovery %s location=%s error=%s\n", action.addr, action.location, err)
-				continue
-			}
-			if notification.UPNPName != "" {
-				if packet.Debug {
-					fmt.Printf("engine: sending upnp notification %s\n", notification)
-				}
-				h.sendNotification(notification)
-			}
-		case <-h.closeChan:
-			return
-		}
-	}
 }
 
 func (h *Handler) FindIP6Router(ip net.IP) icmp6.Router {
@@ -486,15 +461,29 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 	case udpDstPort == 1900:
 		// Microsoft Simple Service Discovery Protocol
 		if host != nil {
-			location, err := h.DNSHandler.ProcessSSDP(host, ether, udp.Payload())
+			nameEntry, location, err := h.DNSHandler.ProcessSSDP(host, ether, udp.Payload())
 			if err != nil {
 				fmt.Printf("packet: error processing ssdp: %s\n", err)
 				break
 			}
-			// Put in queue for service discovery
 			if location != "" {
-				h.serviceDiscoveryChan <- discoverAction{addr: host.Addr, location: location}
+				// Location indicates the
+				go func(host *packet.Host) {
+					host.MACEntry.Row.RLock()
+					if host.UPNPName != "" { // already have name
+						host.MACEntry.Row.RUnlock()
+						return
+					}
+					host.MACEntry.Row.RUnlock()
+					if name, err := h.DNSHandler.UPNPServiceDiscovery(host.Addr, location); err != nil {
+						if notification := h.updateUPNPNameWithLock(host, name); notification {
+							h.sendNotification(toNotification(host))
+						}
+					}
+				}(host)
+				break
 			}
+			notify = h.updateUPNPNameWithLock(host, nameEntry)
 		}
 
 	case udpDstPort == 3702:
@@ -526,9 +515,6 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 	// minute ticker
 	go h.minuteLoop()
-
-	// service discovery goroutine
-	go h.serviceDiscoveryLoop()
 
 	var d1, d2, d3 time.Duration
 	var startTime time.Time
@@ -704,27 +690,6 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		case 0:
 			// Do nothing; likely ARP
 
-		case syscall.IPPROTO_ICMP:
-			if result, err = h.ICMP4Handler.ProcessPacket(host, ether, l4Payload); err != nil {
-				fmt.Printf("packet: error processing icmp4: %s\n", err)
-			}
-		case syscall.IPPROTO_ICMPV6: // 0x03a
-			if result, err = h.ICMP6Handler.ProcessPacket(host, ether, l4Payload); err != nil {
-				fmt.Printf("packet: error processing icmp6 : %s\n", err)
-			}
-			if result.Update {
-				if result.FrameAddr.IP != nil {
-					host, _ = h.session.FindOrCreateHost(result.FrameAddr)
-				}
-				if host != nil {
-					host.MACEntry.IsRouter = result.IsRouter
-					notify = true
-				}
-			}
-		case syscall.IPPROTO_IGMP:
-			// Internet Group Management Protocol - Ipv4 multicast groups
-			// do nothing
-			fmt.Printf("packet: ipv4 igmp packet %s\n", ether)
 		case syscall.IPPROTO_TCP:
 			if ip4Frame != nil {
 				tcp := packet.TCP(ip4Frame.Payload())
@@ -739,6 +704,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 					}
 				}
 			}
+
 		case syscall.IPPROTO_UDP: // 0x11
 			udp := packet.UDP(l4Payload)
 			if !udp.IsValid() {
@@ -756,6 +722,30 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				fastlog.NewLine("packet", "error processing udp").Error(err).Write()
 				continue
 			}
+
+		case syscall.IPPROTO_ICMP:
+			if result, err = h.ICMP4Handler.ProcessPacket(host, ether, l4Payload); err != nil {
+				fmt.Printf("packet: error processing icmp4: %s\n", err)
+			}
+
+		case syscall.IPPROTO_ICMPV6: // 0x03a
+			if result, err = h.ICMP6Handler.ProcessPacket(host, ether, l4Payload); err != nil {
+				fmt.Printf("packet: error processing icmp6 : %s\n", err)
+			}
+			if result.Update {
+				if result.FrameAddr.IP != nil {
+					host, _ = h.session.FindOrCreateHost(result.FrameAddr)
+				}
+				if host != nil {
+					host.MACEntry.IsRouter = result.IsRouter
+					notify = true
+				}
+			}
+
+		case syscall.IPPROTO_IGMP:
+			// Internet Group Management Protocol - Ipv4 multicast groups
+			// do nothing
+			fmt.Printf("packet: ipv4 igmp packet %s\n", ether)
 
 		default:
 			fmt.Println("packet: unsupported level 4 header", l4Proto, ether)

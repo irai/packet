@@ -75,9 +75,11 @@ type DNSEntry struct {
 
 // NameEntry holds a name entry
 type NameEntry struct {
-	Addr  packet.Addr
-	Name  string
-	Model string
+	Addr         packet.Addr
+	Name         string
+	Model        string
+	Manufacturer string
+	OS           string
 }
 
 func (n NameEntry) Print(l *fastlog.Line) *fastlog.Line {

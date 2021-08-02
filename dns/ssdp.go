@@ -3,13 +3,11 @@ package dns
 import (
 	"bufio"
 	"bytes"
-	"encoding/xml"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"net/http"
+	"strings"
 	"syscall"
-	"time"
 
 	"github.com/irai/packet"
 )
@@ -24,29 +22,7 @@ var ssdpIPv4Addr = packet.Addr{MAC: packet.EthBroadcast, IP: net.IPv4(239, 255, 
 // Web Discovery Protocol - WSD
 var wsd4IPv4Addr = packet.Addr{MAC: packet.EthBroadcast, IP: net.IPv4(239, 255, 255, 250), Port: 3702}
 
-func (h *DNSHandler) ProcessSSDP(host *packet.Host, ether packet.Ether, payload []byte) (location string, err error) {
-
-	// TODO: test ssdp packet without endline
-	/*
-				// Add newline to workaround buggy SSDP responses
-		var endOfHeader = []byte{'\r', '\n', '\r', '\n'}
-				if !bytes.HasSuffix(payload, endOfHeader) {
-					raw = bytes.Join([][]byte{raw, endOfHeader}, nil)
-				}
-	*/
-
-	if bytes.HasPrefix(payload, []byte("M-SEARCH ")) {
-		handleSearch(payload)
-		return location, nil
-	}
-	if bytes.HasPrefix(payload, []byte("NOTIFY ")) {
-		return handleNotify(payload)
-	}
-
-	return handleResponse(payload)
-}
-
-// handleNotify process notify ssdp messages
+// processSSDPNotify process notify ssdp messages
 //
 // When a device is added to the network, it multicasts discovery messages to advertise its root device, any embedded devices, and
 // any services. Each discovery message contains four major components:
@@ -57,10 +33,10 @@ func (h *DNSHandler) ProcessSSDP(host *packet.Host, ether packet.Ether, payload 
 //
 //
 // see upnp spec: http://www.upnp.org/specs/arch/UPnP-arch-DeviceArchitecture-v1.0.pdf
-func handleNotify(raw []byte) (location string, err error) {
+func processSSDPNotify(raw []byte) (name NameEntry, location string, err error) {
 	req, err := http.ReadRequest(bufio.NewReader(bytes.NewReader(raw)))
 	if err != nil {
-		return location, err
+		return NameEntry{}, location, err
 	}
 
 	switch nts := req.Header.Get("NTS"); nts {
@@ -76,13 +52,13 @@ func handleNotify(raw []byte) (location string, err error) {
 		//    SERVER: OS/version UPnP/1.0 product/version
 		//    USN: advertisement UUID
 		if req.Method != "NOTIFY" {
-			return location, packet.ErrParseFrame
+			return NameEntry{}, location, packet.ErrParseFrame
 		}
 		location = req.Header.Get("LOCATION")
 		if Debug {
 			fmt.Printf("ssdp  : Microsoft SSDP service location=%s\n", location)
 		}
-		return location, nil
+		return NameEntry{}, location, nil
 	case "ssdp:byebye":
 		// When a device is about to be removed from the network, it should explicitly revoke its discovery messages by sending one
 		// multicast request for each ssdp:alive message it sent. Each multicast request must have method NOTIFY and ssdp:byebye in the
@@ -97,54 +73,73 @@ func handleNotify(raw []byte) (location string, err error) {
 		}
 	default:
 		fmt.Printf("ssdp  : error unexpected NTS header %s\n", nts)
-		return location, packet.ErrParseFrame
+		return NameEntry{}, location, packet.ErrParseFrame
 	}
-	return location, nil
+	return NameEntry{}, location, nil
 }
 
-// handleSearch process M-SEARCH SSDP packet
+// processSSDPSearchRequest process M-SEARCH SSDP packet
 //
 // TODO: identify system from Chrome
 // By default, Google Chrome sends SSDP network broadcast traffic on the LAN.
 // Chrome then appends a USERAGENT: field and we can use this to identify the OS.
 //
-// USER-AGENT: Chromium/74.0.3729.131 Linux
-// USER-AGENT: Microsoft Edge/91.0.864.64 Windows
-// USE-AGENT: Google Chrome/92.0.4515.107 Windows
-// USER-AGENT: My App/4 (iPhone; iOS 12.4) CocoaSSDP/0.1.0/1
+// Examples:
+//   USER-AGENT: Chromium/74.0.3729.131 Linux
+//   USER-AGENT: Microsoft Edge/91.0.864.64 Windows
+//   USER-AGENT: Google Chrome/92.0.4515.107 Windows
+//   USER-AGENT: My App/4 (iPhone; iOS 12.4) CocoaSSDP/0.1.0/1
 //
 // According to section 1.3.2 of the UPnP Device Architecture 1.1 the value should have the following syntax:
 //   USER-AGENT: OS/version UPnP/1.1 product/version
 // but clearly not many follow this format.
-func handleSearch(raw []byte) error {
+func processSSDPSearchRequest(raw []byte) (name NameEntry, location string, err error) {
 	req, err := http.ReadRequest(bufio.NewReader(bytes.NewReader(raw)))
 	if err != nil {
-		return err
+		return NameEntry{}, "", err
 	}
 	man := req.Header.Get("MAN")
 	if man != `"ssdp:discover"` {
-		return packet.ErrParseFrame
+		return NameEntry{}, "", packet.ErrParseFrame
 	}
 	// fmt.Printf("ssdp  : recv discover packet %s", string(raw))
-	return nil
+	ua := req.Header.Get("USER-AGENT")
+	return processUserAgent(ua), "", nil
 }
 
-// handleResponse process a M-SEARCH http response
-func handleResponse(raw []byte) (location string, err error) {
+func processUserAgent(ua string) (name NameEntry) {
+	switch {
+	case strings.Contains(ua, "iPhone"):
+		name.Model = "iPhone"
+	case strings.Contains(ua, "iPad"):
+		name.Model = "iPad"
+	}
+	switch {
+	case strings.Contains(ua, "Windows"):
+		name.OS = "Windows"
+	case strings.Contains(ua, "Linux"):
+		name.OS = "Linux"
+	case strings.Contains(ua, "iOS"):
+		name.OS = "iOS"
+	}
+	return name
+}
+
+// processSSDPResponse process a M-SEARCH http response
+func processSSDPResponse(raw []byte) (name NameEntry, location string, err error) {
 	resp, err := http.ReadResponse(bufio.NewReader(bytes.NewReader(raw)), nil)
 	if err != nil {
-		return location, err
+		return NameEntry{}, location, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", packet.ErrParseFrame
+		return NameEntry{}, "", packet.ErrParseFrame
 	}
 	location = resp.Header.Get("LOCATION")
 	if Debug {
 		fmt.Printf("ssdp  : Microsoft SSDP service location=%s\n", location)
 	}
-	return location, nil
-
+	return NameEntry{}, location, nil
 }
 
 // When a control point is added to the network, it should send a multicast request with method M-SEARCH in the following format.
@@ -179,68 +174,22 @@ func (h *DNSHandler) SendSSDPSearch() (err error) {
 	return err
 }
 
-// example XML
-// <root xmlns="urn:schemas-upnp-org:device-1-0">
-//   <specVersion>
-//     <major>1</major>
-//     <minor>0</minor>
-//   </specVersion>
-//   <device>
-//     <friendlyName>192.168.0.103 - Sonos Play:1</friendlyName>
-//     <manufacturer>Sonos, Inc.</manufacturer>
-//     <modelNumber>S1</modelNumber>
-//     <modelDescription>Sonos Play:1</modelDescription>
-//     <modelName>Sonos Play:1</modelName>
-type UPNPDevice struct {
-	Name             string `xml:"friendlyName"`
-	Model            string `xml:"modelName"`
-	ModelNumber      string `xml:"modelNumber"`
-	ModelDescription string `xml:"modelDescription"`
-	Manufacturer     string `xml:"manufacturer"`
-}
-type UPNPService struct {
-	XMLName xml.Name   `xml:"root"`
-	Device  UPNPDevice `xml:"device"`
-}
+func (h *DNSHandler) ProcessSSDP(host *packet.Host, ether packet.Ether, payload []byte) (name NameEntry, location string, err error) {
 
-// UnmarshalSSDPService process a UPNP service description XML
-//
-// For a format and list of fields see section 2.3 service description
-//    http://www.upnp.org/specs/arch/UPnP-arch-DeviceArchitecture-v1.0.pdf
-func UnmarshalSSDPService(b []byte) (v UPNPService, err error) {
-	v = UPNPService{}
-	if err := xml.Unmarshal(b, &v); err != nil {
-		fmt.Printf("ssdp: error unmarshal message %v [%+x]", err, b)
-		return v, err
-	}
-	if Debug {
-		fmt.Printf("ssdp  : upnp service description name=%s model=%s manufacturer=%s mnumber=%s description=%s\n",
-			v.Device.Name, v.Device.Model, v.Device.Manufacturer, v.Device.ModelNumber, v.Device.ModelDescription)
-	}
-	return v, nil
-}
+	// TODO: test ssdp packet without endline
+	/*
+				// Add newline to workaround buggy SSDP responses
+		var endOfHeader = []byte{'\r', '\n', '\r', '\n'}
+				if !bytes.HasSuffix(payload, endOfHeader) {
+					raw = bytes.Join([][]byte{raw, endOfHeader}, nil)
+				}
+	*/
 
-func GetUPNPServiceDescription(location string) ([]byte, error) {
-	client := &http.Client{
-		Timeout: time.Second * 3,
+	if bytes.HasPrefix(payload, []byte("M-SEARCH ")) {
+		return processSSDPSearchRequest(payload)
 	}
-	req, err := http.NewRequest("GET", location, nil)
-	if err != nil {
-		return nil, err
+	if bytes.HasPrefix(payload, []byte("NOTIFY ")) {
+		return processSSDPNotify(payload)
 	}
-	resp, err := client.Do(req)
-	if err != nil {
-		fmt.Printf("ssdp  : error lookup upnp name resp=%+v error=\"%s\"\n", resp, err)
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, packet.ErrNoReader
-	}
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	return body, nil
+	return processSSDPResponse(payload)
 }

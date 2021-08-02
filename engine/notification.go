@@ -28,6 +28,28 @@ func (n Notification) String() string {
 	return line.ToString()
 }
 
+func (h *Handler) updateUPNPNameWithLock(host *packet.Host, name dns.NameEntry) bool {
+	host.MACEntry.Row.Lock()
+	notify := false
+	if host.UPNPName != name.Name {
+		host.UPNPName = name.Name
+		notify = true
+	}
+	if host.Model != name.Model {
+		host.Model = name.Model
+		notify = true
+	}
+	if host.Manufacturer != name.Manufacturer {
+		host.Manufacturer = name.Manufacturer
+		notify = true
+	}
+	if notify {
+		fastlog.NewLine("dns", "updated upnp name").Struct(host).Write()
+	}
+	host.MACEntry.Row.Unlock()
+	return notify
+}
+
 func (n Notification) Print(l *fastlog.Line) *fastlog.Line {
 	l.Struct(n.Addr)
 	l.Bool("online", n.Online)
