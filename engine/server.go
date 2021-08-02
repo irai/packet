@@ -475,10 +475,13 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 						return
 					}
 					host.MACEntry.Row.RUnlock()
-					if name, err := h.DNSHandler.UPNPServiceDiscovery(host.Addr, location); err != nil {
-						if notification := h.updateUPNPNameWithLock(host, name); notification {
-							h.sendNotification(toNotification(host))
-						}
+					name, err := h.DNSHandler.UPNPServiceDiscovery(host.Addr, location)
+					if err != nil {
+						fastlog.NewLine("engine", "error retrieving UPNP service discovery").String("location", location).Error(err).Write()
+						return
+					}
+					if notification := h.updateUPNPNameWithLock(host, name); notification {
+						h.sendNotification(toNotification(host))
 					}
 				}(host)
 				break
@@ -489,8 +492,7 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 	case udpDstPort == 3702:
 		// Web Services Discovery Protocol (WSD)
 		fastlog.NewLine("ether", "wsd packet").Struct(ether).LF().Module("udp", "wsd packet").Struct(udp).Write()
-		fastlog.NewLine("proto", "wsd packet").Struct(host).ByteArray("payload", udp.Payload()).Write()
-		fmt.Printf("proto : WSD %s\n", host)
+		fastlog.NewLine("proto", "wsd packet").Struct(host).String("payload", string(udp.Payload())).Write()
 
 	case udpDstPort == 32412 || udpDstPort == 32414:
 		// Plex application multicast on these ports to find players.
@@ -499,8 +501,8 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 		fmt.Printf("proto : plex %s\n", host)
 
 	default:
-		fastlog.NewLine("proto", "error unexpected udp type").Struct(udp).Struct(host).Write()
-		fastlog.NewLine("proto", "error payload").ByteArray("payload", udp.Payload()).Write()
+		fastlog.NewLine("proto", "error unexpected udp type").Struct(ether).Struct(udp).Struct(host).Write()
+		// fastlog.NewLine("proto", "error payload").ByteArray("payload", udp.Payload()).Write()
 	}
 
 	return host, notify, nil

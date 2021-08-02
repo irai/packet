@@ -91,7 +91,7 @@ func (h *DNSHandler) UPNPServiceDiscovery(addr packet.Addr, location string) (na
 		return NameEntry{}, err
 	}
 	if packet.Debug {
-		fmt.Printf("engine: updated upnp name=%s model=%s manufacturer=%s\n", service.Device.Name, service.Device.Model, service.Device.Manufacturer)
+		fmt.Printf("engine: retrieved upnp name=%s model=%s manufacturer=%s\n", service.Device.Name, service.Device.Model, service.Device.Manufacturer)
 	}
 
 	name.Addr = addr
