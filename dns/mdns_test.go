@@ -40,8 +40,8 @@ func TestMDNSHandler_PTR(t *testing.T) {
 	if err != nil {
 		t.Error("unexpected error", err)
 	}
-	if ipv4Host.MDNSName != "" || ipv6Host.MDNSName != "" {
-		t.Error("unexpected name", ipv4Host.MDNSName, ipv6Host.MDNSName)
+	if ipv4Host.Name != "" || ipv6Host.Name != "" {
+		t.Error("unexpected name", ipv4Host.Name, ipv6Host.Name)
 	}
 }
 
@@ -165,8 +165,8 @@ func TestMDNSHandler_Sonos(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Error("unexpected error", err)
 			}
-			if ipv4Host.MDNSName != tt.wantIPv4Host.MDNSName {
-				t.Errorf("%s: unexpected mdnsname=%s want=%s", tt.name, ipv4Host.MDNSName, tt.wantIPv4Host.MDNSName)
+			if ipv4Host.Name != tt.wantIPv4Host.MDNSName {
+				t.Errorf("%s: unexpected mdnsname=%s want=%s", tt.name, ipv4Host.Name, tt.wantIPv4Host.MDNSName)
 			}
 			if !ipv4Host.Addr.IP.Equal(tt.wantIPv4Host.Addr.IP) {
 				t.Errorf("%s: unexpected ip=%s want=%s", tt.name, ipv4Host.Addr.IP, tt.wantIPv4Host.Addr.IP)
@@ -248,8 +248,8 @@ func TestMDNSHandler_Apple(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Error("unexpected error", err)
 			}
-			if ipv4Host.MDNSName != tt.wantIPv4Host.MDNSName {
-				t.Errorf("%s: unexpected mdnsname=%s want=%s", tt.name, ipv4Host.MDNSName, tt.wantIPv4Host.MDNSName)
+			if ipv4Host.Name != tt.wantIPv4Host.MDNSName {
+				t.Errorf("%s: unexpected mdnsname=%s want=%s", tt.name, ipv4Host.Name, tt.wantIPv4Host.MDNSName)
 			}
 			if ipv4Host.Model != tt.wantIPv4Host.Model {
 				t.Errorf("%s: unexpected model=%s want=%s", tt.name, ipv4Host.Model, tt.wantIPv4Host.Model)

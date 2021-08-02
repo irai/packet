@@ -391,10 +391,10 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 				fmt.Printf("packet: error processing mdns: %s\n", err)
 				break
 			}
-			if ipv4Host.MDNSName != "" {
+			if ipv4Host.Name != "" {
 				host.MACEntry.Row.Lock()
-				if host.MDNSName != ipv4Host.MDNSName {
-					host.MDNSName = ipv4Host.MDNSName
+				if host.MDNSName != ipv4Host.Name {
+					host.MDNSName = ipv4Host.Name
 					notify = true
 				}
 				if host.Model == "" { // only update if no model yet
@@ -403,7 +403,7 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 				}
 				host.MACEntry.Row.Unlock()
 				if packet.Debug && notify {
-					fastlog.NewLine("packet", "mdns update").Struct(host.Addr).String("name", ipv4Host.MDNSName).String("model", ipv4Host.Model).Write()
+					fastlog.NewLine("packet", "mdns update").Struct(host.Addr).String("name", ipv4Host.Name).String("model", ipv4Host.Model).Write()
 					if ipv6Host.Addr.IP != nil {
 						fastlog.NewLine("packet", "mdns ipv6 ignoring host").Struct(ipv6Host).Write()
 					}
@@ -414,16 +414,16 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 	case udpSrcPort == 5252 || udpDstPort == 5252:
 		// Link Local Multicast Name Resolution (LLMNR)
 		fastlog.NewLine("proto", "LLMNR").Struct(host).Write()
-		ipv4Host, ipv6Host, err := h.DNSHandler.ProcessMDNS(host, ether, udp.Payload())
+		ipv4Name, ipv6Name, err := h.DNSHandler.ProcessMDNS(host, ether, udp.Payload())
 		if err != nil {
 			fmt.Printf("packet: error processing mdns: %s\n", err)
 			break
 		}
-		if ipv4Host.MDNSName != "" {
-			fastlog.NewLine("llmnr", "ipv4 host").Struct(ipv4Host).Write()
+		if ipv4Name.Name != "" {
+			fastlog.NewLine("llmnr", "ipv4 host").Struct(ipv4Name).Write()
 		}
-		if ipv6Host.MDNSName != "" {
-			fastlog.NewLine("llmnr", "ipv6 host").Struct(ipv6Host).Write()
+		if ipv6Name.Name != "" {
+			fastlog.NewLine("llmnr", "ipv6 host").Struct(ipv6Name).Write()
 		}
 
 	case udpDstPort == 137 || udpDstPort == 138:
