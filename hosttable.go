@@ -22,18 +22,15 @@ type HostTable struct {
 // Host has a RWMutex used to sync access to the record. This must be read locked to access fields or write locked for updating
 // When locking the engine, you must lock the engine first then row lock to avoid deadlocks
 type Host struct {
-	Addr         Addr      // MAC and IP
-	MACEntry     *MACEntry // pointer to mac entry
-	Online       bool      // keep host online / offline state
-	HuntStage    HuntStage // keep host overall huntStage
-	LastSeen     time.Time // keep last packet time
-	DHCP4Name    string
-	UPNPName     string
-	MDNSName     string
-	NBNSName     string
-	Model        string
-	OS           string
-	Manufacturer string
+	Addr      Addr      // MAC and IP
+	MACEntry  *MACEntry // pointer to mac entry
+	Online    bool      // keep host online / offline state
+	HuntStage HuntStage // keep host overall huntStage
+	LastSeen  time.Time // keep last packet time
+	DHCP4Name NameEntry
+	MDNSName  NameEntry
+	SSDPName  NameEntry
+	NBNSName  NameEntry
 }
 
 func (e *Host) String() string {
@@ -48,18 +45,19 @@ func (e Host) FastLog(l *fastlog.Line) *fastlog.Line {
 	l.Bool("online", e.Online)
 	l.Bool("captured", e.MACEntry.Captured)
 	l.String("stage", e.HuntStage.String())
-	if e.DHCP4Name != "" {
-		l.String("name", e.DHCP4Name)
+	if e.DHCP4Name.Name != "" {
+		l.String("name", e.DHCP4Name.Name)
 	}
-	if e.MDNSName != "" {
-		l.String("mdnsname", e.MDNSName)
+	if e.MDNSName.Name != "" {
+		l.String("mdnsname", e.MDNSName.Name)
 	}
-	if e.UPNPName != "" {
-		l.String("upnpname", e.UPNPName)
+	if e.SSDPName.Name != "" {
+		l.String("ssdpname", e.SSDPName.Name)
 	}
-	if e.NBNSName != "" {
-		l.String("nbnsname", e.NBNSName)
+	if e.NBNSName.Name != "" {
+		l.String("nbnsname", e.NBNSName.Name)
 	}
+	/**
 	if e.Model != "" {
 		l.String("model", e.Model)
 	}
@@ -69,6 +67,7 @@ func (e Host) FastLog(l *fastlog.Line) *fastlog.Line {
 	if e.Manufacturer != "" {
 		l.String("manufaturer", e.Manufacturer)
 	}
+	**/
 	l.String("lastSeen", time.Since(e.LastSeen).String())
 	return l
 }
@@ -101,13 +100,13 @@ func (s HuntStage) String() string {
 type Result struct {
 	Update    bool      // Set to true if update is required
 	HuntStage HuntStage // DHCP4 hunt stage
-	Name      string    // DHCP4 host name
+	NameEntry NameEntry // Name
 	FrameAddr Addr      // reference to frame IP and MAC (i.e. not copied) - the engine will copy if required
 	IsRouter  bool      // Mark host as router
 }
 
 func (e Result) String() string {
-	return fmt.Sprintf("huntstage=%s name=%s %s", e.HuntStage, e.Name, e.FrameAddr)
+	return fmt.Sprintf("huntstage=%s name=%s %s", e.HuntStage, e.NameEntry, e.FrameAddr)
 }
 
 // newHostTable returns a HostTable Session
@@ -177,7 +176,7 @@ func (h *Session) findOrCreateHost(addr Addr) (host *Host, found bool) {
 			host.Addr.MAC = macEntry.MAC // new mac
 			host.MACEntry = macEntry     // link host to macEntry
 			host.HuntStage = StageNormal // reset stage
-			host.DHCP4Name = ""          // clear name from previous host
+			// host.DHCP4Name.Name = ""     // clear name from previous host
 		}
 		host.LastSeen = now
 		host.MACEntry.LastSeen = now

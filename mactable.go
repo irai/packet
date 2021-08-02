@@ -4,57 +4,65 @@ import (
 	"bytes"
 	"fmt"
 	"net"
-	"strings"
 	"sync"
 	"time"
+
+	"github.com/irai/packet/fastlog"
 )
 
 // MACEntry stores mac details
 // Each host has one MACEntry
 type MACEntry struct {
-	MAC      net.HardwareAddr // unique mac address
-	Captured bool             // true if mac is in capture mode
-	IP4      net.IP           // keep current IP4 to detect ip changes
-	IP4Offer net.IP           // keep dhcp4 IP offer
-	IP6GUA   net.IP           // keep current ip6 global unique address
-	IP6LLA   net.IP           // keep current ip6 local link address
-	IP6Offer net.IP           // keep ip6 GUA offer
-	Online   bool             // true is mac is online
-	IsRouter bool             // Set to true if this is a router
-	HostList []*Host          // IPs associated with this mac
-	Row      sync.RWMutex     // Row level mutex
-	LastSeen time.Time
+	MAC       net.HardwareAddr // unique mac address
+	Captured  bool             // true if mac is in capture mode
+	IP4       net.IP           // keep current IP4 to detect ip changes
+	IP4Offer  net.IP           // keep dhcp4 IP offer
+	IP6GUA    net.IP           // keep current ip6 global unique address
+	IP6LLA    net.IP           // keep current ip6 local link address
+	IP6Offer  net.IP           // keep ip6 GUA offer
+	Online    bool             // true is mac is online
+	IsRouter  bool             // Set to true if this is a router
+	HostList  []*Host          // IPs associated with this mac
+	Row       sync.RWMutex     // Row level mutex - must lock/unlock if reading/updating MACEntry and Host entry
+	LastSeen  time.Time
+	DHCP4Name NameEntry
+	MDNSName  NameEntry
+	SSDPName  NameEntry
+	NBNSName  NameEntry
 }
 
 func (e *MACEntry) String() string {
-	// return fmt.Sprintf("mac=%s captured=%v online=%v ip4=%s ip6=%s lla=%s ip4offer=%s hosts=%d lastSeen=%s",
-	// e.MAC, e.Captured, e.Online, e.IP4, e.IP6GUA, e.IP6LLA, e.IP4Offer, len(e.HostList), time.Since(e.LastSeen))
-	var b strings.Builder
-	b.Grow(120)
-	b.WriteString("mac=")
-	b.WriteString(e.MAC.String())
+	l := fastlog.NewLine("", "")
+	return e.FastLog(l).ToString()
+}
+
+func (e *MACEntry) FastLog(l *fastlog.Line) *fastlog.Line {
+	l.MAC("mac", e.MAC)
 	if e.Captured {
-		b.WriteString(" captured=true")
-	} else {
-		b.WriteString(" captured=false")
+		l.Bool("captured", e.Captured)
 	}
 	if e.Online {
-		b.WriteString(" online=true ip4=")
-	} else {
-		b.WriteString(" online=false ip4=")
+		l.Bool("online", e.Online)
 	}
-	b.WriteString(e.IP4.String())
-	b.WriteString(" ip6=")
-	b.WriteString(e.IP6GUA.String())
-	b.WriteString(" lla=")
-	b.WriteString(e.IP6LLA.String())
-	b.WriteString(" ip4offer=")
-	b.WriteString(e.IP4Offer.String())
-	b.WriteString(" hosts=")
-	b.WriteString(fmt.Sprintf("%d", len(e.HostList)))
-	b.WriteString(" lastSeen=")
-	b.WriteString(time.Since(e.LastSeen).String())
-	return b.String()
+	l.IP("ip", e.IP4)
+	l.IP("ip6", e.IP6GUA)
+	l.IP("lla", e.IP6LLA)
+	l.IP("ip4offer", e.IP4Offer)
+	l.Int("hosts", len(e.HostList))
+	l.String("lastSeen", time.Since(e.LastSeen).String())
+	if e.DHCP4Name.Name != "" {
+		l.String("dhcp4name", e.DHCP4Name.Name)
+	}
+	if e.MDNSName.Name != "" {
+		l.String("mdnsname", e.MDNSName.Name)
+	}
+	if e.SSDPName.Name != "" {
+		l.String("ssdpname", e.SSDPName.Name)
+	}
+	if e.NBNSName.Name != "" {
+		l.String("nbnsname", e.NBNSName.Name)
+	}
+	return l
 }
 
 // link appends the host to the macEntry host list
@@ -147,4 +155,50 @@ func (s *MACTable) FindMACNoLock(mac net.HardwareAddr) (*MACEntry, int) {
 		}
 	}
 	return nil, -1
+}
+
+// NameEntry holds a name entry
+type NameEntry struct {
+	Name         string
+	Model        string
+	Manufacturer string
+	OS           string
+}
+
+func (n NameEntry) FastLog(l *fastlog.Line) *fastlog.Line {
+	l.String("name", n.Name)
+	l.String("model", n.Model)
+	return l
+}
+
+func (e NameEntry) Merge(nameEntry NameEntry) (newEntry NameEntry, modified bool) {
+	if nameEntry.Name != "" && e.Name != nameEntry.Name {
+		e.Name = nameEntry.Name
+		modified = true
+	}
+	if nameEntry.Model != "" && e.Model != nameEntry.Model {
+		e.Model = nameEntry.Model
+		modified = true
+	}
+	if nameEntry.OS != "" && e.OS != nameEntry.OS {
+		e.OS = nameEntry.OS
+		modified = true
+	}
+	if nameEntry.Manufacturer != "" && e.Manufacturer != nameEntry.Manufacturer {
+		e.Manufacturer = nameEntry.Manufacturer
+		modified = true
+	}
+	return e, modified
+}
+
+// IPNameEntry adds an Address to NameEntry
+type IPNameEntry struct {
+	Addr      Addr
+	NameEntry NameEntry
+}
+
+func (n IPNameEntry) FastLog(l *fastlog.Line) *fastlog.Line {
+	l.Struct(n.Addr)
+	l.Struct(n.NameEntry)
+	return l
 }

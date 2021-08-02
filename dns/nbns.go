@@ -219,7 +219,7 @@ func processNBNSNodeStatusResponse(b []byte) (names []string, err error) {
 	return names, err
 }
 
-func (h *DNSHandler) ProcessNBNS(host *packet.Host, ether packet.Ether, payload []byte) (name NameEntry, err error) {
+func (h *DNSHandler) ProcessNBNS(host *packet.Host, ether packet.Ether, payload []byte) (name packet.NameEntry, err error) {
 	dns := DNS(payload)
 	if err := dns.IsValid(); err != nil {
 		return name, err

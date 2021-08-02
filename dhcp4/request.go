@@ -61,7 +61,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 	if host != nil {
 		if name != "" {
 			result.Update = true
-			result.Name = name
+			result.NameEntry.Name = name
 		}
 	}
 
@@ -135,7 +135,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 			result.Update = true
 			result.IsRouter = true                                     // hack to mark result as a new host
 			result.FrameAddr = packet.Addr{MAC: p.CHAddr(), IP: reqIP} // ok to pass frame addr
-			result.Name = name
+			result.NameEntry.Name = name
 			result.HuntStage = packet.StageNoChange
 
 			if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && captured) {
@@ -180,7 +180,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 		result.Update = true
 		result.IsRouter = true                                     // hack to mark result as a new host
 		result.FrameAddr = packet.Addr{MAC: p.CHAddr(), IP: reqIP} // ok to pass frame addr
-		result.Name = name
+		result.NameEntry.Name = name
 		result.HuntStage = packet.StageNoChange
 
 		if lease.State == StateFree {
@@ -254,7 +254,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 	result.Update = true
 	result.IsRouter = true // hack to mark result as a new host
 	result.HuntStage = lease.subnet.Stage
-	result.Name = lease.Name
+	result.NameEntry.Name = lease.Name
 
 	return result, ret
 }

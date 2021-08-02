@@ -160,7 +160,7 @@ type HostName struct {
 
 var macEntryInvalid = packet.MACEntry{}
 
-func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload []byte) (ipv4 NameEntry, ipv6 NameEntry, err error) {
+func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload []byte) (ipv4 packet.IPNameEntry, ipv6 packet.IPNameEntry, err error) {
 	var p dnsmessage.Parser
 	dnsHeader, err := p.Start(payload)
 	if err != nil {
@@ -216,11 +216,11 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 			if err != nil {
 				return ipv4, ipv6, err
 			}
-			ipv4.Name = strings.TrimSuffix(hdr.Name.String(), ".local.")
+			ipv4.NameEntry.Name = strings.TrimSuffix(hdr.Name.String(), ".local.")
 			ipv4.Addr.MAC = packet.CopyMAC(ether.Src())
 			ipv4.Addr.IP = packet.CopyIP(r.A[:])
 			if Debug {
-				fmt.Printf("mdns  : A record name=%s %s\n", ipv4.Name, ipv4.Addr)
+				fmt.Printf("mdns  : A record name=%s %s\n", ipv4.NameEntry.Name, ipv4.Addr)
 			}
 
 		case dnsmessage.TypeAAAA:
@@ -228,11 +228,11 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 			if err != nil {
 				return ipv4, ipv6, err
 			}
-			ipv6.Name = strings.TrimSuffix(hdr.Name.String(), ".local.")
+			ipv6.NameEntry.Name = strings.TrimSuffix(hdr.Name.String(), ".local.")
 			ipv6.Addr.MAC = packet.CopyMAC(ether.Src())
 			ipv6.Addr.IP = packet.CopyIP(r.AAAA[:])
 			if Debug {
-				fmt.Printf("mdns  : AAAA record name=%s %s\n", ipv6.Name, ipv6.Addr)
+				fmt.Printf("mdns  : AAAA record name=%s %s\n", ipv6.NameEntry.Name, ipv6.Addr)
 			}
 
 		case dnsmessage.TypePTR:
@@ -275,11 +275,11 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 				continue
 			}
 			if model := parseTXT(r.TXT); model != "" {
-				ipv4.Model = model
-				ipv6.Model = model
+				ipv4.NameEntry.Model = model
+				ipv6.NameEntry.Model = model
 			}
 			if Debug {
-				fmt.Printf("mdns  : TXT name=%s txt=%s model=%s\n", hdr.Name, r.TXT, ipv4.Model)
+				fmt.Printf("mdns  : TXT name=%s txt=%s model=%s\n", hdr.Name, r.TXT, ipv4.NameEntry.Model)
 			}
 
 		default:

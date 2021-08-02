@@ -18,6 +18,8 @@ import (
 	"golang.org/x/net/bpf"
 )
 
+const module = "engine"
+
 // Config has a list of configurable parameters that overide package defaults
 type Config struct {
 	// Conn enables the client to override the connection with a another packet conn
@@ -353,7 +355,6 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 
 	switch {
 	case udpDstPort == packet.DHCP4ServerPort || udpDstPort == packet.DHCP4ClientPort: // DHCP4 packet?
-		// if udp.DstPort() == packet.DHCP4ServerPort || udp.DstPort() == packet.DHCP4ClientPort {
 		if result, err = h.DHCP4Handler.ProcessPacket(host, ether, udp.Payload()); err != nil {
 			fmt.Printf("packet: error processing dhcp4: %s\n", err)
 		}
@@ -391,23 +392,17 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 				fmt.Printf("packet: error processing mdns: %s\n", err)
 				break
 			}
-			if ipv4Host.Name != "" {
+			if ipv4Host.NameEntry.Name != "" {
 				host.MACEntry.Row.Lock()
-				if host.MDNSName != ipv4Host.Name {
-					host.MDNSName = ipv4Host.Name
-					notify = true
-				}
-				if host.Model == "" { // only update if no model yet
-					host.Model = ipv4Host.Model
-					notify = true
+				host.MDNSName, notify = host.MDNSName.Merge(ipv4Host.NameEntry)
+				if notify {
+					fastlog.NewLine(module, "updated mdns name").Struct(host.Addr).Struct(host.MDNSName).Write()
+					host.MACEntry.MDNSName, _ = host.MACEntry.MDNSName.Merge(host.MDNSName)
 				}
 				host.MACEntry.Row.Unlock()
-				if packet.Debug && notify {
-					fastlog.NewLine("packet", "mdns update").Struct(host.Addr).String("name", ipv4Host.Name).String("model", ipv4Host.Model).Write()
-					if ipv6Host.Addr.IP != nil {
-						fastlog.NewLine("packet", "mdns ipv6 ignoring host").Struct(ipv6Host).Write()
-					}
-				}
+			}
+			if ipv6Host.Addr.IP != nil {
+				fastlog.NewLine("packet", "mdns ipv6 ignoring host").Struct(ipv6Host).Write()
 			}
 		}
 
@@ -419,16 +414,15 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 			fmt.Printf("packet: error processing mdns: %s\n", err)
 			break
 		}
-		if ipv4Name.Name != "" {
+		if ipv4Name.NameEntry.Name != "" {
 			fastlog.NewLine("llmnr", "ipv4 host").Struct(ipv4Name).Write()
 		}
-		if ipv6Name.Name != "" {
+		if ipv6Name.NameEntry.Name != "" {
 			fastlog.NewLine("llmnr", "ipv6 host").Struct(ipv6Name).Write()
 		}
 
 	case udpDstPort == 137 || udpDstPort == 138:
 		// Netbions NBNS
-		fastlog.NewLine("proto", "NBNS").Struct(host).Write()
 		entry, err := h.DNSHandler.ProcessNBNS(host, ether, udp.Payload())
 		if err != nil {
 			fmt.Printf("packet: error processing ssdp: %s\n", err)
@@ -436,17 +430,12 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 		}
 		if entry.Name != "" {
 			host.MACEntry.Row.Lock()
-			if host.NBNSName != entry.Name {
-				host.NBNSName = entry.Name
-				notify = true
-				if host.Model == "" { // only update if no model yet
-					host.Model = entry.Model
-				}
-				host.MACEntry.Row.Unlock()
-				if packet.Debug && notify {
-					fastlog.NewLine("packet", "nbns update").Struct(host.Addr).Struct(entry).Write()
-				}
+			host.NBNSName, notify = host.NBNSName.Merge(entry)
+			if notify {
+				fastlog.NewLine(module, "updated nbns name").Struct(host.Addr).Struct(host.NBNSName).Write()
+				host.MACEntry.NBNSName, _ = host.MACEntry.NBNSName.Merge(host.NBNSName)
 			}
+			host.MACEntry.Row.Unlock()
 		}
 
 	case udpSrcPort == 123:
@@ -467,26 +456,41 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 				break
 			}
 			if location != "" {
-				// Location indicates the
+				// Location is the end point for the UPNP service discovery
+				// Retrieve in a goroutine
 				go func(host *packet.Host) {
 					host.MACEntry.Row.RLock()
-					if host.UPNPName != "" { // already have name
+					if host.SSDPName.Name != "" { // already have name
 						host.MACEntry.Row.RUnlock()
 						return
 					}
 					host.MACEntry.Row.RUnlock()
-					name, err := h.DNSHandler.UPNPServiceDiscovery(host.Addr, location)
+					nameEntry, err := h.DNSHandler.UPNPServiceDiscovery(host.Addr, location)
 					if err != nil {
 						fastlog.NewLine("engine", "error retrieving UPNP service discovery").String("location", location).Error(err).Write()
 						return
 					}
-					if notification := h.updateUPNPNameWithLock(host, name); notification {
+					var notify bool
+					host.MACEntry.Row.Lock()
+					host.SSDPName, notify = host.SSDPName.Merge(nameEntry)
+					if notify {
+						fastlog.NewLine(module, "updated ssdp name").Struct(host.Addr).Struct(host.SSDPName).Write()
+						host.MACEntry.SSDPName, _ = host.MACEntry.SSDPName.Merge(host.SSDPName)
+					}
+					host.MACEntry.Row.Unlock()
+					if notify {
 						h.sendNotification(toNotification(host))
 					}
 				}(host)
 				break
 			}
-			notify = h.updateUPNPNameWithLock(host, nameEntry)
+			host.MACEntry.Row.Lock()
+			host.SSDPName, notify = host.SSDPName.Merge(nameEntry)
+			if notify {
+				fastlog.NewLine("dns", "updated ssdp name").Struct(host).Write()
+				host.MACEntry.SSDPName, _ = host.MACEntry.SSDPName.Merge(host.SSDPName)
+			}
+			host.MACEntry.Row.Unlock()
 		}
 
 	case udpDstPort == 3702:

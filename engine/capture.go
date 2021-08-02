@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/fastlog"
 )
 
 // Stage transitions identify how the engine behave in various states
@@ -340,9 +341,10 @@ func (h *Handler) lockAndSetOffline(host *packet.Host) {
 func (h *Handler) lockAndProcessDHCP4Update(host *packet.Host, result packet.Result) (notify bool) {
 	if host != nil {
 		host.MACEntry.Row.Lock()
-		if host.DHCP4Name != result.Name {
-			host.DHCP4Name = result.Name
-			notify = true
+		host.DHCP4Name, notify = host.DHCP4Name.Merge(result.NameEntry)
+		if notify {
+			fastlog.NewLine(module, "updated dhcp4 name").Struct(host.Addr).Struct(host.DHCP4Name).Write()
+			host.MACEntry.DHCP4Name, _ = host.MACEntry.DHCP4Name.Merge(host.DHCP4Name)
 		}
 		host.MACEntry.Row.Unlock()
 

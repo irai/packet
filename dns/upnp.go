@@ -80,21 +80,20 @@ func getUPNPServiceDescription(location string) ([]byte, error) {
 	return body, nil
 }
 
-func (h *DNSHandler) UPNPServiceDiscovery(addr packet.Addr, location string) (name NameEntry, err error) {
+func (h *DNSHandler) UPNPServiceDiscovery(addr packet.Addr, location string) (name packet.NameEntry, err error) {
 
 	desc, err := getUPNPServiceDescription(location)
 	if err != nil {
-		return NameEntry{}, err
+		return packet.NameEntry{}, err
 	}
 	service, err := unmarshalUPNPServiceDescriptor(desc)
 	if err != nil {
-		return NameEntry{}, err
+		return packet.NameEntry{}, err
 	}
 	if packet.Debug {
 		fmt.Printf("engine: retrieved upnp name=%s model=%s manufacturer=%s\n", service.Device.Name, service.Device.Model, service.Device.Manufacturer)
 	}
 
-	name.Addr = addr
 	name.Name = service.Device.Name
 	name.Model = service.Device.Model
 	name.Manufacturer = service.Device.Manufacturer

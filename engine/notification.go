@@ -11,16 +11,13 @@ import (
 )
 
 type Notification struct {
-	Addr         packet.Addr
-	Online       bool
-	DHCPName     string
-	MDNSName     string
-	UPNPName     string
-	NBNSName     string
-	Model        string
-	Manufacturer string
-	OS           string
-	IsRouter     bool
+	Addr      packet.Addr
+	Online    bool
+	DHCP4Name packet.NameEntry
+	MDNSName  packet.NameEntry
+	SSDPName  packet.NameEntry
+	NBNSName  packet.NameEntry
+	IsRouter  bool
 }
 
 func (n Notification) String() string {
@@ -29,53 +26,29 @@ func (n Notification) String() string {
 	return line.ToString()
 }
 
-func (h *Handler) updateUPNPNameWithLock(host *packet.Host, name dns.NameEntry) bool {
-	host.MACEntry.Row.Lock()
-	notify := false
-	if host.UPNPName != name.Name {
-		host.UPNPName = name.Name
-		notify = true
-	}
-	if host.Model != name.Model {
-		host.Model = name.Model
-		notify = true
-	}
-	if host.Manufacturer != name.Manufacturer {
-		host.Manufacturer = name.Manufacturer
-		notify = true
-	}
-	if host.OS != name.OS {
-		host.OS = name.OS
-		notify = true
-	}
-	if notify {
-		fastlog.NewLine("dns", "updated upnp name").Struct(host).Write()
-	}
-	host.MACEntry.Row.Unlock()
-	return notify
-}
-
 func (n Notification) FastLog(l *fastlog.Line) *fastlog.Line {
 	l.Struct(n.Addr)
 	l.Bool("online", n.Online)
-	if n.DHCPName != "" {
-		l.String("dhcp4name", n.DHCPName)
+	if n.DHCP4Name.Name != "" {
+		l.String("dhcp4name", n.DHCP4Name.Name)
 	}
-	if n.MDNSName != "" {
-		l.String("mdnsname", n.MDNSName)
+	if n.MDNSName.Name != "" {
+		l.String("mdnsname", n.MDNSName.Name)
 	}
-	if n.UPNPName != "" {
-		l.String("upnpname", n.UPNPName)
+	if n.SSDPName.Name != "" {
+		l.String("upnpname", n.SSDPName.Name)
 	}
-	if n.NBNSName != "" {
-		l.String("nbnsname", n.NBNSName)
+	if n.NBNSName.Name != "" {
+		l.String("nbnsname", n.NBNSName.Name)
 	}
+	/**
 	if n.Model != "" {
 		l.String("model", n.Model)
 	}
 	if n.Manufacturer != "" {
 		l.String("manufacturer", n.Manufacturer)
 	}
+	**/
 	l.Bool("router", n.IsRouter)
 	return l
 }
@@ -133,9 +106,9 @@ func (h *Handler) purge(now time.Time, probeDur time.Duration, offlineDur time.D
 }
 
 func toNotification(host *packet.Host) Notification {
+	// send the MACEntry name as there can be many IPv6 hosts, some with name entries not populated yet
 	return Notification{Addr: host.Addr, Online: false,
-		DHCPName: host.DHCP4Name, MDNSName: host.MDNSName, UPNPName: host.UPNPName, NBNSName: host.NBNSName,
-		Model: host.Model, Manufacturer: host.Manufacturer, OS: host.OS,
+		DHCP4Name: host.MACEntry.DHCP4Name, MDNSName: host.MACEntry.MDNSName, SSDPName: host.MACEntry.SSDPName, NBNSName: host.MACEntry.NBNSName,
 		IsRouter: host.MACEntry.IsRouter}
 }
 

@@ -40,8 +40,8 @@ func TestMDNSHandler_PTR(t *testing.T) {
 	if err != nil {
 		t.Error("unexpected error", err)
 	}
-	if ipv4Host.Name != "" || ipv6Host.Name != "" {
-		t.Error("unexpected name", ipv4Host.Name, ipv6Host.Name)
+	if ipv4Host.NameEntry.Name != "" || ipv6Host.NameEntry.Name != "" {
+		t.Error("unexpected name", ipv4Host.NameEntry.Name, ipv6Host.NameEntry.Name)
 	}
 }
 
@@ -133,18 +133,18 @@ func TestMDNSHandler_Sonos(t *testing.T) {
 	tests := []struct {
 		name         string
 		frame        []byte
-		wantIPv4Host packet.Host
-		wantIPv6Host packet.Host
+		wantIPv4Host NameEntry
+		wantIPv6Host NameEntry
 		wantErr      bool
 	}{
 		{name: "sonos1", frame: sonosResponse1, wantErr: false,
-			wantIPv4Host: packet.Host{},
+			wantIPv4Host: NameEntry{},
 		},
 		{name: "sonos2", frame: sonosResponse2, wantErr: false,
-			wantIPv4Host: packet.Host{MDNSName: "sonosB8E937524E2C", Addr: packet.Addr{IP: net.IPv4(192, 168, 0, 101)}},
+			wantIPv4Host: NameEntry{Name: "sonosB8E937524E2C", Addr: packet.Addr{IP: net.IPv4(192, 168, 0, 101)}},
 		},
 		{name: "sonos3", frame: sonosResponse3, wantErr: false,
-			wantIPv4Host: packet.Host{MDNSName: "Sonos-B8E937524E2C", Addr: packet.Addr{IP: net.IPv4(192, 168, 0, 101)}},
+			wantIPv4Host: NameEntry{Name: "Sonos-B8E937524E2C", Addr: packet.Addr{IP: net.IPv4(192, 168, 0, 101)}},
 		},
 	}
 
@@ -165,8 +165,8 @@ func TestMDNSHandler_Sonos(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Error("unexpected error", err)
 			}
-			if ipv4Host.Name != tt.wantIPv4Host.MDNSName {
-				t.Errorf("%s: unexpected mdnsname=%s want=%s", tt.name, ipv4Host.Name, tt.wantIPv4Host.MDNSName)
+			if ipv4Host.NameEntry.Name != tt.wantIPv4Host.Name {
+				t.Errorf("%s: unexpected mdnsname=%s want=%s", tt.name, ipv4Host.NameEntry.Name, tt.wantIPv4Host.Name)
 			}
 			if !ipv4Host.Addr.IP.Equal(tt.wantIPv4Host.Addr.IP) {
 				t.Errorf("%s: unexpected ip=%s want=%s", tt.name, ipv4Host.Addr.IP, tt.wantIPv4Host.Addr.IP)
@@ -222,12 +222,12 @@ func TestMDNSHandler_Apple(t *testing.T) {
 	tests := []struct {
 		name         string
 		frame        []byte
-		wantIPv4Host packet.Host
-		wantIPv6Host packet.Host
+		wantIPv4Host NameEntry
+		wantIPv6Host NameEntry
 		wantErr      bool
 	}{
 		{name: "MacBook", frame: frameMacBook, wantErr: false,
-			wantIPv4Host: packet.Host{MDNSName: "Goth", Addr: packet.Addr{IP: net.IPv4(192, 168, 0, 110)}, Model: "MacBookPro14,1"},
+			wantIPv4Host: NameEntry{Name: "Goth", Addr: packet.Addr{IP: net.IPv4(192, 168, 0, 110)}, Model: "MacBookPro14,1"},
 		},
 	}
 
@@ -248,11 +248,11 @@ func TestMDNSHandler_Apple(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Error("unexpected error", err)
 			}
-			if ipv4Host.Name != tt.wantIPv4Host.MDNSName {
-				t.Errorf("%s: unexpected mdnsname=%s want=%s", tt.name, ipv4Host.Name, tt.wantIPv4Host.MDNSName)
+			if ipv4Host.NameEntry.Name != tt.wantIPv4Host.Name {
+				t.Errorf("%s: unexpected mdnsname=%s want=%s", tt.name, ipv4Host.NameEntry.Name, tt.wantIPv4Host.Name)
 			}
-			if ipv4Host.Model != tt.wantIPv4Host.Model {
-				t.Errorf("%s: unexpected model=%s want=%s", tt.name, ipv4Host.Model, tt.wantIPv4Host.Model)
+			if ipv4Host.NameEntry.Model != tt.wantIPv4Host.Model {
+				t.Errorf("%s: unexpected model=%s want=%s", tt.name, ipv4Host.NameEntry.Model, tt.wantIPv4Host.Model)
 			}
 			if !ipv4Host.Addr.IP.Equal(tt.wantIPv4Host.Addr.IP) {
 				t.Errorf("%s: unexpected ip=%s want=%s", tt.name, ipv4Host.Addr.IP, tt.wantIPv4Host.Addr.IP)

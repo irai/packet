@@ -33,10 +33,10 @@ var wsd4IPv4Addr = packet.Addr{MAC: packet.EthBroadcast, IP: net.IPv4(239, 255, 
 //
 //
 // see upnp spec: http://www.upnp.org/specs/arch/UPnP-arch-DeviceArchitecture-v1.0.pdf
-func processSSDPNotify(raw []byte) (name NameEntry, location string, err error) {
+func processSSDPNotify(raw []byte) (name packet.NameEntry, location string, err error) {
 	req, err := http.ReadRequest(bufio.NewReader(bytes.NewReader(raw)))
 	if err != nil {
-		return NameEntry{}, location, err
+		return packet.NameEntry{}, location, err
 	}
 
 	switch nts := req.Header.Get("NTS"); nts {
@@ -52,13 +52,13 @@ func processSSDPNotify(raw []byte) (name NameEntry, location string, err error) 
 		//    SERVER: OS/version UPnP/1.0 product/version
 		//    USN: advertisement UUID
 		if req.Method != "NOTIFY" {
-			return NameEntry{}, location, packet.ErrParseFrame
+			return packet.NameEntry{}, location, packet.ErrParseFrame
 		}
 		location = req.Header.Get("LOCATION")
 		if Debug {
 			fmt.Printf("ssdp  : Microsoft SSDP service location=%s\n", location)
 		}
-		return NameEntry{}, location, nil
+		return packet.NameEntry{}, location, nil
 	case "ssdp:byebye":
 		// When a device is about to be removed from the network, it should explicitly revoke its discovery messages by sending one
 		// multicast request for each ssdp:alive message it sent. Each multicast request must have method NOTIFY and ssdp:byebye in the
@@ -73,9 +73,9 @@ func processSSDPNotify(raw []byte) (name NameEntry, location string, err error) 
 		}
 	default:
 		fmt.Printf("ssdp  : error unexpected NTS header %s\n", nts)
-		return NameEntry{}, location, packet.ErrParseFrame
+		return packet.NameEntry{}, location, packet.ErrParseFrame
 	}
-	return NameEntry{}, location, nil
+	return packet.NameEntry{}, location, nil
 }
 
 // processSSDPSearchRequest process M-SEARCH SSDP packet
@@ -93,21 +93,21 @@ func processSSDPNotify(raw []byte) (name NameEntry, location string, err error) 
 // According to section 1.3.2 of the UPnP Device Architecture 1.1 the value should have the following syntax:
 //   USER-AGENT: OS/version UPnP/1.1 product/version
 // but clearly not many follow this format.
-func processSSDPSearchRequest(raw []byte) (name NameEntry, location string, err error) {
+func processSSDPSearchRequest(raw []byte) (name packet.NameEntry, location string, err error) {
 	req, err := http.ReadRequest(bufio.NewReader(bytes.NewReader(raw)))
 	if err != nil {
-		return NameEntry{}, "", err
+		return packet.NameEntry{}, "", err
 	}
 	man := req.Header.Get("MAN")
 	if man != `"ssdp:discover"` {
-		return NameEntry{}, "", packet.ErrParseFrame
+		return packet.NameEntry{}, "", packet.ErrParseFrame
 	}
 	// fmt.Printf("ssdp  : recv discover packet %s", string(raw))
 	ua := req.Header.Get("USER-AGENT")
 	return processUserAgent(ua), "", nil
 }
 
-func processUserAgent(ua string) (name NameEntry) {
+func processUserAgent(ua string) (name packet.NameEntry) {
 	switch {
 	case strings.Contains(ua, "iPhone"):
 		name.Model = "iPhone"
@@ -126,20 +126,20 @@ func processUserAgent(ua string) (name NameEntry) {
 }
 
 // processSSDPResponse process a M-SEARCH http response
-func processSSDPResponse(raw []byte) (name NameEntry, location string, err error) {
+func processSSDPResponse(raw []byte) (name packet.NameEntry, location string, err error) {
 	resp, err := http.ReadResponse(bufio.NewReader(bytes.NewReader(raw)), nil)
 	if err != nil {
-		return NameEntry{}, location, err
+		return packet.NameEntry{}, location, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return NameEntry{}, "", packet.ErrParseFrame
+		return packet.NameEntry{}, "", packet.ErrParseFrame
 	}
 	location = resp.Header.Get("LOCATION")
 	if Debug {
 		fmt.Printf("ssdp  : Microsoft SSDP service location=%s\n", location)
 	}
-	return NameEntry{}, location, nil
+	return packet.NameEntry{}, location, nil
 }
 
 // When a control point is added to the network, it should send a multicast request with method M-SEARCH in the following format.
@@ -174,7 +174,7 @@ func (h *DNSHandler) SendSSDPSearch() (err error) {
 	return err
 }
 
-func (h *DNSHandler) ProcessSSDP(host *packet.Host, ether packet.Ether, payload []byte) (name NameEntry, location string, err error) {
+func (h *DNSHandler) ProcessSSDP(host *packet.Host, ether packet.Ether, payload []byte) (name packet.NameEntry, location string, err error) {
 
 	// TODO: test ssdp packet without endline
 	/*
