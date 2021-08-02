@@ -32,16 +32,17 @@ type Host struct {
 	MDNSName     string
 	NBNSName     string
 	Model        string
+	OS           string
 	Manufacturer string
 }
 
 func (e *Host) String() string {
 	line := fastlog.NewLine("", "")
-	e.Print(line)
+	e.FastLog(line)
 	return line.ToString()
 }
 
-func (e Host) Print(l *fastlog.Line) *fastlog.Line {
+func (e Host) FastLog(l *fastlog.Line) *fastlog.Line {
 	l.MAC("mac", e.Addr.MAC)
 	l.IP("ip", e.Addr.IP)
 	l.Bool("online", e.Online)
@@ -61,6 +62,9 @@ func (e Host) Print(l *fastlog.Line) *fastlog.Line {
 	}
 	if e.Model != "" {
 		l.String("model", e.Model)
+	}
+	if e.OS != "" {
+		l.String("os", e.OS)
 	}
 	if e.Manufacturer != "" {
 		l.String("manufaturer", e.Manufacturer)

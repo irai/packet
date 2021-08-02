@@ -216,7 +216,7 @@ func (p Ether) String() string {
 }
 
 // Print implements fastlog struct interface
-func (p Ether) Print(line *fastlog.Line) *fastlog.Line {
+func (p Ether) FastLog(line *fastlog.Line) *fastlog.Line {
 	line.Uint16Hex("type", p.EtherType())
 	line.MAC("src", p.Src())
 	line.MAC("dst", p.Dst())
@@ -276,7 +276,7 @@ func (p IP4) String() string {
 }
 
 // Print implements fastlog struct interface
-func (p IP4) Print(line *fastlog.Line) *fastlog.Line {
+func (p IP4) FastLog(line *fastlog.Line) *fastlog.Line {
 	line.Int("version", p.Version())
 	line.IP("src", p.Src())
 	line.IP("dst", p.Dst())
@@ -415,7 +415,7 @@ func (p UDP) String() string {
 }
 
 // Print implements fastlog interface
-func (p UDP) Print(line *fastlog.Line) *fastlog.Line {
+func (p UDP) FastLog(line *fastlog.Line) *fastlog.Line {
 	line.Int("srcport", int(p.SrcPort()))
 	line.Int("dstport", int(p.DstPort()))
 	line.Int("len", int(p.Len()))

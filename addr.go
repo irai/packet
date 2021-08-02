@@ -34,7 +34,7 @@ func (a Addr) String() string {
 	return b.String()
 }
 
-func (a Addr) Print(l *fastlog.Line) *fastlog.Line {
+func (a Addr) FastLog(l *fastlog.Line) *fastlog.Line {
 	l.MAC("mac", a.MAC)
 	l.IP("ip", a.IP)
 	if a.Port != 0 {

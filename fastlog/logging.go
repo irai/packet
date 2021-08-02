@@ -44,8 +44,8 @@ type Line struct {
 	index  int
 }
 
-type LineLog interface {
-	Print(*Line) *Line
+type FastLog interface {
+	FastLog(*Line) *Line
 }
 
 func NewLine(module string, msg string) *Line {
@@ -140,11 +140,11 @@ func (l *Line) MAC(name string, value net.HardwareAddr) *Line {
 	return l
 }
 
-func (l *Line) Struct(value LineLog) *Line {
+func (l *Line) Struct(value FastLog) *Line {
 	if value == nil || (reflect.ValueOf(value).Kind() == reflect.Ptr && reflect.ValueOf(value).IsNil()) {
 		return l
 	}
-	return value.Print(l)
+	return value.FastLog(l)
 }
 
 func (l *Line) Stringer(value fmt.Stringer) *Line {

@@ -50,7 +50,7 @@ func (p IP6) String() string {
 }
 
 // Print implements fastlog struct interface
-func (p IP6) Print(line *fastlog.Line) *fastlog.Line {
+func (p IP6) FastLog(line *fastlog.Line) *fastlog.Line {
 	line.Int("version", p.Version())
 	line.IP("src", p.Src())
 	line.IP("dst", p.Dst())

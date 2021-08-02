@@ -31,7 +31,7 @@ func (p ICMP6) String() string {
 }
 
 // Print implements fastlog interface
-func (p ICMP6) Print(line *fastlog.Line) *fastlog.Line {
+func (p ICMP6) FastLog(line *fastlog.Line) *fastlog.Line {
 	line.Uint8("type", p.Type())
 	line.Uint8("code", p.Code())
 	line.Uint16Hex("checksum", p.Checksum())
@@ -71,7 +71,7 @@ func (p ICMP6RouterSolicitation) String() string {
 	return fmt.Sprintf("type=ra code=%d sourceLLA=%s", p.Code(), p.SourceLLA())
 }
 
-func (p ICMP6RouterSolicitation) Print(line *fastlog.Line) *fastlog.Line {
+func (p ICMP6RouterSolicitation) FastLog(line *fastlog.Line) *fastlog.Line {
 	line.String("type", "ra")
 	line.Uint8("code", p.Code())
 	line.MAC("targetLLA", p.SourceLLA())
@@ -135,7 +135,7 @@ func (p ICMP6NeighborAdvertisement) String() string {
 }
 
 // Print implements fastlog interface
-func (p ICMP6NeighborAdvertisement) Print(line *fastlog.Line) *fastlog.Line {
+func (p ICMP6NeighborAdvertisement) FastLog(line *fastlog.Line) *fastlog.Line {
 	line.String("type", "na")
 	line.Uint8("code", p.Code())
 	line.IP("targetIP", p.TargetAddress())
@@ -182,7 +182,7 @@ func (p ICMP6NeighborSolicitation) String() string {
 }
 
 // Print implements fastlog interface
-func (p ICMP6NeighborSolicitation) Print(line *fastlog.Line) *fastlog.Line {
+func (p ICMP6NeighborSolicitation) FastLog(line *fastlog.Line) *fastlog.Line {
 	line.String("type", "ns")
 	line.Uint8("code", p.Code())
 	line.IP("targetIP", p.TargetAddress())

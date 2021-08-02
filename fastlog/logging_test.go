@@ -132,7 +132,7 @@ func TestLine_appendIP6(t *testing.T) {
 
 type testType struct{}
 
-func (t testType) Print(l *Line) *Line {
+func (t testType) FastLog(l *Line) *Line {
 	return l
 }
 func (t testType) String() string {

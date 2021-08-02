@@ -19,12 +19,13 @@ type Notification struct {
 	NBNSName     string
 	Model        string
 	Manufacturer string
+	OS           string
 	IsRouter     bool
 }
 
 func (n Notification) String() string {
 	line := fastlog.NewLine("", "")
-	n.Print(line)
+	n.FastLog(line)
 	return line.ToString()
 }
 
@@ -43,6 +44,10 @@ func (h *Handler) updateUPNPNameWithLock(host *packet.Host, name dns.NameEntry) 
 		host.Manufacturer = name.Manufacturer
 		notify = true
 	}
+	if host.OS != name.OS {
+		host.OS = name.OS
+		notify = true
+	}
 	if notify {
 		fastlog.NewLine("dns", "updated upnp name").Struct(host).Write()
 	}
@@ -50,7 +55,7 @@ func (h *Handler) updateUPNPNameWithLock(host *packet.Host, name dns.NameEntry) 
 	return notify
 }
 
-func (n Notification) Print(l *fastlog.Line) *fastlog.Line {
+func (n Notification) FastLog(l *fastlog.Line) *fastlog.Line {
 	l.Struct(n.Addr)
 	l.Bool("online", n.Online)
 	if n.DHCPName != "" {
@@ -130,7 +135,7 @@ func (h *Handler) purge(now time.Time, probeDur time.Duration, offlineDur time.D
 func toNotification(host *packet.Host) Notification {
 	return Notification{Addr: host.Addr, Online: false,
 		DHCPName: host.DHCP4Name, MDNSName: host.MDNSName, UPNPName: host.UPNPName, NBNSName: host.NBNSName,
-		Model: host.Model, Manufacturer: host.Manufacturer,
+		Model: host.Model, Manufacturer: host.Manufacturer, OS: host.OS,
 		IsRouter: host.MACEntry.IsRouter}
 }
 

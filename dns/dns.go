@@ -82,7 +82,7 @@ type NameEntry struct {
 	OS           string
 }
 
-func (n NameEntry) Print(l *fastlog.Line) *fastlog.Line {
+func (n NameEntry) FastLog(l *fastlog.Line) *fastlog.Line {
 	l.Struct(n.Addr)
 	l.String("name", n.Name)
 	l.String("model", n.Model)
@@ -201,7 +201,7 @@ func (p DNS) String() string {
 	return fmt.Sprintf("qr=%v tc=%v rcode=%v qdcount=%d ancount=%d nscount=%d arcount=%d", p.QR(), p.TC(), p.ResponseCode(), p.QDCount(), p.ANCount(), p.NSCount(), p.ARCount())
 }
 
-func (p DNS) Print(l *fastlog.Line) *fastlog.Line {
+func (p DNS) FastLog(l *fastlog.Line) *fastlog.Line {
 	l.Uint16("tranid", p.TransactionID())
 	l.Bool("qr", p.QR())
 	l.Bool("rc", p.TC())
