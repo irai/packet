@@ -450,7 +450,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				continue
 			}
 			if packet.DebugIP4 {
-				fastlog.NewLine("ether", "").Struct(ether).LF().Module("ip4", "").Struct(ip4Frame).Write()
+				fastlog.NewLine("ether", "").Struct(ether).Module("ip4", "").Struct(ip4Frame).Write()
 			}
 
 			// Create host only if on same subnet
@@ -468,7 +468,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				continue
 			}
 			if packet.DebugIP6 {
-				fastlog.NewLine("ether", "").Struct(ether).LF().Module("ip6", "").Struct(ip6Frame).Write()
+				fastlog.NewLine("ether", "").Struct(ether).Module("ip6", "").Struct(ip6Frame).Write()
 				// fastlog.Strings("packet: ether ", ether.String())
 				// fastlog.Strings("packet: ip6 ", ip6Frame.String())
 			}
@@ -587,9 +587,9 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			}
 			if packet.DebugUDP {
 				if ip4Frame != nil {
-					fastlog.NewLine("ether", "").Struct(ether).LF().Module("ip4", "").Struct(ip4Frame).Module("udp", "").Struct(udp).Write()
+					fastlog.NewLine("ether", "").Struct(ether).Module("ip4", "").Struct(ip4Frame).Module("udp", "").Struct(udp).Write()
 				} else {
-					fastlog.NewLine("ether", "").Struct(ether).LF().Module("ip6", "").Struct(ip6Frame).Module("udp", "").Struct(udp).Write()
+					fastlog.NewLine("ether", "").Struct(ether).Module("ip6", "").Struct(ip6Frame).Module("udp", "").Struct(udp).Write()
 				}
 			}
 
@@ -613,9 +613,9 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			case udpDstPort == 546 || udpDstPort == 547: // DHCP6
 				// fmt.Printf("ether : %s", ether)
 				if ip4Frame != nil {
-					fastlog.NewLine("ether", "").Struct(ether).LF().Module("ip4", "").Struct(ip4Frame).Module("udp", "").Struct(udp).Write()
+					fastlog.NewLine("ether", "").Struct(ether).Module("ip4", "").Struct(ip4Frame).Module("udp", "").Struct(udp).Write()
 				} else {
-					fastlog.NewLine("ether", "").Struct(ether).LF().Module("ip6", "").Struct(ip6Frame).Module("udp", "").Struct(udp).Write()
+					fastlog.NewLine("ether", "").Struct(ether).Module("ip6", "").Struct(ip6Frame).Module("udp", "").Struct(udp).Write()
 				}
 				fastlog.NewLine("packet", "ignore dhcp6 packet").ByteArray("payload", udp.Payload()).Write()
 				// fastlog.Strings("packet: dhcp6 packet - do nothing ", host.String())

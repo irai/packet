@@ -58,6 +58,7 @@ func (logger *Logger) NewLine(module string, msg string) *Line {
 }
 
 func (l *Line) Module(name string, msg string) *Line {
+	l.appendByte('\n')
 	return l.newModule(name, msg)
 }
 
