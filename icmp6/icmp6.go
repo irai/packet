@@ -252,7 +252,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 				return packet.Result{}, packet.ErrInvalidMAC
 			}
 			result.Update = true
-			result.FrameAddr = packet.Addr{MAC: ether.Src(), IP: frame.TargetAddress()} // ok to pass frame addr
+			result.FrameAddr = packet.Addr{MAC: frame.TargetLLA(), IP: frame.TargetAddress()} // ok to pass frame addr
 		}
 		return result, nil
 
