@@ -220,7 +220,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 	icmp6Frame := ICMP6(header)
 
 	if !icmp6Frame.IsValid() {
-		fmt.Printf("icmp6 : error invalid icmp from %s len=%d msg=\"% x\" \n", ip6Frame, len(header), header)
+		fastlog.NewLine(module, "error invalid icmp frame").Struct(ether).Int("len", len(header)).ByteArray("frame", header).Write()
 		return packet.Result{}, errParseMessage
 	}
 
@@ -252,7 +252,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 				return packet.Result{}, packet.ErrInvalidMAC
 			}
 			result.Update = true
-			result.FrameAddr = packet.Addr{MAC: ether.Src(), IP: frame.TargetAddress()} // ok to pass frame addr
+			result.FrameAddr = packet.Addr{MAC: frame.TargetLLA(), IP: frame.TargetAddress()} // ok to pass frame addr
 		}
 		return result, nil
 
