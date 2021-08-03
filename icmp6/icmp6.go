@@ -19,6 +19,8 @@ import (
 // Debug packets turn on logging if desirable
 var Debug bool
 
+const module = "icmp6"
+
 // Event represents and ICMP6 event from a host
 type Event struct {
 	Type ipv6.ICMPType
@@ -224,14 +226,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 
 	t := ipv6.ICMPType(icmp6Frame.Type())
 	if Debug && t != ipv6.ICMPTypeRouterAdvertisement {
-		// fastlog.Strings("icmp6 : ether", ether.String())
-		// fastlog.Strings("icmp6 : ip6 ", ip6Frame.String())
-		l := fastlog.NewLine("icmp6", "ether").Struct(ether).LF()
-		l.Module("icmp6", "ip6").Struct(ip6Frame).LF()
-		l.Module("icmp6", "icmp").Struct(icmp6Frame)
-		l.Write()
-		// fastlog.NewLine("icmp6", "ip6").Struct(ip6Frame).Write()
-		// fastlog.Strings("icmp6 : icmp ", icmp6Frame.String())
+		fastlog.NewLine("icmp6", "ether").Struct(ether).Module("icmp6", "ip6").Struct(ip6Frame).Module("icmp6", "icmp").Struct(icmp6Frame).Write()
 	}
 
 	switch t {
@@ -246,10 +241,15 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 			// fastlog.Strings("icmp6 : neighbor advertisement from ip=", ip6Frame.Src().String(), " ", frame.String())
 		}
 
-		// Source IP is sometimes ff02::1 multicast, which means the host is nil
-		if host == nil {
-			if !ip6Frame.Src().Equal(frame.TargetAddress()) {
-				fmt.Printf("icmp6 : neighbor advertisement diverging IP frameIP=%s %s\n", ip6Frame.Src(), frame)
+		// When a device gets an IPv6 address, it will join a solicited-node multicast group
+		// to see if any other devices are trying to communicate with it. In this case, the
+		// source IP is sometimes ff02::1 multicast, which means the host is nil.
+		// If unsolicited and Override, it is an indication the IPv6 that corresponds to a link layer address has changed.
+		if frame.Override() && !frame.Solicited() {
+			fastlog.NewLine(module, "neighbor advertisement overrid IP").Struct(ip6Frame).Module(module, "neighbour advertisement").Struct(frame).Write()
+			if frame.TargetLLA() == nil {
+				fastlog.NewLine(module, "error na override with nil targetLLA").Error(packet.ErrInvalidMAC).Write()
+				return packet.Result{}, packet.ErrInvalidMAC
 			}
 			result.Update = true
 			result.FrameAddr = packet.Addr{MAC: ether.Src(), IP: frame.TargetAddress()} // ok to pass frame addr
@@ -346,12 +346,9 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 		h.Unlock()
 
 		if Debug {
-			l := fastlog.NewLine("icmp6", "ether").Struct(ether).LF()
-			l.Module("icmp6", "ip6").Struct(ip6Frame).LF()
+			l := fastlog.NewLine("icmp6", "ether").Struct(ether).Module("icmp6", "ip6").Struct(ip6Frame)
 			l.Module("icmp6", "router advertisement").Struct(icmp6Frame).String("options", fmt.Sprintf("%+v", router.Options))
 			l.Write()
-			// fastlog.Strings("icmp6 : ip6 ", ip6Frame.String())
-			// fastlog.Strings("icmp6 : router advertisement from ip=", ip6Frame.Src().String(), " ", frame.String(), fmt.Sprintf("%+v", router.Options))
 		}
 
 		result := packet.Result{}

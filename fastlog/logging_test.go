@@ -51,7 +51,7 @@ func TestLine_Write(t *testing.T) {
 	l.IP("ip", ip)
 
 	if !bytes.Equal(l.buffer[:l.index],
-		[]byte(`ether : mac=00:02:03:04:05:af ip=192.168.0.1 int=10 uint8=65ip    : "test ip" mac=00:02:03:04:05:af ip=192.168.0.1`)) {
+		[]byte("ether : mac=00:02:03:04:05:af ip=192.168.0.1 int=10 uint8=65\nip    : \"test ip\" mac=00:02:03:04:05:af ip=192.168.0.1")) {
 		t.Errorf("invalid buffer=[%s], len=%d", string(l.buffer[:l.index]), l.index)
 	}
 
@@ -95,6 +95,7 @@ func TestLine_ByteArray(t *testing.T) {
 			l.Write()
 		})
 	}
+
 }
 
 func TestLine_appendIP6(t *testing.T) {

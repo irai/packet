@@ -138,6 +138,9 @@ func (p ICMP6NeighborAdvertisement) String() string {
 func (p ICMP6NeighborAdvertisement) FastLog(line *fastlog.Line) *fastlog.Line {
 	line.String("type", "na")
 	line.Uint8("code", p.Code())
+	line.Bool("override", p.Override())
+	line.Bool("solicited", p.Solicited())
+	line.Bool("router", p.Solicited())
 	line.IP("targetIP", p.TargetAddress())
 	line.MAC("targetLLA", p.TargetLLA())
 	return line
@@ -146,6 +149,9 @@ func (p ICMP6NeighborAdvertisement) FastLog(line *fastlog.Line) *fastlog.Line {
 func (p ICMP6NeighborAdvertisement) Type() uint8           { return uint8(p[0]) }
 func (p ICMP6NeighborAdvertisement) Code() byte            { return p[1] }
 func (p ICMP6NeighborAdvertisement) Checksum() int         { return int(binary.BigEndian.Uint16(p[2:4])) }
+func (p ICMP6NeighborAdvertisement) Router() bool          { return (p[4] & 0x80) != 0 }
+func (p ICMP6NeighborAdvertisement) Solicited() bool       { return (p[4] & 0x40) != 0 }
+func (p ICMP6NeighborAdvertisement) Override() bool        { return (p[4] & 0x20) != 0 }
 func (p ICMP6NeighborAdvertisement) TargetAddress() net.IP { return net.IP(p[8:24]) }
 func (p ICMP6NeighborAdvertisement) TargetLLA() net.HardwareAddr {
 	// TargetLLA option

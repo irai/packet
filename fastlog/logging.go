@@ -59,6 +59,7 @@ func (logger *Logger) NewLine(module string, msg string) *Line {
 }
 
 func (l *Line) Module(name string, msg string) *Line {
+	l.appendByte('\n')
 	return l.newModule(name, msg)
 }
 
@@ -76,6 +77,7 @@ func (l *Line) newModule(module string, msg string) *Line {
 		l.appendByte('"')
 	}
 	return l
+
 }
 
 // LF append a line feed to line
@@ -115,6 +117,18 @@ func (l *Line) Error(value error) *Line {
 	l.index = l.index + copy(l.buffer[l.index:], " error=[")
 	l.index = l.index + copy(l.buffer[l.index:], value.Error())
 	l.appendByte(']')
+	return l
+}
+
+func (l *Line) Bool(name string, value bool) *Line {
+	l.appendByte(' ')
+	l.index = l.index + copy(l.buffer[l.index:], name)
+	l.appendByte('=')
+	if value {
+		l.index = l.index + copy(l.buffer[l.index:], "true")
+	} else {
+		l.index = l.index + copy(l.buffer[l.index:], "false")
+	}
 	return l
 }
 
@@ -175,18 +189,6 @@ func (l *Line) printUint32(value uint32) *Line {
 		value %= d
 	}
 	l.index = l.index + copy(l.buffer[l.index:], buf)
-	return l
-}
-
-func (l *Line) Bool(name string, value bool) *Line {
-	l.appendByte(' ')
-	l.index = l.index + copy(l.buffer[l.index:], name)
-	l.appendByte('=')
-	if value {
-		l.index = l.index + copy(l.buffer[l.index:], "true")
-	} else {
-		l.index = l.index + copy(l.buffer[l.index:], "false")
-	}
 	return l
 }
 
