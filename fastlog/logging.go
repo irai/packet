@@ -73,6 +73,7 @@ func (l *Line) newModule(module string, msg string) *Line {
 		l.appendByte('"')
 	}
 	return l
+
 }
 
 // LF append a line feed to line

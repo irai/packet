@@ -65,6 +65,7 @@ func TestLine_ByteArray(t *testing.T) {
 			l.Write()
 		})
 	}
+
 }
 
 func TestLine_appendIP6(t *testing.T) {
