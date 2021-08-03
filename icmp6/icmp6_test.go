@@ -61,3 +61,67 @@ func Test_ICMP6Redirect(t *testing.T) {
 	}
 
 }
+
+// sudo tcpdump -en -vv -XX -t icmp6
+// 02:42:ca:78:04:50 > 8c:85:90:ae:ab:fc, ethertype IPv6 (0x86dd), length 86: (hlim 255, next-header ICMPv6 (58) payload length: 32)
+// fe80::ce32:e5ff:fe0e:67f4 > ff02::1: [icmp6 sum ok] ICMP6, neighbor advertisement, length 32, tgt is fe80::ce32:e5ff:fe0e:67f4, Flags [override]
+//   destination link-address option (2), length 8 (1): 02:42:ca:78:04:50
+//   0x0000:  0242 ca78 0450
+var icmp6NAOverride = []byte{
+	0x8c, 0x85, 0x90, 0xae, 0xab, 0xfc, 0x02, 0x42, 0xca, 0x78, 0x04, 0x50, 0x86, 0xdd, 0x60, 0x00, //  .......B.x.P..`.
+	0x00, 0x00, 0x00, 0x20, 0x3a, 0xff, 0xfe, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xce, 0x32, //  ....:..........2
+	0xe5, 0xff, 0xfe, 0x0e, 0x67, 0xf4, 0xff, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, //  ....g...........
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x88, 0x00, 0x54, 0x27, 0x20, 0x00, 0x00, 0x00, 0xfe, 0x80, //  ........T'......
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xce, 0x32, 0xe5, 0xff, 0xfe, 0x0e, 0x67, 0xf4, 0x02, 0x01, //  .......2....g...
+	0x02, 0x42, 0xca, 0x78, 0x04, 0x50, //  .B.x.P
+}
+
+// f8:d0:27:3c:9f:86 > 02:42:ca:78:04:50, ethertype IPv6 (0x86dd), length 78: (hlim 255, next-header ICMPv6 (58) payload length: 24)
+// fe80::fad0:27ff:fe3c:9f86 > fe80::42:caff:fe78:450: [icmp6 sum ok] ICMP6, neighbor advertisement, length 24, tgt is fe80::fad0:27ff:fe3c:9f86, Flags [solicited]
+var icmp6NASolicited = []byte{
+	0x02, 0x42, 0xca, 0x78, 0x04, 0x50, 0xf8, 0xd0, 0x27, 0x3c, 0x9f, 0x86, 0x86, 0xdd, 0x60, 0x00, //  .B.x.P..'<....`.
+	0x00, 0x00, 0x00, 0x18, 0x3a, 0xff, 0xfe, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xfa, 0xd0, //  ....:...........
+	0x27, 0xff, 0xfe, 0x3c, 0x9f, 0x86, 0xfe, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x42, //  '..<...........B
+	0xca, 0xff, 0xfe, 0x78, 0x04, 0x50, 0x88, 0x00, 0xec, 0xf7, 0x40, 0x00, 0x00, 0x00, 0xfe, 0x80, //  ...x.P....@.....
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xfa, 0xd0, 0x27, 0xff, 0xfe, 0x3c, 0x9f, 0x86, //  ........'..<..
+}
+
+func TestHandler_ProcessPacket(t *testing.T) {
+	tc := setupTestHandler()
+	defer tc.Close()
+
+	mac, _ := net.ParseMAC("02:42:ca:78:04:50")
+
+	tests := []struct {
+		name       string
+		frame      []byte
+		wantResult packet.Result
+		wantErr    bool
+	}{
+		{name: "na_override", frame: icmp6NAOverride, wantErr: false,
+			wantResult: packet.Result{Update: true, FrameAddr: packet.Addr{MAC: mac, IP: net.ParseIP("fe80::ce32:e5ff:fe0e:67f4")}}},
+		{name: "na_solicited", frame: icmp6NASolicited, wantErr: false,
+			wantResult: packet.Result{Update: false, FrameAddr: packet.Addr{}}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ether := packet.Ether(tt.frame)
+			ip6Frame := packet.IP6(ether.Payload())
+
+			gotResult, err := tc.h.ProcessPacket(nil, ether, ip6Frame.Payload())
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Handler.ProcessPacket() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if gotResult.Update != tt.wantResult.Update {
+				t.Errorf("Handler.ProcessPacket() invalid result update=%v, want=%v", gotResult.Update, tt.wantResult.Update)
+			}
+			if !gotResult.FrameAddr.IP.Equal(tt.wantResult.FrameAddr.IP) ||
+				!bytes.Equal(gotResult.FrameAddr.MAC, tt.wantResult.FrameAddr.MAC) {
+				t.Errorf("Handler.ProcessPacket() invalid addr=%v, want=%v", gotResult.FrameAddr, tt.wantResult.FrameAddr)
+				return
+			}
+		})
+	}
+}
