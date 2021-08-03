@@ -195,7 +195,7 @@ func (h *Handler) lockAndStopHunt(host *packet.Host, stage packet.HuntStage) (er
 	// IP6 handlers
 	go func() {
 		if _, err := h.ICMP6Handler.StopHunt(addr); err != nil {
-			fmt.Printf("packet: failed to stop icmp6 hunt: %s", err.Error())
+			fastlog.NewLine(module, "error failed to stop icmp6 hunt").Struct(addr).Error(err).Write()
 		}
 	}()
 	return nil
