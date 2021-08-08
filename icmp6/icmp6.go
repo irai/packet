@@ -170,10 +170,9 @@ func (h *Handler) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
 }
 
 func (h *Handler) sendPacket(srcAddr packet.Addr, dstAddr packet.Addr, b []byte) error {
-	buf := h.session.EtherPool.Get().(*[packet.EthMaxSize]byte) // reuse buffers
-	defer h.session.EtherPool.Put(buf)
+	buf := h.session.GetBuffer()
+	defer h.session.PutBuffer(buf)
 	ether := packet.Ether(buf[:])
-	// ether := packet.Ether(make([]byte, packet.EthMaxSize))
 
 	// All Neighbor Discovery packets must use link-local addresses (FE80::/64)
 	// and a hop limit of 255. Linux discards ND messages with hop limits different than 255.
@@ -195,8 +194,8 @@ func (h *Handler) sendPacket(srcAddr packet.Addr, dstAddr packet.Addr, b []byte)
 	//   - 4 bytes high endian payload length (the same value as in the IPv6 header)
 	//   - 3 bytes zero
 	//   - 1 byte nextheader (so, 58 decimal)
-	buf2 := h.session.EtherPool.Get().(*[packet.EthMaxSize]byte) // reuse buffers
-	defer h.session.EtherPool.Put(buf2)
+	buf2 := h.session.GetBuffer()
+	defer h.session.PutBuffer(buf2)
 	// psh := make([]byte, 40+len(b))
 	psh := buf2[:40+len(b)]
 	copy(psh[0:16], ip6.Src())

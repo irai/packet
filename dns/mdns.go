@@ -106,10 +106,9 @@ func (h *DNSHandler) sendMDNSQuery(srcAddr packet.Addr, dstAddr packet.Addr, mty
 		return err
 	}
 
-	buffer := h.session.EtherPool.Get().(*[packet.EthMaxSize]byte) // reuse buffers
-	defer h.session.EtherPool.Put(buffer)
-	ether := packet.Ether(buf[:])
-	// ether := packet.Ether(make([]byte, packet.EthMaxSize))
+	buffer := h.session.GetBuffer()
+	defer h.session.PutBuffer(buffer)
+	ether := packet.Ether(buffer[:])
 
 	//  The source UDP port in all Multicast DNS responses MUST be 5353 (the
 	//  well-known port assigned to mDNS).  Multicast DNS implementations

@@ -7,13 +7,15 @@ import (
 	"time"
 )
 
+type Buffer [EthMaxSize]byte
+
 type Session struct {
 	Conn         net.PacketConn
 	NICInfo      *NICInfo
 	HostTable    HostTable    // store IP list - one for each host
 	MACTable     MACTable     // store mac list
 	mutex        sync.RWMutex // global session mutex
-	EtherPool    sync.Pool
+	etherPool    sync.Pool
 	eventChannel chan NetEvent
 }
 
@@ -21,12 +23,12 @@ func NewEmptySession() *Session {
 	session := new(Session)
 	session.MACTable = NewMACTable()
 	session.HostTable = NewHostTable()
-	session.EtherPool = sync.Pool{
+	session.etherPool = sync.Pool{
 		New: func() interface{} {
 			// The Pool's New function should generally only return pointer
 			// types, since a pointer can be put into the return interface
 			// value without an allocation:
-			return new([EthMaxSize]byte)
+			return new(Buffer)
 		},
 	}
 	return session
@@ -61,6 +63,14 @@ func (p PacketNOOP) Close() error                           { return nil }
 
 // func (p PacketNOOP) HuntStage(addr Addr) HuntStage              { return StageNormal }
 func (p PacketNOOP) MinuteTicker(now time.Time) error { return nil }
+
+func (h *Session) GetBuffer() *Buffer {
+	return h.etherPool.Get().(*Buffer) // reuse buffers
+}
+
+func (h *Session) PutBuffer(buf *Buffer) {
+	h.etherPool.Put(buf)
+}
 
 // PrintTable logs the table to standard out
 func (h *Session) PrintTable() {

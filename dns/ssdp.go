@@ -148,8 +148,8 @@ ST: "ssdp:all"`), []byte{0x0d, 0x0a, 0x0d, 0x0a}...) // must have 0d0a,0d0a at t
 
 //SendSSDPSearch transmit a multicast SSDP M-SEARCH discovery packet
 func (h *DNSHandler) SendSSDPSearch() (err error) {
-	buf := h.session.EtherPool.Get().(*[packet.EthMaxSize]byte) // reuse buffers
-	defer h.session.EtherPool.Put(buf)
+	buf := h.session.GetBuffer()
+	defer h.session.PutBuffer(buf)
 	ether := packet.Ether(buf[:])
 
 	// ether := packet.Ether(make([]byte, packet.EthMaxSize))

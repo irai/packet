@@ -56,13 +56,9 @@ func (h *Handler) Request(srcAddr packet.Addr, dstAddr packet.Addr) error {
 }
 
 func (h *Handler) request(dstEther net.HardwareAddr, srcAddr packet.Addr, dstAddr packet.Addr) error {
-	buf := h.session.EtherPool.Get().(*[packet.EthMaxSize]byte) // reuse buffers
-	defer h.session.EtherPool.Put(buf)
+	buf := h.session.GetBuffer()
+	defer h.session.PutBuffer(buf)
 	ether := packet.Ether(buf[:])
-	// var b [packet.EthMaxSize]byte
-	// ether := packet.Ether(b[0:])
-
-	// ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_ARP, srcHwAddr, dstEther)
 
 	// Send packet with ether src set to host but arp packet set to target
 	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_ARP, h.session.NICInfo.HostMAC, dstEther)
@@ -94,11 +90,9 @@ func (h *Handler) Reply(dstEther net.HardwareAddr, srcAddr packet.Addr, dstAddr 
 // dstEther identifies the target for the Ethernet packet : i.e. use EthernetBroadcast for gratuitous ARP
 // func (h *Handler) reply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
 func (h *Handler) reply(dstEther net.HardwareAddr, srcAddr packet.Addr, dstAddr packet.Addr) error {
-	buf := h.session.EtherPool.Get().(*[packet.EthMaxSize]byte) // reuse buffers
-	defer h.session.EtherPool.Put(buf)
+	buf := h.session.GetBuffer()
+	defer h.session.PutBuffer(buf)
 	ether := packet.Ether(buf[:])
-	// var b [packet.EthMaxSize]byte
-	// ether := packet.Ether(b[0:])
 
 	// ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_ARP, srcHwAddr, dstEther)
 	// Send packet with ether src set to host but arp packet set to target
