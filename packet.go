@@ -439,6 +439,7 @@ func UDPMarshalBinary(p []byte, srcPort uint16, dstPort uint16) UDP {
 	binary.BigEndian.PutUint16(p[0:2], srcPort)
 	binary.BigEndian.PutUint16(p[2:4], dstPort)
 	binary.BigEndian.PutUint16(p[4:6], 0) // len zero - no payload
+	binary.BigEndian.PutUint16(p[6:8], 0) // checksum
 	return UDP(p)
 }
 
