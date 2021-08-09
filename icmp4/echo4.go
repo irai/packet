@@ -130,13 +130,13 @@ func (h *Handler) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
 	}
 
 	// first attempt
-	err := h.Ping(packet.Addr{MAC: h.session.NICInfo.RouterMAC, IP: h.session.NICInfo.RouterIP4.IP}, addr, time.Second*2)
+	err := h.Ping(packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.RouterIP4.IP}, addr, time.Second*2)
 	if err == nil {
 		return packet.StageRedirected, nil
 	}
 
 	// second attempt
-	err = h.Ping(packet.Addr{MAC: h.session.NICInfo.RouterMAC, IP: h.session.NICInfo.RouterIP4.IP}, addr, time.Second*2)
+	err = h.Ping(packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.RouterIP4.IP}, addr, time.Second*2)
 	if err == nil {
 		return packet.StageRedirected, nil
 	}

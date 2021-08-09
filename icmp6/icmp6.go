@@ -181,7 +181,7 @@ func (h *Handler) sendPacket(srcAddr packet.Addr, dstAddr packet.Addr, b []byte)
 		hopLimit = 255
 	}
 
-	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IPV6, srcAddr.MAC, dstAddr.MAC)
+	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IPV6, h.session.NICInfo.HostMAC, dstAddr.MAC)
 	ip6 := packet.IP6MarshalBinary(ether.Payload(), hopLimit, srcAddr.IP, dstAddr.IP)
 	ip6, _ = ip6.AppendPayload(b, syscall.IPPROTO_ICMPV6)
 	ether, _ = ether.SetPayload(ip6)

@@ -121,7 +121,7 @@ func (h *DNSHandler) sendMDNSQuery(srcAddr packet.Addr, dstAddr packet.Addr, mty
 
 	// IP4
 	if srcAddr.IP.To4() != nil {
-		ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IP, srcAddr.MAC, dstAddr.MAC)
+		ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IP, h.session.NICInfo.HostMAC, dstAddr.MAC)
 		ip4 := packet.IP4MarshalBinary(ether.Payload(), 255, srcAddr.IP, dstAddr.IP)
 		udp := packet.UDPMarshalBinary(ip4.Payload(), dstAddr.Port, dstAddr.Port) // same port number for src and dst
 		if udp, err = udp.AppendPayload(buf); err != nil {
@@ -138,7 +138,7 @@ func (h *DNSHandler) sendMDNSQuery(srcAddr packet.Addr, dstAddr packet.Addr, mty
 	}
 
 	// IP6
-	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IPV6, srcAddr.MAC, dstAddr.MAC)
+	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IPV6, h.session.NICInfo.HostMAC, dstAddr.MAC)
 	ip6 := packet.IP6MarshalBinary(ether.Payload(), 255, srcAddr.IP, dstAddr.IP)
 	udp := packet.UDPMarshalBinary(ip6.Payload(), dstAddr.Port, dstAddr.Port) // same port number for src and dst
 	if udp, err = udp.AppendPayload(buf); err != nil {
