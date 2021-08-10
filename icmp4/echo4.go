@@ -74,7 +74,11 @@ func echoNotify(id uint16) {
 }
 
 // Ping send a ping request and wait for a reply
-func (h *Handler) Ping(srcAddr packet.Addr, dstAddr packet.Addr, timeout time.Duration) (err error) {
+func (h *Handler) Ping(dstAddr packet.Addr, timeout time.Duration) (err error) {
+	return h.ping(h.session.NICInfo.HostAddr4, dstAddr, timeout)
+}
+
+func (h *Handler) ping(srcAddr packet.Addr, dstAddr packet.Addr, timeout time.Duration) (err error) {
 	if timeout <= 0 || timeout > time.Second*10 {
 		timeout = time.Second * 2
 	}
@@ -124,19 +128,19 @@ func (h *Handler) Ping(srcAddr packet.Addr, dstAddr packet.Addr, timeout time.Du
 func (h *Handler) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
 	// Test if client is online first
 	// If client does not respond to echo, there is little we can test
-	if err := h.Ping(packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostIP4.IP}, addr, time.Second*2); err != nil {
+	if err := h.Ping(addr, time.Second*2); err != nil {
 		fmt.Printf("icmp4 : not responding to ping ip=%s mac=%s\n", addr.IP, addr.MAC)
 		return packet.StageNormal, packet.ErrTimeout
 	}
 
 	// first attempt
-	err := h.Ping(packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.RouterIP4.IP}, addr, time.Second*2)
+	err := h.ping(packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.RouterIP4.IP}, addr, time.Second*2)
 	if err == nil {
 		return packet.StageRedirected, nil
 	}
 
 	// second attempt
-	err = h.Ping(packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.RouterIP4.IP}, addr, time.Second*2)
+	err = h.ping(packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.RouterIP4.IP}, addr, time.Second*2)
 	if err == nil {
 		return packet.StageRedirected, nil
 	}

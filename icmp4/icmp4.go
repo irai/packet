@@ -14,7 +14,7 @@ var Debug bool
 
 type ICMP4Handler interface {
 	packet.PacketProcessor
-	Ping(srcAddr packet.Addr, dstAddr packet.Addr, timeout time.Duration) (err error)
+	Ping(dstAddr packet.Addr, timeout time.Duration) (err error)
 }
 
 type ICMP4NOOP struct {
@@ -36,7 +36,7 @@ func (p ICMP4NOOP) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
 }
 func (p ICMP4NOOP) MinuteTicker(now time.Time) error { return nil }
 func (p ICMP4NOOP) Close() error                     { return nil }
-func (p ICMP4NOOP) Ping(srcAddr packet.Addr, dstAddr packet.Addr, timeout time.Duration) error {
+func (p ICMP4NOOP) Ping(dstAddr packet.Addr, timeout time.Duration) error {
 	return nil
 }
 

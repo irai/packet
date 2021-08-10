@@ -542,7 +542,6 @@ func cmd(h *handlers) {
 				}
 				// if err := h.SendEchoRequest(packet.Addr{MAC: packet.Eth4AllNodesMulticast, IP: ip}, 2, 2); err != nil {
 				if err := h.icmp4.Ping(
-					packet.Addr{MAC: h.engine.Session().NICInfo.HostMAC, IP: h.engine.Session().NICInfo.HostIP4.IP},
 					packet.Addr{MAC: packet.Eth4AllNodesMulticast, IP: ip}, time.Second*2); err != nil {
 					if errors.Is(err, packet.ErrTimeout) {
 						fmt.Println("ping timeout ")

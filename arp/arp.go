@@ -103,7 +103,7 @@ func (h *Handler) MinuteTicker(now time.Time) error {
 	}
 
 	for _, addr := range arpAddrs {
-		if err := h.Request(h.session.NICInfo.HostAddr4, addr); err != nil {
+		if err := h.RequestTo(addr.MAC, addr.IP); err != nil {
 			return err
 		}
 	}
@@ -114,7 +114,7 @@ func (h *Handler) MinuteTicker(now time.Time) error {
 //
 // The ARP handler sends a ARP Request packet
 func (h *Handler) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
-	err := h.request(EthernetBroadcast, h.session.NICInfo.HostAddr4, packet.Addr{MAC: EthernetBroadcast, IP: addr.IP})
+	err := h.Request(addr.IP)
 	h.arpMutex.Lock()
 	defer h.arpMutex.Unlock()
 	if _, found := h.huntList[string(addr.MAC)]; found {
