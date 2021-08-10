@@ -78,19 +78,18 @@ func (h *Handler) spoofLoop(addr packet.Addr) {
 
 		if !hunting || h.closed {
 			fmt.Printf("arp   : hunt loop stop %s repeat=%v duration=%v\n", addr, nTimes, time.Since(startTime))
-			// clear the arp table
-			if err := h.request(addr.MAC, h.session.NICInfo.RouterAddr4, packet.Addr{MAC: EthernetBroadcast, IP: h.session.NICInfo.RouterAddr4.IP}); err != nil {
+			// clear the arp table with announcement to real router mac
+			// request will fix the ether src mac to host to prevent ethernet port disabling
+			if err := h.request(addr.MAC, h.session.NICInfo.RouterAddr4, h.session.NICInfo.RouterAddr4); err != nil {
 				fmt.Printf("arp error send announcement packet %s: %s\n", addr, err)
 			}
 			return
 		}
 
 		// Re-arp target to change router to host so all traffic comes to us
-		// Announce to target that we own the router IP
-		// This will update the target arp table with our mac
-		// i.e. tell target I am 192.168.0.1
 		//
-		// Use virtual IP as it is guaranteed to not change.
+		// Announce to target that we own the router IP; This will update the target arp table with our mac
+		// i.e. tell target I am 192.168.0.1
 		err := h.AnnounceTo(targetAddr.MAC, h.session.NICInfo.RouterIP4.IP)
 		if err != nil {
 			fmt.Printf("arp   : error send announcement packet %s: %s\n", targetAddr, err)
