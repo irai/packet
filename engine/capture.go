@@ -270,13 +270,6 @@ func (h *Handler) lockAndSetOnline(host *packet.Host, notify bool) {
 	// addr := packet.Addr{IP: host.Addr.IP, MAC: host.MACEntry.MAC}
 	addr := host.Addr
 	notification := toNotification(host)
-	/**
-	notification := Notification{Addr: addr, Online: true,
-		DHCPName: host.DHCP4Name, MDNSName: host.MDNSName, UPNPName: host.UPNPName, NBNSName: host.NBNSName,
-		Model: host.Model, Manufacturer: host.Manufacturer,
-		IsRouter: host.MACEntry.IsRouter}
-	*/
-
 	if packet.Debug {
 		fmt.Printf("packet: IP is online %s\n", host)
 	}
