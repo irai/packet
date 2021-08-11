@@ -354,6 +354,10 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 	var result packet.Result
 
 	switch {
+	case udpSrcPort == 433 || udpDstPort == 433:
+		// ssl udp - likely quic?
+		// do nothing
+
 	case udpDstPort == packet.DHCP4ServerPort || udpDstPort == packet.DHCP4ClientPort: // DHCP4 packet?
 		if result, err = h.DHCP4Handler.ProcessPacket(host, ether, udp.Payload()); err != nil {
 			fmt.Printf("packet: error processing dhcp4: %s\n", err)
@@ -402,50 +406,14 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 				host.MACEntry.Row.Unlock()
 			}
 			if ipv6Host.Addr.IP != nil {
-				fastlog.NewLine("packet", "mdns ipv6 ignoring host").Struct(ipv6Host).Write()
+				fastlog.NewLine(module, "mdns ipv6 ignoring host").Struct(ipv6Host).Write()
 			}
-		}
-
-	case udpSrcPort == 5252 || udpDstPort == 5252:
-		// Link Local Multicast Name Resolution (LLMNR)
-		fastlog.NewLine("proto", "LLMNR").Struct(host).Write()
-		ipv4Name, ipv6Name, err := h.DNSHandler.ProcessMDNS(host, ether, udp.Payload())
-		if err != nil {
-			fmt.Printf("packet: error processing mdns: %s\n", err)
-			break
-		}
-		if ipv4Name.NameEntry.Name != "" {
-			fastlog.NewLine("llmnr", "ipv4 host").Struct(ipv4Name).Write()
-		}
-		if ipv6Name.NameEntry.Name != "" {
-			fastlog.NewLine("llmnr", "ipv6 host").Struct(ipv6Name).Write()
-		}
-
-	case udpDstPort == 137 || udpDstPort == 138:
-		// Netbions NBNS
-		entry, err := h.DNSHandler.ProcessNBNS(host, ether, udp.Payload())
-		if err != nil {
-			fmt.Printf("packet: error processing ssdp: %s\n", err)
-			break
-		}
-		if entry.Name != "" {
-			host.MACEntry.Row.Lock()
-			host.NBNSName, notify = host.NBNSName.Merge(entry)
-			if notify {
-				fastlog.NewLine(module, "updated nbns name").Struct(host.Addr).Struct(host.NBNSName).Write()
-				host.MACEntry.NBNSName, _ = host.MACEntry.NBNSName.Merge(host.NBNSName)
-			}
-			host.MACEntry.Row.Unlock()
 		}
 
 	case udpSrcPort == 123:
 		// Network time synchonization protocol
 		// do nothing
 		fmt.Printf("proto : NTP %s %s\n", ether, host)
-
-	case udpSrcPort == 433 || udpDstPort == 433:
-		// ssl udp - likely quic?
-		// do nothing
 
 	case udpDstPort == 1900:
 		// Microsoft Simple Service Discovery Protocol
@@ -460,7 +428,7 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 				// Retrieve in a goroutine
 				go func(host *packet.Host) {
 					host.MACEntry.Row.RLock()
-					if host.SSDPName.Name != "" { // already have name
+					if host.SSDPName.Name != "" { // ignore if already have name
 						host.MACEntry.Row.RUnlock()
 						return
 					}
@@ -497,6 +465,38 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 		// Web Services Discovery Protocol (WSD)
 		fastlog.NewLine("ether", "wsd packet").Struct(ether).LF().Module("udp", "wsd packet").Struct(udp).Write()
 		fastlog.NewLine("proto", "wsd packet").Struct(host).String("payload", string(udp.Payload())).Write()
+
+	case udpSrcPort == 5252 || udpDstPort == 5252:
+		// Link Local Multicast Name Resolution (LLMNR)
+		fastlog.NewLine(module, "received LLMNR packet").Struct(host).Write()
+		ipv4Name, ipv6Name, err := h.DNSHandler.ProcessMDNS(host, ether, udp.Payload())
+		if err != nil {
+			fmt.Printf("packet: error processing mdns: %s\n", err)
+			break
+		}
+		if ipv4Name.NameEntry.Name != "" {
+			fastlog.NewLine(module, "llmnr ipv4 host").Struct(ipv4Name).Write()
+		}
+		if ipv6Name.NameEntry.Name != "" {
+			fastlog.NewLine(module, "llmnr ipv6 host").Struct(ipv6Name).Write()
+		}
+
+	case udpDstPort == 137 || udpDstPort == 138:
+		// Netbions NBNS
+		entry, err := h.DNSHandler.ProcessNBNS(host, ether, udp.Payload())
+		if err != nil {
+			fmt.Printf("packet: error processing ssdp: %s\n", err)
+			break
+		}
+		if entry.Name != "" {
+			host.MACEntry.Row.Lock()
+			host.NBNSName, notify = host.NBNSName.Merge(entry)
+			if notify {
+				fastlog.NewLine(module, "updated nbns name").Struct(host.Addr).Struct(host.NBNSName).Write()
+				host.MACEntry.NBNSName, notify = host.MACEntry.NBNSName.Merge(host.NBNSName)
+			}
+			host.MACEntry.Row.Unlock()
+		}
 
 	case udpDstPort == 32412 || udpDstPort == 32414:
 		// Plex application multicast on these ports to find players.
