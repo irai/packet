@@ -107,7 +107,7 @@ func (h *Handler) purge(now time.Time, probeDur time.Duration, offlineDur time.D
 
 func toNotification(host *packet.Host) Notification {
 	// send the MACEntry name as there can be many IPv6 hosts, some with name entries not populated yet
-	return Notification{Addr: host.Addr, Online: false,
+	return Notification{Addr: host.Addr, Online: host.Online,
 		DHCP4Name: host.MACEntry.DHCP4Name, MDNSName: host.MACEntry.MDNSName, SSDPName: host.MACEntry.SSDPName, NBNSName: host.MACEntry.NBNSName,
 		IsRouter: host.MACEntry.IsRouter}
 }
