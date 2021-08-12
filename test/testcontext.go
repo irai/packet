@@ -191,6 +191,7 @@ func NewTestContext() *TestContext {
 		RouterIP4:   net.IPNet{IP: RouterIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
 		RouterMAC:   RouterMAC,
 		RouterAddr4: packet.Addr{MAC: RouterMAC, IP: RouterIP4},
+		HostAddr4:   packet.Addr{MAC: HostMAC, IP: HostIP4},
 		HomeLAN4:    HomeLAN,
 	}
 
