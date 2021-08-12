@@ -194,7 +194,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (pac
 		// | request    | 1 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  targetIP |
 		// +============+===+===========+===========+============+============+===================+===========+
 		if Debug {
-			fastlog.NewLine(module, "ether").Struct(ether).Module(module, "who is").IP("ip", frame.DstIP()).Struct(frame).Write()
+			fastlog.NewLine(module, "ether").Struct(ether).Module(module, "request received").IP("ip", frame.DstIP()).Struct(frame).Write()
 		}
 		// if we are spoofing the src host and the src host is trying to discover the router IP,
 		// reply on behalf of the router
