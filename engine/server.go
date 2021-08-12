@@ -466,7 +466,7 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 		fastlog.NewLine("ether", "wsd packet").Struct(ether).LF().Module("udp", "wsd packet").Struct(udp).Write()
 		fastlog.NewLine("proto", "wsd packet").Struct(host).String("payload", string(udp.Payload())).Write()
 
-	case udpSrcPort == 5252 || udpDstPort == 5252:
+	case udpSrcPort == 5255 || udpDstPort == 5255:
 		// Link Local Multicast Name Resolution (LLMNR)
 		fastlog.NewLine(module, "received LLMNR packet").Struct(host).Write()
 		ipv4Name, ipv6Name, err := h.DNSHandler.ProcessMDNS(host, ether, udp.Payload())
