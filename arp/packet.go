@@ -2,11 +2,11 @@ package arp
 
 import (
 	"encoding/binary"
-	"fmt"
 	"net"
 	"syscall"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/fastlog"
 )
 
 // ARP Operation types
@@ -79,7 +79,19 @@ func (b ARP) DstIP() net.IP {
 }
 
 func (b ARP) String() string {
-	return fmt.Sprintf("operation=%d proto=%d srcMAC=%s srcIP=%s dstMAC=%s dstIP=%s", b.Operation(), b.Proto(), b.SrcMAC(), b.SrcIP(), b.DstMAC(), b.DstIP())
+	l := fastlog.NewLine("", "")
+	b.FastLog(l)
+	return l.ToString()
+}
+
+func (b ARP) FastLog(line *fastlog.Line) *fastlog.Line {
+	line.Uint16("operation", b.Operation())
+	line.Uint16("proto", b.Proto())
+	line.MAC("srcMAC", b.SrcMAC())
+	line.IP("srcIP", b.SrcIP())
+	line.MAC("dstMAC", b.DstMAC())
+	line.IP("dstIP", b.DstIP())
+	return line
 }
 
 // MarshalBinary creates a wire ARP frame ready for transmission
@@ -91,7 +103,7 @@ func MarshalBinary(b []byte, operation uint16, srcAddr packet.Addr, dstAddr pack
 		b = make([]byte, arpLen)
 	}
 	if cap(b) < arpLen {
-		return nil, fmt.Errorf("invalid len")
+		return nil, packet.ErrInvalidLen
 	}
 	b = b[:arpLen] // change the slice to accomodate the index below in case slice is less than arpLen
 

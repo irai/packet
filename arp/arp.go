@@ -2,12 +2,12 @@ package arp
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"sync"
 	"time"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/fastlog"
 )
 
 type ARPHandler interface {
@@ -36,6 +36,8 @@ var (
 	Debug bool
 )
 
+const module = "arp"
+
 // New creates the ARP handler and attach to the engine
 func New(session *packet.Session) (h *Handler, err error) {
 	return Config{ProbeInterval: time.Minute * 5}.New(session)
@@ -43,7 +45,6 @@ func New(session *packet.Session) (h *Handler, err error) {
 
 func (config Config) New(session *packet.Session) (h *Handler, err error) {
 	h = &Handler{session: session, huntList: make(map[string]packet.Addr, 6), closeChan: make(chan bool)}
-	// h.table, _ = loadARPProcTable() // load linux proc table
 	if h.session.NICInfo.HostIP4.IP.To4() == nil {
 		return nil, packet.ErrInvalidIP
 	}
@@ -73,7 +74,8 @@ func (h *Handler) PrintTable() {
 	h.arpMutex.Lock()
 	defer h.arpMutex.Unlock()
 	for _, v := range h.huntList {
-		fmt.Printf("arp   : hunting %s", v)
+		fastlog.NewLine(module, "hunting").Struct(v).Write()
+		// fmt.Printf("arp   : hunting %s", v)
 	}
 }
 
@@ -160,7 +162,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (pac
 	// skip link local packets
 	if frame.SrcIP().IsLinkLocalUnicast() || frame.DstIP().IsLinkLocalUnicast() {
 		if Debug {
-			fmt.Printf("arp   : skipping link local packet smac=%v sip=%v tmac=%v tip=%v\n", frame.SrcMAC(), frame.SrcIP(), frame.DstMAC(), frame.DstIP())
+			fastlog.NewLine(module, "skipping link local packet").Struct(frame).Write()
 		}
 		return packet.Result{}, nil
 	}
@@ -179,7 +181,8 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (pac
 			operation = request
 		}
 	default:
-		fmt.Printf("arp   : invalid operation: %s\n", frame)
+		fastlog.NewLine(module, "invalid operation").Struct(frame).Write()
+		// fmt.Printf("arp   : invalid operation: %s\n", frame)
 		return packet.Result{}, nil
 	}
 
@@ -191,8 +194,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (pac
 		// | request    | 1 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  targetIP |
 		// +============+===+===========+===========+============+============+===================+===========+
 		if Debug {
-			fmt.Println("ether :", ether)
-			fmt.Printf("arp   : who is %s: %s\n", frame.DstIP(), frame)
+			fastlog.NewLine(module, "ether").Struct(ether).Module(module, "who is").IP("ip", frame.DstIP()).Struct(frame).Write()
 		}
 		// if we are spoofing the src host and the src host is trying to discover the router IP,
 		// reply on behalf of the router
@@ -201,7 +203,8 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (pac
 		h.arpMutex.Unlock()
 		if hunting && frame.DstIP().Equal(h.session.NICInfo.RouterIP4.IP) {
 			if Debug {
-				fmt.Printf("arp   : router spoofing - send reply i am ip=%s\n", frame.DstIP())
+				fastlog.NewLine(module, "router spoofing - send reply i am").IP("ip", frame.DstIP()).Write()
+				// fmt.Printf("arp   : router spoofing - send reply i am ip=%s\n", frame.DstIP())
 			}
 			h.reply(frame.SrcMAC(), packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: frame.DstIP()}, packet.Addr{MAC: frame.SrcMAC(), IP: frame.SrcIP()})
 			return packet.Result{}, nil
@@ -218,8 +221,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (pac
 		// | ACD probe  | 1 | broadcast | clientMAC | clientMAC  | 0x00       | 0x00              |  targetIP |
 		// +============+===+===========+===========+============+============+===================+===========+
 		if Debug {
-			fmt.Println("ether :", ether)
-			fmt.Printf("arp   : probe recvd: %s\n", frame)
+			fastlog.NewLine(module, "ether").Struct(ether).Module(module, "probe recvd").Struct(frame).Write()
 		}
 
 		// reject any other ip
@@ -233,7 +235,8 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (pac
 			// Note: detected one situation where android probed external DNS IP. Not sure if this occur in other clients.
 			//     arp  : probe reject for ip=8.8.8.8 from mac=84:11:9e:03:89:c0 (android phone) - 10 March 2021
 			if h.session.NICInfo.HomeLAN4.Contains(frame.DstIP()) {
-				fmt.Printf("arp   : probe reject for ip=%s from mac=%s macentry=%s\n", frame.DstIP(), frame.SrcMAC(), macEntry)
+				fastlog.NewLine(module, "probe reject for").IP("ip", frame.DstIP()).MAC("fromMAC", frame.SrcMAC()).Struct(macEntry).Write()
+				// fmt.Printf("arp   : probe reject for ip=%s from mac=%s macentry=%s\n", frame.DstIP(), frame.SrcMAC(), macEntry)
 				h.reply(frame.SrcMAC(), packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: frame.DstIP()}, packet.Addr{MAC: frame.SrcMAC(), IP: net.IP(EthernetBroadcast)})
 			}
 		}
@@ -246,8 +249,9 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (pac
 		// | ACD announ | 1 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  clientIP |
 		// +============+===+===========+===========+============+============+===================+===========+
 		if Debug {
-			fmt.Println("ether :", ether)
-			fmt.Printf("arp   : announcement recvd: %s\n", frame)
+			fastlog.NewLine(module, "ether").Struct(ether).Module(module, "announcement recvd").Struct(frame).Write()
+			// fmt.Println("ether :", ether)
+			// fmt.Printf("arp   : announcement recvd: %s\n", frame)
 		}
 
 	default:
@@ -258,8 +262,9 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (pac
 		// | gratuitous | 2 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  clientIP |
 		// +============+===+===========+===========+============+============+===================+===========+
 		if Debug {
-			fmt.Println("ether :", ether)
-			fmt.Printf("arp   : reply recvd: %s\n", frame)
+			fastlog.NewLine(module, "ether").Struct(ether).Module(module, "reply recvd").Struct(frame).Write()
+			// fmt.Println("ether :", ether)
+			// fmt.Printf("arp   : reply recvd: %s\n", frame)
 		}
 	}
 

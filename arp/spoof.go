@@ -1,11 +1,11 @@
 package arp
 
 import (
-	"fmt"
 	"net"
 	"time"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/fastlog"
 )
 
 func (h *Handler) findHuntByIP(ip net.IP) (packet.Addr, bool) {
@@ -35,7 +35,8 @@ func (h *Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
 	}
 	h.huntList[string(addr.MAC)] = addr
 
-	fmt.Printf("arp   : start hunt %s\n", addr)
+	fastlog.NewLine(module, "start hunt").Struct(addr).Write()
+	// fmt.Printf("arp   : start hunt %s\n", addr)
 	go h.spoofLoop(addr)
 	return packet.StageHunt, nil
 }
@@ -50,9 +51,11 @@ func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
 	}
 	h.arpMutex.Unlock()
 	if !hunting {
-		fmt.Println("arp   : hunt stop failed - not in hunt stage", addr)
+		fastlog.NewLine(module, "error stop hunt failed - not in hunt stage").Struct(addr).Write()
+		// fmt.Println("arp   : hunt stop failed - not in hunt stage", addr)
 	}
-	fmt.Println("arp   : stop hunt", addr)
+	fastlog.NewLine(module, "stop hunt").Struct(addr).Write()
+	// fmt.Println("arp   : stop hunt", addr)
 	return packet.StageNormal, nil
 }
 
@@ -77,11 +80,13 @@ func (h *Handler) spoofLoop(addr packet.Addr) {
 		h.arpMutex.Unlock()
 
 		if !hunting || h.closed {
-			fmt.Printf("arp   : hunt loop stop %s repeat=%v duration=%v\n", addr, nTimes, time.Since(startTime))
+			fastlog.NewLine(module, "hunt loop stop").Struct(addr).Int("repeat", nTimes).String("duration", time.Since(startTime).String()).Write()
+			// fmt.Printf("arp   : hunt loop stop %s repeat=%v duration=%v\n", addr, nTimes, time.Since(startTime))
 			// clear the arp table with announcement to real router mac
 			// request will fix the ether src mac to host to prevent ethernet port disabling
 			if err := h.request(addr.MAC, h.session.NICInfo.RouterAddr4, h.session.NICInfo.RouterAddr4); err != nil {
-				fmt.Printf("arp error send announcement packet %s: %s\n", addr, err)
+				fastlog.NewLine(module, "error send request packet").Struct(addr).Error(err).Write()
+				// fmt.Printf("arp error send announcement packet %s: %s\n", addr, err)
 			}
 			return
 		}
@@ -92,12 +97,14 @@ func (h *Handler) spoofLoop(addr packet.Addr) {
 		// i.e. tell target I am 192.168.0.1
 		err := h.AnnounceTo(targetAddr.MAC, h.session.NICInfo.RouterIP4.IP)
 		if err != nil {
-			fmt.Printf("arp   : error send announcement packet %s: %s\n", targetAddr, err)
+			fastlog.NewLine(module, "error send announcement packet").Struct(targetAddr).Error(err).Write()
+			// fmt.Printf("arp   : error send announcement packet %s: %s\n", targetAddr, err)
 			return
 		}
 
 		if nTimes%16 == 0 {
-			fmt.Printf("arp   : hunt loop attack %s repeat=%v duration=%s\n", targetAddr, nTimes, time.Since(startTime))
+			fastlog.NewLine(module, "hunt loop attack").Struct(targetAddr).Int("repeat", nTimes).String("duration", time.Since(startTime).String()).Write()
+			// fmt.Printf("arp   : hunt loop attack %s repeat=%v duration=%s\n", targetAddr, nTimes, time.Since(startTime))
 		}
 		nTimes++
 

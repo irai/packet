@@ -2,19 +2,15 @@ package arp
 
 import (
 	"bytes"
-	"fmt"
 	"net"
 	"syscall"
 	"time"
 
-	"errors"
-
 	"github.com/irai/packet"
+	"github.com/irai/packet/fastlog"
 )
 
 var (
-	// ErrNotFound is returned when MAC not found
-	ErrNotFound = errors.New("not found")
 
 	// EthernetBroadcast defines the broadcast address
 	EthernetBroadcast = net.HardwareAddr{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
@@ -27,7 +23,8 @@ func (h *Handler) RequestTo(dst net.HardwareAddr, targetIP net.IP) error {
 		return packet.ErrInvalidIP
 	}
 	if Debug {
-		fmt.Printf("arp   : send request - who is ip=%s tell %s dst=%s\n", targetIP, h.session.NICInfo.HostAddr4, dst)
+		fastlog.NewLine(module, "send request - who is").IP("ip", targetIP).IP("tell", h.session.NICInfo.HostAddr4.IP).MAC("dst", dst).Write()
+		// fmt.Printf("arp   : send request - who is ip=%s tell %s dst=%s\n", targetIP, h.session.NICInfo.HostAddr4, dst)
 	}
 	return h.request(dst, h.session.NICInfo.HostAddr4, packet.Addr{MAC: EthernetBroadcast, IP: targetIP})
 }
@@ -39,7 +36,8 @@ func (h *Handler) Request(targetIP net.IP) error {
 		return packet.ErrInvalidIP
 	}
 	if Debug {
-		fmt.Printf("arp   : send request - who is ip=%s tell %s\n", targetIP, h.session.NICInfo.HostAddr4)
+		fastlog.NewLine(module, "send request - who is").IP("ip", targetIP).IP("tell", h.session.NICInfo.HostAddr4.IP).Write()
+		// fmt.Printf("arp   : send request - who is ip=%s tell %s\n", targetIP, h.session.NICInfo.HostAddr4)
 	}
 	return h.request(EthernetBroadcast, h.session.NICInfo.HostAddr4, packet.Addr{MAC: EthernetBroadcast, IP: targetIP})
 }
@@ -74,9 +72,11 @@ func (h *Handler) Probe(ip net.IP) error {
 func (h *Handler) AnnounceTo(dst net.HardwareAddr, targetIP net.IP) (err error) {
 	if Debug {
 		if bytes.Equal(dst, EthernetBroadcast) {
-			fmt.Printf("arp   : send announcement broadcast - I am %s\n", targetIP)
+			fastlog.NewLine(module, "send announcement broadcast - I am").IP("ip", targetIP).Write()
+			// fmt.Printf("arp   : send announcement broadcast - I am %s\n", targetIP)
 		} else {
-			fmt.Printf("arp   : send announcement unicast - I am %s to=%s\n", targetIP, dst)
+			fastlog.NewLine(module, "send announcement unicast - I am").IP("ip", targetIP).MAC("dst", dst).Write()
+			// fmt.Printf("arp   : send announcement unicast - I am %s to=%s\n", targetIP, dst)
 		}
 	}
 	err = h.request(dst,
@@ -127,7 +127,8 @@ func (h *Handler) request(dst net.HardwareAddr, sender packet.Addr, target packe
 // func (h *Handler) Reply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
 func (h *Handler) Reply(dst net.HardwareAddr, sender packet.Addr, target packet.Addr) error {
 	if Debug {
-		fmt.Printf("arp   : send reply - ip=%s is at mac=%s\n", sender.IP, sender.MAC)
+		fastlog.NewLine(module, "send reply ip is at").IP("ip", sender.IP).MAC("mac", sender.MAC).Write()
+		// fmt.Printf("arp   : send reply - ip=%s is at mac=%s\n", sender.IP, sender.MAC)
 	}
 	return h.reply(dst, sender, target)
 }
@@ -163,14 +164,15 @@ func (h *Handler) WhoIs(ip net.IP) (packet.Addr, error) {
 			return packet.Addr{IP: host.Addr.IP, MAC: host.MACEntry.MAC}, nil
 		}
 		if err := h.Request(ip); err != nil {
-			return packet.Addr{}, fmt.Errorf("arp WhoIs error: %w", err)
+			return packet.Addr{}, err
 		}
 		time.Sleep(time.Millisecond * 50)
 	}
 
 	if Debug {
-		fmt.Printf("arp   : ip=%s whois not found\n", ip)
+		fastlog.NewLine(module, "whois not found").IP("ip", ip).Write()
+		// fmt.Printf("arp   : ip=%s whois not found\n", ip)
 		h.session.PrintTable()
 	}
-	return packet.Addr{}, ErrNotFound
+	return packet.Addr{}, packet.ErrNotFound
 }
