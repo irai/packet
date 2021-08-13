@@ -410,6 +410,21 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 			}
 		}
 
+	case udpSrcPort == 5355 || udpDstPort == 5355:
+		// Link Local Multicast Name Resolution (LLMNR)
+		fastlog.NewLine(module, "ether").Struct(ether).Module(module, "received llmnr packet").Struct(host).Write()
+		ipv4Name, ipv6Name, err := h.DNSHandler.ProcessMDNS(host, ether, udp.Payload())
+		if err != nil {
+			fmt.Printf("packet: error processing mdns: %s\n", err)
+			break
+		}
+		if ipv4Name.NameEntry.Name != "" {
+			fastlog.NewLine(module, "llmnr ipv4 host").Struct(ipv4Name).Write()
+		}
+		if ipv6Name.NameEntry.Name != "" {
+			fastlog.NewLine(module, "llmnr ipv6 host").Struct(ipv6Name).Write()
+		}
+
 	case udpSrcPort == 123:
 		// Network time synchonization protocol
 		// do nothing
@@ -465,21 +480,6 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 		// Web Services Discovery Protocol (WSD)
 		fastlog.NewLine("ether", "wsd packet").Struct(ether).LF().Module("udp", "wsd packet").Struct(udp).Write()
 		fastlog.NewLine("proto", "wsd packet").Struct(host).String("payload", string(udp.Payload())).Write()
-
-	case udpSrcPort == 5355 || udpDstPort == 5355:
-		// Link Local Multicast Name Resolution (LLMNR)
-		fastlog.NewLine(module, "received LLMNR packet").Struct(host).Write()
-		ipv4Name, ipv6Name, err := h.DNSHandler.ProcessMDNS(host, ether, udp.Payload())
-		if err != nil {
-			fmt.Printf("packet: error processing mdns: %s\n", err)
-			break
-		}
-		if ipv4Name.NameEntry.Name != "" {
-			fastlog.NewLine(module, "llmnr ipv4 host").Struct(ipv4Name).Write()
-		}
-		if ipv6Name.NameEntry.Name != "" {
-			fastlog.NewLine(module, "llmnr ipv6 host").Struct(ipv6Name).Write()
-		}
 
 	case udpDstPort == 137 || udpDstPort == 138:
 		// Netbions NBNS
