@@ -98,6 +98,9 @@ func (l *Line) ToString() string {
 // Write writes the buffer and return the buffer to the pool.
 // The buffer is no longer available after calling this function.
 func (l *Line) Write() error {
+	if l.index >= len(l.buffer) { // add as last character
+		l.index--
+	}
 	l.buffer[l.index] = '\n'
 	_, err := Std.Out.Write(l.buffer[:l.index+1])
 	l.index = copy(l.buffer[:], "invalid buffer freed via Write()") // guarding against reuse by caller
