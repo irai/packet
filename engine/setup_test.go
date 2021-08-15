@@ -13,6 +13,10 @@ var (
 	ip3     = net.IPv4(192, 168, 0, 3)
 	ip4     = net.IPv4(192, 168, 0, 4)
 	ip5     = net.IPv4(192, 168, 0, 5)
+	_       = zeroMAC // remove lint warning
+	_       = ip1     // remove lint warning
+	_       = ip4     // remove lint warning
+	_       = ip5     // remove lint warning
 
 	hostMAC   = net.HardwareAddr{0x00, 0x55, 0x55, 0x55, 0x55, 0x55}
 	hostIP4   = net.IPv4(192, 168, 0, 129).To4()
@@ -25,14 +29,11 @@ var (
 	mac3 = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x03}
 	mac4 = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x04}
 	mac5 = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x05}
+	_    = mac3 // remove lint warning
+	_    = mac4 // remove lint warning
+	_    = mac5 // remove lint warning
 
-	ip6LLARouter = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}
-	ip6LLAHost   = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x10, 0x10}
-	ip6LLA1      = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}
-	ip6LLA2      = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02}
-	ip6LLA3      = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x03}
-	ip6LLA4      = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x04}
-	ip6LLA5      = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x05}
+	ip6LLA1 = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}
 
 	// 2001:4479:1d01:2401:7cf2:4f73:f8c1:8b63
 	ip6GUA1 = net.IP{0x20, 0x01, 0x44, 0x79, 0x1d, 0x01, 0x24, 0x01, 0x7c, 0xf2, 0x4f, 0x73, 0xf8, 0xc1, 0x00, 0x01}
@@ -41,6 +42,4 @@ var (
 
 	hostAddr   = packet.Addr{MAC: hostMAC, IP: hostIP4}
 	routerAddr = packet.Addr{MAC: routerMAC, IP: routerIP4}
-
-	dnsIP4 = net.IPv4(8, 8, 8, 8)
 )
