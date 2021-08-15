@@ -26,7 +26,7 @@ type Config struct {
 	// useful for testing
 	Conn                    net.PacketConn  // listen connectinon
 	NICInfo                 *packet.NICInfo // override nic information - set to non nil to create a test Handler
-	FullNetworkScanInterval time.Duration   // Set it to zero if no scan required
+	FullNetworkScanInterval time.Duration   // Set it to -1 if no scan required
 	ProbeInterval           time.Duration   // how often to probe if IP is online
 	OfflineDeadline         time.Duration   // mark offline if more than OfflineInte
 	PurgeDeadline           time.Duration
@@ -51,7 +51,6 @@ type Handler struct {
 	closeChan               chan bool     // close goroutines channel
 	notificationChannel     chan Notification
 	dnsChannel              chan dns.DNSEntry
-	forceScan               bool
 }
 
 // New creates an ICMPv6 handler with default values
