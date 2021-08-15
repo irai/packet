@@ -195,7 +195,7 @@ func (h *Handler) setupConn() (conn net.PacketConn, err error) {
 	//
 	// TODO: use zero copy in bpf
 	// https://www.gsp.com/cgi-bin/man.cgi?topic=BPF
-	bpf, err := bpf.Assemble([]bpf.Instruction{
+	_, err = bpf.Assemble([]bpf.Instruction{
 		// Check EtherType
 		bpf.LoadAbsolute{Off: 12, Size: 2},
 		// 80221Q? Virtual LAN over 802.3 Ethernet
@@ -216,10 +216,8 @@ func (h *Handler) setupConn() (conn net.PacketConn, err error) {
 		panic(err)
 	}
 
-	bpf = nil // remove bpf test - June 2021
-
-	// see: https://www.man7.org/linux/man-pages/man7/packet.7.html
-	conn, err = NewServerConn(h.session.NICInfo.IFI, syscall.ETH_P_ALL, SocketConfig{Filter: bpf, Promiscuous: true})
+	// removed bpf filter : June 21
+	conn, err = NewServerConn(h.session.NICInfo.IFI, syscall.ETH_P_ALL, SocketConfig{Filter: nil, Promiscuous: true})
 	if err != nil {
 		return nil, fmt.Errorf("packet.ListenPacket error: %w", err)
 	}

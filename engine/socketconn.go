@@ -95,6 +95,8 @@ func NewServerConn(ifi *net.Interface, proto uint16, cfg SocketConfig) (*packetC
 	// Open a packet socket using specified socket type. Do not specify
 	// a protocol to avoid capturing packets which to not match cfg.Filter.
 	// The later call to bind() will set up the correct protocol for us.
+	//
+	// see: https://www.man7.org/linux/man-pages/man7/packet.7.html
 	sock, err := unix.Socket(unix.AF_PACKET, unix.SOCK_RAW, 0)
 	if err != nil {
 		return nil, err
