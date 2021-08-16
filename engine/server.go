@@ -502,7 +502,7 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 		fmt.Printf("proto : plex %s\n", host)
 
 	default:
-		fastlog.NewLine("proto", "error unexpected udp type").Struct(ether).Struct(udp).Struct(host).Write()
+		fastlog.NewLine("proto", "unexpected udp type").Struct(ether).Struct(udp).Struct(host).Write()
 		// fastlog.NewLine("proto", "error payload").ByteArray("payload", udp.Payload()).Write()
 	}
 
