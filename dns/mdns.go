@@ -158,8 +158,6 @@ type HostName struct {
 	Attributes map[string]string
 }
 
-var macEntryInvalid = packet.MACEntry{}
-
 func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload []byte) (ipv4 packet.IPNameEntry, ipv6 packet.IPNameEntry, err error) {
 	var p dnsmessage.Parser
 	dnsHeader, err := p.Start(payload)
@@ -280,6 +278,21 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 			}
 			if Debug {
 				fmt.Printf("mdns  : TXT name=%s txt=%s model=%s\n", hdr.Name, r.TXT, ipv4.NameEntry.Model)
+			}
+
+		case dnsmessage.TypeOPT:
+			r, err := p.OPTResource()
+			if err != nil {
+				fmt.Printf("mdns  : error invalid OPT resource name=%s error=[%s]\n", hdr.Name, err)
+				p.SkipAnswer()
+				continue
+			}
+			if Debug {
+				fmt.Printf("mdns  : OPT name=%s options=%v\n", hdr.Name, r.Options)
+			}
+		case 47:
+			if Debug {
+				fmt.Printf("mdns  : NSEC resource type not implemented %+v\n", hdr)
 			}
 
 		default:
