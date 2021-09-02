@@ -7,6 +7,7 @@ import (
 	"os"
 	"reflect"
 	"sync"
+	"time"
 )
 
 // Package fastlog implements a simple, fast logger for hotpath logging. It is
@@ -116,6 +117,13 @@ func (l *Line) String(name string, value string) *Line {
 	return l
 }
 
+// Label adds a static string to the line
+func (l *Line) Label(name string) *Line {
+	l.appendByte(' ')
+	l.index = l.index + copy(l.buffer[l.index:], name)
+	return l
+}
+
 func (l *Line) Error(value error) *Line {
 	l.index = l.index + copy(l.buffer[l.index:], " error=[")
 	l.index = l.index + copy(l.buffer[l.index:], value.Error())
@@ -170,6 +178,22 @@ func (l *Line) Stringer(value fmt.Stringer) *Line {
 	}
 	l.appendByte(' ')
 	l.index = l.index + copy(l.buffer[l.index:], value.String())
+	return l
+}
+
+func (l *Line) Duration(name string, duration time.Duration) *Line {
+	l.appendByte(' ')
+	l.index = l.index + copy(l.buffer[l.index:], name)
+	l.appendByte(' ')
+	l.index = l.index + copy(l.buffer[l.index:], duration.String())
+	return l
+}
+
+func (l *Line) Time(name string, time time.Time) *Line {
+	l.appendByte(' ')
+	l.index = l.index + copy(l.buffer[l.index:], name)
+	l.appendByte(' ')
+	l.index = l.index + copy(l.buffer[l.index:], time.String())
 	return l
 }
 
