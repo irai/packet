@@ -2,11 +2,12 @@ package dhcp4
 
 import (
 	"bytes"
-	"fmt"
+	"errors"
 	"net"
 	"time"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/fastlog"
 )
 
 // State defines type for lease state
@@ -46,9 +47,21 @@ type Lease struct {
 }
 
 func (l Lease) String() string {
-	return fmt.Sprintf("id=% x state=%s %s name=%s offer=%s captured=%v gw=%s mask=%v",
-		l.ClientID, l.State, l.Addr, l.Name, l.IPOffer, l.subnet.Stage, l.subnet.DefaultGW, l.subnet.LAN.Mask)
+	line := fastlog.NewLine("", "")
+	return l.FastLog(line).ToString()
+	// return fmt.Sprintf("id=% x state=%s %s name=%s offer=%s captured=%v gw=%s mask=%v", l.ClientID, l.State, l.Addr, l.Name, l.IPOffer, l.subnet.Stage, l.subnet.DefaultGW, l.subnet.LAN.Mask)
+}
 
+func (l Lease) FastLog(line *fastlog.Line) *fastlog.Line {
+	line.ByteArray("id", l.ClientID)
+	line.String("state", l.State.String())
+	line.Struct(l.Addr)
+	line.String("name", l.Name)
+	line.IP("offer", l.IPOffer)
+	line.String("capture", l.subnet.Stage.String())
+	line.IP("gw", l.subnet.DefaultGW)
+	line.String("mask", l.subnet.LAN.Mask.String())
+	return line
 }
 
 func (h *Handler) findByIP(ip net.IP) *Lease {
@@ -77,7 +90,9 @@ func (h *Handler) findOrCreate(clientID []byte, mac net.HardwareAddr, name strin
 			bytes.Equal(lease.Addr.MAC, mac) {
 			return lease
 		}
-		fmt.Printf("dhcp4 : client changed subnet clientID=%v from=%v to=%v\n", lease.ClientID, lease.subnet.LAN, subnet.LAN)
+		// fmt.Printf("dhcp4 : client changed subnet clientID=%v from=%v to=%v\n", lease.ClientID, lease.subnet.LAN, subnet.LAN)
+		fastlog.NewLine(module, "client changed subnet").ByteArray("clientID", lease.ClientID).
+			String("from", lease.subnet.LAN.String()).String("to", subnet.LAN.String()).Write()
 	}
 
 	lease = &Lease{}
@@ -90,7 +105,8 @@ func (h *Handler) findOrCreate(clientID []byte, mac net.HardwareAddr, name strin
 	lease.Name = name
 	h.table[string(lease.ClientID)] = lease
 	if Debug {
-		fmt.Printf("dhcp4 : new lease allocated %s\n", lease)
+		// fmt.Printf("dhcp4 : new lease allocated %s\n", lease)
+		fastlog.NewLine(module, "new lease allocated").Struct(lease).Write()
 	}
 	return lease
 }
@@ -106,7 +122,8 @@ func (h *Handler) allocIPOffer(lease *Lease, reqIP net.IP) error {
 			if h.session.FindIP(reqIP) == nil {
 				lease.IPOffer = packet.CopyIP(reqIP).To4()
 				if Debug {
-					fmt.Printf("dhcp4 : offer ip=%s\n", lease.IPOffer)
+					// fmt.Printf("dhcp4 : offer ip=%s\n", lease.IPOffer)
+					fastlog.NewLine(module, "offer").IP("ip", lease.IPOffer).Write()
 				}
 				return nil
 			}
@@ -146,12 +163,13 @@ func (h *Handler) allocIPOffer(lease *Lease, reqIP net.IP) error {
 		}
 	}
 	if ip == nil {
-		return fmt.Errorf("exhausted all ips")
+		return errors.New("exhausted all ips")
 	}
 
 	lease.IPOffer = ip
 	if Debug {
-		fmt.Printf("dhcp4 : offer ip=%s\n", lease.IPOffer)
+		// fmt.Printf("dhcp4 : offer ip=%s\n", lease.IPOffer)
+		fastlog.NewLine(module, "offer").IP("ip", lease.IPOffer)
 	}
 	return nil
 }
@@ -160,7 +178,7 @@ func (h *Handler) freeLeases(now time.Time) error {
 	for _, lease := range h.table {
 		if lease.DHCPExpiry.Before(now) {
 			if Debug {
-				fmt.Printf("dhcp4 : freeing lease %v\n", lease)
+				fastlog.NewLine(module, "freeing lease").Struct(lease).Write()
 			}
 			lease.State = StateFree
 		}
