@@ -173,7 +173,9 @@ func (l *Line) Stringer(value fmt.Stringer) *Line {
 	return l
 }
 
-func (l *Line) Any(value interface{}) *Line {
+func (l *Line) Sprintf(name string, value interface{}) *Line {
+	l.appendByte(' ')
+	l.index = l.index + copy(l.buffer[l.index:], name)
 	l.appendByte(' ')
 	l.index = l.index + copy(l.buffer[l.index:], fmt.Sprintf("%+v", value))
 	return l
