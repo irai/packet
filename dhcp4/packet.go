@@ -11,6 +11,8 @@ import (
 	"net"
 	"strings"
 	"time"
+
+	"github.com/irai/packet/fastlog"
 )
 
 type Option struct {
@@ -58,7 +60,18 @@ func (p DHCP4) LogString(clientID []byte, reqIP net.IP, name string, serverIP ne
 }
 
 func (p DHCP4) String() string {
-	return fmt.Sprintf("opcode=%v chaddr=%s ciaddr=%s yiaddr=%s len=%d", p.OpCode(), p.CHAddr(), p.CIAddr(), p.YIAddr(), len(p))
+	// return fmt.Sprintf("opcode=%v chaddr=%s ciaddr=%s yiaddr=%s len=%d", p.OpCode(), p.CHAddr(), p.CIAddr(), p.YIAddr(), len(p))
+	l := fastlog.NewLine("", "")
+	return p.FastLog(l).ToString()
+}
+
+func (p DHCP4) FastLog(line *fastlog.Line) *fastlog.Line {
+	line.Uint8("opcode", uint8(p.OpCode()))
+	line.MAC("chaddr", p.CHAddr())
+	line.IP("ciaddr", p.CIAddr())
+	line.IP("yiaddr", p.YIAddr())
+	line.Int("len", len(p))
+	return line
 }
 
 func (p DHCP4) OpCode() OpCode { return OpCode(p[0]) }

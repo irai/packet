@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/fastlog"
 )
 
 const (
@@ -21,6 +22,8 @@ var (
 	// Debug module variable to enable/disable debug & trace messages
 	Debug bool
 )
+
+const module = "dhcp4"
 
 // Mode type for operational mode: Primary or Secondary server
 type Mode int32
@@ -259,16 +262,17 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (pac
 	if !dhcpFrame.IsValid() {
 		return packet.Result{}, packet.ErrParseFrame
 	}
-	if Debug {
-		fmt.Printf("dhcp4 : ether %s\n", ether)
-		fmt.Printf("dhcp4 : ip4 %s\n", ip4)
-		fmt.Printf("dhcp4 : udp %s\n", udp)
-		fmt.Printf("dhcp4 : dhcp %s\n", dhcpFrame)
-	}
 
 	if udp.DstPort() == packet.DHCP4ClientPort {
+		if Debug {
+			fastlog.NewLine(module, "dhcp client packet").Struct(dhcpFrame).Write()
+		}
 		err := h.processClientPacket(host, dhcpFrame)
 		return packet.Result{}, err
+	}
+
+	if Debug {
+		fastlog.NewLine(module, "ether").Struct(ether).Module(module, "ip4").Struct(ip4).Module(module, "udp").Struct(udp).Module(module, "dhcp").Struct(dhcpFrame).Write()
 	}
 
 	options := dhcpFrame.ParseOptions()
@@ -326,7 +330,8 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (pac
 		}
 
 		if Debug {
-			fmt.Println("dhcp4 : send reply to ", dstAddr, response)
+			// fmt.Println("dhcp4 : send reply to ", dstAddr, response)
+			fastlog.NewLine(module, "send reply to").Struct(dstAddr).Struct(response).Write()
 		}
 
 		srcAddr := packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostIP4.IP, Port: packet.DHCP4ServerPort}
