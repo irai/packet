@@ -1,12 +1,12 @@
 package dns
 
 import (
-	"fmt"
 	"net"
 	"strings"
 	"syscall"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/fastlog"
 	"golang.org/x/net/dns/dnsmessage"
 )
 
@@ -132,7 +132,7 @@ func (h *DNSHandler) sendMDNSQuery(srcAddr packet.Addr, dstAddr packet.Addr, mty
 			return err
 		}
 		if _, err := h.session.Conn.WriteTo(ether, &dstAddr); err != nil {
-			fmt.Printf("mdns  : error failed to write %s\n", err)
+			fastlog.NewLine(moduleMDNS, "failed to write").Error(err).Write()
 		}
 		return err
 	}
@@ -147,7 +147,7 @@ func (h *DNSHandler) sendMDNSQuery(srcAddr packet.Addr, dstAddr packet.Addr, mty
 	ip6 = ip6.SetPayload(udp, syscall.IPPROTO_UDP)
 	ether, _ = ether.SetPayload(ip6)
 	if _, err := h.session.Conn.WriteTo(ether, &dstAddr); err != nil {
-		fmt.Printf("mdns  : error failed to write %s\n", err)
+		fastlog.NewLine(moduleMDNS, "failed to write").Error(err).Write()
 	}
 	return err
 }
@@ -165,7 +165,8 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 		panic(err)
 	}
 	if Debug {
-		fmt.Printf("mdns  : new packet %s %+v\n", host, dnsHeader)
+		// fmt.Printf("mdns  : new packet %s %+v\n", host, dnsHeader)
+		fastlog.NewLine(moduleMDNS, "new packet").Struct(host).Sprintf("dnsheader", dnsHeader).Write()
 	}
 	if !dnsHeader.Response {
 		return
@@ -218,7 +219,8 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 			ipv4.Addr.MAC = packet.CopyMAC(ether.Src())
 			ipv4.Addr.IP = packet.CopyIP(r.A[:])
 			if Debug {
-				fmt.Printf("mdns  : A record name=%s %s\n", ipv4.NameEntry.Name, ipv4.Addr)
+				// fmt.Printf("mdns  : A record name=%s %s\n", ipv4.NameEntry.Name, ipv4.Addr)
+				fastlog.NewLine(moduleMDNS, "A resource").String("name", ipv4.NameEntry.Name).Struct(ipv4.Addr).Write()
 			}
 
 		case dnsmessage.TypeAAAA:
@@ -230,18 +232,21 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 			ipv6.Addr.MAC = packet.CopyMAC(ether.Src())
 			ipv6.Addr.IP = packet.CopyIP(r.AAAA[:])
 			if Debug {
-				fmt.Printf("mdns  : AAAA record name=%s %s\n", ipv6.NameEntry.Name, ipv6.Addr)
+				// fmt.Printf("mdns  : AAAA record name=%s %s\n", ipv6.NameEntry.Name, ipv6.Addr)
+				fastlog.NewLine(moduleMDNS, "AAAA resource").String("name", ipv6.NameEntry.Name).Struct(ipv6.Addr).Write()
 			}
 
 		case dnsmessage.TypePTR:
 			r, err := p.PTRResource()
 			if err != nil {
-				fmt.Printf("mdns  : error invalid PTR resource name=%s error=[%s]\n", hdr.Name, err)
+				// fmt.Printf("mdns  : error invalid PTR resource name=%s error=[%s]\n", hdr.Name, err)
+				fastlog.NewLine(moduleMDNS, "invalid PTR resource").String("name", hdr.Name.String()).Error(err).Write()
 				p.SkipAnswer()
 				continue
 			}
 			if Debug {
-				fmt.Printf("mdns  : PTR name=%s %s\n", hdr.Name, r.PTR)
+				// fmt.Printf("mdns  : PTR name=%s %s\n", hdr.Name, r.PTR)
+				fastlog.NewLine(moduleMDNS, "PTR resource").String("name", hdr.Name.String()).String("ptr", r.PTR.String()).Write()
 			}
 
 		case dnsmessage.TypeSRV:
@@ -256,19 +261,22 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 				// This polutes the log with constant errors for each SRV.
 				// see https://github.com/golang/go/issues/10622
 				if err.Error() != "compressed name in SRV resource data" || Debug {
-					fmt.Printf("mdns  : error invalid SRV resource name=%s error=[%s]\n", hdr.Name, err)
+					// fmt.Printf("mdns  : invalid SRV resource name=%s error=[%s]\n", hdr.Name, err)
+					fastlog.NewLine(moduleMDNS, "invalid SRV resource").String("name", hdr.Name.String()).Error(err).Write()
 				}
 				p.SkipAnswer()
 				continue
 			}
 			if Debug {
-				fmt.Printf("mdns  : SRV name=%s target=%s port=%d\n", hdr.Name, r.Target, r.Port)
+				// fmt.Printf("mdns  : SRV name=%s target=%s port=%d\n", hdr.Name, r.Target, r.Port)
+				fastlog.NewLine(moduleMDNS, "SRV resource").String("name", hdr.Name.String()).String("target", r.Target.String()).Uint16("port", r.Port).Write()
 			}
 
 		case dnsmessage.TypeTXT:
 			r, err := p.TXTResource()
 			if err != nil {
-				fmt.Printf("mdns  : error invalid TXT resource name=%s error=[%s]\n", hdr.Name, err)
+				// fmt.Printf("mdns  : error invalid TXT resource name=%s error=[%s]\n", hdr.Name, err)
+				fastlog.NewLine(moduleMDNS, "invalid TXT resource").String("name", hdr.Name.String()).Error(err).Write()
 				p.SkipAnswer()
 				continue
 			}
@@ -277,26 +285,31 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 				ipv6.NameEntry.Model = model
 			}
 			if Debug {
-				fmt.Printf("mdns  : TXT name=%s txt=%s model=%s\n", hdr.Name, r.TXT, ipv4.NameEntry.Model)
+				// fmt.Printf("mdns  : TXT name=%s txt=%s model=%s\n", hdr.Name, r.TXT, ipv4.NameEntry.Model)
+				fastlog.NewLine(moduleMDNS, "TXT resource").String("name", hdr.Name.String()).Sprintf("txt", r.TXT).String("model", ipv4.NameEntry.Model).Write()
 			}
 
 		case dnsmessage.TypeOPT:
 			r, err := p.OPTResource()
 			if err != nil {
-				fmt.Printf("mdns  : error invalid OPT resource name=%s error=[%s]\n", hdr.Name, err)
+				// fmt.Printf("mdns  : error invalid OPT resource name=%s error=[%s]\n", hdr.Name, err)
+				fastlog.NewLine(moduleMDNS, "invalid OPT resource").String("name", hdr.Name.String()).Error(err).Write()
 				p.SkipAnswer()
 				continue
 			}
 			if Debug {
-				fmt.Printf("mdns  : OPT name=%s options=%v\n", hdr.Name, r.Options)
+				// fmt.Printf("mdns  : OPT name=%s options=%v\n", hdr.Name, r.Options)
+				fastlog.NewLine(moduleMDNS, "OPT resource").String("name", hdr.Name.String()).Sprintf("options", r.Options).Write()
 			}
 		case 47:
 			if Debug {
-				fmt.Printf("mdns  : NSEC resource type not implemented %+v\n", hdr)
+				// fmt.Printf("mdns  : NSEC resource type not implemented %+v\n", hdr)
+				fastlog.NewLine(moduleMDNS, "NSEC resource not implemented").String("name", hdr.Name.String()).Sprintf("hdr", hdr).Write()
 			}
 
 		default:
-			fmt.Printf("mdns  : error unexpected resource type %+v\n", hdr)
+			// fmt.Printf("mdns  : error unexpected resource type %+v\n", hdr)
+			fastlog.NewLine(moduleMDNS, "ignoring unexpected resource type").String("name", hdr.Name.String()).Sprintf("hdr", hdr).Write()
 			p.SkipAnswer()
 		}
 	}

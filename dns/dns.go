@@ -15,6 +15,7 @@ import (
 )
 
 const module = "dns"
+const moduleMDNS = "mdns"
 
 var Debug bool
 
