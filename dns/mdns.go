@@ -306,6 +306,7 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 				// fmt.Printf("mdns  : NSEC resource type not implemented %+v\n", hdr)
 				fastlog.NewLine(moduleMDNS, "NSEC resource not implemented").String("name", hdr.Name.String()).Sprintf("hdr", hdr).Write()
 			}
+			p.SkipAnswer()
 
 		default:
 			// fmt.Printf("mdns  : error unexpected resource type %+v\n", hdr)
