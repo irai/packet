@@ -3,6 +3,8 @@ package engine
 import (
 	"errors"
 	"fmt"
+	"os"
+	"syscall"
 	"time"
 
 	"github.com/irai/packet"
@@ -42,9 +44,6 @@ func (h *Handler) lockAndMonitorRoute(now time.Time) (err error) {
 }
 
 func (h *Handler) minuteChecker(now time.Time) {
-	if packet.Debug {
-		fmt.Printf("packet: running minute checker %v\n", now)
-	}
 
 	// Handlers
 	if err := h.ARPHandler.MinuteTicker(now); err != nil {
@@ -61,6 +60,19 @@ func (h *Handler) minuteChecker(now time.Time) {
 
 	h.purge(now, h.ProbeInterval, h.OfflineDeadline, h.PurgeDeadline)
 
+}
+
+func (h *Handler) threeMinuteChecker(now time.Time) {
+	if packet.Debug {
+		fmt.Printf("packet: running 3 minute checker %v\n", now)
+	}
+	// Check that
+	if ipHeartBeat == 0 {
+		fmt.Printf("fatal: failed to receive ip packets in 3 minutes - sending sigterm time=%v\n", now)
+		// Send sigterm to terminate process
+		syscall.Kill(os.Getpid(), syscall.SIGTERM)
+	}
+	ipHeartBeat = 0
 }
 
 // hourly runs every 60 minutes
@@ -88,7 +100,9 @@ func (h *Handler) minuteLoop() {
 				h.hourly()
 				counter = 60
 			}
-
+			if (counter % 3) == 0 { // three minutes
+				h.threeMinuteChecker(time.Now())
+			}
 		case <-h.closeChan:
 			return
 		}
