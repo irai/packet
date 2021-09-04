@@ -57,7 +57,7 @@ func (h *DNSHandler) DNSLookupPTR(ip netaddr.IP) {
 		if ip.Is4() {
 			_, found = entry.IP4Records[ip]
 			if !found {
-				if packet.Debug {
+				if Debug {
 					fmt.Printf("dns   : add ptr record not found for ip=%s\n", ip)
 				}
 				entry.IP4Records[ip] = IPResourceRecord{IP: ip}
@@ -68,7 +68,7 @@ func (h *DNSHandler) DNSLookupPTR(ip netaddr.IP) {
 		// IPv6?
 		_, found = entry.IP6Records[ip]
 		if !found {
-			if packet.Debug {
+			if Debug {
 				fmt.Printf("dns   : ptr record not found for ip=%s\n", ip)
 			}
 			entry.IP4Records[ip] = IPResourceRecord{IP: ip}

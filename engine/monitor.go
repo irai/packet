@@ -44,9 +44,6 @@ func (h *Handler) lockAndMonitorRoute(now time.Time) (err error) {
 }
 
 func (h *Handler) minuteChecker(now time.Time) {
-	if packet.Debug {
-		fmt.Printf("packet: running minute checker %v\n", now)
-	}
 
 	// Handlers
 	if err := h.ARPHandler.MinuteTicker(now); err != nil {
@@ -71,6 +68,9 @@ func (h *Handler) minuteChecker(now time.Time) {
 }
 
 func (h *Handler) threeMinuteChecker(now time.Time) {
+	if packet.Debug {
+		fmt.Printf("packet: running 3 minute checker %v\n", now)
+	}
 	// Check that
 	if ipHeartBeat == 0 {
 		fmt.Printf("fatal: failed to receive ip packets in 3 minutes - sending sigterm time=%v\n", now)
