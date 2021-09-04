@@ -53,6 +53,10 @@ type Handler struct {
 	serviceDiscoveryChan    chan discoverAction // channel used for delayed service discovery
 }
 
+// ipHeartBeat is set when we get IP packets. It is used to monitor the network is working
+// as expected and IP packets are being received at regular intervals.
+var ipHeartBeat int
+
 // New creates an ICMPv6 handler with default values
 func NewEngine(nic string) (*Handler, error) {
 	return Config{}.NewEngine(nic)
@@ -444,6 +448,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		// This will set host if the sender is a local IP and not multicast.
 		switch ether.EtherType() {
 		case syscall.ETH_P_IP: // 0x0800
+			ipHeartBeat = 1
 			ip4Frame = packet.IP4(ether.Payload())
 			if !ip4Frame.IsValid() {
 				fmt.Println("packet: error invalid ip4 frame type=", ether.EtherType())
@@ -462,6 +467,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			l4Payload = ip4Frame.Payload()
 
 		case syscall.ETH_P_IPV6: // 0x86dd
+			ipHeartBeat = 1
 			ip6Frame = packet.IP6(ether.Payload())
 			if !ip6Frame.IsValid() {
 				fmt.Println("packet: error invalid ip6 frame type=", ether.EtherType())
@@ -701,7 +707,11 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 					}
 					// Put in queue for service discovery
 					if location != "" {
-						h.serviceDiscoveryChan <- discoverAction{addr: host.Addr, location: location}
+						if len(h.serviceDiscoveryChan) < cap(h.serviceDiscoveryChan) { // protect from blocking
+							h.serviceDiscoveryChan <- discoverAction{addr: host.Addr, location: location}
+						} else {
+							fmt.Printf("packet: error discovery channel is full len=%d %v\n", len(h.serviceDiscoveryChan), location)
+						}
 					}
 				}
 

@@ -3,6 +3,8 @@ package engine
 import (
 	"errors"
 	"fmt"
+	"os"
+	"syscall"
 	"time"
 
 	"github.com/irai/packet"
@@ -68,6 +70,16 @@ func (h *Handler) minuteChecker(now time.Time) {
 
 }
 
+func (h *Handler) threeMinuteChecker(now time.Time) {
+	// Check that
+	if ipHeartBeat == 0 {
+		fmt.Printf("fatal: failed to receive ip packets in 3 minutes - sending sigterm time=%v\n", now)
+		// Send sigterm to terminate process
+		syscall.Kill(os.Getpid(), syscall.SIGTERM)
+	}
+	ipHeartBeat = 0
+}
+
 // hourly runs every 60 minutes
 func (h *Handler) hourly() {
 	// send MDNS service discovery
@@ -93,7 +105,9 @@ func (h *Handler) minuteLoop() {
 				h.hourly()
 				counter = 60
 			}
-
+			if (counter % 3) == 0 { // three minutes
+				h.threeMinuteChecker(time.Now())
+			}
 		case <-h.closeChan:
 			return
 		}
