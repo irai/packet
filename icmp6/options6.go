@@ -314,7 +314,7 @@ func (ri *RouteInformation) unmarshal(b []byte) error {
 	//             the Prefix that are valid.  The value ranges from 0 to
 	//             128.  The Prefix field is 0, 8, or 16 octets depending on
 	//             Length.
-	l := b[1]  // Exclude type and length fields from value's length.
+	l := b[1]  // length
 	pl := b[2] // prefix len
 	err := fmt.Errorf("invalid route information for /%d prefix", pl)
 
