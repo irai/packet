@@ -198,7 +198,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 
 		if lease.State == StateFree {
 			// fmt.Printf("dhcp4 : request NACK - rebooting for another server %s\n", fields)
-			line.Module(module, "request NACK - rebooting for another server").ByteArray("xid", p.XId()).IP("ip", reqIP)
+			line.Module(module, "client lease does not exist").ByteArray("xid", p.XId()).IP("ip", reqIP)
 
 			if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && captured) {
 				// Attempt to force other dhcp server to release the IP
