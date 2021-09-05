@@ -108,13 +108,13 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 	defer line.Write() // write a single line
 
 	if Debug {
-		line.Module(module, "parameters").ByteArray("xid", p.XId()).IP("ciaddr", p.CIAddr()).Bool("brd", p.Broadcast()).IP("serverIP", serverIP)
+		line.Module(module, "request parameters").ByteArray("xid", p.XId()).IP("ciaddr", p.CIAddr()).Bool("brd", p.Broadcast()).IP("serverIP", serverIP)
 	}
 
 	// reqIP must always be filled in
 	if reqIP.Equal(net.IPv4zero) {
 		// fmt.Printf("dhcp4 : error in request - invalid IP %s optionIP=%s ciaddr=%s\n", fields, string(options[OptionRequestedIPAddress]), p.CIAddr())
-		line.Module(module, "invalid requested IP").ByteArray("xid", p.XId()).String("optionIP", string(options[OptionRequestedIPAddress])).IP("ciaddr", p.CIAddr())
+		line.Module(module, "invalid request IP").ByteArray("xid", p.XId()).String("optionIP", string(options[OptionRequestedIPAddress])).IP("ciaddr", p.CIAddr())
 		return result, nil
 	}
 
