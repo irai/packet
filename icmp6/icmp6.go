@@ -411,6 +411,12 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 		fmt.Printf("icmp6 : redirect from ip=%s %s \n", ip6Frame.Src(), redirect)
 		return packet.Result{}, nil
 
+	case ipv6.ICMPTypeDestinationUnreachable:
+		if Debug {
+			fastlog.NewLine(module, "destination unreachable").Struct(ip6Frame).Struct(icmp6Frame).Write()
+		}
+		return packet.Result{}, nil
+
 	default:
 		fmt.Printf("icmp6 : type not implemented from ip=%s type=%v\n", ip6Frame.Src(), t)
 		return packet.Result{}, fmt.Errorf("unrecognized icmp6 type=%d: %w", t, errParseMessage)
