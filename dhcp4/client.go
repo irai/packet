@@ -46,7 +46,7 @@ func (h *Handler) forceDecline(clientID []byte, serverIP net.IP, chAddr net.Hard
 	// fields["mac"] = chAddr
 	// }
 	// fmt.Printf("dhcp4: client send decline to server clientID=%v\n", clientID)
-	fastlog.NewLine("dhcp4", "client send declien to server").ByteArray("clientid", clientID).IP("ip", clientIP).ByteArray("xid", xid).Write()
+	fastlog.NewLine("dhcp4", "client send decline to server").ByteArray("clientid", clientID).IP("ip", clientIP).ByteArray("xid", xid).Write()
 
 	// use a copy in the goroutine
 	clientID = dupBytes(clientID)
@@ -79,7 +79,7 @@ func (h *Handler) forceRelease(clientID []byte, serverIP net.IP, chAddr net.Hard
 	// fields["mac"] = chAddr
 	// }
 	// fmt.Printf("dhcp4: sent force release to server clientID=%v\n", clientID)
-	fastlog.NewLine("dhcp4", "client send declien to server").ByteArray("clientid", clientID).IP("ip", clientIP).ByteArray("xid", xid).Write()
+	fastlog.NewLine("dhcp4", "client send release to server").ByteArray("clientid", clientID).IP("ip", clientIP).ByteArray("xid", xid).Write()
 
 	// use a copy in the goroutine
 	clientIP = dupIP(clientIP)
@@ -100,7 +100,8 @@ func (h *Handler) forceRelease(clientID []byte, serverIP net.IP, chAddr net.Hard
 // SendDiscoverPacket send a DHCP discover packet to target
 func (h *Handler) SendDiscoverPacket(chAddr net.HardwareAddr, cIAddr net.IP, xID []byte, options Options) (err error) {
 	if Debug {
-		fmt.Printf("dhcp4: send discover packet from %s ciAddr=%v xID=%v\n", chAddr, cIAddr, xID)
+		// fmt.Printf("dhcp4: send discover packet from %s ciAddr=%v xID=%v\n", chAddr, cIAddr, xID)
+		fastlog.NewLine(module, "send discover packet").ByteArray("xid", xID).MAC("from", chAddr).IP("ciaddr", cIAddr)
 	}
 	p := RequestPacket(Discover, chAddr, cIAddr, xID, false, options.SelectOrderOrAll(nil))
 	srcAddr := packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostIP4.IP, Port: packet.DHCP4ClientPort}
