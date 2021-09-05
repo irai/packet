@@ -1,11 +1,11 @@
 package icmp6
 
 import (
-	"fmt"
 	"net"
 	"time"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/fastlog"
 )
 
 func (h *Handler) SendRouterAdvertisement(router Router, dstAddr packet.Addr) error {
@@ -88,6 +88,7 @@ func (h *Handler) SendNeighborAdvertisement(srcAddr packet.Addr, dstAddr packet.
 func (h *Handler) SendNeighbourSolicitation(srcAddr packet.Addr, dstAddr packet.Addr, targetIP net.IP) error {
 	p, _ := ICMP6NeighborSolicitationMarshal(targetIP, h.session.NICInfo.HostMAC)
 
-	fmt.Printf("icmp6 : sending NS src %s dst %s targetIP=%s\n", srcAddr, dstAddr, targetIP)
+	// fmt.Printf("icmp6 : sending NS src %s dst %s targetIP=%s\n", srcAddr, dstAddr, targetIP)
+	fastlog.NewLine(module, "sending NS src").Struct(srcAddr).Label("dst").Struct(dstAddr).IP("targetip", targetIP).Write()
 	return h.sendPacket(srcAddr, dstAddr, p)
 }
