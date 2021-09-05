@@ -93,7 +93,7 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (result packet.Result
 
 	if Debug {
 		// fmt.Printf("dhcp4 : offer - options %s options=%v optsent=%v\n", fields, options, ret.ParseOptions())
-		line.Module(module, "all ips allocated, failing silently").Sprintf("options", options).Sprintf("optsent", ret.ParseOptions())
+		line.Module(module, "offer options").Sprintf("optrecv", options).Sprintf("optsent", ret.ParseOptions())
 	}
 
 	//Attemp to disrupt the lan DHCP handshake
