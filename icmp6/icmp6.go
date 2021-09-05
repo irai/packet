@@ -360,8 +360,8 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 
 	case ipv6.ICMPTypeRouterSolicitation:
 		frame := ICMP6RouterSolicitation(icmp6Frame)
-		if !frame.IsValid() {
-			return packet.Result{}, packet.ErrParseFrame
+		if err := frame.IsValid(); err != nil {
+			return packet.Result{}, err
 		}
 		if Debug {
 			fastlog.NewLine("icmp6", "router solicitation").IP("ip", ip6Frame.Src()).Struct(frame).Write()

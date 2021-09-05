@@ -66,7 +66,16 @@ func (p ICMPEcho) String() string {
 
 type ICMP6RouterSolicitation []byte
 
-func (p ICMP6RouterSolicitation) IsValid() bool { return len(p) >= 8 }
+func (p ICMP6RouterSolicitation) IsValid() error {
+	if len(p) < 8 {
+		return packet.ErrFrameLen
+	}
+	if p[0] != byte(ipv6.ICMPTypeRouterSolicitation) {
+		return packet.ErrParseFrame
+	}
+	return nil
+}
+
 func (p ICMP6RouterSolicitation) String() string {
 	return fmt.Sprintf("type=ra code=%d sourceLLA=%s", p.Code(), p.SourceLLA())
 }
@@ -74,7 +83,7 @@ func (p ICMP6RouterSolicitation) String() string {
 func (p ICMP6RouterSolicitation) FastLog(line *fastlog.Line) *fastlog.Line {
 	line.String("type", "ra")
 	line.Uint8("code", p.Code())
-	line.MAC("targetLLA", p.SourceLLA())
+	line.MAC("sourceLLA", p.SourceLLA())
 	return line
 }
 
@@ -83,8 +92,8 @@ func (p ICMP6RouterSolicitation) Code() byte    { return p[1] }
 func (p ICMP6RouterSolicitation) Checksum() int { return int(binary.BigEndian.Uint16(p[2:4])) }
 func (p ICMP6RouterSolicitation) SourceLLA() net.HardwareAddr {
 	// RA options may containg a single SourceLLA option
-	// len is therefore: 26 = 4 bytes header + 4 bytes reserved + 18 bytes SourceLLA option
-	if len(p) > 26 && p[8] == 1 && p[9] == 3 { // type == SourceLLA & 24 bytes len (3 * 8bytes)
+	// len is therefore: 26 = 4 bytes header + 4 bytes reserved + 2 bytes option header + 16 IP bytes SourceLLA option
+	if len(p) >= 26 && p[8] == 1 && p[9] == 3 { // type == SourceLLA & 24 bytes len (3 * 8bytes)
 		return net.HardwareAddr(p[10 : 10+16])
 	}
 	return nil
