@@ -302,21 +302,33 @@ func (ri *RouteInformation) unmarshal(b []byte) error {
 
 	// Verify the option's length against prefix length using the rules defined
 	// in the RFC.
-	pl := b[2]         // prefix len
-	l := int(pl*8) - 2 // Exclude type and length fields from value's length.
-	err := fmt.Errorf("ndp: invalid route information for /%d prefix", l)
+	// Length      8-bit unsigned integer.  The length of the option
+	//             (including the Type and Length fields) in units of 8
+	//             octets.  The Length field is 1, 2, or 3 depending on the
+	//             Prefix Length.  If Prefix Length is greater than 64, then
+	//             Length must be 3.  If Prefix Length is greater than 0,
+	//             then Length must be 2 or 3.  If Prefix Length is zero,
+	//             then Length must be 1, 2, or 3.
+	//  Prefix Length
+	//             8-bit unsigned integer.  The number of leading bits in
+	//             the Prefix that are valid.  The value ranges from 0 to
+	//             128.  The Prefix field is 0, 8, or 16 octets depending on
+	//             Length.
+	l := b[1]  // Exclude type and length fields from value's length.
+	pl := b[2] // prefix len
+	err := fmt.Errorf("invalid route information for /%d prefix", pl)
 
 	switch {
 	case pl == 0:
 		if l < 1 || l > 3 {
 			return err
 		}
-	case pl > 0 && l < 65:
+	case pl > 0 && pl < 65:
 		// Some devices will use length 3 anyway for a route that fits in /64.
 		if l != 2 && l != 3 {
 			return err
 		}
-	case pl > 64 && l < 129:
+	case pl > 64 && pl < 129:
 		if l != 3 {
 			return err
 		}
@@ -327,7 +339,7 @@ func (ri *RouteInformation) unmarshal(b []byte) error {
 
 	// Unpack preference (with adjacent reserved bits) and lifetime values.
 	ri.PrefixLength = pl
-	ri.RouteLifetime = time.Duration(binary.BigEndian.Uint32(b[3:8])) * time.Second
+	ri.RouteLifetime = time.Duration(binary.BigEndian.Uint32(b[4:8])) * time.Second
 	ri.Preference = Preference((b[3] & 0x18) >> 3)
 	if err := checkPreference(ri.Preference); err != nil {
 		return err

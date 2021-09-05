@@ -347,7 +347,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 
 		if Debug {
 			l := fastlog.NewLine("icmp6", "ether").Struct(ether).Module("icmp6", "ip6").Struct(ip6Frame)
-			l.Module("icmp6", "router advertisement").Struct(icmp6Frame).String("options", fmt.Sprintf("%+v", router.Options))
+			l.Module("icmp6", "router advertisement").Struct(icmp6Frame).Sprintf("options", router.Options)
 			l.Write()
 		}
 
