@@ -237,7 +237,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 			return packet.Result{}, packet.ErrParseFrame
 		}
 		if Debug {
-			fastlog.NewLine("icmp6", "neigbor advertisement").IP("ip", ip6Frame.Src()).Struct(frame).Write()
+			fastlog.NewLine("icmp6", "neighbor advertisement").IP("ip", ip6Frame.Src()).Struct(frame).Write()
 			// fastlog.Strings("icmp6 : neighbor advertisement from ip=", ip6Frame.Src().String(), " ", frame.String())
 		}
 
