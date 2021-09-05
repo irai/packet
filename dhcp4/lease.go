@@ -176,7 +176,7 @@ func (h *Handler) allocIPOffer(lease *Lease, reqIP net.IP) error {
 
 func (h *Handler) freeLeases(now time.Time) error {
 	for _, lease := range h.table {
-		if lease.DHCPExpiry.Before(now) {
+		if lease.State != StateFree && lease.DHCPExpiry.Before(now) {
 			if Debug {
 				fastlog.NewLine(module, "freeing lease").Struct(lease).Write()
 			}
