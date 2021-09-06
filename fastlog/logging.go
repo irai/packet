@@ -118,6 +118,15 @@ func (l *Line) String(name string, value string) *Line {
 	return l
 }
 
+// Bytes append an unmodified byte string to line.
+func (l *Line) Bytes(name string, value []byte) *Line {
+	l.appendByte(' ')
+	l.index = l.index + copy(l.buffer[l.index:], name)
+	l.appendByte('=')
+	l.index = l.index + copy(l.buffer[l.index:], value)
+	return l
+}
+
 // Label adds a static string to the line
 func (l *Line) Label(name string) *Line {
 	l.appendByte(' ')
