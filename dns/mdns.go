@@ -158,18 +158,31 @@ type HostName struct {
 	Attributes map[string]string
 }
 
+// ProcesMDNS will process a multicast DNS packet.
+// Note: host cannot be nil.
 func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload []byte) (ipv4 packet.IPNameEntry, ipv6 packet.IPNameEntry, err error) {
 	var p dnsmessage.Parser
 	dnsHeader, err := p.Start(payload)
 	if err != nil {
-		panic(err)
+		return ipv4, ipv6, err
+	}
+
+	// not interested in queries
+	if !dnsHeader.Response {
+		if Debug {
+			line := fastlog.NewLine(moduleMDNS, "new mdns query from").Struct(host.Addr).Struct(DNS(payload))
+			questions, err := p.AllQuestions()
+			if err == nil { // ignore error
+				for _, q := range questions {
+					line.Bytes("qname", q.Name.Data[:q.Name.Length])
+				}
+			}
+			line.Write()
+		}
+		return ipv4, ipv6, nil
 	}
 	if Debug {
-		// fmt.Printf("mdns  : new packet %s %+v\n", host, dnsHeader)
-		fastlog.NewLine(moduleMDNS, "new packet").Struct(host).Sprintf("dnsheader", dnsHeader).Write()
-	}
-	if !dnsHeader.Response {
-		return
+		fastlog.NewLine(moduleMDNS, "new mdns response from").Struct(host.Addr).Struct(DNS(payload)).Write()
 	}
 
 	//  Multicast DNS responses MUST NOT contain any questions in the
