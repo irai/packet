@@ -15,7 +15,7 @@ type ICMP6 []byte
 // IsValid validates the packet
 // TODO: verify checksum?
 func (p ICMP6) IsValid() bool {
-	return len(p) > 8
+	return len(p) >= 8
 }
 
 func (p ICMP6) Type() uint8      { return uint8(p[0]) }
@@ -25,7 +25,12 @@ func (p ICMP6) Checksum() uint16 { return binary.BigEndian.Uint16(p[2:4]) }
 // TODO: fix the order
 func (p ICMP6) SetChecksum(cs uint16) { p[3] = uint8(cs >> 8); p[2] = uint8(cs) }
 func (p ICMP6) RestOfHeader() []byte  { return p[4:8] }
-func (p ICMP6) Payload() []byte       { return p[8:] }
+func (p ICMP6) Payload() []byte {
+	if len(p) > 8 {
+		return p[8:]
+	}
+	return []byte{}
+}
 func (p ICMP6) String() string {
 	return fmt.Sprintf("type=%v code=%v checksum=%x payloadLen=%v\n", p.Type(), p.Code(), p.Checksum(), len(p.Payload()))
 }
@@ -91,7 +96,7 @@ func (p ICMP6RouterSolicitation) Type() uint8   { return uint8(p[0]) }
 func (p ICMP6RouterSolicitation) Code() byte    { return p[1] }
 func (p ICMP6RouterSolicitation) Checksum() int { return int(binary.BigEndian.Uint16(p[2:4])) }
 func (p ICMP6RouterSolicitation) SourceLLA() net.HardwareAddr {
-	// RA options may containg a single SourceLLA option
+	// RS options may containg a single SourceLLA option
 	// len is therefore: 26 = 4 bytes header + 4 bytes reserved + 2 bytes option header + 16 IP bytes SourceLLA option
 	if len(p) >= 26 && p[8] == 1 && p[9] == 3 { // type == SourceLLA & 24 bytes len (3 * 8bytes)
 		return net.HardwareAddr(p[10 : 10+16])
