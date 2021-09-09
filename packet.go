@@ -158,6 +158,26 @@ func (p Ether) Dst() net.HardwareAddr { return net.HardwareAddr(p[:6]) }
 func (p Ether) Src() net.HardwareAddr { return net.HardwareAddr(p[6 : 6+6]) }
 func (p Ether) EtherType() uint16     { return binary.BigEndian.Uint16(p[12:14]) } // same pos as PayloadLen
 
+func (p Ether) SrcIP() net.IP {
+	switch p.EtherType() {
+	case syscall.ETH_P_IP:
+		return IP4(p.Payload()).Src()
+	case syscall.ETH_P_IPV6:
+		return IP6(p.Payload()).Src()
+	}
+	return nil
+}
+
+func (p Ether) DstIP() net.IP {
+	switch p.EtherType() {
+	case syscall.ETH_P_IP:
+		return IP4(p.Payload()).Dst()
+	case syscall.ETH_P_IPV6:
+		return IP6(p.Payload()).Dst()
+	}
+	return nil
+}
+
 func (p Ether) Payload() []byte {
 	if p.EtherType() == syscall.ETH_P_IP || p.EtherType() == syscall.ETH_P_IPV6 || p.EtherType() == syscall.ETH_P_ARP {
 		// fmt.Println("DEBUG: arp payload ", len(p), cap(p))

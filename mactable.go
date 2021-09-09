@@ -166,8 +166,18 @@ type NameEntry struct {
 }
 
 func (n NameEntry) FastLog(l *fastlog.Line) *fastlog.Line {
-	l.String("name", n.Name)
-	l.String("model", n.Model)
+	if n.Name != "" {
+		l.String("name", n.Name)
+	}
+	if n.Model != "" {
+		l.String("model", n.Model)
+	}
+	if n.OS != "" {
+		l.String("OS", n.OS)
+	}
+	if n.Manufacturer != "" {
+		l.String("manufacturer", n.Manufacturer)
+	}
 	return l
 }
 
