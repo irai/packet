@@ -189,7 +189,7 @@ func (h *DNSHandler) SendSleepProxyResponse(srcAddr packet.Addr, dstAddr packet.
 		Answers: []dnsmessage.Resource{
 			{
 				Header: dnsmessage.ResourceHeader{
-					Name:  mustNewName("_sleep-proxy._udp._local."),
+					Name:  mustNewName("_sleep-proxy._udp.local."),
 					Type:  dnsmessage.TypePTR,
 					Class: dnsmessage.ClassINET,
 				},
