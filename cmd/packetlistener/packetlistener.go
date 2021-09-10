@@ -377,6 +377,12 @@ func doMDNS(h *handlers, tokens []string) {
 		if err := h.engine.DNSHandler.SendMDNSQuery(dns.MDNSServiceDiscovery); err != nil {
 			fmt.Println("error:", err)
 		}
+	case "sleepproxy", "sp":
+		mdnsIPv4Addr := packet.Addr{MAC: packet.EthBroadcast, IP: net.IPv4(224, 0, 0, 251), Port: 5353}
+		// mdnsIPv6Addr = packet.Addr{MAC: packet.EthBroadcast, IP: net.ParseIP("ff02::fb"), Port: 5353}
+		if err := h.engine.DNSHandler.SendSleepProxyResponse(h.engine.Session().NICInfo.HostAddr4, mdnsIPv4Addr, ""); err != nil {
+			fmt.Println("error:", err)
+		}
 	case "print":
 		h.engine.PrintTable()
 
@@ -443,6 +449,7 @@ var icmp6Syntax = []string{
 var mdnsSyntax = []string{
 	"mdns    query <service>                 : query service name             ",
 	"        queryall                        : send dns-sd request            ",
+	"        sp                              : send sleep proxy response      ",
 	"        print                           : print ",
 	"llmnr   query <service>                 : query service name             ",
 	"ssdp    search                          : send ssdp search multicast     ",

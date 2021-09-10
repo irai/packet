@@ -106,7 +106,10 @@ func (h *DNSHandler) sendMDNSQuery(srcAddr packet.Addr, dstAddr packet.Addr, mty
 	if err != nil {
 		return err
 	}
+	return h.sendMDNS(buf, srcAddr, dstAddr)
+}
 
+func (h *DNSHandler) sendMDNS(buf []byte, srcAddr packet.Addr, dstAddr packet.Addr) (err error) {
 	ether := packet.Ether(make([]byte, packet.EthMaxSize))
 
 	//  The source UDP port in all Multicast DNS responses MUST be 5353 (the
@@ -150,7 +153,54 @@ func (h *DNSHandler) sendMDNSQuery(srcAddr packet.Addr, dstAddr packet.Addr, mty
 	if _, err := h.session.Conn.WriteTo(ether, &dstAddr); err != nil {
 		fastlog.NewLine(moduleMDNS, "failed to write").Error(err).Write()
 	}
-	return err
+	return nil
+}
+
+func (h *DNSHandler) SendSleepProxyResponse(srcAddr packet.Addr, dstAddr packet.Addr, name string) (err error) {
+	// See python code: https://github.com/kfix/SleepProxyServer/blob/master/sleepproxy/manager.py
+
+	// Sleep proxy encode information in front of the name
+	// #<SPSType>-<SPSPortability>-<SPSMarginalPower>-<SPSTotalPower>.<SPSFeatureFlags> <nicelabel>
+	name = "10-34-10-70 SleepProxyServer._sleep-proxy._udp.local."
+	var ip4 [4]byte
+	copy(ip4[:], h.session.NICInfo.HostAddr4.IP.To4()[0:3])
+	msg := dnsmessage.Message{
+		Header:    dnsmessage.Header{Response: true},
+		Questions: []dnsmessage.Question{
+			/**
+			{
+				Name:  mustNewName(name),
+				Type:  dnsmessage.TypeALL,
+				Class: dnsmessage.ClassANY,
+			},
+			**/
+		},
+		Answers:     []dnsmessage.Resource{},
+		Authorities: []dnsmessage.Resource{},
+		Additionals: []dnsmessage.Resource{
+			{
+				Header: dnsmessage.ResourceHeader{
+					Name:  mustNewName(name),
+					Type:  dnsmessage.TypeA,
+					Class: dnsmessage.ClassINET,
+				},
+				Body: &dnsmessage.AResource{A: ip4},
+			},
+			{
+				Header: dnsmessage.ResourceHeader{
+					Name:  mustNewName(name),
+					Type:  dnsmessage.TypeSRV,
+					Class: dnsmessage.ClassINET,
+				},
+				Body: &dnsmessage.SRVResource{Target: mustNewName(name), Port: 3535},
+			},
+		},
+	}
+	buf, err := msg.Pack()
+	if err != nil {
+		return err
+	}
+	return h.sendMDNS(buf, srcAddr, dstAddr)
 }
 
 type HostName struct {
