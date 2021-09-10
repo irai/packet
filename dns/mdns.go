@@ -12,6 +12,7 @@ import (
 
 // MDNS RFC
 //    see https://datatracker.ietf.org/doc/html/rfc6762
+//    see Apple bonjour - https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/NetServices/Introduction.html
 //
 //    One of the motivations for DNS-based Service Discovery is to enable a
 //    visiting client (e.g., a Wi-Fi-equipped [IEEEW] laptop computer,
