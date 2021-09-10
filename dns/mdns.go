@@ -157,25 +157,45 @@ func (h *DNSHandler) sendMDNS(buf []byte, srcAddr packet.Addr, dstAddr packet.Ad
 }
 
 func (h *DNSHandler) SendSleepProxyResponse(srcAddr packet.Addr, dstAddr packet.Addr, name string) (err error) {
-	// See python code: https://github.com/kfix/SleepProxyServer/blob/master/sleepproxy/manager.py
+	// Server response format: See https://datatracker.ietf.org/doc/html/rfc6763
+	//
+	// Example python code: https://github.com/kfix/SleepProxyServer/blob/master/sleepproxy/manager.py
 
 	// Sleep proxy encode information in front of the name
 	// #<SPSType>-<SPSPortability>-<SPSMarginalPower>-<SPSTotalPower>.<SPSFeatureFlags> <nicelabel>
 	name = "10-34-10-70 SleepProxyServer._sleep-proxy._udp.local."
 	var ip4 [4]byte
-	copy(ip4[:], h.session.NICInfo.HostAddr4.IP.To4()[0:3])
+	copy(ip4[:], h.session.NICInfo.HostAddr4.IP)
 	msg := dnsmessage.Message{
-		Header:    dnsmessage.Header{Response: true},
+		Header: dnsmessage.Header{Response: true},
+
+		// MDNS-SD PTR answer record
+		// Instead of requesting records of type "SRV" with name "_ipp._tcp.example.com.",
+		// the client requests records of type "PTR" (pointer from one name to
+		// another in the DNS namespace) [RFC1035].
+		// The result of this PTR lookup for the name "<Service>.<Domain>" is a
+		//  set of zero or more PTR records giving Service Instance Names of the
+		//  form:
+		//        Service Instance Name = <Instance> . <Service> . <Domain>
 		Questions: []dnsmessage.Question{
-			/**
-			{
-				Name:  mustNewName(name),
-				Type:  dnsmessage.TypeALL,
-				Class: dnsmessage.ClassANY,
-			},
-			**/
+			/*
+				{
+					Name:  mustNewName(name),
+					Type:  dnsmessage.TypeALL,
+					Class: dnsmessage.ClassANY,
+				},
+			*/
 		},
-		Answers:     []dnsmessage.Resource{},
+		Answers: []dnsmessage.Resource{
+			{
+				Header: dnsmessage.ResourceHeader{
+					Name:  mustNewName("_sleep-proxy._udp._local."),
+					Type:  dnsmessage.TypePTR,
+					Class: dnsmessage.ClassINET,
+				},
+				Body: &dnsmessage.PTRResource{PTR: mustNewName(name)},
+			},
+		},
 		Authorities: []dnsmessage.Resource{},
 		Additionals: []dnsmessage.Resource{
 			{
@@ -193,6 +213,18 @@ func (h *DNSHandler) SendSleepProxyResponse(srcAddr packet.Addr, dstAddr packet.
 					Class: dnsmessage.ClassINET,
 				},
 				Body: &dnsmessage.SRVResource{Target: mustNewName(name), Port: 5353},
+			},
+			//Every DNS-SD service MUST have a TXT record in addition to its SRV
+			// record, with the same name, even if the service has no additional
+			// data to store and the TXT record contains no more than a single zero
+			// byte.
+			{
+				Header: dnsmessage.ResourceHeader{
+					Name:  mustNewName(name),
+					Type:  dnsmessage.TypeTXT,
+					Class: dnsmessage.ClassINET,
+				},
+				Body: &dnsmessage.TXTResource{TXT: []string{"txtvers=1.0"}},
 			},
 		},
 	}
