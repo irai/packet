@@ -192,7 +192,7 @@ func (h *DNSHandler) SendSleepProxyResponse(srcAddr packet.Addr, dstAddr packet.
 					Type:  dnsmessage.TypeSRV,
 					Class: dnsmessage.ClassINET,
 				},
-				Body: &dnsmessage.SRVResource{Target: mustNewName(name), Port: 3535},
+				Body: &dnsmessage.SRVResource{Target: mustNewName(name), Port: 5353},
 			},
 		},
 	}
