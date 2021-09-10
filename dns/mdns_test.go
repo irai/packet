@@ -229,12 +229,79 @@ func TestMDNSHandler_Apple(t *testing.T) {
 		{name: "MacBook", frame: frameMacBook, wantErr: false,
 			wantIPv4Host: NameEntry{Name: "Goth", Addr: packet.Addr{IP: net.IPv4(192, 168, 0, 110)}, Model: "MacBookPro14,1"},
 		},
+		{name: "iPhoneIpv6Query", frame: frameIphoneIPv6Query, wantErr: false,
+			wantIPv4Host: NameEntry{Name: "", Addr: packet.Addr{}, Model: ""},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ether := packet.Ether(tt.frame)
 			ip := packet.IP4(ether.Payload())
+			fmt.Println("ip", ip)
+			udp := packet.UDP(ip.Payload())
+			fmt.Println("udp", udp)
+			p := DNS(udp.Payload())
+			if p.IsValid() != nil {
+				t.Fatal("invalid dns packet")
+			}
+			fmt.Println("dns", p)
+
+			ipv4Host, _, err := dnsHandler.ProcessMDNS(nil, ether, udp.Payload())
+			if (err != nil) != tt.wantErr {
+				t.Error("unexpected error", err)
+			}
+			if ipv4Host.NameEntry.Name != tt.wantIPv4Host.Name {
+				t.Errorf("%s: unexpected mdnsname=%s want=%s", tt.name, ipv4Host.NameEntry.Name, tt.wantIPv4Host.Name)
+			}
+			if ipv4Host.NameEntry.Model != tt.wantIPv4Host.Model {
+				t.Errorf("%s: unexpected model=%s want=%s", tt.name, ipv4Host.NameEntry.Model, tt.wantIPv4Host.Model)
+			}
+			if !ipv4Host.Addr.IP.Equal(tt.wantIPv4Host.Addr.IP) {
+				t.Errorf("%s: unexpected ip=%s want=%s", tt.name, ipv4Host.Addr.IP, tt.wantIPv4Host.Addr.IP)
+			}
+		})
+	}
+}
+
+// 34:a3:95:d8:13:39 > 33:33:00:00:00:fb, ethertype IPv6 (0x86dd), length 174: (flowlabel 0x58dda, hlim 255, next-header UDP (17) payload length: 120)
+// fe80::18c6:775e:333e:9b92.5353 > ff02::fb.5353: [udp sum ok] 0 [3q] [1au] PTR (QM)?
+//  _companion-link._tcp.local. PTR (QM)? _homekit._tcp.local. PTR (QM)? _sleep-proxy._udp.local. ar: . OPT UDPsize=1440 (112)
+var frameIphoneIPv6Query = []byte{
+	0x33, 0x33, 0x00, 0x00, 0x00, 0xfb, 0x34, 0xa3, 0x95, 0xd8, 0x13, 0x39, 0x86, 0xdd, 0x60, 0x05, // 33....4....9..`.
+	0x8d, 0xda, 0x00, 0x78, 0x11, 0xff, 0xfe, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x18, 0xc6, // ...x............
+	0x77, 0x5e, 0x33, 0x3e, 0x9b, 0x92, 0xff, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // w^3>............
+	0x00, 0x00, 0x00, 0x00, 0x00, 0xfb, 0x14, 0xe9, 0x14, 0xe9, 0x00, 0x78, 0x3f, 0x90, 0x00, 0x00, // ...........x?...
+	0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x0f, 0x5f, 0x63, 0x6f, 0x6d, 0x70, // ..........._comp
+	0x61, 0x6e, 0x69, 0x6f, 0x6e, 0x2d, 0x6c, 0x69, 0x6e, 0x6b, 0x04, 0x5f, 0x74, 0x63, 0x70, 0x05, // anion-link._tcp.
+	0x6c, 0x6f, 0x63, 0x61, 0x6c, 0x00, 0x00, 0x0c, 0x00, 0x01, 0x08, 0x5f, 0x68, 0x6f, 0x6d, 0x65, // local......_home
+	0x6b, 0x69, 0x74, 0xc0, 0x1c, 0x00, 0x0c, 0x00, 0x01, 0x0c, 0x5f, 0x73, 0x6c, 0x65, 0x65, 0x70, // kit......._sleep
+	0x2d, 0x70, 0x72, 0x6f, 0x78, 0x79, 0x04, 0x5f, 0x75, 0x64, 0x70, 0xc0, 0x21, 0x00, 0x0c, 0x00, // -proxy._udp.!...
+	0x01, 0x00, 0x00, 0x29, 0x05, 0xa0, 0x00, 0x00, 0x11, 0x94, 0x00, 0x12, 0x00, 0x04, 0x00, 0x0e, // ...)............
+	0x00, 0xe4, 0x36, 0xa3, 0x95, 0xd8, 0x13, 0x39, 0x34, 0xa3, 0x95, 0xd8, 0x13, 0x39, // ..6....94....9
+}
+
+func TestMDNSHandler_IPv6(t *testing.T) {
+	session := packet.NewEmptySession()
+	dnsHandler, _ := New(session)
+	Debug = true
+
+	tests := []struct {
+		name         string
+		frame        []byte
+		wantIPv4Host NameEntry
+		wantIPv6Host NameEntry
+		wantErr      bool
+	}{
+		{name: "iPhoneIpv6Query", frame: frameIphoneIPv6Query, wantErr: false,
+			wantIPv4Host: NameEntry{Name: "", Addr: packet.Addr{}, Model: ""},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ether := packet.Ether(tt.frame)
+			ip := packet.IP6(ether.Payload())
 			fmt.Println("ip", ip)
 			udp := packet.UDP(ip.Payload())
 			fmt.Println("udp", udp)

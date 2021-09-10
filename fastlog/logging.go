@@ -114,7 +114,9 @@ func (l *Line) String(name string, value string) *Line {
 	l.appendByte(' ')
 	l.index = l.index + copy(l.buffer[l.index:], name)
 	l.appendByte('=')
+	l.appendByte('"')
 	l.index = l.index + copy(l.buffer[l.index:], value)
+	l.appendByte('"')
 	return l
 }
 

@@ -10,7 +10,10 @@ import (
 	"syscall"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/fastlog"
 )
+
+const moduleSSDP = "ssdp"
 
 // SSDP draft here
 // see : https://datatracker.ietf.org/doc/html/draft-cai-ssdp-v1-03
@@ -56,7 +59,7 @@ func processSSDPNotify(raw []byte) (name packet.NameEntry, location string, err 
 		}
 		location = req.Header.Get("LOCATION")
 		if Debug {
-			fmt.Printf("ssdp  : Microsoft SSDP service location=%s\n", location)
+			fastlog.NewLine(moduleSSDP, "ssdp:alive recv").String("location", location).Write()
 		}
 		return packet.NameEntry{}, location, nil
 	case "ssdp:byebye":
@@ -69,7 +72,8 @@ func processSSDPNotify(raw []byte) (name packet.NameEntry, location string, err 
 		//    NTS: ssdp:byebye
 		//    USN: uuid:advertisement UUID
 		if Debug {
-			fmt.Printf("ssdp  : byebye %s", string(raw))
+			// fmt.Printf("ssdp  : byebye %s", string(raw))
+			fastlog.NewLine(moduleSSDP, "ssdp:byebye recv").Bytes("txt", raw).Write()
 		}
 	default:
 		fmt.Printf("ssdp  : error unexpected NTS header %s\n", nts)
@@ -104,7 +108,11 @@ func processSSDPSearchRequest(raw []byte) (name packet.NameEntry, location strin
 	}
 	// fmt.Printf("ssdp  : recv discover packet %s", string(raw))
 	ua := req.Header.Get("USER-AGENT")
-	return processUserAgent(ua), "", nil
+	name = processUserAgent(ua)
+	if Debug {
+		fastlog.NewLine(moduleSSDP, "ssdp:discover recv").String("user-agent", ua).Struct(name).Write()
+	}
+	return name, "", nil
 }
 
 func processUserAgent(ua string) (name packet.NameEntry) {
@@ -137,7 +145,7 @@ func processSSDPResponse(raw []byte) (name packet.NameEntry, location string, er
 	}
 	location = resp.Header.Get("LOCATION")
 	if Debug {
-		fmt.Printf("ssdp  : Microsoft SSDP service location=%s\n", location)
+		fastlog.NewLine(moduleSSDP, "response").String("location", location).Write()
 	}
 	return packet.NameEntry{}, location, nil
 }
@@ -186,10 +194,19 @@ func (h *DNSHandler) ProcessSSDP(host *packet.Host, ether packet.Ether, payload 
 	*/
 
 	if bytes.HasPrefix(payload, []byte("M-SEARCH ")) {
+		if Debug {
+			fastlog.NewLine(moduleSSDP, "m-search rcvd").MAC("mac", ether.Src()).IP("ip", ether.SrcIP()).Write()
+		}
 		return processSSDPSearchRequest(payload)
 	}
 	if bytes.HasPrefix(payload, []byte("NOTIFY ")) {
+		if Debug {
+			fastlog.NewLine(moduleSSDP, "notify rcvd").MAC("mac", ether.Src()).IP("ip", ether.SrcIP()).Write()
+		}
 		return processSSDPNotify(payload)
+	}
+	if Debug {
+		fastlog.NewLine(moduleSSDP, "response rcvd").MAC("mac", ether.Src()).IP("ip", ether.SrcIP()).Write()
 	}
 	return processSSDPResponse(payload)
 }

@@ -167,10 +167,14 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 		return ipv4, ipv6, err
 	}
 
+	var addr packet.Addr
+	if host != nil {
+		addr = host.Addr
+	}
 	// not interested in queries
 	if !dnsHeader.Response {
 		if Debug {
-			line := fastlog.NewLine(moduleMDNS, "query").Struct(host.Addr).Struct(DNS(payload))
+			line := fastlog.NewLine(moduleMDNS, "query").Struct(addr).Struct(DNS(payload))
 			questions, err := p.AllQuestions()
 			if err == nil { // ignore error
 				for _, q := range questions {
@@ -183,7 +187,7 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 	}
 
 	if Debug {
-		fastlog.NewLine(moduleMDNS, "response").Struct(host.Addr).Struct(DNS(payload)).Write()
+		fastlog.NewLine(moduleMDNS, "response").Struct(addr).Struct(DNS(payload)).Write()
 	}
 
 	//  Multicast DNS responses MUST NOT contain any questions in the

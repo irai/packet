@@ -2,9 +2,16 @@ package dns
 
 import (
 	"fmt"
+	"net"
+	"syscall"
 	"testing"
 
 	"github.com/irai/packet"
+)
+
+var (
+	mac1 = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x01}
+	mac2 = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x02}
 )
 
 // b8:e9:37:51:89:8c > ff:ff:ff:ff:ff:ff, ethertype IPv4 (0x0800), length 530: (tos 0x0, ttl 64, id 0, offset 0, flags [DF], proto UDP (17), length 516)
@@ -142,13 +149,15 @@ func TestDNSHandler_ProcessSSDPFrame(t *testing.T) {
 		{name: "ssdpSearchRequestChrome", frame: frameMSearchRequestChrome, wantErr: false, wantLocation: "", wantName: NameEntry{OS: "Windows"}},
 		{name: "ssdpSearchResponse", frame: frameMSearchResponse, wantErr: false, wantLocation: "http://192.168.0.1:1900/gatedesc.xml"},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			ether := packet.EtherMarshalBinary(make([]byte, 1500), syscall.ETH_P_IP, mac1, mac2)
 			ip := packet.IP4(tt.frame)
 			fmt.Println("ip", ip)
 			udp := packet.UDP(ip.Payload())
 			fmt.Println("udp", udp)
-			nameEntry, location, err := dnsHandler.ProcessSSDP(nil, nil, udp.Payload())
+			nameEntry, location, err := dnsHandler.ProcessSSDP(nil, ether, udp.Payload())
 			if (err != nil) != tt.wantErr {
 				t.Errorf("DNSHandler.ProcessSSDP() error = %v, wantErr %v", err, tt.wantErr)
 				return
