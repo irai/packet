@@ -45,6 +45,8 @@ import (
 // queries.  This mechanism is referred to as DNS-based Service Discovery, or DNS-SD.
 const MDNSServiceDiscovery = "_services._dns-sd._udp.local."
 
+const moduleMDNS = "mdns"
+
 var (
 	// Any DNS query for a name ending with ".local." MUST be sent to the
 	// mDNS IPv4 link-local multicast address 224.0.0.251 (or its IPv6 equivalent FF02::FB).
@@ -291,6 +293,8 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 		return ipv4, ipv6, err
 	}
 
+	ipv4.NameEntry.Type = moduleMDNS
+	ipv6.NameEntry.Type = moduleMDNS
 	section := "answer"
 	for {
 		var hdr dnsmessage.ResourceHeader

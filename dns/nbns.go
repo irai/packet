@@ -18,6 +18,8 @@ import (
 //
 // An old protocol but still in use in Windows 10 and Home routers in 2021.
 const (
+	moduleNBNS = "nbns"
+
 	netbiosMaxNameLen = 16
 
 	// response flag: bit 15
@@ -73,7 +75,7 @@ func encodeNBNSName(name string) []byte {
 	buffer.Write([]byte{0x00})
 
 	if Debug {
-		log.Printf("nbns encode netbios name=%s len=%v", string(buffer.Bytes()), len(buffer.Bytes()))
+		log.Printf("nbns encode netbios name=%s len=%v", buffer.String(), len(buffer.Bytes()))
 	}
 
 	return buffer.Bytes()
@@ -225,7 +227,7 @@ func (h *DNSHandler) ProcessNBNS(host *packet.Host, ether packet.Ether, payload 
 		return name, err
 	}
 	if Debug {
-		fastlog.NewLine(module, "new nbns packet").Stringer(host).Struct(dns).Write()
+		fastlog.NewLine(moduleNBNS, "new nbns packet").Stringer(host).Struct(dns).Write()
 	}
 	var p dnsmessage.Parser
 	dnsHeader, err := p.Start(payload)
@@ -238,6 +240,8 @@ func (h *DNSHandler) ProcessNBNS(host *packet.Host, ether packet.Ether, payload 
 	if err := p.SkipAllQuestions(); err != nil {
 		return name, err
 	}
+
+	name.Type = moduleNBNS
 
 	for {
 		h, err := p.AnswerHeader()

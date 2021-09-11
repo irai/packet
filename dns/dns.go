@@ -14,9 +14,6 @@ import (
 	"inet.af/netaddr"
 )
 
-const module = "dns"
-const moduleMDNS = "mdns"
-
 var Debug bool
 
 type DNSHandler struct {

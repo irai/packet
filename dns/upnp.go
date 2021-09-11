@@ -94,6 +94,7 @@ func (h *DNSHandler) UPNPServiceDiscovery(addr packet.Addr, location string) (na
 		fmt.Printf("engine: retrieved upnp name=%s model=%s manufacturer=%s\n", service.Device.Name, service.Device.Model, service.Device.Manufacturer)
 	}
 
+	name.Type = moduleSSDP
 	name.Name = service.Device.Name
 	name.Model = service.Device.Model
 	name.Manufacturer = service.Device.Manufacturer

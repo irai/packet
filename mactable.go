@@ -51,16 +51,16 @@ func (e *MACEntry) FastLog(l *fastlog.Line) *fastlog.Line {
 	l.Int("hosts", len(e.HostList))
 	l.String("lastSeen", time.Since(e.LastSeen).String())
 	if e.DHCP4Name.Name != "" {
-		l.String("dhcp4name", e.DHCP4Name.Name)
+		l.Struct(e.DHCP4Name)
 	}
 	if e.MDNSName.Name != "" {
-		l.String("mdnsname", e.MDNSName.Name)
+		l.Struct(e.MDNSName)
 	}
 	if e.SSDPName.Name != "" {
-		l.String("ssdpname", e.SSDPName.Name)
+		l.Struct(e.SSDPName)
 	}
 	if e.NBNSName.Name != "" {
-		l.String("nbnsname", e.NBNSName.Name)
+		l.Struct(e.NBNSName)
 	}
 	return l
 }
@@ -159,6 +159,7 @@ func (s *MACTable) FindMACNoLock(mac net.HardwareAddr) (*MACEntry, int) {
 
 // NameEntry holds a name entry
 type NameEntry struct {
+	Type         string
 	Name         string
 	Model        string
 	Manufacturer string
@@ -167,16 +168,16 @@ type NameEntry struct {
 
 func (n NameEntry) FastLog(l *fastlog.Line) *fastlog.Line {
 	if n.Name != "" {
-		l.String("name", n.Name)
+		l.String(n.Type+"name", n.Name)
 	}
 	if n.Model != "" {
-		l.String("model", n.Model)
+		l.String(n.Type+"model", n.Model)
 	}
 	if n.OS != "" {
-		l.String("OS", n.OS)
+		l.String(n.Type+"OS", n.OS)
 	}
 	if n.Manufacturer != "" {
-		l.String("manufacturer", n.Manufacturer)
+		l.String(n.Type+"manufacturer", n.Manufacturer)
 	}
 	return l
 }

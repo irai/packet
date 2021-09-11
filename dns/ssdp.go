@@ -116,6 +116,7 @@ func processSSDPSearchRequest(raw []byte) (name packet.NameEntry, location strin
 }
 
 func processUserAgent(ua string) (name packet.NameEntry) {
+	name.Type = moduleSSDP
 	switch {
 	case strings.Contains(ua, "iPhone"):
 		name.Model = "iPhone"
