@@ -28,6 +28,7 @@ type MACEntry struct {
 	DHCP4Name NameEntry
 	MDNSName  NameEntry
 	SSDPName  NameEntry
+	LLMNRName NameEntry
 	NBNSName  NameEntry
 }
 
@@ -50,18 +51,11 @@ func (e *MACEntry) FastLog(l *fastlog.Line) *fastlog.Line {
 	l.IP("ip4offer", e.IP4Offer)
 	l.Int("hosts", len(e.HostList))
 	l.String("lastSeen", time.Since(e.LastSeen).String())
-	if e.DHCP4Name.Name != "" {
-		l.Struct(e.DHCP4Name)
-	}
-	if e.MDNSName.Name != "" {
-		l.Struct(e.MDNSName)
-	}
-	if e.SSDPName.Name != "" {
-		l.Struct(e.SSDPName)
-	}
-	if e.NBNSName.Name != "" {
-		l.Struct(e.NBNSName)
-	}
+	l.Struct(e.DHCP4Name)
+	l.Struct(e.MDNSName)
+	l.Struct(e.SSDPName)
+	l.Struct(e.LLMNRName)
+	l.Struct(e.NBNSName)
 	return l
 }
 

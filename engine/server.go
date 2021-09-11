@@ -389,25 +389,23 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 	case udpDstPort == 53: // DNS request
 	// do nothing
 
-	case udpSrcPort == 5353 || udpDstPort == 5353:
-		// Multicast DNS (MDNS)
+	case udpSrcPort == 5353 || udpDstPort == 5353: // Multicast DNS (MDNS)
 		if host != nil {
-			ipv4Host, ipv6Host, err := h.DNSHandler.ProcessMDNS(host, ether, udp.Payload())
+			ipv4Name, ipv6Name, err := h.DNSHandler.ProcessMDNS(host, ether, udp.Payload())
 			if err != nil {
 				fmt.Printf("packet: error processing mdns: %s\n", err)
 				break
 			}
-			if ipv4Host.NameEntry.Name != "" {
+			ipv4Name.NameEntry, notify = host.MDNSName.Merge(ipv4Name.NameEntry)
+			if notify {
 				host.MACEntry.Row.Lock()
-				host.MDNSName, notify = host.MDNSName.Merge(ipv4Host.NameEntry)
-				if notify {
-					fastlog.NewLine(module, "updated mdns name").Struct(host.Addr).Struct(host.MDNSName).Write()
-					host.MACEntry.MDNSName, _ = host.MACEntry.MDNSName.Merge(host.MDNSName)
-				}
+				host.MDNSName = ipv4Name.NameEntry
+				fastlog.NewLine(module, "updated mdns name").Struct(host.Addr).Struct(host.MDNSName).Write()
+				host.MACEntry.MDNSName, _ = host.MACEntry.MDNSName.Merge(host.MDNSName)
 				host.MACEntry.Row.Unlock()
 			}
-			if ipv6Host.Addr.IP != nil {
-				fastlog.NewLine(module, "mdns ipv6 ignoring host").Struct(ipv6Host).Write()
+			if ipv6Name.Addr.IP != nil {
+				fastlog.NewLine(module, "mdns ipv6 ignoring host").Struct(ipv6Name).Write()
 			}
 		}
 
@@ -420,8 +418,13 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 				fmt.Printf("packet: error processing mdns: %s\n", err)
 				break
 			}
-			if ipv4Name.NameEntry.Name != "" {
-				fastlog.NewLine(module, "llmnr ipv4 host").Struct(ipv4Name).Write()
+			ipv4Name.NameEntry, notify = host.LLMNRName.Merge(ipv4Name.NameEntry)
+			if notify {
+				host.MACEntry.Row.Lock()
+				host.LLMNRName = ipv4Name.NameEntry
+				fastlog.NewLine(module, "updated llmnr name").Struct(host.Addr).Struct(host.LLMNRName).Write()
+				host.MACEntry.LLMNRName, _ = host.MACEntry.LLMNRName.Merge(host.LLMNRName)
+				host.MACEntry.Row.Unlock()
 			}
 			if ipv6Name.NameEntry.Name != "" {
 				fastlog.NewLine(module, "llmnr ipv6 host").Struct(ipv6Name).Write()
@@ -441,9 +444,21 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 				fmt.Printf("packet: error processing ssdp: %s\n", err)
 				break
 			}
+
+			// Update SSDPName if modified
+			nameEntry, notify = host.SSDPName.Merge(nameEntry)
+			if notify {
+				host.MACEntry.Row.Lock()
+				host.SSDPName = nameEntry
+				fastlog.NewLine(module, "updated ssdp name").Struct(host.Addr).Struct(host.SSDPName).Write()
+				host.MACEntry.SSDPName, _ = host.MACEntry.SSDPName.Merge(host.SSDPName)
+				host.MACEntry.Row.Unlock()
+			}
+
+			// Retrieve service details if valid location
+			// Location is the end point for the UPNP service discovery
+			// Retrieve in a goroutine
 			if location != "" {
-				// Location is the end point for the UPNP service discovery
-				// Retrieve in a goroutine
 				go func(host *packet.Host) {
 					host.MACEntry.Row.RLock()
 					if host.SSDPName.Name != "" { // ignore if already have name
@@ -470,13 +485,6 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 				}(host)
 				break
 			}
-			host.MACEntry.Row.Lock()
-			host.SSDPName, notify = host.SSDPName.Merge(nameEntry)
-			if notify {
-				fastlog.NewLine("dns", "updated ssdp name").Struct(host).Write()
-				host.MACEntry.SSDPName, _ = host.MACEntry.SSDPName.Merge(host.SSDPName)
-			}
-			host.MACEntry.Row.Unlock()
 		}
 
 	case udpDstPort == 3702:
