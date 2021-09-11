@@ -269,6 +269,8 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 				for _, q := range questions {
 					line.Bytes("qname", q.Name.Data[:q.Name.Length])
 					if strings.Contains(string(q.Name.Data[:q.Name.Length]), "sleep-proxy") {
+						ipv4.NameEntry.Type = moduleMDNS
+						ipv4.NameEntry.Manufacturer = "Apple"
 						h.SendSleepProxyResponse(h.session.NICInfo.HostAddr4, mdnsIPv4Addr, dnsHeader.ID, "sleepproxy")
 					}
 				}
