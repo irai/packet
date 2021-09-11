@@ -156,7 +156,11 @@ func (h *DNSHandler) sendMDNS(buf []byte, srcAddr packet.Addr, dstAddr packet.Ad
 	return nil
 }
 
-func (h *DNSHandler) SendSleepProxyResponse(srcAddr packet.Addr, dstAddr packet.Addr, name string) (err error) {
+func (h *DNSHandler) SendSleepProxyResponse(srcAddr packet.Addr, dstAddr packet.Addr, id uint16, name string) (err error) {
+	if Debug {
+		fastlog.NewLine(moduleMDNS, "send sleep proxy announcement").Struct(dstAddr).Write()
+	}
+
 	// Server response format: See https://datatracker.ietf.org/doc/html/rfc6763
 	//
 	// see http://www.cnpbagwell.com/mac-os-x/bonjour-sleep-proxy
@@ -168,7 +172,7 @@ func (h *DNSHandler) SendSleepProxyResponse(srcAddr packet.Addr, dstAddr packet.
 	var ip4 [4]byte
 	copy(ip4[:], h.session.NICInfo.HostAddr4.IP)
 	msg := dnsmessage.Message{
-		Header: dnsmessage.Header{Response: true},
+		Header: dnsmessage.Header{ID: id, Response: true},
 
 		// MDNS-SD PTR answer record
 		// Instead of requesting records of type "SRV" with name "_ipp._tcp.example.com.",
@@ -196,9 +200,6 @@ func (h *DNSHandler) SendSleepProxyResponse(srcAddr packet.Addr, dstAddr packet.
 				},
 				Body: &dnsmessage.PTRResource{PTR: mustNewName(name)},
 			},
-		},
-		Authorities: []dnsmessage.Resource{},
-		Additionals: []dnsmessage.Resource{
 			{
 				Header: dnsmessage.ResourceHeader{
 					Name:  mustNewName(name),
@@ -213,7 +214,7 @@ func (h *DNSHandler) SendSleepProxyResponse(srcAddr packet.Addr, dstAddr packet.
 					Type:  dnsmessage.TypeSRV,
 					Class: dnsmessage.ClassINET,
 				},
-				Body: &dnsmessage.SRVResource{Target: mustNewName(name), Port: 48000}, // fake port number
+				Body: &dnsmessage.SRVResource{Target: mustNewName(name), Port: 5353},
 			},
 			//Every DNS-SD service MUST have a TXT record in addition to its SRV
 			// record, with the same name, even if the service has no additional
@@ -225,9 +226,11 @@ func (h *DNSHandler) SendSleepProxyResponse(srcAddr packet.Addr, dstAddr packet.
 					Type:  dnsmessage.TypeTXT,
 					Class: dnsmessage.ClassINET,
 				},
-				Body: &dnsmessage.TXTResource{TXT: []string{"txtvers=1.0"}},
+				Body: &dnsmessage.TXTResource{TXT: []string{"vers=1.0"}},
 			},
 		},
+		Authorities: []dnsmessage.Resource{},
+		Additionals: []dnsmessage.Resource{},
 	}
 	buf, err := msg.Pack()
 	if err != nil {
@@ -264,7 +267,7 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 				for _, q := range questions {
 					line.Bytes("qname", q.Name.Data[:q.Name.Length])
 					if strings.Contains(string(q.Name.Data[:q.Name.Length]), "sleep-proxy") {
-						h.SendSleepProxyResponse(h.session.NICInfo.HostAddr4, mdnsIPv4Addr, "sleepproxy")
+						h.SendSleepProxyResponse(h.session.NICInfo.HostAddr4, mdnsIPv4Addr, dnsHeader.ID, "sleepproxy")
 					}
 				}
 			}

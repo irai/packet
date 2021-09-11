@@ -380,7 +380,7 @@ func doMDNS(h *handlers, tokens []string) {
 	case "sleepproxy", "sp":
 		mdnsIPv4Addr := packet.Addr{MAC: packet.EthBroadcast, IP: net.IPv4(224, 0, 0, 251), Port: 5353}
 		// mdnsIPv6Addr = packet.Addr{MAC: packet.EthBroadcast, IP: net.ParseIP("ff02::fb"), Port: 5353}
-		if err := h.engine.DNSHandler.SendSleepProxyResponse(h.engine.Session().NICInfo.HostAddr4, mdnsIPv4Addr, ""); err != nil {
+		if err := h.engine.DNSHandler.SendSleepProxyResponse(h.engine.Session().NICInfo.HostAddr4, mdnsIPv4Addr, 0x00, ""); err != nil {
 			fmt.Println("error:", err)
 		}
 	case "print":
