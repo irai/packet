@@ -60,7 +60,7 @@ func main() {
 
 	go pprof()
 
-	packet.Debug = true
+	dns.Debug = true
 
 	fmt.Printf("packetlistener: Listen and send lan packets\n")
 	fmt.Printf("Using interface %v \n", *nic)
