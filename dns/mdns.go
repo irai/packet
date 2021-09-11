@@ -159,6 +159,7 @@ func (h *DNSHandler) sendMDNS(buf []byte, srcAddr packet.Addr, dstAddr packet.Ad
 func (h *DNSHandler) SendSleepProxyResponse(srcAddr packet.Addr, dstAddr packet.Addr, name string) (err error) {
 	// Server response format: See https://datatracker.ietf.org/doc/html/rfc6763
 	//
+	// see http://www.cnpbagwell.com/mac-os-x/bonjour-sleep-proxy
 	// Example python code: https://github.com/kfix/SleepProxyServer/blob/master/sleepproxy/manager.py
 
 	// Sleep proxy encode information in front of the name
@@ -212,7 +213,7 @@ func (h *DNSHandler) SendSleepProxyResponse(srcAddr packet.Addr, dstAddr packet.
 					Type:  dnsmessage.TypeSRV,
 					Class: dnsmessage.ClassINET,
 				},
-				Body: &dnsmessage.SRVResource{Target: mustNewName(name), Port: 5353},
+				Body: &dnsmessage.SRVResource{Target: mustNewName(name), Port: 48000}, // fake port number
 			},
 			//Every DNS-SD service MUST have a TXT record in addition to its SRV
 			// record, with the same name, even if the service has no additional
@@ -262,6 +263,9 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 			if err == nil { // ignore error
 				for _, q := range questions {
 					line.Bytes("qname", q.Name.Data[:q.Name.Length])
+					if strings.Contains(string(q.Name.Data[:q.Name.Length]), "sleep-proxy") {
+						h.SendSleepProxyResponse(h.session.NICInfo.HostAddr4, mdnsIPv4Addr, "sleepproxy")
+					}
 				}
 			}
 			line.Write()
