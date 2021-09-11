@@ -199,6 +199,7 @@ func (e NameEntry) Merge(nameEntry NameEntry) (newEntry NameEntry, modified bool
 		e.Manufacturer = nameEntry.Manufacturer
 		modified = true
 	}
+	e.Type = nameEntry.Type
 	return e, modified
 }
 

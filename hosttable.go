@@ -46,16 +46,20 @@ func (e Host) FastLog(l *fastlog.Line) *fastlog.Line {
 	l.Bool("captured", e.MACEntry.Captured)
 	l.String("stage", e.HuntStage.String())
 	if e.DHCP4Name.Name != "" {
-		l.String("name", e.DHCP4Name.Name)
+		// l.String("name", e.DHCP4Name.Name)
+		l.Struct(e.DHCP4Name)
 	}
 	if e.MDNSName.Name != "" {
-		l.String("mdnsname", e.MDNSName.Name)
+		// l.String("mdnsname", e.MDNSName.Name)
+		l.Struct(e.MDNSName)
 	}
 	if e.SSDPName.Name != "" {
-		l.String("ssdpname", e.SSDPName.Name)
+		// l.String("ssdpname", e.SSDPName.Name)
+		l.Struct(e.SSDPName)
 	}
 	if e.NBNSName.Name != "" {
-		l.String("nbnsname", e.NBNSName.Name)
+		// l.String("nbnsname", e.NBNSName.Name)
+		l.Struct(e.NBNSName)
 	}
 	/**
 	if e.Model != "" {
