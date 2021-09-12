@@ -116,6 +116,9 @@ func (l *Line) String(name string, value string) *Line {
 	l.appendByte('=')
 	l.appendByte('"')
 	l.index = l.index + copy(l.buffer[l.index:], value)
+	if l.index == cap(l.buffer) { // prevent segfault for long strings
+		l.index--
+	}
 	l.appendByte('"')
 	return l
 }
