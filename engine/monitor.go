@@ -44,7 +44,9 @@ func (h *Handler) lockAndMonitorRoute(now time.Time) (err error) {
 }
 
 func (h *Handler) minuteChecker(now time.Time) {
-	fmt.Printf("packet: running 1 minute checker %v\n", now)
+	if packet.Debug {
+		fmt.Printf("packet: running 1 minute checker %v\n", now)
+	}
 
 	// ARP Handler - will global lock session
 	if err := h.ARPHandler.MinuteTicker(now); err != nil {
