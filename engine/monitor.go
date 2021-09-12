@@ -119,9 +119,6 @@ func (h *Handler) minuteLoop() {
 				// run in goroutine
 				go h.hourly(now)
 			}
-			if (counter % 3) == 0 { // three minutes
-				h.threeMinuteChecker(time.Now())
-			}
 		case <-h.closeChan:
 			fmt.Println("engine: minute loop goroutine ended")
 			return
