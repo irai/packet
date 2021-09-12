@@ -44,33 +44,34 @@ func (h *Handler) lockAndMonitorRoute(now time.Time) (err error) {
 }
 
 func (h *Handler) minuteChecker(now time.Time) {
+	fmt.Printf("packet: running 1 minute checker %v\n", now)
 
-	// Handlers
+	// ARP Handler - will global lock session
 	if err := h.ARPHandler.MinuteTicker(now); err != nil {
 		fmt.Printf("packet: error in arp minute checker err=\"%s\"\n", err)
 	}
+
+	// ICMP4 Handler - no lock
 	h.ICMP4Handler.MinuteTicker(now)
+
+	// ICMP6 - no lock
 	if err := h.ICMP6Handler.MinuteTicker(now); err != nil {
 		fmt.Printf("packet: error in icmp6 minute checker err=\"%s\"\n", err)
 	}
+
+	// no lock
 	h.DHCP4Handler.MinuteTicker(now)
 
 	// internal checks
 	h.lockAndMonitorRoute(now)
 
-	// received a new "onlink" event
-	if h.forceScan {
-		h.forceScan = false
-		h.ICMP6Handler.PingAll()
-	}
 	h.purge(now, h.ProbeInterval, h.OfflineDeadline, h.PurgeDeadline)
 
 }
 
 func (h *Handler) threeMinuteChecker(now time.Time) {
-	if packet.Debug {
-		fmt.Printf("packet: running 3 minute checker %v\n", now)
-	}
+	fmt.Printf("packet: running 3 minute checker %v\n", now)
+
 	// Check that
 	if ipHeartBeat == 0 {
 		fmt.Printf("fatal: failed to receive ip packets in 3 minutes - sending sigterm time=%v\n", now)
@@ -81,7 +82,8 @@ func (h *Handler) threeMinuteChecker(now time.Time) {
 }
 
 // hourly runs every 60 minutes
-func (h *Handler) hourly() {
+func (h *Handler) hourly(now time.Time) {
+	fmt.Printf("packet: running hourly checker %v\n", now)
 	// send MDNS service discovery
 	if err := h.DNSHandler.SendMDNSQuery(dns.MDNSServiceDiscovery); err != nil {
 		fmt.Printf("engine: error in hourly dns query %s\n", err)
@@ -99,15 +101,22 @@ func (h *Handler) minuteLoop() {
 	for {
 		select {
 		case <-ticker.C:
-			h.minuteChecker(time.Now())
+			now := time.Now()
 			counter--
-			if counter <= 0 {
-				h.hourly()
-				counter = 60
-			}
+
+			go h.minuteChecker(now)
+
 			if (counter % 3) == 0 { // three minutes
-				h.threeMinuteChecker(time.Now())
+				// run in goroutine
+				go h.threeMinuteChecker(now)
 			}
+
+			if counter <= 0 {
+				counter = 60
+				// run in goroutine
+				go h.hourly(now)
+			}
+
 		case <-h.closeChan:
 			return
 		}
