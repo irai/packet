@@ -118,6 +118,7 @@ func (h *Handler) minuteLoop() {
 			}
 
 		case <-h.closeChan:
+			fmt.Println("engine: minute loop goroutine ended")
 			return
 		}
 	}
