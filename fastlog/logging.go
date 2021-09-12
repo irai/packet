@@ -18,8 +18,9 @@ import (
 //  - avoiding type introspection
 //  - Writting directly to in memory buffer - no string conversion
 //  - specialised types for MAC/IP/Int writing directly to buffer
+//  - multiline logging in a single write
 //  - minimum validation - assumes the caller is passing valid types and valid len
-//  - assumes a max fixed memory buffer len of 1024k per message - ie. it will segfault if the caller passes longer data
+//  - assumes a max fixed memory buffer len of 2048k per message - ie. it will segfault if the caller passes longer data
 //  - pool of reusable buffers
 //
 // Results: July 2021 logging Ethernet frame
@@ -27,7 +28,7 @@ import (
 // Benchmark_FastLogLinePrint-8             4046708               282 ns/op              34 B/op          2 allocs/op
 
 // bufSize sets the maximum len for a log entry
-const bufSize = 1024
+const bufSize = 2048
 
 type Logger struct {
 	Out   io.Writer
