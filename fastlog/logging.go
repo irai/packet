@@ -120,6 +120,31 @@ func (l *Line) String(name string, value string) *Line {
 	return l
 }
 
+func (l *Line) StringArray(name string, value []string) *Line {
+	l.appendByte(' ')
+	l.index = l.index + copy(l.buffer[l.index:], name)
+	l.appendByte('=')
+	l.appendByte('[')
+	if len(value) <= 0 {
+		l.appendByte(']')
+		return l
+	}
+
+	for _, v := range value {
+		if l.index+len(v)+4 > cap(l.buffer) {
+			break
+		}
+		l.appendByte('"')
+		l.index = l.index + copy(l.buffer[l.index:], v)
+		l.appendByte('"')
+		l.appendByte(',')
+		l.appendByte(' ')
+	}
+	l.index--
+	l.appendByte(']')
+	return l
+}
+
 // Bytes append an unmodified byte string to line.
 func (l *Line) Bytes(name string, value []byte) *Line {
 	l.appendByte(' ')

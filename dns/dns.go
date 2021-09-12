@@ -16,6 +16,8 @@ import (
 
 var Debug bool
 
+const module = "dns"
+
 type DNSHandler struct {
 	session   *packet.Session
 	DNSTable  map[string]DNSEntry // store dns records
@@ -534,14 +536,15 @@ func ReverseDNS(ip netaddr.IP) error {
 		dnsErr, ok := err.(*net.DNSError)
 		if ok && dnsErr.IsNotFound {
 			if Debug {
-				fmt.Printf("dns   : error in reverse lookup for ip=%s: %s %+v\n", ip, err, *dnsErr)
+				fmt.Printf("dns   : reverse lookup not found for ip=%s: %s %+v\n", ip, err, *dnsErr)
 			}
 			return packet.ErrNotFound
 		}
 		return err
 	}
 	if Debug {
-		fmt.Printf("dns   : reverse dns success ip=%s names=%v\n", ip, names)
+		// fmt.Printf("dns   : reverse dns success ip=%s names=%v\n", ip, names)
+		fastlog.NewLine(module, "reverse dns ok").String("ip", ip.String()).StringArray("names", names)
 	}
 	return nil
 }
