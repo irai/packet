@@ -324,7 +324,8 @@ func (h *Handler) process8023Frame(ether packet.Ether) {
 		stpCount++
 		now := time.Now()
 		if stpNextLog.Before(now) {
-			fmt.Printf("packet: LLC STP protocol %s %s count=%d payload=[% x]\n", ether, llc, stpCount, ether[:])
+			// fmt.Printf("packet: LLC STP protocol %s %s count=%d payload=[% x]\n", ether, llc, stpCount, ether[:])
+			fastlog.NewLine(module, "LLC STP protocol").Struct(ether).Struct(llc).Int("count", stpCount).ByteArray("payload", ether.Payload()).Write()
 			stpNextLog = now.Add(time.Minute * 5)
 		}
 		return
@@ -336,7 +337,13 @@ func (h *Handler) process8023Frame(ether packet.Ether) {
 			fmt.Printf("packet: err invalid SNAP packet err=%s\n", err)
 			return
 		}
-		fmt.Printf("packet: LLC SNAP protocol %s %s payload=[% x]\n", ether, snap, ether[:])
+		// fmt.Printf("packet: LLC SNAP protocol %s %s payload=[% x]\n", ether, snap, ether[:])
+		fastlog.NewLine(module, "LLC SNAP protocol").Struct(ether).Struct(snap).ByteArray("payload", ether.Payload()).Write()
+		return
+	}
+
+	if llc.DSAP() == 0xe0 && llc.SSAP() == 0xe0 {
+		fastlog.NewLine(module, "IPX protocol").Struct(ether).ByteArray("payload", ether.Payload()).Write()
 		return
 	}
 
