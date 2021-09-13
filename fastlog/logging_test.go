@@ -29,7 +29,7 @@ func TestLine_PrintUint32(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		l := &Line{buffer: [1024]byte{}}
+		l := &Line{buffer: [2048]byte{}}
 		l = l.printUint32(test)
 		if want := fmt.Sprint(test); string(l.buffer[:l.index]) != want {
 			t.Errorf("got printUint32(%d) got=%s, want=%s", test, l.buffer[:l.index], want)
