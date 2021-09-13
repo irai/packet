@@ -69,8 +69,8 @@ func TestLine_ByteArray(t *testing.T) {
 		wantLen       int
 	}{
 		{name: "ok", module: "module", msg: "", payload: make([]byte, 300), wantBytes: []byte(`module:`), wantLen: 917, wantEndMarker: true},
-		{name: "truncated", module: "module", msg: "", payload: make([]byte, 500), wantBytes: []byte(`module:`), wantLen: 1023, wantEndMarker: false},
-		{name: "boundary", module: "module", msg: "", payload: make([]byte, 500), wantBytes: []byte(`module:`), wantLen: 1023, wantEndMarker: false},
+		{name: "truncated", module: "module", msg: "", payload: make([]byte, 2500), wantBytes: []byte(`module:`), wantLen: 2047, wantEndMarker: false},
+		{name: "boundary", module: "module", msg: "", payload: make([]byte, 2500), wantBytes: []byte(`module:`), wantLen: 2047, wantEndMarker: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
