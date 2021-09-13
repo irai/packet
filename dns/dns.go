@@ -170,8 +170,6 @@ func (d DNSEntry) print() {
 // DNS is specified in RFC 1034 / RFC 1035
 // see : https://github.com/google/gopacket/blob/master/layers/dns.go
 //
-// We maintain a table of all DNS entries in the session.
-var dnsMutex sync.RWMutex // dns table mutex
 
 // DNS maps a domain name server frame
 //  0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
@@ -263,9 +261,6 @@ func (p DNS) decode() (e DNSEntry, err error) {
 	}
 
 	e = newDNSEntry()
-
-	dnsMutex.Lock()
-	defer dnsMutex.Unlock()
 
 	if _, _, err = e.decodeAnswers(p, index, &buffer); err != nil {
 		fmt.Printf("dns   : error decoding answers %s %s", err, p)
@@ -573,8 +568,8 @@ func (h *DNSHandler) ProcessDNS(host *packet.Host, ether packet.Ether, payload [
 		return DNSEntry{}, err
 	}
 
-	dnsMutex.Lock()
-	defer dnsMutex.Unlock()
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
 
 	e, found := h.DNSTable[tmp.Name]
 	if !found {
