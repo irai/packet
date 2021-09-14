@@ -66,6 +66,7 @@ func (h *Handler) Close() error {
 
 // Stop implements PacketProcessor interface
 func (h *Handler) Stop() error {
+	h.Close()
 	return nil
 }
 

@@ -161,28 +161,44 @@ func (h *Handler) AttachARP(p arp.ARPHandler) {
 	h.ARPHandler = p
 }
 
-func (h *Handler) DetachARP() {
+func (h *Handler) DetachARP() error {
+	if err := h.ARPHandler.Stop(); err != nil {
+		return err
+	}
 	h.ARPHandler = packet.PacketNOOP{}
+	return nil
 }
 
 func (h *Handler) AttachICMP4(p icmp4.ICMP4Handler) {
 	h.ICMP4Handler = p
 }
-func (h *Handler) DetachICMP4() {
+func (h *Handler) DetachICMP4() error {
+	if err := h.ICMP4Handler.Stop(); err != nil {
+		return err
+	}
 	h.ICMP4Handler = icmp4.ICMP4NOOP{}
+	return nil
 }
 
 func (h *Handler) AttachICMP6(p icmp6.ICMP6Handler) {
 	h.ICMP6Handler = p
 }
-func (h *Handler) DetachICMP6() {
+func (h *Handler) DetachICMP6() error {
+	if err := h.ICMP6Handler.Stop(); err != nil {
+		return err
+	}
 	h.ICMP6Handler = icmp6.ICMP6NOOP{}
+	return nil
 }
 func (h *Handler) AttachDHCP4(p dhcp4.DHCP4Handler) {
 	h.DHCP4Handler = p
 }
-func (h *Handler) DetachDHCP4() {
+func (h *Handler) DetachDHCP4() error {
+	if err := h.DHCP4Handler.Stop(); err != nil {
+		return err
+	}
 	h.DHCP4Handler = packet.PacketNOOP{}
+	return nil
 }
 
 func (h *Handler) setupConn() (conn net.PacketConn, err error) {

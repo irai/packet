@@ -133,6 +133,7 @@ func (h *Handler) Start() error {
 
 // Stop implements PacketProcessor interface
 func (h *Handler) Stop() error {
+	h.Close()
 	return nil
 }
 
