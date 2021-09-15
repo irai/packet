@@ -51,7 +51,10 @@ func (h *Handler) Start() error {
 }
 
 // Stop implements PacketProcessor interface
-func (h *Handler) Stop() error { return nil }
+func (h *Handler) Stop() error {
+	h.Close()
+	return nil
+}
 
 // MinuteTicker implements packet processor interface
 func (h *Handler) MinuteTicker(now time.Time) error {
