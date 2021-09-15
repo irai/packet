@@ -16,6 +16,7 @@ type Notification struct {
 	DHCP4Name packet.NameEntry
 	MDNSName  packet.NameEntry
 	SSDPName  packet.NameEntry
+	LLMNRName packet.NameEntry
 	NBNSName  packet.NameEntry
 	IsRouter  bool
 }
@@ -29,26 +30,11 @@ func (n Notification) String() string {
 func (n Notification) FastLog(l *fastlog.Line) *fastlog.Line {
 	l.Struct(n.Addr)
 	l.Bool("online", n.Online)
-	if n.DHCP4Name.Name != "" {
-		l.String("dhcp4name", n.DHCP4Name.Name)
-	}
-	if n.MDNSName.Name != "" {
-		l.String("mdnsname", n.MDNSName.Name)
-	}
-	if n.SSDPName.Name != "" {
-		l.String("upnpname", n.SSDPName.Name)
-	}
-	if n.NBNSName.Name != "" {
-		l.String("nbnsname", n.NBNSName.Name)
-	}
-	/**
-	if n.Model != "" {
-		l.String("model", n.Model)
-	}
-	if n.Manufacturer != "" {
-		l.String("manufacturer", n.Manufacturer)
-	}
-	**/
+	l.Struct(n.DHCP4Name)
+	l.Struct(n.MDNSName)
+	l.Struct(n.SSDPName)
+	l.Struct(n.LLMNRName)
+	l.Struct(n.NBNSName)
 	l.Bool("router", n.IsRouter)
 	return l
 }
@@ -108,7 +94,8 @@ func (h *Handler) purge(now time.Time, probeDur time.Duration, offlineDur time.D
 func toNotification(host *packet.Host) Notification {
 	// send the MACEntry name as there can be many IPv6 hosts, some with name entries not populated yet
 	return Notification{Addr: host.Addr, Online: host.Online,
-		DHCP4Name: host.MACEntry.DHCP4Name, MDNSName: host.MACEntry.MDNSName, SSDPName: host.MACEntry.SSDPName, NBNSName: host.MACEntry.NBNSName,
+		DHCP4Name: host.MACEntry.DHCP4Name, MDNSName: host.MACEntry.MDNSName, SSDPName: host.MACEntry.SSDPName,
+		LLMNRName: host.LLMNRName, NBNSName: host.MACEntry.NBNSName,
 		IsRouter: host.MACEntry.IsRouter}
 }
 
