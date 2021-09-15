@@ -41,8 +41,8 @@ func TestMDNSHandler_PTR(t *testing.T) {
 	if err != nil {
 		t.Error("unexpected error", err)
 	}
-	if ipv4Host.NameEntry.Name != "" || ipv6Host.NameEntry.Name != "" {
-		t.Error("unexpected name", ipv4Host.NameEntry.Name, ipv6Host.NameEntry.Name)
+	if ipv4Host.NameEntry.Name != "" || ipv6Host != nil {
+		t.Error("unexpected name", ipv4Host.NameEntry.Name, ipv6Host[0].NameEntry.Name)
 	}
 }
 

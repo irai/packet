@@ -427,8 +427,9 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 				host.MACEntry.MDNSName, _ = host.MACEntry.MDNSName.Merge(host.MDNSName)
 				host.MACEntry.Row.Unlock()
 			}
-			if ipv6Name.Addr.IP != nil {
-				fastlog.NewLine(module, "mdns ipv6 ignoring host").Struct(ipv6Name).Write()
+
+			for _, v := range ipv6Name {
+				fastlog.NewLine(module, "mdns ipv6 ignoring host").Struct(v).Write()
 			}
 		}
 
@@ -436,7 +437,7 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 		// Link Local Multicast Name Resolution (LLMNR)
 		fastlog.NewLine(module, "ether").Struct(ether).Module(module, "received llmnr packet").Struct(host).Write()
 		if host != nil {
-			ipv4Name, ipv6Name, err := h.DNSHandler.ProcessMDNS(host, ether, udp.Payload())
+			ipv4Name, ipv6Names, err := h.DNSHandler.ProcessMDNS(host, ether, udp.Payload())
 			if err != nil {
 				fmt.Printf("packet: error processing mdns: %s\n", err)
 				break
@@ -449,8 +450,8 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 				host.MACEntry.LLMNRName, _ = host.MACEntry.LLMNRName.Merge(host.LLMNRName)
 				host.MACEntry.Row.Unlock()
 			}
-			if ipv6Name.NameEntry.Name != "" {
-				fastlog.NewLine(module, "llmnr ipv6 host").Struct(ipv6Name).Write()
+			for _, v := range ipv6Names {
+				fastlog.NewLine(module, "mdns ipv6 ignoring host").Struct(v).Write()
 			}
 		}
 

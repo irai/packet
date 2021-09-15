@@ -249,7 +249,7 @@ type HostName struct {
 
 // ProcesMDNS will process a multicast DNS packet.
 // Note: host cannot be nil.
-func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload []byte) (ipv4 packet.IPNameEntry, ipv6 packet.IPNameEntry, err error) {
+func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload []byte) (ipv4 packet.IPNameEntry, ipv6 []packet.IPNameEntry, err error) {
 	var p dnsmessage.Parser
 	dnsHeader, err := p.Start(payload)
 	if err != nil {
@@ -271,7 +271,10 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 					if strings.Contains(string(q.Name.Data[:q.Name.Length]), "sleep-proxy") {
 						ipv4.NameEntry.Type = moduleMDNS
 						ipv4.NameEntry.Manufacturer = "Apple"
-						h.SendSleepProxyResponse(h.session.NICInfo.HostAddr4, mdnsIPv4Addr, dnsHeader.ID, "sleepproxy")
+
+						// Advertise that we are a SpeepProxy server
+						// TODO: this is not working yet - September 2021
+						go h.SendSleepProxyResponse(h.session.NICInfo.HostAddr4, mdnsIPv4Addr, dnsHeader.ID, "sleepproxy")
 					}
 				}
 			}
@@ -296,7 +299,6 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 	}
 
 	ipv4.NameEntry.Type = moduleMDNS
-	ipv6.NameEntry.Type = moduleMDNS
 	section := "answer"
 	for {
 		var hdr dnsmessage.ResourceHeader
@@ -316,6 +318,15 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 		case "additional":
 			hdr, err = p.AdditionalHeader()
 			if err == dnsmessage.ErrSectionDone {
+				// Model is saved in single ipv4 entry; copy to all IPv6 entries
+				// before returning
+				if ipv4.NameEntry.Model != "" {
+					for i := range ipv6 {
+						ipv6[i].NameEntry.Model = ipv4.NameEntry.Model
+					}
+				}
+
+				// this is the last section; return
 				return ipv4, ipv6, nil
 			}
 		}
@@ -333,7 +344,6 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 			ipv4.Addr.MAC = packet.CopyMAC(ether.Src())
 			ipv4.Addr.IP = packet.CopyIP(r.A[:])
 			if Debug {
-				// fmt.Printf("mdns  : A record name=%s %s\n", ipv4.NameEntry.Name, ipv4.Addr)
 				fastlog.NewLine(moduleMDNS, "A resource").String("name", ipv4.NameEntry.Name).Struct(ipv4.Addr).Write()
 			}
 
@@ -342,24 +352,24 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 			if err != nil {
 				return ipv4, ipv6, err
 			}
-			ipv6.NameEntry.Name = strings.TrimSuffix(hdr.Name.String(), ".local.")
-			ipv6.Addr.MAC = packet.CopyMAC(ether.Src())
-			ipv6.Addr.IP = packet.CopyIP(r.AAAA[:])
+			entry := packet.IPNameEntry{}
+			entry.NameEntry.Type = moduleMDNS
+			entry.NameEntry.Name = strings.TrimSuffix(hdr.Name.String(), ".local.")
+			entry.Addr.MAC = packet.CopyMAC(ether.Src())
+			entry.Addr.IP = packet.CopyIP(r.AAAA[:])
 			if Debug {
-				// fmt.Printf("mdns  : AAAA record name=%s %s\n", ipv6.NameEntry.Name, ipv6.Addr)
-				fastlog.NewLine(moduleMDNS, "AAAA resource").String("name", ipv6.NameEntry.Name).Struct(ipv6.Addr).Write()
+				fastlog.NewLine(moduleMDNS, "AAAA resource").String("name", entry.NameEntry.Name).Struct(entry.Addr).Write()
 			}
+			ipv6 = append(ipv6, entry)
 
 		case dnsmessage.TypePTR:
 			r, err := p.PTRResource()
 			if err != nil {
-				// fmt.Printf("mdns  : error invalid PTR resource name=%s error=[%s]\n", hdr.Name, err)
 				fastlog.NewLine(moduleMDNS, "invalid PTR resource").String("name", hdr.Name.String()).Error(err).Write()
 				p.SkipAnswer()
 				continue
 			}
 			if Debug {
-				// fmt.Printf("mdns  : PTR name=%s %s\n", hdr.Name, r.PTR)
 				fastlog.NewLine(moduleMDNS, "PTR resource").String("name", hdr.Name.String()).String("ptr", r.PTR.String()).Write()
 			}
 
@@ -396,7 +406,6 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 			}
 			if model := parseTXT(r.TXT); model != "" {
 				ipv4.NameEntry.Model = model
-				ipv6.NameEntry.Model = model
 			}
 			if Debug {
 				// fmt.Printf("mdns  : TXT name=%s txt=%s model=%s\n", hdr.Name, r.TXT, ipv4.NameEntry.Model)
