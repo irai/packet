@@ -704,12 +704,14 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			// See frames here:
 			// http://realtek.info/pdf/rtl8324.pdf  page 43
 			//
-			fmt.Printf("packet: RRCP frame %s payload=[% x]\n", ether, ether[:])
+			// fmt.Printf("packet: RRCP frame %s payload=[% x]\n", ether, ether[:])
+			fastlog.NewLine(module, "ether").Struct(ether).Module(module, "RRCP frame").ByteArray("payload", ether.Payload()).Write()
 			continue
 
 		case 0x88cc: // Link Layer Discovery Protocol (LLDP)
 			// not sure if we will ever receive these in a home LAN!
-			fmt.Printf("packet: LLDP frame %s payload=[% x]\n", ether, ether[:])
+			// fmt.Printf("packet: LLDP frame %s payload=[% x]\n", ether, ether[:])
+			fastlog.NewLine(module, "ether").Struct(ether).Module(module, "LLDP frame").ByteArray("payload", ether.Payload()).Write()
 			continue
 
 		case 0x890d: // Fast Roaming Remote Request (802.11r)
@@ -717,11 +719,13 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			// allows a client device to roam quickly in environments implementing WPA2 Enterprise security,
 			// by ensuring that the client device does not need to re-authenticate to the RADIUS server
 			// every time it roams from one access point to another.
-			fmt.Printf("packet: 802.11r Fast Roaming frame %s payload=[% x]\n", ether, ether[:])
+			// fmt.Printf("packet: 802.11r Fast Roaming frame %s payload=[% x]\n", ether, ether[:])
+			fastlog.NewLine(module, "ether").Struct(ether).Module(module, "802.11r Fast Roaming frame").ByteArray("payload", ether.Payload()).Write()
 			continue
 
 		default:
-			fmt.Printf("packet: error invalid ethernet type %s\n", ether)
+			// fmt.Printf("packet: error invalid ethernet type %s\n", ether)
+			fastlog.NewLine(module, "unexpected ethernet type").Struct(ether).ByteArray("payload", ether.Payload()).Write()
 			continue
 		}
 		d1 = time.Since(startTime)
