@@ -183,19 +183,6 @@ func main() {
 
 	cmd(&handlers)
 
-	// Cannot defer this at the moment because we could have changed the pointers
-	if handlers.arp != nil {
-		handlers.arp.Close()
-	}
-	if handlers.icmp4 != nil {
-		handlers.icmp4.Close()
-	}
-	if handlers.icmp6 != nil {
-		handlers.icmp6.Close()
-	}
-	if handlers.dhcp4 != nil {
-		handlers.dhcp4.Close()
-	}
 	handlers.engine.Close()
 
 	cancel()
