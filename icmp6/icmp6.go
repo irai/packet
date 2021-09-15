@@ -204,7 +204,7 @@ func (h *Handler) sendPacket(srcAddr packet.Addr, dstAddr packet.Addr, b []byte)
 	ICMP6(ip6.Payload()).SetChecksum(packet.Checksum(psh))
 
 	if _, err := h.session.Conn.WriteTo(ether, &dstAddr); err != nil {
-		fmt.Println("icmp failed to write ", err)
+		fmt.Println("icmp6 : failed to write ", err)
 		return err
 	}
 
