@@ -98,5 +98,6 @@ func (h *DNSHandler) UPNPServiceDiscovery(addr packet.Addr, location string) (na
 	name.Name = service.Device.Name
 	name.Model = service.Device.Model
 	name.Manufacturer = service.Device.Manufacturer
+	name.Expire = time.Now().Add(time.Minute * 10) // cache this entry for a period
 	return name, nil
 }

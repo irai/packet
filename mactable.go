@@ -158,6 +158,7 @@ type NameEntry struct {
 	Model        string
 	Manufacturer string
 	OS           string
+	Expire       time.Time
 }
 
 func (n NameEntry) FastLog(l *fastlog.Line) *fastlog.Line {
@@ -179,18 +180,22 @@ func (n NameEntry) FastLog(l *fastlog.Line) *fastlog.Line {
 func (e NameEntry) Merge(nameEntry NameEntry) (newEntry NameEntry, modified bool) {
 	if nameEntry.Name != "" && e.Name != nameEntry.Name {
 		e.Name = nameEntry.Name
+		e.Expire = nameEntry.Expire
 		modified = true
 	}
 	if nameEntry.Model != "" && e.Model != nameEntry.Model {
 		e.Model = nameEntry.Model
+		e.Expire = nameEntry.Expire
 		modified = true
 	}
 	if nameEntry.OS != "" && e.OS != nameEntry.OS {
 		e.OS = nameEntry.OS
+		e.Expire = nameEntry.Expire
 		modified = true
 	}
 	if nameEntry.Manufacturer != "" && e.Manufacturer != nameEntry.Manufacturer {
 		e.Manufacturer = nameEntry.Manufacturer
+		e.Expire = nameEntry.Expire
 		modified = true
 	}
 	e.Type = nameEntry.Type

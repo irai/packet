@@ -485,7 +485,7 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 			if location != "" {
 				go func(host *packet.Host) {
 					host.MACEntry.Row.RLock()
-					if host.SSDPName.Name != "" { // ignore if already have name
+					if host.SSDPName.Expire.After(time.Now()) { // ignore if cache is valid
 						host.MACEntry.Row.RUnlock()
 						return
 					}

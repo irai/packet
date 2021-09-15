@@ -120,8 +120,10 @@ func processUserAgent(ua string) (name packet.NameEntry) {
 	switch {
 	case strings.Contains(ua, "iPhone"):
 		name.Model = "iPhone"
+		name.Manufacturer = "Apple"
 	case strings.Contains(ua, "iPad"):
 		name.Model = "iPad"
+		name.Manufacturer = "Apple"
 	}
 	switch {
 	case strings.Contains(ua, "Windows"):
