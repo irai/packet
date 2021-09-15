@@ -539,6 +539,11 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 		// https://github.com/NineWorlds/serenity-android/wiki/Good-Day-Mate
 		fmt.Printf("proto : plex %s\n", host)
 
+	case udpSrcPort == 10001 || udpDstPort == 10001:
+		// Ubiquiti device discovery protocol
+		// https://help.ui.com/hc/en-us/articles/204976244-EdgeRouter-Ubiquiti-Device-Discovery
+		fastlog.NewLine("proto", "ubiquiti device discovery").Struct(ether).IP("srcip", ether.SrcIP()).IP("dstip", ether.DstIP()).ByteArray("udp", udp).Write()
+
 	default:
 		fastlog.NewLine("proto", "unexpected udp type").Struct(ether).Struct(udp).Struct(host).Write()
 		// fastlog.NewLine("proto", "error payload").ByteArray("payload", udp.Payload()).Write()
