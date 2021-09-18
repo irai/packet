@@ -381,11 +381,15 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 			r, err := p.SRVResource()
 			if err != nil {
 				// Don't log if compressed error.
-				// It is invalid to compress SRV name but some do. In particular Google Chromecast.
+				// dnsmessage package does not allow compressed SRV name which is required in Multicast DNS.
 				// This polutes the log with constant errors for each SRV.
-				// see https://github.com/golang/go/issues/10622
-				if err.Error() != "compressed name in SRV resource data" || Debug {
+				// https://github.com/golang/go/issues/24870
+				if err.Error() != "compressed name in SRV resource data" {
 					fastlog.NewLine(moduleMDNS, "invalid SRV resource").String("name", hdr.Name.String()).Error(err).Write()
+				} else {
+					if Debug {
+						fastlog.NewLine(moduleMDNS, "invalid SRV resource").String("name", hdr.Name.String()).String("message", err.Error()).Write()
+					}
 				}
 				p.SkipAnswer()
 				continue
