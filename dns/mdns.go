@@ -385,21 +385,18 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 				// This polutes the log with constant errors for each SRV.
 				// see https://github.com/golang/go/issues/10622
 				if err.Error() != "compressed name in SRV resource data" || Debug {
-					// fmt.Printf("mdns  : invalid SRV resource name=%s error=[%s]\n", hdr.Name, err)
 					fastlog.NewLine(moduleMDNS, "invalid SRV resource").String("name", hdr.Name.String()).Error(err).Write()
 				}
 				p.SkipAnswer()
 				continue
 			}
 			if Debug {
-				// fmt.Printf("mdns  : SRV name=%s target=%s port=%d\n", hdr.Name, r.Target, r.Port)
 				fastlog.NewLine(moduleMDNS, "SRV resource").String("name", hdr.Name.String()).String("target", r.Target.String()).Uint16("port", r.Port).Write()
 			}
 
 		case dnsmessage.TypeTXT:
 			r, err := p.TXTResource()
 			if err != nil {
-				// fmt.Printf("mdns  : error invalid TXT resource name=%s error=[%s]\n", hdr.Name, err)
 				fastlog.NewLine(moduleMDNS, "invalid TXT resource").String("name", hdr.Name.String()).Error(err).Write()
 				p.SkipAnswer()
 				continue
@@ -408,7 +405,6 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 				ipv4.NameEntry.Model = model
 			}
 			if Debug {
-				// fmt.Printf("mdns  : TXT name=%s txt=%s model=%s\n", hdr.Name, r.TXT, ipv4.NameEntry.Model)
 				fastlog.NewLine(moduleMDNS, "TXT resource").String("name", hdr.Name.String()).Sprintf("txt", r.TXT).String("model", ipv4.NameEntry.Model).Write()
 			}
 
