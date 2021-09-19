@@ -167,6 +167,11 @@ MX: 1
 ST: "ssdp:all"`), []byte{0x0d, 0x0a, 0x0d, 0x0a}...) // must have 0d0a,0d0a at the end
 
 //SendSSDPSearch transmit a multicast SSDP M-SEARCH discovery packet
+//
+// TODO: test with samsung SSDP string
+//       MSearch ST: urn:samsung.com:service:MultiScreenService:1
+//       see: https://developer.samsung.com/smarttv/develop/legacy-platform-library/art00030/index.html#
+//
 func (h *DNSHandler) SendSSDPSearch() (err error) {
 	ether := packet.Ether(make([]byte, packet.EthMaxSize))
 	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IP, h.session.NICInfo.HostMAC, ssdpIPv4Addr.MAC)
