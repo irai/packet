@@ -226,7 +226,7 @@ func (h *Handler) lockAndSetOnline(host *packet.Host, notify bool) {
 	if !host.Online {
 		if host.Addr.IP.To4() != nil {
 			if !host.Addr.IP.Equal(host.MACEntry.IP4) { // changed IP4
-				fmt.Printf("packet: host changed ip4 mac=%s from=%s to=%s\n", host.MACEntry.MAC, host.MACEntry.IP4, host.Addr.IP)
+				fastlog.NewLine(module, "host changed ip4").MAC("mac", host.MACEntry.MAC).IP("from", host.MACEntry.IP4).IP("to", host.Addr.IP).Write()
 			}
 			for _, v := range host.MACEntry.HostList {
 				if ip := v.Addr.IP.To4(); ip != nil && !ip.Equal(host.Addr.IP) {
@@ -235,11 +235,11 @@ func (h *Handler) lockAndSetOnline(host *packet.Host, notify bool) {
 			}
 		} else {
 			if host.Addr.IP.IsGlobalUnicast() && !host.Addr.IP.Equal(host.MACEntry.IP6GUA) { // changed IP6 global unique address
-				fmt.Printf("packet: host changed ip6 mac=%s from=%s to=%s\n", host.MACEntry.MAC, host.MACEntry.IP6GUA, host.Addr.IP)
+				fastlog.NewLine(module, "host changed ip6").MAC("mac", host.MACEntry.MAC).IP("from", host.MACEntry.IP6GUA).IP("to", host.Addr.IP).Write()
 				// offlineIP = host.MACEntry.IP6GUA
 			}
 			if host.Addr.IP.IsLinkLocalUnicast() && !host.Addr.IP.Equal(host.MACEntry.IP6LLA) { // changed IP6 link local address
-				fmt.Printf("packet: host changed ip6LLA mac=%s from=%s to=%s\n", host.MACEntry.MAC, host.MACEntry.IP6LLA, host.Addr.IP)
+				fastlog.NewLine(module, "host changed ip6LLA").MAC("mac", host.MACEntry.MAC).IP("from", host.MACEntry.IP6LLA).IP("to", host.Addr.IP).Write()
 				// don't set offline IP as we don't target LLA
 			}
 		}
@@ -275,7 +275,7 @@ func (h *Handler) lockAndSetOnline(host *packet.Host, notify bool) {
 	addr := host.Addr
 	notification := toNotification(host)
 	if packet.Debug {
-		fmt.Printf("packet: IP is online %s\n", host)
+		fastlog.NewLine(module, "IP is online").Struct(host).Write()
 	}
 
 	// CAUTION: in goroutine - must not access host fields without lock
@@ -311,7 +311,7 @@ func (h *Handler) lockAndSetOffline(host *packet.Host) {
 		return
 	}
 	if packet.Debug {
-		fmt.Printf("packet: IP is offline %s\n", host)
+		fastlog.NewLine(module, "IP is offline").Struct(host).Write()
 	}
 	host.Online = false
 	notification := toNotification(host)
