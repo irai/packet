@@ -729,6 +729,12 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			fastlog.NewLine(module, "ether").Struct(ether).Module(module, "802.11r Fast Roaming frame").ByteArray("payload", ether.Payload()).Write()
 			continue
 
+		case 0x6970: // Sonos Data Routing Optimisation
+			// References to type EthType 0x6970 appear in a Sonos patent
+			// https://portal.unifiedpatents.com/patents/patent/US-20160006778-A1
+			fastlog.NewLine(module, "ether").Struct(ether).Module(module, "Sonos data routing frame").ByteArray("payload", ether.Payload()).Write()
+			continue
+
 		default:
 			// fmt.Printf("packet: error invalid ethernet type %s\n", ether)
 			fastlog.NewLine(module, "unexpected ethernet type").Struct(ether).ByteArray("payload", ether.Payload()).Write()
