@@ -193,6 +193,10 @@ func (h *Handler) lockAndStopHunt(host *packet.Host, stage packet.HuntStage) (er
 	}
 
 	// IP6 handlers
+	// Only hunting link local IP
+	if !addr.IP.IsLinkLocalUnicast() {
+		return nil
+	}
 	go func() {
 		if _, err := h.ICMP6Handler.StopHunt(addr); err != nil {
 			fastlog.NewLine(module, "error failed to stop icmp6 hunt").Struct(addr).Error(err).Write()
