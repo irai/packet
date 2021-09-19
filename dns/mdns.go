@@ -385,11 +385,11 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 				// This polutes the log with constant errors for each SRV.
 				// https://github.com/golang/go/issues/24870
 				if strings.Contains(err.Error(), "compressed name in SRV resource data") {
-					fastlog.NewLine(moduleMDNS, "invalid SRV resource").String("name", hdr.Name.String()).Error(err).Write()
-				} else {
 					if Debug {
-						fastlog.NewLine(moduleMDNS, "invalid SRV resource").String("name", hdr.Name.String()).String("message", err.Error()).Write()
+						fastlog.NewLine(moduleMDNS, "ignore compressed name in SRV resource").String("name", hdr.Name.String()).String("message", err.Error()).Write()
 					}
+				} else {
+					fastlog.NewLine(moduleMDNS, "invalid SRV resource").String("name", hdr.Name.String()).Error(err).Write()
 				}
 				p.SkipAnswer()
 				continue
