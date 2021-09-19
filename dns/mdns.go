@@ -384,7 +384,7 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 				// dnsmessage package does not allow compressed SRV name which is required in Multicast DNS.
 				// This polutes the log with constant errors for each SRV.
 				// https://github.com/golang/go/issues/24870
-				if err.Error() != "compressed name in SRV resource data" {
+				if strings.Contains(err.Error(), "compressed name in SRV resource data") {
 					fastlog.NewLine(moduleMDNS, "invalid SRV resource").String("name", hdr.Name.String()).Error(err).Write()
 				} else {
 					if Debug {
