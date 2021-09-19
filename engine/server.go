@@ -458,7 +458,7 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 	case udpSrcPort == 123:
 		// Network time synchonization protocol
 		// do nothing
-		fmt.Printf("proto : NTP %s %s\n", ether, host)
+		fastlog.NewLine(module, "NTP frame").Struct(ether).Write()
 
 	case udpDstPort == 1900:
 		// Microsoft Simple Service Discovery Protocol
@@ -513,8 +513,8 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 
 	case udpDstPort == 3702:
 		// Web Services Discovery Protocol (WSD)
-		fastlog.NewLine("ether", "wsd packet").Struct(ether).LF().Module("udp", "wsd packet").Struct(udp).Write()
-		fastlog.NewLine("proto", "wsd packet").Struct(host).String("payload", string(udp.Payload())).Write()
+		fastlog.NewLine(module, "ether").Struct(ether).Struct(udp).Struct(host).Write()
+		fastlog.NewLine(module, "wsd frame").String("payload", string(udp.Payload())).Write()
 
 	case udpDstPort == 137 || udpDstPort == 138:
 		// Netbions NBNS
@@ -537,7 +537,7 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 		// Plex application multicast on these ports to find players.
 		// G'Day Mate (GDM) multicast packets
 		// https://github.com/NineWorlds/serenity-android/wiki/Good-Day-Mate
-		fmt.Printf("proto : plex %s\n", host)
+		fastlog.NewLine(module, "plex frame").Struct(ether).IP("srcip", ether.SrcIP()).IP("dstip", ether.DstIP()).ByteArray("payload", udp.Payload()).Write()
 
 	case udpSrcPort == 10001 || udpDstPort == 10001:
 		// Ubiquiti device discovery protocol
