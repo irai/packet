@@ -378,9 +378,10 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 	var result packet.Result
 
 	switch {
-	case udpSrcPort == 433 || udpDstPort == 433:
+	case udpSrcPort == 443 || udpDstPort == 443:
 		// ssl udp - likely quic?
 		// do nothing
+		return host, false, nil
 
 	case udpDstPort == packet.DHCP4ServerPort || udpDstPort == packet.DHCP4ClientPort: // DHCP4 packet?
 		if result, err = h.DHCP4Handler.ProcessPacket(host, ether, udp.Payload()); err != nil {
