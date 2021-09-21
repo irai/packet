@@ -86,7 +86,7 @@ func IPv6NewULA(mac net.HardwareAddr, subnet uint16) (*net.IPNet, error) {
 // IPv6NewLLA produce a local link layer address with an EUI-64 value for mac.
 // Reference: https://packetlife.net/blog/2008/aug/4/eui-64-ipv6/.
 func IPv6NewLLA(mac net.HardwareAddr) net.IP {
-	if mac == nil || len(mac) != 6 {
+	if len(mac) != 6 {
 		fmt.Printf("packet: error in ipv6newlla invalid mac=%s\n", mac)
 		return nil
 	}
@@ -245,9 +245,9 @@ func (p Ether) FastLog(line *fastlog.Line) *fastlog.Line {
 }
 
 // EtherMarshalBinary creates a ethernet frame in at b using the values
-// It automatically allocates a buffer if b is nil or not sufficient to store a full len ethernet packet
+// It panic if b is nil or not sufficient to store a full len ethernet packet
 func EtherMarshalBinary(b []byte, hType uint16, srcMAC net.HardwareAddr, dstMAC net.HardwareAddr) Ether {
-	if b == nil || cap(b) < 14 {
+	if cap(b) < 14 {
 		panic("ether buffer too small")
 	}
 	b = b[:14] // change slice in case slice is less than 14
@@ -348,7 +348,7 @@ func (p IP4) SetPayload(b []byte, protocol byte) IP4 {
 }
 
 func (p IP4) AppendPayload(b []byte, protocol byte) (IP4, error) {
-	if b == nil || cap(p)-len(p) < len(b) {
+	if cap(p)-len(p) < len(b) {
 		return nil, ErrPayloadTooBig
 	}
 	p = p[:len(p)+len(b)] // change slice in case slice is less than required
@@ -436,8 +436,8 @@ func (p UDP) String() string {
 
 // Print implements fastlog interface
 func (p UDP) FastLog(line *fastlog.Line) *fastlog.Line {
-	line.Int("srcport", int(p.SrcPort()))
-	line.Int("dstport", int(p.DstPort()))
+	line.Uint16("srcport", p.SrcPort())
+	line.Uint16("dstport", p.DstPort())
 	line.Int("len", int(p.Len()))
 	line.Int("payloadlen", len(p.Payload()))
 	return line
@@ -472,7 +472,7 @@ func (p UDP) SetPayload(b []byte) UDP {
 }
 
 func (p UDP) AppendPayload(b []byte) (UDP, error) {
-	if b == nil || cap(p)-len(p) < len(b) {
+	if cap(p)-len(p) < len(b) {
 		return nil, ErrPayloadTooBig
 	}
 	p = p[:len(p)+len(b)] // change slice in case slice is less total
