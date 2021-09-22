@@ -65,7 +65,6 @@ func getUPNPServiceDescription(location string) ([]byte, error) {
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		fmt.Printf("ssdp  : error lookup upnp name resp=%+v error=\"%s\"\n", resp, err)
 		return nil, err
 	}
 	defer resp.Body.Close()
