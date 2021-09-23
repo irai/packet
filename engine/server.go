@@ -546,12 +546,17 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 		fastlog.NewLine("proto", "ubiquiti device discovery").Struct(ether).IP("srcip", ether.SrcIP()).IP("dstip", ether.DstIP()).ByteArray("udp", udp).Write()
 
 	default:
-		fastlog.NewLine("proto", "unexpected udp type").Struct(ether).Struct(udp).Struct(host).Write()
-		// fastlog.NewLine("proto", "error payload").ByteArray("payload", udp.Payload()).Write()
+		// don't log if getting too many packets
+		if now := time.Now(); invalidUDPNextLog.Before(now) {
+			invalidUDPNextLog = now.Add(time.Minute * 5)
+			fastlog.NewLine("proto", "unexpected udp type").Struct(ether).Struct(udp).Struct(host).Write()
+		}
 	}
 
 	return host, notify, nil
 }
+
+var invalidUDPNextLog time.Time // hack to print udp logs every few minutes only
 
 // ListenAndServe listen for raw packets and invoke hooks as required
 func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
