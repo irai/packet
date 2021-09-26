@@ -57,7 +57,7 @@ func (h *Handler) Capture(mac net.HardwareAddr) error {
 		}
 	}
 
-	// There is a chance that we don't have the IPv6 LLA for host as mobile
+	// There is a chance that we don't have IPv6 LLA entry yet as mobile
 	// hosts don't always respond to ping ff02::1.
 	//
 	// Then, force hunt using a multicast IPv6 as the target host
@@ -90,6 +90,13 @@ func (h *Handler) Release(mac net.HardwareAddr) error {
 		if err := h.lockAndStopHunt(host, packet.StageNormal); err != nil {
 			return err
 		}
+	}
+
+	// force IPv6 stop if host does not have IPv6 entry yet. This call is ignored if
+	// host LLA is already stopped.
+	ipv6Addr := packet.Addr{MAC: mac, IP: nil}
+	if _, err := h.ICMP6Handler.StopHunt(ipv6Addr); err != nil {
+		fmt.Printf("packet: failed to stop icmp6 hunt: %s", err.Error())
 	}
 	return nil
 }
