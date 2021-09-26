@@ -18,7 +18,7 @@ func (h *Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
 		fmt.Printf("icmp6 : start neighbor hunt %s\n", addr)
 	}
 	if addr.IP != nil && !addr.IP.IsLinkLocalUnicast() {
-		return packet.StageNoChange, packet.ErrInvalidIP6LLA
+		return packet.StageNoChange, nil
 	}
 	h.Lock()
 	if h.huntList.Index(addr.MAC) != -1 {
@@ -39,7 +39,7 @@ func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
 		fmt.Printf("icmp6 : stop neighbor hunt %s\n", addr)
 	}
 	if addr.IP != nil && !addr.IP.IsLinkLocalUnicast() {
-		return packet.StageNoChange, packet.ErrInvalidIP6LLA
+		return packet.StageNoChange, nil
 	}
 	h.Lock()
 	h.huntList.Del(addr)

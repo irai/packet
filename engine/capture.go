@@ -139,11 +139,6 @@ func (h *Handler) lockAndStartHunt(addr packet.Addr) (err error) {
 		return nil
 	}
 
-	// IP6 handlers
-	// Only hunt link local IP
-	if !addr.IP.IsLinkLocalUnicast() {
-		return nil
-	}
 	go func() {
 		if _, err := h.ICMP6Handler.StartHunt(addr); err != nil {
 			fmt.Printf("packet: failed to start icmp6 hunt: %s", err.Error())
@@ -192,11 +187,6 @@ func (h *Handler) lockAndStopHunt(host *packet.Host, stage packet.HuntStage) (er
 		return nil
 	}
 
-	// IP6 handlers
-	// Only hunting link local IP
-	if !addr.IP.IsLinkLocalUnicast() {
-		return nil
-	}
 	go func() {
 		if _, err := h.ICMP6Handler.StopHunt(addr); err != nil {
 			fastlog.NewLine(module, "error failed to stop icmp6 hunt").Struct(addr).Error(err).Write()
