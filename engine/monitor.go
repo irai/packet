@@ -24,8 +24,8 @@ func (h *Handler) lockAndMonitorRoute(now time.Time) (err error) {
 			continue
 		}
 		if host.HuntStage != packet.StageRedirected { // ignore if are we hunting this host
-			if packet.Debug {
-				fastlog.NewLine(module, "ip4 routing ignore host not redirected").Struct(addr).String("stage", host.HuntStage.String()).Write()
+			if packet.Debug && host.HuntStage == packet.StageHunt {
+				fastlog.NewLine(module, "ip4 routing ignore host in hunt stage").Struct(addr).Write()
 			}
 			host.MACEntry.Row.RUnlock()
 			continue
