@@ -147,6 +147,9 @@ func Test_Handler_BasicTest(t *testing.T) {
 	tc := setupTestHandler(t)
 	defer tc.Close()
 
+	// Addr4 is captured
+	tc.arp.huntList[string(addr4.MAC)] = addr4
+
 	tests := []struct {
 		name       string
 		ether      packet.Ether
@@ -166,6 +169,10 @@ func Test_Handler_BasicTest(t *testing.T) {
 		{name: "replymac4",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac4, routerMAC),
 			arp:     newPacket(OperationReply, addr4, routerAddr),
+			wantErr: nil, wantLen: 3, wantResult: true},
+		{name: "request",
+			ether:   newEtherPacket(syscall.ETH_P_ARP, mac4, routerMAC),
+			arp:     newPacket(OperationRequest, addr4, routerAddr),
 			wantErr: nil, wantLen: 3, wantResult: true},
 	}
 

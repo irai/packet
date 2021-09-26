@@ -204,10 +204,11 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (pac
 		h.arpMutex.Unlock()
 		if hunting && frame.DstIP().Equal(h.session.NICInfo.RouterIP4.IP) {
 			if Debug {
-				fastlog.NewLine(module, "router spoofing - send reply i am").IP("ip", frame.DstIP()).Write()
-				// fmt.Printf("arp   : router spoofing - send reply i am ip=%s\n", frame.DstIP())
+				fastlog.NewLine(module, "router spoofing - send reply I am").IP("ip", frame.DstIP()).MAC("dstmac", frame.SrcMAC()).Write()
 			}
-			h.reply(frame.SrcMAC(), packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: frame.DstIP()}, packet.Addr{MAC: frame.SrcMAC(), IP: frame.SrcIP()})
+			if err := h.reply(frame.SrcMAC(), packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: frame.DstIP()}, packet.Addr{MAC: frame.SrcMAC(), IP: frame.SrcIP()}); err != nil {
+				fastlog.NewLine(module, "failed to send spoofing reply").MAC("mac", frame.SrcMAC()).Error(err).Write()
+			}
 			return packet.Result{}, nil
 		}
 
