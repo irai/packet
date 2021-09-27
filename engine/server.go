@@ -466,7 +466,7 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 		if host != nil {
 			nameEntry, location, err := h.DNSHandler.ProcessSSDP(host, ether, udp.Payload())
 			if err != nil {
-				fmt.Printf("packet: error processing ssdp: %s\n", err)
+				fastlog.NewLine(module, "error processing ssdp").Error(err).Write()
 				break
 			}
 
@@ -521,7 +521,7 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 		// Netbions NBNS
 		entry, err := h.DNSHandler.ProcessNBNS(host, ether, udp.Payload())
 		if err != nil {
-			fmt.Printf("packet: error processing ssdp: %s\n", err)
+			fastlog.NewLine(module, "error processing nbns").Error(err).Write()
 			break
 		}
 		if entry.Name != "" {
