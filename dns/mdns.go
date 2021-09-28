@@ -263,7 +263,7 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 	// not interested in queries
 	if !dnsHeader.Response {
 		if Debug {
-			line := fastlog.NewLine(moduleMDNS, "query").Struct(addr).Struct(DNS(payload))
+			line := fastlog.NewLine(moduleMDNS, "query rcvd").Struct(addr).Struct(DNS(payload))
 			questions, err := p.AllQuestions()
 			if err == nil { // ignore error
 				for _, q := range questions {
