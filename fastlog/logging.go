@@ -270,6 +270,17 @@ func (l *Line) Uint8(name string, value uint8) *Line {
 	return l
 }
 
+func (l *Line) Uint8Hex(name string, value uint8) *Line {
+	l.appendByte(' ')
+	l.index = l.index + copy(l.buffer[l.index:], name)
+	l.appendByte('=')
+	l.appendByte('0')
+	l.appendByte('x')
+	l.appendByte(hexAscii[(value>>4)&0x0f])
+	l.appendByte(hexAscii[value&0x0f])
+	return l
+}
+
 func (l *Line) Uint16(name string, value uint16) *Line {
 	l.appendByte(' ')
 	l.index = l.index + copy(l.buffer[l.index:], name)
@@ -415,7 +426,9 @@ func (l *Line) ByteArray(name string, value []byte) *Line {
 		l.writeHex(v)
 		l.appendByte(' ')
 	}
-	l.index--
+	if len(value) > 0 {
+		l.index--
+	}
 	l.appendByte(']')
 	if truncated {
 		l.index = cap(l.buffer) - 1
