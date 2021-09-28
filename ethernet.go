@@ -90,6 +90,7 @@ func (p Ether) SetPayload(payload []byte) (Ether, error) {
 	// by receiving station as a frame resulting from a collision. This len was chosen to occupy the whole
 	// distance of 1500 meters so the whole cable is occupied and collisions can be avoided.
 	// pad smaller frames with zeros
+	// see: https://serverfault.com/questions/510657/is-the-64-byte-minimal-ethernet-packet-rule-respected-in-practice
 	tmp := p[:len(p)+len(payload)]
 	if n := len(tmp); n < 60 {
 		tmp = tmp[:60]
@@ -110,6 +111,7 @@ func (p Ether) AppendPayload(payload []byte) (Ether, error) {
 	// An Ethernet frame has a minimum size of 60 bytes because anything that is shorter is interpreted
 	// by receiving station as a frame resulting from a collision. This len was chosen to occupy the whole
 	// distance of 1500 meters so the whole cable is occupied and collisions can be avoided.
+	// see: https://serverfault.com/questions/510657/is-the-64-byte-minimal-ethernet-packet-rule-respected-in-practice
 	tmp := p[:14+len(payload)]
 	if n := len(tmp); n < 60 {
 		tmp = tmp[:60]
