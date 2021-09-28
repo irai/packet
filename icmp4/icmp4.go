@@ -6,11 +6,14 @@ import (
 	"time"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/fastlog"
 	"golang.org/x/net/ipv4"
 )
 
 // Debug packets turn on logging if desirable
 var Debug bool
+
+const module = "icmp4"
 
 type ICMP4Handler interface {
 	packet.PacketProcessor
@@ -146,7 +149,9 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (pac
 			}
 			port = tcp.DstPort()
 		}
-		fmt.Printf("icmp4 : destination unreacheable from ip=%s failIP=%s failPort=%d code=%d\n", ip4Frame.Src(), originalIP4Frame.Dst(), port, icmpFrame.Code())
+		// fmt.Printf("icmp4 : destination unreacheable from ip=%s failIP=%s failPort=%d code=%d\n", ip4Frame.Src(), originalIP4Frame.Dst(), port, icmpFrame.Code())
+		fastlog.NewLine(module, "ether").Struct(ether).IP("srcIP", ether.SrcIP()).IP("dstIP", ether.DstIP()).Module(module, "icmp4").
+			Uint8("code", icmpFrame.Code()).IP("origIP", originalIP4Frame.Dst()).Uint16Hex("origPort", port).Write()
 
 	default:
 		fmt.Printf("icmp4 not implemented type=%d: frame:0x[% x]\n", icmpFrame.Type(), icmpFrame)
