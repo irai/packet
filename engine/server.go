@@ -735,6 +735,19 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			fastlog.NewLine(module, "ether").Struct(ether).Module(module, "802.11r Fast Roaming frame").ByteArray("payload", ether.Payload()).Write()
 			continue
 
+		case 0x893a: // IEEE 1905.1 - network enabler for home networking
+			// Enables topology discovery, link metrics, forwarding rules, AP auto configuration
+			// TODO: investigate how to use IEEE 1905.1
+			// See:
+			// https://grouper.ieee.org/groups/802/1/files/public/docs2012/802-1-phkl-P1095-Tech-Presentation-1207-v01.pdf
+			p := packet.IEEE1905(ether.Payload())
+			if err := p.IsValid(); err != nil {
+				fastlog.NewLine(module, "invalid IEEE 1905 frame").Error(err).ByteArray("frame", ether).Write()
+				continue
+			}
+			fastlog.NewLine(module, "ether").Struct(ether).Module(module, "IEEE 1905.1 frame").Struct(p).Write()
+			continue
+
 		case 0x6970: // Sonos Data Routing Optimisation
 			// References to type EthType 0x6970 appear in a Sonos patent
 			// https://portal.unifiedpatents.com/patents/patent/US-20160006778-A1
