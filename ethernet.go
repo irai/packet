@@ -86,7 +86,18 @@ func (p Ether) Payload() []byte {
 }
 
 func (p Ether) SetPayload(payload []byte) (Ether, error) {
-	return p[:len(p)+len(payload)], nil
+	// An Ethernet frame has a minimum size of 60 bytes because anything that is shorter is interpreted
+	// by receiving station as a frame resulting from a collision.
+	// pad smaller frames with zeros
+	tmp := p[:len(p)+len(payload)]
+	if n := len(tmp); n < 60 {
+		tmp = tmp[:60]
+		for n < 60 {
+			tmp[n] = 0x00
+			n++
+		}
+	}
+	return tmp, nil
 }
 
 func (p Ether) AppendPayload(payload []byte) (Ether, error) {
@@ -94,7 +105,19 @@ func (p Ether) AppendPayload(payload []byte) (Ether, error) {
 		return nil, ErrPayloadTooBig
 	}
 	copy(p.Payload()[:cap(payload)], payload)
-	return p[:14+len(payload)], nil
+
+	// An Ethernet frame has a minimum size of 60 bytes because anything that is shorter is interpreted
+	// by receiving station as a frame resulting from a collision.
+	// pad smaller frames with zeros
+	tmp := p[:14+len(payload)]
+	if n := len(tmp); n < 60 {
+		tmp = tmp[:60]
+		for n < 60 {
+			tmp[n] = 0x00
+			n++
+		}
+	}
+	return tmp, nil
 }
 
 func (p Ether) String() string {

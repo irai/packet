@@ -95,7 +95,7 @@ func TestIP6Payload(t *testing.T) {
 	}
 
 	ether, _ = ether.AppendPayload(ip6)
-	if len(ether) != 40+14+len(mypayload) {
+	if len(ether) != 60 { // 40+14+len(mypayload)
 		t.Fatal("invalid packet len ", len(ether))
 	}
 
