@@ -707,6 +707,20 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				host, _ = h.session.FindOrCreateHost(result.FrameAddr)
 			}
 
+		case 0x8808: // Ethernet flow control - Pause frame
+			// An overwhelmed network node can send a pause frame, which halts the transmission of the sender for a specified period of time.
+			// EtherType 0x8808 is used to carry the pause command, with the Control opcode set to 0x0001 (hexadecimal).
+			// When a station wishes to pause the other end of a link, it sends a pause frame to either the unique
+			// 48-bit destination address of this link or to the 48-bit reserved multicast address of 01-80-C2-00-00-01.
+			// A likely scenario is network congestion within a switch.
+			p := packet.EthernetPause(ether.Payload())
+			if err := p.IsValid(); err != nil {
+				fastlog.NewLine(module, "invalid Ethernet pause frame").Error(err).ByteArray("frame", ether).Write()
+				continue
+			}
+			fastlog.NewLine(module, "ether").Struct(ether).Module(module, "ethernet flow control frame").Struct(p).Write()
+			continue
+
 		case 0x8899: // Realtek Remote Control Protocol (RRCP)
 			// This protocol allows an expernal application to control a dumb switch.
 			// TODO: Need to investigate this
