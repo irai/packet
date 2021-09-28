@@ -182,6 +182,9 @@ func Test_Handler_BasicTest(t *testing.T) {
 			if err != nil {
 				panic(err)
 			}
+			if len(ether) != 60 { // test auto padding in append
+				t.Errorf("Test_Requests:%s len = %v", tt.name, len(ether))
+			}
 
 			result, err := tc.arp.ProcessPacket(nil, ether, ether.Payload())
 			if err != tt.wantErr {

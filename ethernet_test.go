@@ -1,10 +1,32 @@
 package packet
 
 import (
+	"syscall"
 	"testing"
 
 	"github.com/irai/packet/fastlog"
 )
+
+func TestPadding(t *testing.T) {
+	buf := make([]byte, EthMaxSize) // allocate in the stack
+	ether := EtherMarshalBinary(buf, syscall.ETH_P_IP, routerMAC, mac2)
+	payload := []byte{0x04, 0x55, 0x33}
+	var err error
+	if ether, err = ether.AppendPayload(payload); err != nil {
+		t.Fatal("error in append ", err)
+	}
+	if len(ether) != 60 {
+		t.Errorf("invalid append payload len= %v", len(ether))
+	}
+
+	ether = EtherMarshalBinary(buf, syscall.ETH_P_IPV6, routerMAC, mac2)
+	if ether, err = ether.SetPayload(payload); err != nil {
+		t.Fatal("error in append ", err)
+	}
+	if len(ether) != 60 {
+		t.Errorf("invalid payload len= %v", len(ether))
+	}
+}
 
 func TestIEEE1905_IsValid(t *testing.T) {
 	tests := []struct {
