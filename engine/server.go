@@ -566,29 +566,10 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 
 var invalidUDPNextLog time.Time // hack to print udp logs every few minutes only
 
-func (h *Handler) processPacket(buf *buffer) (err error) {
+func (h *Handler) processPacket(ether packet.Ether) (err error) {
 	var d1, d2, d3 time.Duration
 
 	startTime := time.Now()
-
-	ether := packet.Ether(buf.b[:buf.n])
-	if err := ether.IsValid(); err != nil {
-		fmt.Printf("packet: invalid ethernet packet type=0x%x\n", ether.EtherType())
-		return nil
-	}
-
-	// Ignore packets sent via our interface
-	// If we don't have this, then we received all forwarded packets with client IPs containing our host mac
-	//
-	// TODO: should this be in the bpf rules?
-	if bytes.Equal(ether.Src(), h.session.NICInfo.HostMAC) {
-		return nil
-	}
-
-	// Only interested in unicast ethernet
-	if !isUnicastMAC(ether.Src()) {
-		return nil
-	}
 
 	// In order to allow Ethernet II and IEEE 802.3 framing to be used on the same Ethernet segment,
 	// a unifying standard, IEEE 802.3x-1997, was introduced that required that EtherType values be greater than or equal to 1536.
@@ -664,7 +645,7 @@ func (h *Handler) processPacket(buf *buffer) (err error) {
 		if l4Proto == syscall.IPPROTO_HOPOPTS {
 			header := packet.HopByHopExtensionHeader(l4Payload)
 			if !header.IsValid() {
-				fmt.Printf("packet: error invalid next header payload=%d ext=%d\n", len(l4Payload), buf.n)
+				fmt.Printf("packet: error invalid next header payload=%d ext=%d\n", len(l4Payload), len(ether))
 				return nil
 			}
 			if n, err := h.session.ProcessIP6HopByHopExtension(host, ether, l4Payload); err != nil || n <= 0 {
@@ -855,7 +836,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 	//
 	// A single worker is the simplest pattern to ensure packets are processed in order received but
 	// queue must be sufficiently large to accommodate the worker taking too long to process packets.
-	const packetQueueLen = 16
+	const packetQueueLen = 128
 	var packetBuf = sync.Pool{New: func() interface{} { return new(buffer) }}
 	packetQueue := make(chan *buffer, packetQueueLen)
 	go func() {
@@ -865,7 +846,8 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				fastlog.NewLine(module, "packet worker goroutine terminating")
 				return
 			}
-			h.processPacket(buf)
+			ether := packet.Ether(buf.b[:buf.n])
+			h.processPacket(ether)
 			packetBuf.Put(buf)
 		}
 	}()
@@ -889,6 +871,25 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 				return nil
 			}
 			return fmt.Errorf("read error: %w", err)
+		}
+
+		ether := packet.Ether(buf.b[:buf.n])
+		if err := ether.IsValid(); err != nil {
+			fastlog.NewLine(module, "invalid ethernet packet").ByteArray("frame", ether).Write()
+			continue
+		}
+
+		// Ignore packets sent via our interface
+		// If we don't have this, then we received all forwarded packets with client IPs containing our host mac
+		//
+		// TODO: should this be in the bpf rules?
+		if bytes.Equal(ether.Src(), h.session.NICInfo.HostMAC) {
+			continue
+		}
+
+		// Only interested in unicast ethernet
+		if !isUnicastMAC(ether.Src()) {
+			continue
 		}
 
 		if len(packetQueue) >= packetQueueLen {
