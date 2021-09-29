@@ -737,7 +737,12 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		case 0x88cc: // Link Layer Discovery Protocol (LLDP)
 			// not sure if we will ever receive these in a home LAN!
 			// fmt.Printf("packet: LLDP frame %s payload=[% x]\n", ether, ether[:])
-			fastlog.NewLine(module, "ether").Struct(ether).Module(module, "LLDP frame").ByteArray("payload", ether.Payload()).Write()
+			p := packet.LLDP(ether.Payload())
+			if err := p.IsValid(); err != nil {
+				fastlog.NewLine(module, "invalid LLDP frame").Error(err).ByteArray("frame", ether).Write()
+				continue
+			}
+			fastlog.NewLine(module, "ether").Struct(ether).Module(module, "LLDP").Struct(p).Write()
 			continue
 
 		case 0x890d: // Fast Roaming Remote Request (802.11r)

@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -217,5 +218,145 @@ func (p EthernetPause) String() string {
 func (p EthernetPause) FastLog(line *fastlog.Line) *fastlog.Line {
 	line.Uint16Hex("opcode", p.Opcode())
 	line.Uint16Hex("duration", p.Duration())
+	return line
+}
+
+// LLDP provides access to Local Link Discovery Protocol
+type LLDP []byte
+
+func (p LLDP) IsValid() error {
+	if len(p) < 6 {
+		return ErrFrameLen
+	}
+	return nil
+}
+
+func (p LLDP) ChassisID() []byte {
+	_, _, v, _ := p.getTLV(0)
+	return v
+}
+func (p LLDP) PortID() []byte {
+	c := p.ChassisID()
+	_, _, v, _ := p.getTLV(len(c) + 2) // skip first PDU
+	return v
+}
+
+func (p LLDP) GetPDU(pduType int) []byte {
+	pos := 0
+	for {
+		t, l, v, err := p.getTLV(pos)
+		if err != nil {
+			return nil
+		}
+		if t == pduType || t == 0 { // return if end of TLV
+			return v
+		}
+		pos = pos + l + 2
+	}
+}
+
+func (p LLDP) getTLV(n int) (t int, l int, v []byte, err error) {
+	if len(p) <= n+2 {
+		return 0, 0, nil, ErrParseFrame
+	}
+	t = int(p[n] >> 1) // type = 7 bits
+	l = (int(p[n]) & 0x01 << 8) + int(p[n+1])
+	if t == 0 && l == 0 { // end of LLPDU
+		return t, l, nil, nil
+	}
+	if len(p) > n+2+int(l)+2 {
+		return t, l, p[n+2 : n+l], nil
+	}
+	return 0, 0, nil, ErrParseFrame
+}
+
+func (p LLDP) String() string {
+	line := fastlog.NewLine("", "")
+	return p.FastLog(line).ToString()
+}
+
+func (p LLDP) Type(t int) string {
+	switch t {
+	case 0:
+		return "endpdu"
+	case 1:
+		return "chassisID"
+	case 2:
+		return "port"
+	case 3:
+		return "ttl"
+	case 4:
+		return "portdesc"
+	case 5:
+		return "name"
+	case 6:
+		return "description"
+	case 7:
+		return "capabilities"
+	case 8:
+		return "mngntaddr"
+	default:
+		return strconv.Itoa(t)
+	}
+}
+func (p LLDP) Capability(v []byte) string {
+	if len(v) < 2 {
+		return ""
+	}
+	// System capabilities TLV: Indicates the primary function(s) of the device and whether or not these
+	// functions are enabled in the device. The capabilities are indicated by two octects.
+	// Bits 0 through 7 indicate Other, Repeater, Bridge, WLAN AP, Router, Telephone, DOCSIS cable device and Station respectively. Bits 8 through 15 are reserved.
+	s := ""
+	if (v[1] & 0x80) == 0x80 {
+		s = s + "other,"
+	}
+	if (v[1] & 0x40) == 0x40 {
+		s = s + "repeater,"
+	}
+	if (v[1] & 0x20) == 0x20 {
+		s = s + "bridge,"
+	}
+	if (v[1] & 0x10) == 0x10 {
+		s = s + "AP,"
+	}
+	if (v[1] & 0x08) == 0x08 {
+		s = s + "router,"
+	}
+	if (v[1] & 0x04) == 0x04 {
+		s = s + "phone,"
+	}
+	if (v[1] & 0x02) == 0x02 {
+		s = s + "docsis,"
+	}
+	if (v[1] & 0x01) == 0x01 {
+		s = s + "station,"
+	}
+	if len(s) > 0 {
+		return s[:len(s)-1]
+	}
+	return ""
+}
+
+func (p LLDP) FastLog(line *fastlog.Line) *fastlog.Line {
+	pos := 0
+	for {
+		t, l, v, err := p.getTLV(pos)
+		if err != nil {
+			break
+		}
+		if t == 0 { // return if end of TLV
+			break
+		}
+		switch t {
+		case 5, 6:
+			line.String(p.Type(t), string(v))
+		case 7:
+			line.ByteArray("capability", v)
+			line.String("type", p.Capability(v))
+		default:
+			line.ByteArray(p.Type(t), v)
+		}
+		pos = pos + l + 2
+	}
 	return line
 }
