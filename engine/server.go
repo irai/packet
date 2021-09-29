@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
+	"sync"
 	"syscall"
 	"time"
 
@@ -30,6 +32,12 @@ type Config struct {
 	ProbeInterval           time.Duration   // how often to probe if IP is online
 	OfflineDeadline         time.Duration   // mark offline if more than OfflineInte
 	PurgeDeadline           time.Duration
+}
+
+// buffer holds a raw Ethernet network packet
+type buffer struct {
+	b [packet.EthMaxSize]byte // buffer
+	n int                     // buffer len
 }
 
 // Handler implements ICMPv6 Neighbor Discovery Protocol
@@ -558,6 +566,280 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 
 var invalidUDPNextLog time.Time // hack to print udp logs every few minutes only
 
+func (h *Handler) processPacket(buf *buffer) (err error) {
+	var d1, d2, d3 time.Duration
+
+	startTime := time.Now()
+
+	ether := packet.Ether(buf.b[:buf.n])
+	if err := ether.IsValid(); err != nil {
+		fmt.Printf("packet: invalid ethernet packet type=0x%x\n", ether.EtherType())
+		return nil
+	}
+
+	// Ignore packets sent via our interface
+	// If we don't have this, then we received all forwarded packets with client IPs containing our host mac
+	//
+	// TODO: should this be in the bpf rules?
+	if bytes.Equal(ether.Src(), h.session.NICInfo.HostMAC) {
+		return nil
+	}
+
+	// Only interested in unicast ethernet
+	if !isUnicastMAC(ether.Src()) {
+		return nil
+	}
+
+	// In order to allow Ethernet II and IEEE 802.3 framing to be used on the same Ethernet segment,
+	// a unifying standard, IEEE 802.3x-1997, was introduced that required that EtherType values be greater than or equal to 1536.
+	// Thus, values of 1500 and below for this field indicate that the field is used as the size of the payload of the Ethernet frame
+	// while values of 1536 and above indicate that the field is used to represent an EtherType.
+	if ether.EtherType() < 1536 {
+		h.process8023Frame(ether)
+		return nil
+	}
+
+	notify := false
+	var ip4Frame packet.IP4
+	var ip6Frame packet.IP6
+	var l4Proto int
+	var l4Payload []byte
+	var host *packet.Host
+	var result packet.Result
+
+	// Everything from here is encapsulated in an Ethernet II frame format
+	// First, lets process layer 3 - IP4, IP6, ARP and some weird protocols
+	//
+	// This will set the variable host if the sender is a local IP and not multicast.
+	switch ether.EtherType() {
+	case syscall.ETH_P_IP: // 0x0800
+		ipHeartBeat = 1
+		ip4Frame = packet.IP4(ether.Payload())
+		if !ip4Frame.IsValid() {
+			fmt.Println("packet: error invalid ip4 frame type=", ether.EtherType())
+			return nil
+		}
+		if packet.DebugIP4 {
+			fastlog.NewLine("ether", "").Struct(ether).LF().Module("ip4", "").Struct(ip4Frame).Write()
+		}
+
+		// Create host only if on same subnet
+		// Note: DHCP request for previous discover have zero src IP; therefore wont't create host entry here.
+		if h.session.NICInfo.HostIP4.Contains(ip4Frame.Src()) {
+			host, _ = h.session.FindOrCreateHost(packet.Addr{MAC: ether.Src(), IP: ip4Frame.Src()}) // will lock/unlock
+		}
+		l4Proto = ip4Frame.Protocol()
+		l4Payload = ip4Frame.Payload()
+
+	case syscall.ETH_P_IPV6: // 0x86dd
+		ipHeartBeat = 1
+		ip6Frame = packet.IP6(ether.Payload())
+		if !ip6Frame.IsValid() {
+			fmt.Println("packet: error invalid ip6 frame type=", ether.EtherType())
+			return nil
+		}
+		if packet.DebugIP6 {
+			fastlog.NewLine("ether", "").Struct(ether).LF().Module("ip6", "").Struct(ip6Frame).Write()
+			// fastlog.Strings("packet: ether ", ether.String())
+			// fastlog.Strings("packet: ip6 ", ip6Frame.String())
+		}
+
+		l4Proto = ip6Frame.NextHeader()
+		l4Payload = ip6Frame.Payload()
+
+		// create host only if src IP is:
+		//     - unicast local link address (i.e. fe80::)
+		//     - global IP6 sent by a local host not the router
+		//
+		// We ignore IP6 packets forwarded by the router to a local host using a Global Unique Addresses.
+		// For example, an IP6 google search will be forwared by the router as:
+		//    ip6 src=google.com dst=GUA localhost and srcMAC=routerMAC dstMAC=localHostMAC
+		// TODO: is it better to check if IP is in the prefix?
+		if ip6Frame.Src().IsLinkLocalUnicast() ||
+			(ip6Frame.Src().IsGlobalUnicast() && !bytes.Equal(ether.Src(), h.session.NICInfo.RouterMAC)) {
+			host, _ = h.session.FindOrCreateHost(packet.Addr{MAC: ether.Src(), IP: ip6Frame.Src()}) // will lock/unlock
+		}
+
+		// IPv6 Hop by Hop extension - always the first header if present
+		if l4Proto == syscall.IPPROTO_HOPOPTS {
+			header := packet.HopByHopExtensionHeader(l4Payload)
+			if !header.IsValid() {
+				fmt.Printf("packet: error invalid next header payload=%d ext=%d\n", len(l4Payload), buf.n)
+				return nil
+			}
+			if n, err := h.session.ProcessIP6HopByHopExtension(host, ether, l4Payload); err != nil || n <= 0 {
+				fmt.Printf("packet: error processing hop by hop extension : %s\n", err)
+			}
+			if len(l4Payload) <= header.Len()+1 {
+				fmt.Printf("packet: error invalid next header payload=%d ext=%d\n", len(l4Payload), header.Len()+2)
+				return nil
+			}
+			l4Proto = header.NextHeader()
+			l4Payload = l4Payload[header.Len():]
+		}
+
+	case syscall.ETH_P_ARP: // 0x806
+		l4Proto = 0 // skip layer 4 processing below
+		if result, err = h.ARPHandler.ProcessPacket(host, ether, ether.Payload()); err != nil {
+			fmt.Printf("packet: error processing arp: %s\n", err)
+		}
+		if result.Update {
+			host, _ = h.session.FindOrCreateHost(result.FrameAddr)
+		}
+
+	case 0x8808: // Ethernet flow control - Pause frame
+		// An overwhelmed network node can send a pause frame, which halts the transmission of the sender for a specified period of time.
+		// EtherType 0x8808 is used to carry the pause command, with the Control opcode set to 0x0001 (hexadecimal).
+		// When a station wishes to pause the other end of a link, it sends a pause frame to either the unique
+		// 48-bit destination address of this link or to the 48-bit reserved multicast address of 01-80-C2-00-00-01.
+		// A likely scenario is network congestion within a switch.
+		p := packet.EthernetPause(ether.Payload())
+		if err := p.IsValid(); err != nil {
+			fastlog.NewLine(module, "invalid Ethernet pause frame").Error(err).ByteArray("frame", ether).Write()
+			return nil
+		}
+		fastlog.NewLine(module, "ether").Struct(ether).Module(module, "ethernet flow control frame").Struct(p).Write()
+		return nil
+
+	case 0x8899: // Realtek Remote Control Protocol (RRCP)
+		// This protocol allows an expernal application to control a dumb switch.
+		// TODO: Need to investigate this
+		// https://andreas.jakum.net/blog/2012/10/27/rrcp-realtek-remote-control-protocol
+		// Realtek's RTL8316B, RTL8324, RTL8326 and RTL8326S are supported
+		//
+		// See frames here:
+		// http://realtek.info/pdf/rtl8324.pdf  page 43
+		//
+		// fmt.Printf("packet: RRCP frame %s payload=[% x]\n", ether, ether[:])
+		fastlog.NewLine(module, "ether").Struct(ether).Module(module, "RRCP frame").ByteArray("payload", ether.Payload()).Write()
+		return nil
+
+	case 0x88cc: // Link Layer Discovery Protocol (LLDP)
+		// not sure if we will ever receive these in a home LAN!
+		// fmt.Printf("packet: LLDP frame %s payload=[% x]\n", ether, ether[:])
+		p := packet.LLDP(ether.Payload())
+		if err := p.IsValid(); err != nil {
+			fastlog.NewLine(module, "invalid LLDP frame").Error(err).ByteArray("frame", ether).Write()
+			return nil
+		}
+		fastlog.NewLine(module, "ether").Struct(ether).Module(module, "LLDP").Struct(p).Write()
+		return nil
+
+	case 0x890d: // Fast Roaming Remote Request (802.11r)
+		// Fast roaming, also known as IEEE 802.11r or Fast BSS Transition (FT),
+		// allows a client device to roam quickly in environments implementing WPA2 Enterprise security,
+		// by ensuring that the client device does not need to re-authenticate to the RADIUS server
+		// every time it roams from one access point to another.
+		// fmt.Printf("packet: 802.11r Fast Roaming frame %s payload=[% x]\n", ether, ether[:])
+		fastlog.NewLine(module, "ether").Struct(ether).Module(module, "802.11r Fast Roaming frame").ByteArray("payload", ether.Payload()).Write()
+		return nil
+
+	case 0x893a: // IEEE 1905.1 - network enabler for home networking
+		// Enables topology discovery, link metrics, forwarding rules, AP auto configuration
+		// TODO: investigate how to use IEEE 1905.1
+		// See:
+		// https://grouper.ieee.org/groups/802/1/files/public/docs2012/802-1-phkl-P1095-Tech-Presentation-1207-v01.pdf
+		p := packet.IEEE1905(ether.Payload())
+		if err := p.IsValid(); err != nil {
+			fastlog.NewLine(module, "invalid IEEE 1905 frame").Error(err).ByteArray("frame", ether).Write()
+			return nil
+		}
+		fastlog.NewLine(module, "ether").Struct(ether).Module(module, "IEEE 1905.1 frame").Struct(p).Write()
+		return nil
+
+	case 0x6970: // Sonos Data Routing Optimisation
+		// References to type EthType 0x6970 appear in a Sonos patent
+		// https://portal.unifiedpatents.com/patents/patent/US-20160006778-A1
+		fastlog.NewLine(module, "ether").Struct(ether).Module(module, "Sonos data routing frame").ByteArray("payload", ether.Payload()).Write()
+		return nil
+
+	default:
+		// fmt.Printf("packet: error invalid ethernet type %s\n", ether)
+		fastlog.NewLine(module, "unexpected ethernet type").Struct(ether).ByteArray("payload", ether.Payload()).Write()
+		return nil
+	}
+	d1 = time.Since(startTime)
+
+	// Process level 4 and 5 protocols: ICMP4, ICMP6, IGMP, TCP, UDP, DHCP4, DNS
+	//
+	switch l4Proto {
+	case 0:
+		// Do nothing; likely ARP
+
+	case syscall.IPPROTO_TCP:
+		if ip4Frame != nil {
+			tcp := packet.TCP(ip4Frame.Payload())
+
+			// During connection establishement (SYN), test if we have the host name
+			// in case the client is using an ip we don't know about
+			// perform a PTR lookup to attempt to discover the name
+			if tcp.SYN() && !h.session.NICInfo.HomeLAN4.Contains(ip4Frame.Dst()) {
+				if !h.DNSHandler.DNSExist(ip4Frame.NetaddrDst()) {
+					fmt.Printf("packet: dns entry does not exist for ip=%s\n", ip4Frame.Dst())
+					go h.DNSHandler.DNSLookupPTR(ip4Frame.NetaddrDst())
+				}
+			}
+		}
+
+	case syscall.IPPROTO_UDP: // 0x11
+		udp := packet.UDP(l4Payload)
+		if !udp.IsValid() {
+			fmt.Println("packet: error invalid udp frame ", ip4Frame)
+			return nil
+		}
+		if packet.DebugUDP {
+			if ip4Frame != nil {
+				fastlog.NewLine("ether", "").Struct(ether).LF().Module("ip4", "").Struct(ip4Frame).Module("udp", "").Struct(udp).Write()
+			} else {
+				fastlog.NewLine("ether", "").Struct(ether).LF().Module("ip6", "").Struct(ip6Frame).Module("udp", "").Struct(udp).Write()
+			}
+		}
+		if host, notify, err = h.processUDP(host, ether, udp); err != nil {
+			fastlog.NewLine("packet", "error processing udp").Error(err).Write()
+			return nil
+		}
+
+	case syscall.IPPROTO_ICMP:
+		if result, err = h.ICMP4Handler.ProcessPacket(host, ether, l4Payload); err != nil {
+			fmt.Printf("packet: error processing icmp4: %s\n", err)
+		}
+
+	case syscall.IPPROTO_ICMPV6: // 0x03a
+		if result, err = h.ICMP6Handler.ProcessPacket(host, ether, l4Payload); err != nil {
+			fmt.Printf("packet: error processing icmp6 : %s\n", err)
+		}
+		if result.Update {
+			if result.FrameAddr.IP != nil {
+				host, _ = h.session.FindOrCreateHost(result.FrameAddr)
+			}
+			if host != nil {
+				host.MACEntry.IsRouter = result.IsRouter
+				notify = true
+			}
+		}
+
+	case syscall.IPPROTO_IGMP:
+		// Internet Group Management Protocol - Ipv4 multicast groups
+		// do nothing
+		fmt.Printf("packet: ipv4 igmp packet %s\n", ether)
+
+	default:
+		fmt.Println("packet: unsupported level 4 header", l4Proto, ether)
+	}
+	d2 = time.Since(startTime)
+
+	if host != nil {
+		h.lockAndSetOnline(host, notify)
+	}
+
+	d3 = time.Since(startTime)
+	if d3 > time.Microsecond*400 {
+		fastlog.NewLine("packet", "warning > 400microseconds").String("l3", d1.String()).String("l4", d2.String()).String("total", d3.String()).
+			Int("l4proto", l4Proto).Uint16Hex("ethertype", ether.EtherType()).Write()
+	}
+	return nil
+}
+
 // ListenAndServe listen for raw packets and invoke hooks as required
 func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
@@ -568,18 +850,37 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 	// minute ticker
 	go h.minuteLoop()
 
-	var d1, d2, d3 time.Duration
-	var startTime time.Time
-	buf := make([]byte, packet.EthMaxSize)
+	// Implement a single worker pattern to process packets async to the reader. This pattern
+	// ensure we are reading packets as fast as possible despite the processing time of the worker.
+	//
+	// A single worker is the simplest pattern to ensure packets are processed in order received but
+	// queue must be sufficiently large to accommodate the worker taking too long to process packets.
+	const packetQueueLen = 16
+	var packetBuf = sync.Pool{New: func() interface{} { return new(buffer) }}
+	packetQueue := make(chan *buffer, packetQueueLen)
+	go func() {
+		for {
+			buf, ok := <-packetQueue
+			if !ok {
+				fastlog.NewLine(module, "packet worker goroutine terminating")
+				return
+			}
+			h.processPacket(buf)
+			packetBuf.Put(buf)
+		}
+	}()
+
 	for {
+		buf := packetBuf.Get().(*buffer)
 		if err = h.session.Conn.SetReadDeadline(time.Now().Add(time.Second * 2)); err != nil {
 			if h.closed { // closed by call to h.Close()?
+				close(packetQueue)
 				return nil
 			}
 			return fmt.Errorf("setReadDeadline error: %w", err)
 		}
 
-		n, _, err := h.session.Conn.ReadFrom(buf)
+		buf.n, _, err = h.session.Conn.ReadFrom(buf.b[:])
 		if err != nil {
 			if err, ok := err.(net.Error); ok && err.Temporary() {
 				continue
@@ -589,293 +890,18 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			}
 			return fmt.Errorf("read error: %w", err)
 		}
-		startTime = time.Now()
 
-		ether := packet.Ether(buf[:n])
-		if err := ether.IsValid(); err != nil {
-			fmt.Printf("packet: invalid ethernet packet type=0x%x\n", ether.EtherType())
-			continue
+		if len(packetQueue) >= packetQueueLen {
+			// Send sigterm to terminate process
+			fastlog.NewLine(module, "fatal: packet queue exceeded maximum limit - deadlock?").Write()
+			syscall.Kill(os.Getpid(), syscall.SIGTERM)
+			return packet.ErrNoReader
+		}
+		if len(packetQueue) > 2 {
+			fastlog.NewLine(module, "packet queue").Int("len", len(packetQueue)).Write()
 		}
 
-		// Ignore packets sent via our interface
-		// If we don't have this, then we received all forwarded packets with client IPs containing our host mac
-		//
-		// TODO: should this be in the bpf rules?
-		if bytes.Equal(ether.Src(), h.session.NICInfo.HostMAC) {
-			continue
-		}
-
-		// Only interested in unicast ethernet
-		if !isUnicastMAC(ether.Src()) {
-			continue
-		}
-
-		// In order to allow Ethernet II and IEEE 802.3 framing to be used on the same Ethernet segment,
-		// a unifying standard, IEEE 802.3x-1997, was introduced that required that EtherType values be greater than or equal to 1536.
-		// Thus, values of 1500 and below for this field indicate that the field is used as the size of the payload of the Ethernet frame
-		// while values of 1536 and above indicate that the field is used to represent an EtherType.
-		if ether.EtherType() < 1536 {
-			h.process8023Frame(ether)
-			continue
-		}
-
-		notify := false
-		var ip4Frame packet.IP4
-		var ip6Frame packet.IP6
-		var l4Proto int
-		var l4Payload []byte
-		var host *packet.Host
-		var result packet.Result
-
-		// Everything from here is encapsulated in an Ethernet II frame format
-		// First, lets process layer 3 - IP4, IP6, ARP and some weird protocols
-		//
-		// This will set the variable host if the sender is a local IP and not multicast.
-		switch ether.EtherType() {
-		case syscall.ETH_P_IP: // 0x0800
-			ipHeartBeat = 1
-			ip4Frame = packet.IP4(ether.Payload())
-			if !ip4Frame.IsValid() {
-				fmt.Println("packet: error invalid ip4 frame type=", ether.EtherType())
-				continue
-			}
-			if packet.DebugIP4 {
-				fastlog.NewLine("ether", "").Struct(ether).LF().Module("ip4", "").Struct(ip4Frame).Write()
-			}
-
-			// Create host only if on same subnet
-			// Note: DHCP request for previous discover have zero src IP; therefore wont't create host entry here.
-			if h.session.NICInfo.HostIP4.Contains(ip4Frame.Src()) {
-				host, _ = h.session.FindOrCreateHost(packet.Addr{MAC: ether.Src(), IP: ip4Frame.Src()}) // will lock/unlock
-			}
-			l4Proto = ip4Frame.Protocol()
-			l4Payload = ip4Frame.Payload()
-
-		case syscall.ETH_P_IPV6: // 0x86dd
-			ipHeartBeat = 1
-			ip6Frame = packet.IP6(ether.Payload())
-			if !ip6Frame.IsValid() {
-				fmt.Println("packet: error invalid ip6 frame type=", ether.EtherType())
-				continue
-			}
-			if packet.DebugIP6 {
-				fastlog.NewLine("ether", "").Struct(ether).LF().Module("ip6", "").Struct(ip6Frame).Write()
-				// fastlog.Strings("packet: ether ", ether.String())
-				// fastlog.Strings("packet: ip6 ", ip6Frame.String())
-			}
-
-			l4Proto = ip6Frame.NextHeader()
-			l4Payload = ip6Frame.Payload()
-
-			// create host only if src IP is:
-			//     - unicast local link address (i.e. fe80::)
-			//     - global IP6 sent by a local host not the router
-			//
-			// We ignore IP6 packets forwarded by the router to a local host using a Global Unique Addresses.
-			// For example, an IP6 google search will be forwared by the router as:
-			//    ip6 src=google.com dst=GUA localhost and srcMAC=routerMAC dstMAC=localHostMAC
-			// TODO: is it better to check if IP is in the prefix?
-			if ip6Frame.Src().IsLinkLocalUnicast() ||
-				(ip6Frame.Src().IsGlobalUnicast() && !bytes.Equal(ether.Src(), h.session.NICInfo.RouterMAC)) {
-				host, _ = h.session.FindOrCreateHost(packet.Addr{MAC: ether.Src(), IP: ip6Frame.Src()}) // will lock/unlock
-			}
-
-			// IPv6 Hop by Hop extension - always the first header if present
-			if l4Proto == syscall.IPPROTO_HOPOPTS {
-				header := packet.HopByHopExtensionHeader(l4Payload)
-				if !header.IsValid() {
-					fmt.Printf("packet: error invalid next header payload=%d ext=%d\n", len(l4Payload), n)
-					continue
-				}
-				if n, err = h.session.ProcessIP6HopByHopExtension(host, ether, l4Payload); err != nil || n <= 0 {
-					fmt.Printf("packet: error processing hop by hop extension : %s\n", err)
-				}
-				if len(l4Payload) <= header.Len()+1 {
-					fmt.Printf("packet: error invalid next header payload=%d ext=%d\n", len(l4Payload), header.Len()+2)
-					continue
-				}
-				l4Proto = header.NextHeader()
-				l4Payload = l4Payload[header.Len():]
-			}
-
-		case syscall.ETH_P_ARP: // 0x806
-			l4Proto = 0 // skip layer 4 processing below
-			if result, err = h.ARPHandler.ProcessPacket(host, ether, ether.Payload()); err != nil {
-				fmt.Printf("packet: error processing arp: %s\n", err)
-			}
-			if result.Update {
-				host, _ = h.session.FindOrCreateHost(result.FrameAddr)
-			}
-
-		case 0x8808: // Ethernet flow control - Pause frame
-			// An overwhelmed network node can send a pause frame, which halts the transmission of the sender for a specified period of time.
-			// EtherType 0x8808 is used to carry the pause command, with the Control opcode set to 0x0001 (hexadecimal).
-			// When a station wishes to pause the other end of a link, it sends a pause frame to either the unique
-			// 48-bit destination address of this link or to the 48-bit reserved multicast address of 01-80-C2-00-00-01.
-			// A likely scenario is network congestion within a switch.
-			p := packet.EthernetPause(ether.Payload())
-			if err := p.IsValid(); err != nil {
-				fastlog.NewLine(module, "invalid Ethernet pause frame").Error(err).ByteArray("frame", ether).Write()
-				continue
-			}
-			fastlog.NewLine(module, "ether").Struct(ether).Module(module, "ethernet flow control frame").Struct(p).Write()
-			continue
-
-		case 0x8899: // Realtek Remote Control Protocol (RRCP)
-			// This protocol allows an expernal application to control a dumb switch.
-			// TODO: Need to investigate this
-			// https://andreas.jakum.net/blog/2012/10/27/rrcp-realtek-remote-control-protocol
-			// Realtek's RTL8316B, RTL8324, RTL8326 and RTL8326S are supported
-			//
-			// See frames here:
-			// http://realtek.info/pdf/rtl8324.pdf  page 43
-			//
-			// fmt.Printf("packet: RRCP frame %s payload=[% x]\n", ether, ether[:])
-			fastlog.NewLine(module, "ether").Struct(ether).Module(module, "RRCP frame").ByteArray("payload", ether.Payload()).Write()
-			continue
-
-		case 0x88cc: // Link Layer Discovery Protocol (LLDP)
-			// not sure if we will ever receive these in a home LAN!
-			// fmt.Printf("packet: LLDP frame %s payload=[% x]\n", ether, ether[:])
-			p := packet.LLDP(ether.Payload())
-			if err := p.IsValid(); err != nil {
-				fastlog.NewLine(module, "invalid LLDP frame").Error(err).ByteArray("frame", ether).Write()
-				continue
-			}
-			fastlog.NewLine(module, "ether").Struct(ether).Module(module, "LLDP").Struct(p).Write()
-			continue
-
-		case 0x890d: // Fast Roaming Remote Request (802.11r)
-			// Fast roaming, also known as IEEE 802.11r or Fast BSS Transition (FT),
-			// allows a client device to roam quickly in environments implementing WPA2 Enterprise security,
-			// by ensuring that the client device does not need to re-authenticate to the RADIUS server
-			// every time it roams from one access point to another.
-			// fmt.Printf("packet: 802.11r Fast Roaming frame %s payload=[% x]\n", ether, ether[:])
-			fastlog.NewLine(module, "ether").Struct(ether).Module(module, "802.11r Fast Roaming frame").ByteArray("payload", ether.Payload()).Write()
-			continue
-
-		case 0x893a: // IEEE 1905.1 - network enabler for home networking
-			// Enables topology discovery, link metrics, forwarding rules, AP auto configuration
-			// TODO: investigate how to use IEEE 1905.1
-			// See:
-			// https://grouper.ieee.org/groups/802/1/files/public/docs2012/802-1-phkl-P1095-Tech-Presentation-1207-v01.pdf
-			p := packet.IEEE1905(ether.Payload())
-			if err := p.IsValid(); err != nil {
-				fastlog.NewLine(module, "invalid IEEE 1905 frame").Error(err).ByteArray("frame", ether).Write()
-				continue
-			}
-			fastlog.NewLine(module, "ether").Struct(ether).Module(module, "IEEE 1905.1 frame").Struct(p).Write()
-			continue
-
-		case 0x6970: // Sonos Data Routing Optimisation
-			// References to type EthType 0x6970 appear in a Sonos patent
-			// https://portal.unifiedpatents.com/patents/patent/US-20160006778-A1
-			fastlog.NewLine(module, "ether").Struct(ether).Module(module, "Sonos data routing frame").ByteArray("payload", ether.Payload()).Write()
-			continue
-
-		default:
-			// fmt.Printf("packet: error invalid ethernet type %s\n", ether)
-			fastlog.NewLine(module, "unexpected ethernet type").Struct(ether).ByteArray("payload", ether.Payload()).Write()
-			continue
-		}
-		d1 = time.Since(startTime)
-
-		// Process level 4 and 5 protocols: ICMP4, ICMP6, IGMP, TCP, UDP, DHCP4, DNS
-		//
-		switch l4Proto {
-		case 0:
-			// Do nothing; likely ARP
-
-		case syscall.IPPROTO_TCP:
-			if ip4Frame != nil {
-				tcp := packet.TCP(ip4Frame.Payload())
-
-				// During connection establishement (SYN), test if we have the host name
-				// in case the client is using an ip we don't know about
-				// perform a PTR lookup to attempt to discover the name
-				if tcp.SYN() && !h.session.NICInfo.HomeLAN4.Contains(ip4Frame.Dst()) {
-					if !h.DNSHandler.DNSExist(ip4Frame.NetaddrDst()) {
-						fmt.Printf("packet: dns entry does not exist for ip=%s\n", ip4Frame.Dst())
-						go h.DNSHandler.DNSLookupPTR(ip4Frame.NetaddrDst())
-					}
-				}
-			}
-
-		case syscall.IPPROTO_UDP: // 0x11
-			udp := packet.UDP(l4Payload)
-			if !udp.IsValid() {
-				fmt.Println("packet: error invalid udp frame ", ip4Frame)
-				continue
-			}
-			if packet.DebugUDP {
-				if ip4Frame != nil {
-					fastlog.NewLine("ether", "").Struct(ether).LF().Module("ip4", "").Struct(ip4Frame).Module("udp", "").Struct(udp).Write()
-				} else {
-					fastlog.NewLine("ether", "").Struct(ether).LF().Module("ip6", "").Struct(ip6Frame).Module("udp", "").Struct(udp).Write()
-				}
-			}
-			if host, notify, err = h.processUDP(host, ether, udp); err != nil {
-				fastlog.NewLine("packet", "error processing udp").Error(err).Write()
-				continue
-			}
-
-		case syscall.IPPROTO_ICMP:
-			if result, err = h.ICMP4Handler.ProcessPacket(host, ether, l4Payload); err != nil {
-				fmt.Printf("packet: error processing icmp4: %s\n", err)
-			}
-
-		case syscall.IPPROTO_ICMPV6: // 0x03a
-			if result, err = h.ICMP6Handler.ProcessPacket(host, ether, l4Payload); err != nil {
-				fmt.Printf("packet: error processing icmp6 : %s\n", err)
-			}
-			if result.Update {
-				if result.FrameAddr.IP != nil {
-					host, _ = h.session.FindOrCreateHost(result.FrameAddr)
-				}
-				if host != nil {
-					host.MACEntry.IsRouter = result.IsRouter
-					notify = true
-				}
-			}
-
-		case syscall.IPPROTO_IGMP:
-			// Internet Group Management Protocol - Ipv4 multicast groups
-			// do nothing
-			fmt.Printf("packet: ipv4 igmp packet %s\n", ether)
-
-		default:
-			fmt.Println("packet: unsupported level 4 header", l4Proto, ether)
-		}
-		d2 = time.Since(startTime)
-
-		if host != nil {
-			h.lockAndSetOnline(host, notify)
-		}
-
-		d3 = time.Since(startTime)
-		if d3 > time.Microsecond*400 {
-			fastlog.NewLine("packet", "warning > 400microseconds").String("l3", d1.String()).String("l4", d2.String()).String("total", d3.String()).
-				Int("l4proto", l4Proto).Uint16Hex("ethertype", ether.EtherType()).Write()
-		}
-
-		/****
-		 ** Uncomment this to help identify deadlocks
-		 **
-		if packet.Debug {
-			fmt.Println("Check engine lock", ether)
-			h.session.GlobalLock()
-			fmt.Println("Check engine lock pass")
-			for _, host := range h.session.HostTable.Table {
-				fmt.Println("Check row ", host.Addr)
-				host.MACEntry.Row.Lock()
-				fmt.Println("Check row lock pass ", host.Addr)
-				host.MACEntry.Row.Unlock()
-				fmt.Println("Check row unlock pass ", host.Addr)
-			}
-			fmt.Println("Check engine unlock")
-			h.session.GlobalUnlock()
-			fmt.Println("Check engine unlock pass ")
-		}
-		***/
+		// queue for worker
+		packetQueue <- buf
 	}
 }
