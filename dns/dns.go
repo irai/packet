@@ -142,12 +142,12 @@ func (d DNSEntry) FastLog(l *fastlog.Line) *fastlog.Line {
 		str = append(str, v.IP.String())
 	}
 	l.StringArray("ip4", str)
-	str = str[:]
+	str = str[:0]
 	for _, v := range d.IP6Records {
 		str = append(str, v.IP.String())
 	}
 	l.StringArray("ip6", str)
-	str = str[:]
+	str = str[:0]
 	for _, v := range d.CNameRecords {
 		str = append(str, v.CName)
 	}
