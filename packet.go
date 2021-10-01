@@ -99,11 +99,6 @@ func IPv6NewLLA(mac net.HardwareAddr) net.IP {
 
 // Ethernet packet types - ETHER_TYPE
 const (
-	EthType8021AD = 0x88a8 // VLAN 802.1ad
-
-	// Maximum ethernet II frame size is 1518 = 14 header + 1500 data + 4 CRC
-	// see: https://en.wikipedia.org/wiki/Ethernet_frame#Ethernet_II
-	EthMaxSize = 1518
 
 	// ICMP Packet types
 	ICMPTypeEchoReply   = 0
