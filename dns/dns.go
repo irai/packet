@@ -135,36 +135,25 @@ func (d DNSEntry) CNameList() []string {
 	return list
 }
 
-func (d DNSEntry) print() {
-
-	var b strings.Builder
-	b.Grow(512)
-	b.WriteString("dns   : name=")
-	b.WriteString(d.Name)
-	b.WriteString(" ip4=[ ")
+func (d DNSEntry) FastLog(l *fastlog.Line) *fastlog.Line {
+	l.String("name", d.Name)
+	str := make([]string, 0, 16)
 	for _, v := range d.IP4Records {
-		b.WriteString(v.IP.String())
-		b.WriteString(" ")
+		str = append(str, v.IP.String())
 	}
-	b.WriteString("] ip6=[ ")
+	l.StringArray("ip4", str)
+	str = str[:0]
 	for _, v := range d.IP6Records {
-		b.WriteString(v.IP.String())
-		b.WriteString(" ")
+		str = append(str, v.IP.String())
 	}
-	b.WriteString("] cname=[ ")
+	l.StringArray("ip6", str)
+	str = str[:0]
 	for _, v := range d.CNameRecords {
-		b.WriteString(v.CName)
-		b.WriteString(" ")
+		str = append(str, v.CName)
 	}
-	if len(d.PTRRecords) > 0 {
-		b.WriteString("] ptr=[ ")
-		for _, v := range d.PTRRecords {
-			b.WriteString(v.IP.String())
-			b.WriteString(" ")
-		}
-	}
-	b.WriteString("]")
-	fmt.Println(b.String())
+	l.StringArray("cname", str)
+	return l
+
 }
 
 // DNS is specified in RFC 1034 / RFC 1035
@@ -588,7 +577,7 @@ func (h *DNSHandler) ProcessDNS(host *packet.Host, ether packet.Ether, payload [
 	}
 	if updated {
 		if Debug {
-			e.print()
+			fastlog.NewLine(module, "entry").Struct(e).Write()
 		}
 		h.DNSTable[e.Name] = e
 		return e.copy(), nil // return a copy to avoid race on maps

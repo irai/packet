@@ -9,7 +9,6 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
-	"runtime"
 	"time"
 
 	"github.com/irai/packet"
@@ -19,11 +18,13 @@ import (
 	"github.com/irai/packet/engine"
 	"github.com/irai/packet/icmp4"
 	"github.com/irai/packet/icmp6"
+	"github.com/pkg/profile"
 )
 
 var (
 	dstIP = flag.String("dst", "192.168.0.1", "destination IP for target packet")
-	nic   = flag.String("nic", "eth0", "nic interface to listent to")
+	nic   = flag.String("nic", "eth0", "nic interface to listen")
+	pprof = flag.String("pprof", "", "pprof profile <cpu or mutex or block>")
 )
 
 type handlers struct {
@@ -36,29 +37,30 @@ type handlers struct {
 	netfilterIP net.IPNet
 }
 
-// pprof helper function to profile app
-//
-// add the import
-//  import _ "net/http/pprof"
-//
-// Heap profile
-//      go tool pprof -alloc_objects http://localhost:6060/debug/pprof/heap
-//          inuse_space — amount of memory allocated and not released yet
-//          inuse_objects— amount of objects allocated and not released yet
-//          alloc_space — total amount of memory allocated (regardless of released)
-//          alloc_objects — total amount of objects allocated (regardless of released
-//
-// Mutex profile:
-// 		go tool pprof http://localhost:6060/debug/pprof/mutex
-func pprof() {
-	runtime.SetMutexProfileFraction(5)
-	fmt.Println("profile http server terminated: ", http.ListenAndServe("localhost:6060", nil))
-}
-
 func main() {
+	// defer profile.Start(profile.BlockProfile).Stop()
+
 	flag.Parse()
 
-	go pprof()
+	switch *pprof {
+	case "cpu":
+		defer profile.Start(profile.CPUProfile).Stop()
+	case "block":
+		defer profile.Start(profile.BlockProfile).Stop()
+	case "goroutine":
+		defer profile.Start(profile.GoroutineProfile).Stop()
+	case "mutex":
+		defer profile.Start(profile.MutexProfile).Stop()
+	}
+	// 		go tool pprof -http=:8080 http://localhost:6060/debug/pprof/mutex
+	//      go tool pprof -http=:8080 http://localhost:6060/debug/pprof/block
+	//      go tool pprof -http=:8080 http://localhost:6060/debug/pprof/heap
+	//      go tool pprof -http=:8080 http://localhost:6060/debug/pprof/profile
+	//      go tool pprof -http=:8080 http://localhost:6060/debug/pprof/goroutine
+
+	// to open netfilter firewall for testing:
+	//   sudo nft add element ip netfilter_firewall allow_input_ports { 6060 }
+	go http.ListenAndServe(":6060", nil)
 
 	dns.Debug = true
 

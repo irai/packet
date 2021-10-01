@@ -24,7 +24,6 @@ func (h *Handler) RequestTo(dst net.HardwareAddr, targetIP net.IP) error {
 	}
 	if Debug {
 		fastlog.NewLine(module, "send request - who is").IP("ip", targetIP).IP("tell", h.session.NICInfo.HostAddr4.IP).MAC("dst", dst).Write()
-		// fmt.Printf("arp   : send request - who is ip=%s tell %s dst=%s\n", targetIP, h.session.NICInfo.HostAddr4, dst)
 	}
 	return h.request(dst, h.session.NICInfo.HostAddr4, packet.Addr{MAC: EthernetBroadcast, IP: targetIP})
 }
@@ -37,7 +36,6 @@ func (h *Handler) Request(targetIP net.IP) error {
 	}
 	if Debug {
 		fastlog.NewLine(module, "send request - who is").IP("ip", targetIP).IP("tell", h.session.NICInfo.HostAddr4.IP).Write()
-		// fmt.Printf("arp   : send request - who is ip=%s tell %s\n", targetIP, h.session.NICInfo.HostAddr4)
 	}
 	return h.request(EthernetBroadcast, h.session.NICInfo.HostAddr4, packet.Addr{MAC: EthernetBroadcast, IP: targetIP})
 }
@@ -73,10 +71,8 @@ func (h *Handler) AnnounceTo(dst net.HardwareAddr, targetIP net.IP) (err error) 
 	if Debug {
 		if bytes.Equal(dst, EthernetBroadcast) {
 			fastlog.NewLine(module, "send announcement broadcast - I am").IP("ip", targetIP).Write()
-			// fmt.Printf("arp   : send announcement broadcast - I am %s\n", targetIP)
 		} else {
 			fastlog.NewLine(module, "send announcement unicast - I am").IP("ip", targetIP).MAC("dst", dst).Write()
-			// fmt.Printf("arp   : send announcement unicast - I am %s to=%s\n", targetIP, dst)
 		}
 	}
 	err = h.request(dst,
@@ -104,7 +100,8 @@ func (h *Handler) AnnounceTo(dst net.HardwareAddr, targetIP net.IP) (err error) 
 // +============+===+===========+===========+============+============+===================+===========+
 //
 func (h *Handler) request(dst net.HardwareAddr, sender packet.Addr, target packet.Addr) error {
-	var b [packet.EthMaxSize]byte
+	b := packet.EtherBufferPool.Get().(*[packet.EthMaxSize]byte)
+	defer packet.EtherBufferPool.Put(b)
 	ether := packet.Ether(b[0:])
 
 	// Send packet with ether src set to host but arp packet set to target
@@ -138,7 +135,8 @@ func (h *Handler) Reply(dst net.HardwareAddr, sender packet.Addr, target packet.
 // dstEther identifies the target for the Ethernet packet : i.e. use EthernetBroadcast for gratuitous ARP
 // func (h *Handler) reply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
 func (h *Handler) reply(dst net.HardwareAddr, sender packet.Addr, target packet.Addr) error {
-	var b [packet.EthMaxSize]byte
+	b := packet.EtherBufferPool.Get().(*[packet.EthMaxSize]byte)
+	defer packet.EtherBufferPool.Put(b)
 	ether := packet.Ether(b[0:])
 
 	// Send packet with ether src set to host but arp packet set to target
@@ -171,7 +169,6 @@ func (h *Handler) WhoIs(ip net.IP) (packet.Addr, error) {
 
 	if Debug {
 		fastlog.NewLine(module, "whois not found").IP("ip", ip).Write()
-		// fmt.Printf("arp   : ip=%s whois not found\n", ip)
 		h.session.PrintTable()
 	}
 	return packet.Addr{}, packet.ErrNotFound

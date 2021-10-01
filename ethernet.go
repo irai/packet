@@ -6,10 +6,22 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/irai/packet/fastlog"
 )
+
+const (
+	EthType8021AD = 0x88a8 // VLAN 802.1ad
+
+	// Maximum ethernet II frame size is 1518 = 14 header + 1500 data + 4 CRC
+	// see: https://en.wikipedia.org/wiki/Ethernet_frame#Ethernet_II
+	EthMaxSize = 1518
+)
+
+// EtherBufferPool implemts a simple buffer pool for Ethernet packets
+var EtherBufferPool = sync.Pool{New: func() interface{} { return new([EthMaxSize]byte) }}
 
 // Ether provide access to ethernet II fields without copying the structure
 // see: https://medium.com/@mdlayher/network-protocol-breakdown-ethernet-and-go-de985d726cc1
