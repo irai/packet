@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/fastlog"
 	"inet.af/netaddr"
 )
 
@@ -13,7 +14,7 @@ func (h *DNSHandler) PrintDNSTable() {
 	defer h.mutex.RUnlock()
 	fmt.Printf("dns table len=%d\n", len(h.DNSTable))
 	for _, v := range h.DNSTable {
-		v.print()
+		fastlog.NewLine(module, "entry").Struct(v).Write()
 	}
 }
 
