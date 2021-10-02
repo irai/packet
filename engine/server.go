@@ -894,15 +894,17 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 		if len(packetQueue) >= packetQueueLen {
 			// Send sigterm to terminate process
-			fastlog.NewLine(module, "fatal: packet queue exceeded maximum limit - deadlock?").Write()
+			fastlog.NewLine(module, "error packet queue exceeded maximum limit - deadlock?").Write()
 			syscall.Kill(os.Getpid(), syscall.SIGTERM)
+			packetBuf.Put(buf)
 			return packet.ErrNoReader
 		}
-		if len(packetQueue) > 2 {
+
+		if len(packetQueue) > 16 {
 			fastlog.NewLine(module, "packet queue").Int("len", len(packetQueue)).Write()
 		}
 
-		// queue for worker
+		// wakeup worker
 		packetQueue <- buf
 	}
 }
