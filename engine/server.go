@@ -606,8 +606,9 @@ func (h *Handler) processPacket(ether packet.Ether) (err error) {
 
 		// Create host only if on same subnet
 		// Note: DHCP request for previous discover have zero src IP; therefore wont't create host entry here.
-		if h.session.NICInfo.HostIP4.Contains(ip4Frame.Src()) {
-			host, _ = h.session.FindOrCreateHost(packet.Addr{MAC: ether.Src(), IP: ip4Frame.Src()}) // will lock/unlock
+		ip := ip4Frame.Src() // avoid []byte allocation when used twice below
+		if h.session.NICInfo.HostIP4.Contains(ip) {
+			host, _ = h.session.FindOrCreateHost(packet.Addr{MAC: ether.Src(), IP: ip}) // will lock/unlock
 		}
 		l4Proto = ip4Frame.Protocol()
 		l4Payload = ip4Frame.Payload()
