@@ -739,6 +739,7 @@ func (h *Handler) processPacket(ether packet.Ether) (err error) {
 			fastlog.NewLine(module, "unknown 0x880a frame").Int("count", count0x880a).ByteArray("payload", ether.Payload()).Write()
 		}
 		count0x880a++
+		return nil
 
 	default:
 		// fmt.Printf("packet: error invalid ethernet type %s\n", ether)
