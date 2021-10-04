@@ -813,8 +813,8 @@ func (h *Handler) processPacket(ether packet.Ether) (err error) {
 	}
 
 	d3 = time.Since(startTime)
-	if d3 > time.Microsecond*400 {
-		fastlog.NewLine("packet", "warning > 400microseconds").String("l3", d1.String()).String("l4", d2.String()).String("total", d3.String()).
+	if d3 > time.Microsecond*600 {
+		fastlog.NewLine("packet", "warning > 600 microseconds").String("l3", d1.String()).String("l4", d2.String()).String("total", d3.String()).
 			Int("l4proto", l4Proto).Uint16Hex("ethertype", ether.EtherType()).Write()
 	}
 	return nil
