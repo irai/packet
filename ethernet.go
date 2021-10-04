@@ -311,6 +311,7 @@ func (p LLDP) Type(t int) string {
 		return strconv.Itoa(t)
 	}
 }
+
 func (p LLDP) Capability(v []byte) string {
 	if len(v) < 2 {
 		return ""
@@ -371,4 +372,14 @@ func (p LLDP) FastLog(line *fastlog.Line) *fastlog.Line {
 		pos = pos + l + 2
 	}
 	return line
+}
+
+// unknown880a unkownn ether type 0x880a
+type Unknown880a []byte
+
+func (p Unknown880a) IsValid() error {
+	if len(p) <= 0 {
+		return ErrFrameLen
+	}
+	return nil
 }

@@ -565,6 +565,7 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 }
 
 var invalidUDPNextLog time.Time // hack to print udp logs every few minutes only
+var count0x880a int
 
 func (h *Handler) processPacket(ether packet.Ether) (err error) {
 	var d1, d2, d3 time.Duration
@@ -732,6 +733,12 @@ func (h *Handler) processPacket(ether packet.Ether) (err error) {
 		// https://portal.unifiedpatents.com/patents/patent/US-20160006778-A1
 		fastlog.NewLine(module, "ether").Struct(ether).Module(module, "Sonos data routing frame").ByteArray("payload", ether.Payload()).Write()
 		return nil
+
+	case 0x880a: // Unknown protocol - but commonly seen in logs
+		if (count0x880a % 32) == 0 {
+			fastlog.NewLine(module, "unknown 0x880a frame").Int("count", count0x880a).ByteArray("payload", ether.Payload()).Write()
+		}
+		count0x880a++
 
 	default:
 		// fmt.Printf("packet: error invalid ethernet type %s\n", ether)

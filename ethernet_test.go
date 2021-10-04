@@ -136,3 +136,19 @@ func TestLLPDFrame_IsValid(t *testing.T) {
 		})
 	}
 }
+
+/**
+examples 0x880a packets
+Sep 30 03:09:39 netfilter netfilter[6597]: engine: "unexpected ethernet type" type=0x880a src=e0:19:54:cc:1c:6e dst=ff:ff:ff:ff:ff:ff len=60 payload=[0a 6c 6f 6f 70 62 61 63 6b 00 00 00 00 00 00 00 00 00 00 00 00 22 90 a8 a6 8e 0a 3c fd 0d f5 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00]
+Sep 30 03:09:39 netfilter netfilter[6597]: engine: "unexpected ethernet type" type=0x880a src=e0:19:54:cc:1c:6e dst=ff:ff:ff:ff:ff:ff len=60 payload=[0a 6c 6f 6f 70 62 61 63 6b 00 00 00 00 00 00 00 00 00 00 00 00 52 54 e5 52 60 83 e7 bd 10 ab 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00]
+Sep 30 03:09:39 netfilter netfilter[6597]: engine: "unexpected ethernet type" type=0x880a src=e0:19:54:cc:1c:6e dst=ff:ff:ff:ff:ff:ff len=60 payload=[0a 6c 6f 6f 70 62 61 63 6b 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 00 01 4e 6f 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00]
+Sep 30 03:09:39 netfilter netfilter[6597]: engine: "unexpected ethernet type" type=0x880a src=e0:19:54:cc:1c:6e dst=ff:ff:ff:ff:ff:ff len=60 payload=[0a 6c 6f 6f 70 62 61 63 6b 00 00 00 00 00 00 00 00 00 00 00 00 22 90 a8 a6 5e f7 cb 6d 1b f1 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00]
+Sep 30 03:09:40 netfilter netfilter[6597]: engine: "unexpected ethernet type" type=0x880a src=e0:19:54:cc:1c:6e dst=ff:ff:ff:ff:ff:ff len=60 payload=[0a 6c 6f 6f 70 62 61 63 6b 00 00 00 00 00 00 00 00 00 00 00 00 bb e4 ad 05 3a ef 39 4e a6 12 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00]
+Sep 30 03:09:41 netfilter netfilter[6597]: engine: "unexpected ethernet type" type=0x880a src=e0:19:54:cc:1c:6e dst=ff:ff:ff:ff:ff:ff len=60 payload=[0a 6c 6f 6f 70 62 61 63 6b 00 00 00 00 00 00 00 00 00 00 00 00 22 90 a8 a6 d5 ec d6 a6 a3 46 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00]
+Sep 30 03:09:41 netfilter netfilter[6597]: engine: "unexpected ethernet type" type=0x880a src=e0:19:54:cc:1c:6e dst=ff:ff:ff:ff:ff:ff len=60 payload=[0a 6c 6f 6f 70 62 61 63 6b 00 00 00 00 00 00 00 00 00 00 00 00 22 90 a8 a6 e6 03 dd 5e 76 f9 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00]
+Sep 30 03:09:41 netfilter netfilter[6597]: engine: "unexpected ethernet type" type=0x880a src=e0:19:54:cc:1c:6e dst=ff:ff:ff:ff:ff:ff len=60 payload=[0a 6c 6f 6f 70 62 61 63 6b 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00]
+Sep 30 03:09:41 netfilter netfilter[6597]: engine: "unexpected ethernet type" type=0x880a src=e0:19:54:cc:1c:6e dst=ff:ff:ff:ff:ff:ff len=60 payload=[0a 6c 6f 6f 70 62 61 63 6b 00 00 00 00 00 00 00 00 00 00 00 00 33 69 eb 10 b5 e9 f1 32 fd 80 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00]
+Sep 30 03:09:42 netfilter netfilter[6597]: engine: "unexpected ethernet type" type=0x880a src=e0:19:54:cc:1c:6e dst=ff:ff:ff:ff:ff:ff len=60 payload=[0a 6c 6f 6f 70 62 61 63 6b 00 00 00 00 00 00 00 00 00 00 00 00 75 78 61 78 2d 32 76 35 65 04 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00]
+Sep 30 03:09:42 netfilter netfilter[6597]: engine: "unexpected ethernet type" type=0x880a src=e0:19:54:cc:1c:6e dst=ff:ff:ff:ff:ff:ff len=60 payload=[0a 6c 6f 6f 70 62 61 63 6b 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 22 90 a8 a6 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00]
+
+*/
