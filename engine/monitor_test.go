@@ -12,7 +12,7 @@ import (
 	"github.com/irai/packet"
 )
 
-func TestHandler_threeMinuteChecker(t *testing.T) {
+func TestHandler_SignalNICStopped(t *testing.T) {
 	packet.Debug = true
 	nicInfo := packet.NICInfo{
 		HostMAC:     hostMAC,
@@ -28,6 +28,13 @@ func TestHandler_threeMinuteChecker(t *testing.T) {
 		t.Fatal("engine did not stop as expected", err)
 	}
 
+	c := make(chan os.Signal, 1)
+	signal.Notify(c)
+
+	keep := monitorNICFrequency
+	defer func() { monitorNICFrequency = keep }()
+	monitorNICFrequency = time.Millisecond * 3
+
 	go func() {
 		if err := engine.ListenAndServe(context.TODO()); err != nil {
 			t.Error("engine did not stop as expected", err)
@@ -35,12 +42,7 @@ func TestHandler_threeMinuteChecker(t *testing.T) {
 		}
 	}()
 
-	c := make(chan os.Signal, 1)
-	signal.Notify(c)
-
 	time.Sleep(time.Millisecond * 5)
-	ipHeartBeat = 0
-	engine.threeMinuteChecker(time.Now())
 
 	select {
 	case <-time.After(time.Millisecond * 5):

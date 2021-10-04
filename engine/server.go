@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -61,9 +62,8 @@ type Handler struct {
 	dnsChannel              chan dns.DNSEntry
 }
 
-// ipHeartBeat is set when we get IP packets. It is used to monitor the network is working
-// as expected and IP packets are being received at regular intervals.
-var ipHeartBeat int
+// monitorNICFrequency set the frequency to validate NIC is working ok
+var monitorNICFrequency = time.Minute * 3
 
 // New creates an ICMPv6 handler with default values
 func NewEngine(nic string) (*Handler, error) {
@@ -594,7 +594,6 @@ func (h *Handler) processPacket(ether packet.Ether) (err error) {
 	// This will set the variable host if the sender is a local IP and not multicast.
 	switch ether.EtherType() {
 	case syscall.ETH_P_IP: // 0x0800
-		ipHeartBeat = 1
 		ip4Frame = packet.IP4(ether.Payload())
 		if !ip4Frame.IsValid() {
 			fmt.Println("packet: error invalid ip4 frame type=", ether.EtherType())
@@ -614,7 +613,6 @@ func (h *Handler) processPacket(ether packet.Ether) (err error) {
 		l4Payload = ip4Frame.Payload()
 
 	case syscall.ETH_P_IPV6: // 0x86dd
-		ipHeartBeat = 1
 		ip6Frame = packet.IP6(ether.Payload())
 		if !ip6Frame.IsValid() {
 			fmt.Println("packet: error invalid ip6 frame type=", ether.EtherType())
@@ -835,8 +833,8 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 	// Implement a single worker pattern to process packets async to the reader. This pattern
 	// ensure we are reading packets as fast as possible despite the processing time of the worker.
 	//
-	// A single worker is the simplest pattern to ensure packets are processed in order received but
-	// queue must be sufficiently large to accommodate the worker taking too long to process packets.
+	// A single worker will ensure packets are processed in order received but
+	// queue must be sufficiently large to accommodate the worker occasionally taking too long.
 	const packetQueueLen = 128
 	var packetBuf = sync.Pool{New: func() interface{} { return new(buffer) }}
 	packetQueue := make(chan *buffer, packetQueueLen)
@@ -850,6 +848,23 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			ether := packet.Ether(buf.b[:buf.n])
 			h.processPacket(ether)
 			packetBuf.Put(buf)
+		}
+	}()
+
+	// Setup a nic monitoring goroutine to ensure we always receive IP packets.
+	// If the switch port is disabled or the the nic stops receiving packets for any reason,
+	// our best option is to stop the engine and likely restart.
+	//
+	var ipHeartBeat uint32 // ipHeartBeat is set to 1 when we receive an IP packet.
+	go func() {
+		for {
+			time.Sleep(monitorNICFrequency)
+			if atomic.LoadUint32(&ipHeartBeat) == 0 {
+				fmt.Printf("fatal: failed to receive ip packets in duration=%s - sending sigterm time=%v\n", monitorNICFrequency, time.Now())
+				// Send sigterm to terminate process
+				syscall.Kill(os.Getpid(), syscall.SIGTERM)
+			}
+			atomic.StoreUint32(&ipHeartBeat, 0)
 		}
 	}()
 
@@ -903,6 +918,10 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 
 		if len(packetQueue) > 16 {
 			fastlog.NewLine(module, "packet queue").Int("len", len(packetQueue)).Write()
+		}
+
+		if ether.EtherType() == syscall.ETH_P_IP || ether.EtherType() == syscall.ETH_P_IPV6 {
+			atomic.StoreUint32(&ipHeartBeat, 1)
 		}
 
 		// wakeup worker
