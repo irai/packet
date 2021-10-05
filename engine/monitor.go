@@ -14,22 +14,24 @@ import (
 func (h *Handler) lockAndMonitorRoute(now time.Time) (err error) {
 	table := h.session.GetHosts()
 	for _, host := range table {
-		host.MACEntry.Row.RLock()
+		macEntry := host.MACEntry // keep a copy in case host.MACEntry changes (i.e. merging macs)
+
+		macEntry.Row.RLock()
 		addr := host.Addr
 
 		if host.Addr.IP.To4() == nil { // Ignore if not IP4
-			host.MACEntry.Row.RUnlock()
+			macEntry.Row.RUnlock()
 			continue
 		}
 		if host.HuntStage != packet.StageRedirected { // ignore if are we hunting this host
 			if packet.Debug && host.HuntStage == packet.StageHunt {
 				fastlog.NewLine(module, "ip4 routing ignore host in hunt stage").Struct(addr).Write()
 			}
-			host.MACEntry.Row.RUnlock()
+			macEntry.Row.RUnlock()
 			continue
 		}
 
-		host.MACEntry.Row.RUnlock()
+		macEntry.Row.RUnlock()
 
 		_, err := h.ICMP4Handler.CheckAddr(addr) // ping host
 		if err == nil {
