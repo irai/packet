@@ -66,7 +66,7 @@ func (h *Handler) purge(now time.Time, probeDur time.Duration, offlineDur time.D
 			if ip := addr.IP.To4(); ip != nil {
 				h.ARPHandler.CheckAddr(addr)
 			} else {
-				h.ICMP6Handler.CheckAddr(addr)
+				h.ICMP6Handler.CheckAddr(addr) // uses ping and may take a few seconds to return
 			}
 			e.MACEntry.Row.RLock()
 		}
