@@ -125,6 +125,9 @@ func (l *Line) String(name string, value string) *Line {
 }
 
 func (l *Line) StringArray(name string, value []string) *Line {
+	if l.index+len(name)+4 > cap(l.buffer) {
+		return l
+	}
 	l.appendByte(' ')
 	l.index = l.index + copy(l.buffer[l.index:], name)
 	l.appendByte('=')
