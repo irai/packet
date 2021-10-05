@@ -168,8 +168,7 @@ func (h *Handler) allocIPOffer(lease *Lease, reqIP net.IP) error {
 
 	lease.IPOffer = ip
 	if Debug {
-		// fmt.Printf("dhcp4 : offer ip=%s\n", lease.IPOffer)
-		fastlog.NewLine(module, "offer").IP("ip", lease.IPOffer)
+		fastlog.NewLine(module, "offer").IP("ip", lease.IPOffer).Write()
 	}
 	return nil
 }

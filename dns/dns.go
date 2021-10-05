@@ -527,8 +527,7 @@ func ReverseDNS(ip netaddr.IP) error {
 		return err
 	}
 	if Debug {
-		// fmt.Printf("dns   : reverse dns success ip=%s names=%v\n", ip, names)
-		fastlog.NewLine(module, "reverse dns ok").String("ip", ip.String()).StringArray("names", names)
+		fastlog.NewLine(module, "reverse dns ok").String("ip", ip.String()).StringArray("names", names).Write()
 	}
 	return nil
 }
