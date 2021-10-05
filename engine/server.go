@@ -843,7 +843,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 	//
 	// A single worker will ensure packets are processed in order received but
 	// queue must be sufficiently large to accommodate the worker occasionally taking too long.
-	const packetQueueLen = 128
+	const packetQueueLen = 512
 	var packetBuf = sync.Pool{New: func() interface{} { return new(buffer) }}
 	packetQueue := make(chan *buffer, packetQueueLen)
 	go func() {
