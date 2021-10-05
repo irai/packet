@@ -41,7 +41,6 @@ func (n Notification) FastLog(l *fastlog.Line) *fastlog.Line {
 
 // purge is called each minute by the minute goroutine
 func (h *Handler) purge(now time.Time, probeDur time.Duration, offlineDur time.Duration, purgeDur time.Duration) error {
-
 	probeCutoff := now.Add(probeDur * -1)     // Mark offline entries last updated before this time
 	offlineCutoff := now.Add(offlineDur * -1) // Mark offline entries last updated before this time
 	deleteCutoff := now.Add(purgeDur * -1)    // Delete entries that have not responded in last hour
@@ -62,11 +61,14 @@ func (h *Handler) purge(now time.Time, probeDur time.Duration, offlineDur time.D
 
 		// Probe if device not seen recently
 		if e.Online && e.LastSeen.Before(probeCutoff) {
-			if ip := e.Addr.IP.To4(); ip != nil {
-				h.ARPHandler.CheckAddr(packet.Addr{MAC: e.MACEntry.MAC, IP: ip})
+			addr := e.Addr
+			e.MACEntry.Row.RUnlock()
+			if ip := addr.IP.To4(); ip != nil {
+				h.ARPHandler.CheckAddr(addr)
 			} else {
-				h.ICMP6Handler.CheckAddr(packet.Addr{MAC: e.MACEntry.MAC, IP: e.Addr.IP})
+				h.ICMP6Handler.CheckAddr(addr)
 			}
+			e.MACEntry.Row.RLock()
 		}
 
 		// Set offline if no updates since the offline deadline
