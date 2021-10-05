@@ -924,7 +924,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			return packet.ErrNoReader
 		}
 
-		if len(packetQueue) > 16 {
+		if len(packetQueue) > 32 {
 			fastlog.NewLine(module, "packet queue").Int("len", len(packetQueue)).Write()
 		}
 
