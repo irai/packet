@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -529,6 +530,13 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 		// Netbions NBNS
 		entry, err := h.DNSHandler.ProcessNBNS(host, ether, udp.Payload())
 		if err != nil {
+			// don't log as error if dns parsing cannot handle nbns reserved keyword.
+			// error: "skipping Question Name: segment prefix is reserved"
+			// TODO: fix nbns parsing
+			if strings.Contains(err.Error(), "prefix is reserved") {
+				fastlog.NewLine(module, "nbns prefix is reserved - fixme").ByteArray("frame", ether).Write()
+				break
+			}
 			fastlog.NewLine(module, "error processing nbns").Error(err).Write()
 			break
 		}
