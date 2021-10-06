@@ -127,6 +127,8 @@ func TestLine_appendIP6(t *testing.T) {
 				t.Errorf("appendIP6() invalid IP got=%s want=%s|", string(txt), tt.wantIP)
 
 			}
+
+			l.appendIP6(nil) // test nil ip
 		})
 	}
 }
