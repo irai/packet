@@ -39,13 +39,15 @@ func (n Notification) FastLog(l *fastlog.Line) *fastlog.Line {
 	return l
 }
 
-// purge is called each minute by the minute goroutine
+// purge set entries offline and subsequently delete them if no more traffic received.
+// The funcion is called each minute by the minute goroutine.
 func (h *Handler) purge(now time.Time, probeDur time.Duration, offlineDur time.Duration, purgeDur time.Duration) error {
-	probeCutoff := now.Add(probeDur * -1)     // Mark offline entries last updated before this time
+	probeCutoff := now.Add(probeDur * -1)     // Check entries last updated before this time
 	offlineCutoff := now.Add(offlineDur * -1) // Mark offline entries last updated before this time
 	deleteCutoff := now.Add(purgeDur * -1)    // Delete entries that have not responded in last hour
 
 	purge := make([]net.IP, 0, 16)
+	probe := make([]packet.Addr, 0, 16)
 	offline := make([]*packet.Host, 0, 16)
 
 	h.session.GlobalRLock()
@@ -61,14 +63,7 @@ func (h *Handler) purge(now time.Time, probeDur time.Duration, offlineDur time.D
 
 		// Probe if device not seen recently
 		if e.Online && e.LastSeen.Before(probeCutoff) {
-			addr := e.Addr
-			e.MACEntry.Row.RUnlock()
-			if ip := addr.IP.To4(); ip != nil {
-				h.ARPHandler.CheckAddr(addr)
-			} else {
-				h.ICMP6Handler.CheckAddr(addr) // uses ping and may take a few seconds to return
-			}
-			e.MACEntry.Row.RLock()
+			probe = append(probe, e.Addr)
 		}
 
 		// Set offline if no updates since the offline deadline
@@ -78,6 +73,19 @@ func (h *Handler) purge(now time.Time, probeDur time.Duration, offlineDur time.D
 		e.MACEntry.Row.RUnlock()
 	}
 	h.session.GlobalRUnlock()
+
+	// run probe addr in goroutine as checkaddr ping may take a few seconds to return
+	if len(probe) > 0 {
+		go func() {
+			for _, addr := range probe {
+				if ip := addr.IP.To4(); ip != nil {
+					h.ARPHandler.CheckAddr(addr)
+				} else {
+					h.ICMP6Handler.CheckAddr(addr)
+				}
+			}
+		}()
+	}
 
 	for _, host := range offline {
 		h.lockAndSetOffline(host) // will lock/unlock row
