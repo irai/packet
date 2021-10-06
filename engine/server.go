@@ -704,8 +704,6 @@ func (h *Handler) processPacket(ether packet.Ether) (err error) {
 		return nil
 
 	case 0x88cc: // Link Layer Discovery Protocol (LLDP)
-		// not sure if we will ever receive these in a home LAN!
-		// fmt.Printf("packet: LLDP frame %s payload=[% x]\n", ether, ether[:])
 		p := packet.LLDP(ether.Payload())
 		if err := p.IsValid(); err != nil {
 			fastlog.NewLine(module, "invalid LLDP frame").Error(err).ByteArray("frame", ether).Write()
@@ -792,17 +790,19 @@ func (h *Handler) processPacket(ether packet.Ether) (err error) {
 		}
 		if host, notify, err = h.processUDP(host, ether, udp); err != nil {
 			fastlog.NewLine("packet", "error processing udp").Error(err).Write()
-			return nil
+			return err
 		}
 
 	case syscall.IPPROTO_ICMP:
 		if result, err = h.ICMP4Handler.ProcessPacket(host, ether, l4Payload); err != nil {
-			fmt.Printf("packet: error processing icmp4: %s\n", err)
+			fastlog.NewLine("packet", "error processing icmp4").Error(err).Write()
+			return err
 		}
 
 	case syscall.IPPROTO_ICMPV6: // 0x03a
 		if result, err = h.ICMP6Handler.ProcessPacket(host, ether, l4Payload); err != nil {
-			fmt.Printf("packet: error processing icmp6 : %s\n", err)
+			fastlog.NewLine("packet", "error processing icmp6").Error(err).Write()
+			return err
 		}
 		if result.Update {
 			if result.FrameAddr.IP != nil {
@@ -817,7 +817,7 @@ func (h *Handler) processPacket(ether packet.Ether) (err error) {
 	case syscall.IPPROTO_IGMP:
 		// Internet Group Management Protocol - Ipv4 multicast groups
 		// do nothing
-		fmt.Printf("packet: ipv4 igmp packet %s\n", ether)
+		fastlog.NewLine("packet", "ipv4 igmp packet").Struct(ether).Write()
 
 	default:
 		fmt.Println("packet: unsupported level 4 header", l4Proto, ether)
