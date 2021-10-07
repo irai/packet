@@ -246,6 +246,7 @@ func (h *Handler) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
 	if lease != nil && lease.State == StateAllocated {
 		return lease.subnet.Stage, nil
 	}
+	fastlog.NewLine(module, "failed to get dhcp hunt status").Struct(addr).Error(packet.ErrNotFound).Write()
 	return packet.StageNormal, packet.ErrNotFound
 }
 

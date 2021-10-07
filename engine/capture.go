@@ -281,10 +281,7 @@ func (h *Handler) lockAndSetOnline(host *packet.Host, notify bool) {
 			if notification.Addr.IP.To4() != nil {
 				// In IPv4 dhcp dictates if host is redirected
 				// start hunt if not redirected
-				stage, err := h.DHCP4Handler.CheckAddr(addr)
-				if err != nil {
-					fmt.Printf("packet: failed to get dhcp hunt status %s error=%s\n", addr, err)
-				}
+				stage, _ := h.DHCP4Handler.CheckAddr(addr)
 				if stage != packet.StageRedirected {
 					if err := h.lockAndStartHunt(addr); err != nil {
 						fmt.Println("packet: failed to start hunt error", err)
