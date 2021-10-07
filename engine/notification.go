@@ -50,8 +50,9 @@ func (h *Handler) purge(now time.Time, probeDur time.Duration, offlineDur time.D
 	probe := make([]packet.Addr, 0, 16)
 	offline := make([]*packet.Host, 0, 16)
 
-	h.session.GlobalRLock()
-	for _, e := range h.session.HostTable.Table {
+	// h.session.GlobalRLock()
+	table := h.session.GetHosts()
+	for _, e := range table {
 		e.MACEntry.Row.RLock()
 
 		// Delete from table if the device is offline and was not seen for the last hour
@@ -72,7 +73,6 @@ func (h *Handler) purge(now time.Time, probeDur time.Duration, offlineDur time.D
 		}
 		e.MACEntry.Row.RUnlock()
 	}
-	h.session.GlobalRUnlock()
 
 	// run probe addr in goroutine as checkaddr ping may take a few seconds to return
 	if len(probe) > 0 {
