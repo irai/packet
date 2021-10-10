@@ -1,4 +1,4 @@
-package icmp4
+package icmp
 
 import (
 	"fmt"
@@ -24,7 +24,7 @@ func ping256(tc *testContext) {
 		ip := packet.CopyIP(srcIP).To4() // new buffer, we are sending this in the channel
 		ip[3] = uint8(i)
 		go func(ip net.IP) {
-			if tc.h.ping(hostAddr, packet.Addr{IP: ip}, time.Second*2) != nil {
+			if tc.h.Ping(hostAddr, packet.Addr{IP: ip}, time.Second*2) != nil {
 				channel <- net.IPv4zero
 				return
 			}

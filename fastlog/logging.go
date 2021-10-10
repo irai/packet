@@ -397,6 +397,44 @@ func (l *Line) IP(name string, value net.IP) *Line {
 	return l
 }
 
+func (l *Line) IPArray(name string, value []net.IP) *Line {
+	if l.index+len(name)+4 > cap(l.buffer) {
+		return l
+	}
+	l.appendByte(' ')
+	l.index = l.index + copy(l.buffer[l.index:], name)
+	l.appendByte('=')
+	l.appendByte('[')
+	if len(value) <= 0 {
+		l.appendByte(']')
+		return l
+	}
+
+	for _, v := range value {
+		if l.index+28+2 > cap(l.buffer) { // assume longest IP len 4*8+4
+			break
+		}
+		if v != nil {
+			if ip := v.To4(); ip != nil {
+				l.index = l.index + copy(l.buffer[l.index:], byteAscii[ip[0]])
+				l.appendByte('.')
+				l.index = l.index + copy(l.buffer[l.index:], byteAscii[ip[1]])
+				l.appendByte('.')
+				l.index = l.index + copy(l.buffer[l.index:], byteAscii[ip[2]])
+				l.appendByte('.')
+				l.index = l.index + copy(l.buffer[l.index:], byteAscii[ip[3]])
+				return l
+			}
+			l.appendIP6(v)
+		}
+		l.appendByte(',')
+		l.appendByte(' ')
+	}
+	l.index--
+	l.appendByte(']')
+	return l
+}
+
 func (l *Line) appendByte(value byte) {
 	l.buffer[l.index] = value
 	l.index++

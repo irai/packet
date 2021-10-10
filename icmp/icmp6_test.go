@@ -1,4 +1,4 @@
-package icmp6
+package icmp
 
 import (
 	"bytes"
@@ -38,7 +38,7 @@ func Test_ICMP6Redirect(t *testing.T) {
 	fmt.Println("ether", ether)
 	ip6Frame := packet.IP6(ether.Payload())
 	fmt.Println("ip6", ip6Frame)
-	icmp6Frame := ICMP6(ip6Frame.Payload())
+	icmp6Frame := ICMP(ip6Frame.Payload())
 	fmt.Println("icmp6", icmp6Frame)
 	redirect := ICMP6Redirect(icmp6Frame)
 	if !redirect.IsValid() {

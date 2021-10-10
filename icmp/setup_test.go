@@ -1,4 +1,4 @@
-package icmp4
+package icmp
 
 import (
 	"context"
@@ -17,6 +17,10 @@ var (
 	ip3     = net.IPv4(192, 168, 0, 3)
 	ip4     = net.IPv4(192, 168, 0, 4)
 	ip5     = net.IPv4(192, 168, 0, 5)
+
+	ip61 = net.IP{0x20, 0x01, 0xff, 0xaa, 0xbb, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}
+	ip62 = net.IP{0x20, 0x01, 0xff, 0xaa, 0xbb, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02}
+	ip63 = net.IP{0x20, 0x01, 0xff, 0xaa, 0xbb, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x03}
 
 	hostMAC   = net.HardwareAddr{0x00, 0x55, 0x55, 0x55, 0x55, 0x55}
 	hostIP4   = net.IPv4(192, 168, 0, 129).To4()
@@ -38,14 +42,15 @@ var (
 	ip6LLA4      = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x04}
 	ip6LLA5      = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x05}
 
-	hostAddr   = packet.Addr{MAC: hostMAC, IP: hostIP4}
-	routerAddr = packet.Addr{MAC: routerMAC, IP: routerIP4}
+	hostAddr      = packet.Addr{MAC: hostMAC, IP: hostIP4}
+	routerAddr    = packet.Addr{MAC: routerMAC, IP: routerIP4}
+	routerLLAAddr = packet.Addr{MAC: routerMAC, IP: ip6LLARouter}
 )
 
 type testContext struct {
 	inConn  net.PacketConn
 	outConn net.PacketConn
-	h       *Handler
+	h       *Handler6
 	session *packet.Session
 	wg      sync.WaitGroup
 	ctx     context.Context
@@ -77,7 +82,7 @@ func setupTestHandler() *testContext {
 		HomeLAN4:  homeLAN,
 	}
 
-	if tc.h, err = New(tc.session); err != nil {
+	if tc.h, err = New6(tc.session); err != nil {
 		panic(err)
 	}
 

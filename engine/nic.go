@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/irai/packet"
-	"github.com/irai/packet/icmp4"
+	"github.com/irai/packet/icmp"
 	"github.com/vishvananda/netlink"
 )
 
@@ -184,7 +184,7 @@ func GetIP4DefaultGatewayAddr(nic string) (addr packet.Addr, err error) {
 	// This is required if we just reset the interface and the arp table is nil
 	var arpList []packet.Addr
 	for i := 0; i < 3; i++ {
-		icmp4.ExecPing(addr.IP.String()) // ping to populate arp table
+		icmp.ExecPing(addr.IP.String()) // ping to populate arp table
 		time.Sleep(time.Millisecond * 15)
 		arpList, err = LoadLinuxARPTable(nic)
 		if err == nil {
@@ -273,7 +273,7 @@ func locateFreeIP(nic string, hostIP net.IP, ip net.IP, start uint8, end uint8) 
 
 		// ping to populate arp table
 		if nic != "" {
-			icmp4.ExecPing(ip.String()) // populate arp table
+			icmp.ExecPing(ip.String()) // populate arp table
 		}
 
 		// check if arp table has the IP

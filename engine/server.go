@@ -17,8 +17,7 @@ import (
 	"github.com/irai/packet/dhcp4"
 	"github.com/irai/packet/dns"
 	"github.com/irai/packet/fastlog"
-	"github.com/irai/packet/icmp4"
-	"github.com/irai/packet/icmp6"
+	"github.com/irai/packet/icmp"
 	"golang.org/x/net/bpf"
 )
 
@@ -48,8 +47,8 @@ type Handler struct {
 	session                 *packet.Session // store shared session values
 	HandlerIP4              packet.PacketProcessor
 	HandlerIP6              packet.PacketProcessor
-	ICMP4Handler            icmp4.ICMP4Handler
-	ICMP6Handler            icmp6.ICMP6Handler
+	ICMP4Handler            icmp.ICMP4Handler
+	ICMP6Handler            icmp.ICMP6Handler
 	DHCP4Handler            dhcp4.DHCP4Handler
 	ARPHandler              arp.ARPHandler
 	DNSHandler              *dns.DNSHandler
@@ -122,8 +121,8 @@ func (config Config) NewEngine(nic string) (*Handler, error) {
 	h.HandlerIP4 = packet.PacketNOOP{}
 	h.HandlerIP6 = packet.PacketNOOP{}
 	h.ARPHandler = packet.PacketNOOP{}
-	h.ICMP4Handler = icmp4.ICMP4NOOP{}
-	h.ICMP6Handler = icmp6.ICMP6NOOP{}
+	h.ICMP4Handler = icmp.ICMP4NOOP{}
+	h.ICMP6Handler = icmp.ICMP6NOOP{}
 	h.DHCP4Handler = packet.PacketNOOP{}
 
 	// default DNS handler
@@ -178,25 +177,25 @@ func (h *Handler) DetachARP() error {
 	return nil
 }
 
-func (h *Handler) AttachICMP4(p icmp4.ICMP4Handler) {
+func (h *Handler) AttachICMP4(p icmp.ICMP4Handler) {
 	h.ICMP4Handler = p
 }
 func (h *Handler) DetachICMP4() error {
 	if err := h.ICMP4Handler.Stop(); err != nil {
 		return err
 	}
-	h.ICMP4Handler = icmp4.ICMP4NOOP{}
+	h.ICMP4Handler = icmp.ICMP4NOOP{}
 	return nil
 }
 
-func (h *Handler) AttachICMP6(p icmp6.ICMP6Handler) {
+func (h *Handler) AttachICMP6(p icmp.ICMP6Handler) {
 	h.ICMP6Handler = p
 }
 func (h *Handler) DetachICMP6() error {
 	if err := h.ICMP6Handler.Stop(); err != nil {
 		return err
 	}
-	h.ICMP6Handler = icmp6.ICMP6NOOP{}
+	h.ICMP6Handler = icmp.ICMP6NOOP{}
 	return nil
 }
 func (h *Handler) AttachDHCP4(p dhcp4.DHCP4Handler) {
@@ -322,7 +321,7 @@ func (h *Handler) stopPlugins() error {
 	return nil
 }
 
-func (h *Handler) FindIP6Router(ip net.IP) icmp6.Router {
+func (h *Handler) FindIP6Router(ip net.IP) icmp.Router {
 	return h.ICMP6Handler.FindRouter(ip)
 }
 

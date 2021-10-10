@@ -1,4 +1,4 @@
-package icmp4
+package icmp
 
 import (
 	"fmt"
@@ -9,11 +9,6 @@ import (
 	"github.com/irai/packet/fastlog"
 	"golang.org/x/net/ipv4"
 )
-
-// Debug packets turn on logging if desirable
-var Debug bool
-
-const module = "icmp4"
 
 type ICMP4Handler interface {
 	packet.PacketProcessor
@@ -43,64 +38,64 @@ func (p ICMP4NOOP) Ping(dstAddr packet.Addr, timeout time.Duration) error {
 	return nil
 }
 
-var _ ICMP4Handler = &Handler{}
+var _ ICMP4Handler = &Handler4{}
 
 // Handler maintains the underlying socket connection
-type Handler struct {
+type Handler4 struct {
 	session *packet.Session
 }
 
 // New create a ICMPv4 handler and attach to the engine
-func New(engine *packet.Session) (h *Handler, err error) {
-	h = &Handler{session: engine}
+func New4(engine *packet.Session) (h *Handler4, err error) {
+	h = &Handler4{session: engine}
 	// h.engine.HandlerICMP4 = h
 
 	return h, nil
 }
 
 // Close remove the plugin from the engine
-func (h *Handler) Close() error {
+func (h *Handler4) Close() error {
 	// h.engine.HandlerICMP4 = packet.PacketNOOP{}
 	return nil
 }
 
 // Start implements PacketProcessor interface
-func (h *Handler) Start() error {
+func (h *Handler4) Start() error {
 	return nil
 }
 
 // Stop implements PacketProcessor interface
-func (h *Handler) Stop() error {
+func (h *Handler4) Stop() error {
 	h.Close()
 	return nil
 }
 
 // MinuteTicker implements packet processor interface
-func (h *Handler) MinuteTicker(now time.Time) error {
+func (h *Handler4) MinuteTicker(now time.Time) error {
 	return nil
 }
 
 // StartHunt implements PacketProcessor interface
-func (h *Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
+func (h *Handler4) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
 	return packet.StageHunt, nil
 }
 
 // StopHunt implements PacketProcessor interface
-func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
+func (h *Handler4) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
 	return packet.StageNormal, nil
 }
 
-func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (packet.Result, error) {
+func (h *Handler4) ProcessPacket(host *packet.Host, p []byte, header []byte) (packet.Result, error) {
 
 	ether := packet.Ether(p)
 	ip4Frame := packet.IP4(ether.Payload())
-	icmpFrame := packet.ICMP4(header)
+	icmpFrame := ICMP(header)
 
 	switch icmpFrame.Type() {
 	case packet.ICMPTypeEchoReply:
 
 		// ICMPEcho start from icmp frame
-		echo := packet.ICMPEcho(icmpFrame)
+		echo := ICMPEcho(icmpFrame)
 		if !echo.IsValid() {
 			fmt.Println("icmp4: invalid echo reply", icmpFrame, len(icmpFrame))
 			return packet.Result{}, fmt.Errorf("icmp invalid icmp4 packet")
@@ -111,10 +106,13 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (pac
 		echoNotify(echo.EchoID()) // unblock ping if waiting
 
 	case packet.ICMPTypeEchoRequest:
-		echo := packet.ICMPEcho(icmpFrame)
+		echo := ICMPEcho(icmpFrame)
 		if Debug {
 			fmt.Printf("icmp4: echo request from ip=%s %s\n", ip4Frame.Src(), echo)
 		}
+
+	case uint8(ipv4.ICMPTypeRedirect):
+		fastlog.NewLine(module, "icmp4 redirect recv").Struct(ether).IP("srcIP", ether.SrcIP()).IP("dstIP", ether.DstIP()).ByteArray("payload", header).Write()
 
 	case uint8(ipv4.ICMPTypeDestinationUnreachable):
 		switch icmpFrame.Code() {

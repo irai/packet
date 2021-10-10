@@ -236,46 +236,6 @@ func (p IP4) CalculateChecksum() uint16 {
 	return Checksum(psh)
 }
 
-type ICMP4 []byte
-
-func (p ICMP4) IsValid() bool {
-	return len(p) > 8
-}
-
-func (p ICMP4) Type() uint8          { return uint8(p[0]) }
-func (p ICMP4) Code() uint8          { return p[1] }
-func (p ICMP4) Checksum() uint16     { return binary.BigEndian.Uint16(p[2:4]) }
-func (p ICMP4) RestOfHeader() []byte { return p[4:8] }
-func (p ICMP4) Payload() []byte      { return p[8:] }
-func (p ICMP4) String() string {
-	return fmt.Sprintf("type=%v code=%v payloadLen=%d, data=0x% x", p.Type(), p.Code(), len(p.Payload()), p.Payload())
-}
-
-type ICMPEcho []byte
-
-func (p ICMPEcho) IsValid() bool   { return len(p) >= 8 }
-func (p ICMPEcho) Type() uint8     { return uint8(p[0]) }
-func (p ICMPEcho) Code() int       { return int(p[1]) }
-func (p ICMPEcho) Checksum() int   { return int(binary.BigEndian.Uint16(p[2:4])) }
-func (p ICMPEcho) EchoID() uint16  { return binary.BigEndian.Uint16(p[4:6]) }
-func (p ICMPEcho) EchoSeq() uint16 { return binary.BigEndian.Uint16(p[6:8]) }
-func (p ICMPEcho) EchoData() string {
-	if len(p) > 8 {
-		return string(p[8:])
-	}
-	return ""
-}
-func (p ICMPEcho) String() string {
-	return fmt.Sprintf("type=%v id=%v code=%v dlen=%v, data=0x% x", p.Type(), p.EchoID(), p.Code(), len(p.EchoData()), p.EchoData())
-}
-
-func ICMPEchoBinary(b []byte, id uint16, seq uint16, data []byte) []byte {
-	binary.BigEndian.PutUint16(b[:2], id)
-	binary.BigEndian.PutUint16(b[2:4], seq)
-	copy(b[4:], data)
-	return b
-}
-
 // Checksum calculate IP4, ICMP6 checksum - is this the same for TCP?
 // In network format already
 // TODO: fix this to work with big endian

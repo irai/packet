@@ -6,8 +6,7 @@ import (
 	"time"
 
 	"github.com/irai/packet"
-	"github.com/irai/packet/icmp4"
-	"github.com/irai/packet/icmp6"
+	"github.com/irai/packet/icmp"
 )
 
 func setupTestHandler() *Handler {
@@ -17,8 +16,8 @@ func setupTestHandler() *Handler {
 	h.HandlerIP4 = packet.PacketNOOP{}
 	h.HandlerIP6 = packet.PacketNOOP{}
 	h.ARPHandler = packet.PacketNOOP{}
-	h.ICMP4Handler = icmp4.ICMP4NOOP{}
-	h.ICMP6Handler = icmp6.ICMP6NOOP{}
+	h.ICMP4Handler = icmp.ICMP4NOOP{}
+	h.ICMP6Handler = icmp.ICMP6NOOP{}
 	h.DHCP4Handler = packet.PacketNOOP{}
 	h.session = &packet.Session{HostTable: packet.NewHostTable(), MACTable: packet.NewMACTable()}
 	return h

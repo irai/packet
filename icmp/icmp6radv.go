@@ -1,4 +1,4 @@
-package icmp6
+package icmp
 
 import (
 	"fmt"
@@ -60,7 +60,7 @@ func (r *Router) String() string {
 // findOrCreateRouter return an existing router that matches ip or create a new one if not found.
 //
 // The function will copy mac and ip if required. It is safe to call this using a frame buffer.
-func (h *Handler) findOrCreateRouter(mac net.HardwareAddr, ip net.IP) (router *Router, found bool) {
+func (h *Handler6) findOrCreateRouter(mac net.HardwareAddr, ip net.IP) (router *Router, found bool) {
 	// use netaddr IP in hash
 	ipNew, _ := netaddr.FromStdIP(ip)
 	r, found := h.LANRouters[ipNew]
@@ -74,7 +74,7 @@ func (h *Handler) findOrCreateRouter(mac net.HardwareAddr, ip net.IP) (router *R
 	return router, false
 }
 
-func (h *Handler) FindRouter(ip net.IP) Router {
+func (h *Handler6) FindRouter(ip net.IP) Router {
 	h.Mutex.Lock()
 	ipNew, _ := netaddr.FromStdIP(ip)
 	r := h.LANRouters[ipNew]
@@ -86,16 +86,16 @@ func (h *Handler) FindRouter(ip net.IP) Router {
 }
 
 type RADVS struct {
-	h           *Handler
+	h           *Handler6
 	Router      *Router
 	stopChannel chan bool
 }
 
-func (h *Handler) StartRADVS(managed bool, other bool, prefixes []PrefixInformation, rdnss *RecursiveDNSServer) (*RADVS, error) {
+func (h *Handler6) StartRADVS(managed bool, other bool, prefixes []PrefixInformation, rdnss *RecursiveDNSServer) (*RADVS, error) {
 	return h.startRADVS(managed, other, prefixes, rdnss)
 }
 
-func (h *Handler) startRADVS(managed bool, other bool, prefixes []PrefixInformation, rdnss *RecursiveDNSServer) (radvs *RADVS, err error) {
+func (h *Handler6) startRADVS(managed bool, other bool, prefixes []PrefixInformation, rdnss *RecursiveDNSServer) (radvs *RADVS, err error) {
 	radvs = &RADVS{stopChannel: make(chan bool, 1)}
 	radvs.Router, _ = h.findOrCreateRouter(h.session.NICInfo.HostMAC, h.session.NICInfo.HostLLA.IP)
 	radvs.Router.enableRADVS = true

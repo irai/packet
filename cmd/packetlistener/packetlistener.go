@@ -16,8 +16,7 @@ import (
 	"github.com/irai/packet/dhcp4"
 	"github.com/irai/packet/dns"
 	"github.com/irai/packet/engine"
-	"github.com/irai/packet/icmp4"
-	"github.com/irai/packet/icmp6"
+	"github.com/irai/packet/icmp"
 	"github.com/pkg/profile"
 )
 
@@ -29,11 +28,11 @@ var (
 
 type handlers struct {
 	engine      *engine.Handler
-	icmp4       *icmp4.Handler
 	arp         *arp.Handler
-	icmp6       *icmp6.Handler
+	icmp4       *icmp.Handler4
+	icmp6       *icmp.Handler6
 	dhcp4       *dhcp4.Handler
-	radvs       *icmp6.RADVS
+	radvs       *icmp.RADVS
 	netfilterIP net.IPNet
 }
 
@@ -124,7 +123,7 @@ func main() {
 	handlers.engine.AttachARP(handlers.arp)
 
 	// ICMPv4
-	handlers.icmp4, err = icmp4.New(handlers.engine.Session())
+	handlers.icmp4, err = icmp.New4(handlers.engine.Session())
 	if err != nil {
 		fmt.Printf("Failed to create icmp nic=%s handler: %s", *nic, err)
 		os.Exit(-1)
@@ -132,7 +131,7 @@ func main() {
 	handlers.engine.AttachICMP4(handlers.icmp4)
 
 	// ICMPv6
-	handlers.icmp6, err = icmp6.New(handlers.engine.Session())
+	handlers.icmp6, err = icmp.New6(handlers.engine.Session())
 	if err != nil {
 		fmt.Printf("Failed to create icmp6 nic=%s handler: %s", *nic, err)
 		os.Exit(-1)
@@ -206,19 +205,19 @@ func doEngine(h *handlers, tokens []string) {
 				fmt.Println("error icmp4 is already attached")
 				return
 			}
-			h.icmp4, err = icmp4.New(h.engine.Session())
+			h.icmp4, err = icmp.New4(h.engine.Session())
 		case "icmp6":
 			if h.icmp6 != nil {
 				fmt.Println("error icmp6 is already attached")
 				return
 			}
-			h.icmp6, err = icmp6.New(h.engine.Session())
+			h.icmp6, err = icmp.New6(h.engine.Session())
 		case "dhcp4":
 			if h.dhcp4 != nil {
 				fmt.Println("error icmp6 is already attached")
 				return
 			}
-			h.dhcp4, err = dhcp4.New(h.engine.Session(), h.netfilterIP, icmp6.DNS6Cloudflare1, "")
+			h.dhcp4, err = dhcp4.New(h.engine.Session(), h.netfilterIP, icmp.DNS6Cloudflare1, "")
 		default:
 			fmt.Println("invalid engine name")
 			return
@@ -504,10 +503,10 @@ func cmd(h *handlers) {
 				packet.DebugIP6 = !packet.DebugIP6
 			case "udp":
 				packet.DebugUDP = !packet.DebugUDP
-			case "icmp4":
-				icmp4.Debug = !icmp4.Debug
-			case "icmp6":
-				icmp6.Debug = !icmp6.Debug
+			// case "icmp4":
+			// icmp4.Debug = !icmp6.Debug
+			case "icmp":
+				icmp.Debug = !icmp.Debug
 			case "arp":
 				arp.Debug = !arp.Debug
 			case "dhcp4":
@@ -518,9 +517,9 @@ func cmd(h *handlers) {
 				fmt.Println("invalid package - use 'g icmp4|icmp6|arp|engine|ip4|ip6|dhcp4|dns'")
 			}
 			fmt.Println("   ip4 debug:", packet.DebugIP4)
-			fmt.Println(" icmp4 debug:", icmp4.Debug)
+			// fmt.Println(" icmp4 debug:", icmp4.Debug)
 			fmt.Println("   ip6 debug:", packet.DebugIP6)
-			fmt.Println(" icmp6 debug:", icmp6.Debug)
+			fmt.Println("  icmp debug:", icmp.Debug)
 			fmt.Println("engine debug:", packet.Debug)
 			fmt.Println("   arp debug:", arp.Debug)
 			fmt.Println(" dhcp4 debug:", dhcp4.Debug)

@@ -1,4 +1,4 @@
-package icmp6
+package icmp
 
 // File originally copied from http://github.com/mdlayher/ndp/option.go
 

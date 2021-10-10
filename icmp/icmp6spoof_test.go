@@ -1,4 +1,4 @@
-package icmp6
+package icmp
 
 import (
 	"testing"
@@ -11,7 +11,7 @@ func TestHandler_StartHunt(t *testing.T) {
 	tc := setupTestHandler()
 	defer tc.Close()
 
-	h, _ := New(tc.session)
+	h, _ := New6(tc.session)
 	h.Router = &Router{Addr: routerLLAAddr}
 
 	addr1 := packet.Addr{MAC: mac1, IP: ip1}
@@ -41,7 +41,7 @@ func TestHandler_ManyStartHunt(t *testing.T) {
 	tc := setupTestHandler()
 	defer tc.Close()
 
-	h, _ := New(tc.session)
+	h, _ := New6(tc.session)
 	h.Router = &Router{Addr: routerLLAAddr}
 
 	addr1 := packet.Addr{MAC: mac1, IP: ip61}

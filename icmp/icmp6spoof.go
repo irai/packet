@@ -1,4 +1,4 @@
-package icmp6
+package icmp
 
 import (
 	"fmt"
@@ -13,7 +13,7 @@ import (
 //
 // Hunt IPv6 LLA only; return error if IP is not IP6 Local Link Address
 // If IP is nil, we use unicast ethernet address but multicast ip address to get the packet to the target
-func (h *Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
+func (h *Handler6) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
 	if Debug {
 		fmt.Printf("icmp6 : start neighbor hunt %s\n", addr)
 	}
@@ -34,7 +34,7 @@ func (h *Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
 }
 
 // StopHunt implements PacketProcessor interface
-func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
+func (h *Handler6) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
 	if Debug {
 		fmt.Printf("icmp6 : stop neighbor hunt %s\n", addr)
 	}
@@ -50,7 +50,7 @@ func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
 // spoofLoop attacks the client with neighbor advertisement attacks
 //
 // It will continuously send a number of NA packets to client until the mac is no longer in hunt list.
-func (h *Handler) spoofLoop(dstAddr packet.Addr) {
+func (h *Handler6) spoofLoop(dstAddr packet.Addr) {
 	rand.Seed(time.Now().UnixNano())
 	startTime := time.Now()
 	nTimes := 0

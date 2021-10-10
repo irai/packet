@@ -1,4 +1,4 @@
-package icmp6
+package icmp
 
 import (
 	"encoding/binary"
@@ -10,35 +10,34 @@ import (
 	"golang.org/x/net/ipv6"
 )
 
-type ICMP6 []byte
+// ICMP enable access to ICMP frame without copying
+type ICMP []byte
 
 // IsValid validates the packet
 // TODO: verify checksum?
-func (p ICMP6) IsValid() bool {
+func (p ICMP) IsValid() bool {
 	return len(p) >= 8
 }
-
-func (p ICMP6) Type() uint8      { return uint8(p[0]) }
-func (p ICMP6) Code() uint8      { return p[1] }
-func (p ICMP6) Checksum() uint16 { return binary.BigEndian.Uint16(p[2:4]) }
+func (p ICMP) Type() uint8      { return uint8(p[0]) }
+func (p ICMP) Code() uint8      { return p[1] }
+func (p ICMP) Checksum() uint16 { return binary.BigEndian.Uint16(p[2:4]) }
 
 // TODO: fix the order
-func (p ICMP6) SetChecksum(cs uint16) { p[3] = uint8(cs >> 8); p[2] = uint8(cs) }
-func (p ICMP6) RestOfHeader() []byte  { return p[4:8] }
-func (p ICMP6) Payload() []byte {
+func (p ICMP) SetChecksum(cs uint16) { p[3] = uint8(cs >> 8); p[2] = uint8(cs) }
+func (p ICMP) RestOfHeader() []byte  { return p[4:8] }
+func (p ICMP) Payload() []byte {
 	if len(p) > 8 {
 		return p[8:]
 	}
 	return []byte{}
 }
 
-func (p ICMP6) String() string {
-	l := fastlog.NewLine("", "")
-	return l.Struct(p).ToString()
+func (p ICMP) String() string {
+	return fastlog.NewLine("", "").Struct(p).ToString()
 }
 
 // Print implements fastlog interface
-func (p ICMP6) FastLog(line *fastlog.Line) *fastlog.Line {
+func (p ICMP) FastLog(line *fastlog.Line) *fastlog.Line {
 	line.Uint8("type", p.Type())
 	line.Uint8("code", p.Code())
 	line.Uint16Hex("checksum", p.Checksum())
@@ -75,6 +74,77 @@ func (p ICMPEcho) FastLog(line *fastlog.Line) *fastlog.Line {
 	return line
 }
 
+type ICMP4Redirect []byte
+
+/*
+0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|     Type      |     Code      |           Checksum            |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|   Num Addrs   |Addr Entry Size|           Lifetime            |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                       Router Address[1]                       |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                      Preference Level[1]                      |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                       Router Address[2]                       |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                      Preference Level[2]                      |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                               .                               |
+|                               .                               |
+|                               .                               |
+**/
+
+func (p ICMP4Redirect) IsValid() error {
+	if len(p) < 8 || len(p) < 8+int(p.NumAddrs())*int(p.AddrSize())*4 {
+		fmt.Println("TRACE    ", len(p), p.NumAddrs(), p.AddrSize())
+		return packet.ErrFrameLen
+	}
+	if p[0] != byte(ipv6.ICMPTypeRedirect) {
+		return packet.ErrParseFrame
+	}
+	if p.AddrSize() != 4 && p.AddrSize() != 10 {
+		return packet.ErrParseFrame
+	}
+	return nil
+}
+
+func (p ICMP4Redirect) Type() uint8      { return uint8(p[0]) }
+func (p ICMP4Redirect) Code() byte       { return p[1] }
+func (p ICMP4Redirect) Checksum() uint16 { return binary.BigEndian.Uint16(p[2:4]) }
+func (p ICMP4Redirect) NumAddrs() uint8  { return p[4] }
+func (p ICMP4Redirect) AddrSize() uint8  { return p[5] } // The number of 32-bit words per each router address (ie. 2 for IP4)
+func (p ICMP4Redirect) Lifetime() uint16 { return binary.BigEndian.Uint16(p[6:8]) }
+func (p ICMP4Redirect) Addrs() []net.IP {
+	addr := make([]net.IP, 0, p.NumAddrs())
+	for i := 0; i < int(p.NumAddrs()); i++ {
+		pos := i * int(p.AddrSize()) * 4
+		if p.AddrSize() == 4 {
+			addr = append(addr, net.IP(p[pos:pos+4]))
+			continue
+		}
+		addr = append(addr, net.IP(p[pos:pos+16]))
+	}
+	return addr
+}
+
+func (p ICMP4Redirect) String() string {
+	return fastlog.NewLine("", "").Struct(p).ToString()
+}
+
+func (p ICMP4Redirect) FastLog(line *fastlog.Line) *fastlog.Line {
+	line.Uint8("type", p.Type())
+	line.Uint8("code", p.Code())
+	line.Uint16Hex("checksum", p.Checksum())
+	line.Uint8("naddrs", p.NumAddrs())
+	line.Uint8("addrsize", p.AddrSize())
+	line.Uint16("lifetime", p.Lifetime())
+	line.Uint16("lifetime", p.Lifetime())
+	line.IPArray("addrs", p.Addrs())
+	return line
+}
+
 type ICMP6RouterSolicitation []byte
 
 func (p ICMP6RouterSolicitation) IsValid() error {
@@ -85,17 +155,6 @@ func (p ICMP6RouterSolicitation) IsValid() error {
 		return packet.ErrParseFrame
 	}
 	return nil
-}
-
-func (p ICMP6RouterSolicitation) String() string {
-	return fastlog.NewLine("", "").Struct(p).ToString()
-}
-
-func (p ICMP6RouterSolicitation) FastLog(line *fastlog.Line) *fastlog.Line {
-	line.String("type", "ra")
-	line.Uint8("code", p.Code())
-	line.MAC("sourceLLA", p.SourceLLA())
-	return line
 }
 
 func (p ICMP6RouterSolicitation) Type() uint8   { return uint8(p[0]) }
@@ -117,13 +176,20 @@ func (p ICMP6RouterSolicitation) Options() (NewOptions, error) {
 	return newParseOptions(p[24:])
 }
 
+func (p ICMP6RouterSolicitation) String() string {
+	return fastlog.NewLine("", "").Struct(p).ToString()
+}
+
+func (p ICMP6RouterSolicitation) FastLog(line *fastlog.Line) *fastlog.Line {
+	line.String("type", "ra")
+	line.Uint8("code", p.Code())
+	line.MAC("sourceLLA", p.SourceLLA())
+	return line
+}
+
 type ICMP6RouterAdvertisement []byte
 
-func (p ICMP6RouterAdvertisement) IsValid() bool { return len(p) >= 16 }
-func (p ICMP6RouterAdvertisement) String() string {
-	return fmt.Sprintf("type=ra code=%v hopLim=%d managed=%t other=%t preference=%d lifetimeSec=%d reacheableMSec=%d retransmitMSec=%d",
-		p.Code(), p.CurrentHopLimit(), p.ManagedConfiguration(), p.OtherConfiguration(), p.Preference(), p.Lifetime(), p.ReachableTime(), p.RetransmitTimer())
-}
+func (p ICMP6RouterAdvertisement) IsValid() bool              { return len(p) >= 16 }
 func (p ICMP6RouterAdvertisement) Type() uint8                { return uint8(p[0]) }
 func (p ICMP6RouterAdvertisement) Code() byte                 { return p[1] }
 func (p ICMP6RouterAdvertisement) Checksum() int              { return int(binary.BigEndian.Uint16(p[2:4])) }
@@ -146,10 +212,28 @@ func (p ICMP6RouterAdvertisement) Options() (NewOptions, error) {
 	}
 	return newParseOptions(p[16:])
 }
+func (p ICMP6RouterAdvertisement) String() string {
+	return fmt.Sprintf("type=ra code=%v hopLim=%d managed=%t other=%t preference=%d lifetimeSec=%d reacheableMSec=%d retransmitMSec=%d",
+		p.Code(), p.CurrentHopLimit(), p.ManagedConfiguration(), p.OtherConfiguration(), p.Preference(), p.Lifetime(), p.ReachableTime(), p.RetransmitTimer())
+}
 
 type ICMP6NeighborAdvertisement []byte
 
-func (p ICMP6NeighborAdvertisement) IsValid() bool { return len(p) >= 24 }
+func (p ICMP6NeighborAdvertisement) IsValid() bool         { return len(p) >= 24 }
+func (p ICMP6NeighborAdvertisement) Type() uint8           { return uint8(p[0]) }
+func (p ICMP6NeighborAdvertisement) Code() byte            { return p[1] }
+func (p ICMP6NeighborAdvertisement) Checksum() int         { return int(binary.BigEndian.Uint16(p[2:4])) }
+func (p ICMP6NeighborAdvertisement) Router() bool          { return (p[4] & 0x80) != 0 }
+func (p ICMP6NeighborAdvertisement) Solicited() bool       { return (p[4] & 0x40) != 0 }
+func (p ICMP6NeighborAdvertisement) Override() bool        { return (p[4] & 0x20) != 0 }
+func (p ICMP6NeighborAdvertisement) TargetAddress() net.IP { return net.IP(p[8:24]) }
+func (p ICMP6NeighborAdvertisement) TargetLLA() net.HardwareAddr {
+	// TargetLLA option
+	if len(p) < 32 || p[24] != 2 || p[25] != 1 { // Option type TargetLLA, len 8 bytes
+		return nil
+	}
+	return net.HardwareAddr(p[26 : 26+6])
+}
 
 func (p ICMP6NeighborAdvertisement) String() string {
 	return fastlog.NewLine("", "").Struct(p).ToString()
@@ -165,21 +249,6 @@ func (p ICMP6NeighborAdvertisement) FastLog(line *fastlog.Line) *fastlog.Line {
 	line.IP("targetIP", p.TargetAddress())
 	line.MAC("targetLLA", p.TargetLLA())
 	return line
-}
-
-func (p ICMP6NeighborAdvertisement) Type() uint8           { return uint8(p[0]) }
-func (p ICMP6NeighborAdvertisement) Code() byte            { return p[1] }
-func (p ICMP6NeighborAdvertisement) Checksum() int         { return int(binary.BigEndian.Uint16(p[2:4])) }
-func (p ICMP6NeighborAdvertisement) Router() bool          { return (p[4] & 0x80) != 0 }
-func (p ICMP6NeighborAdvertisement) Solicited() bool       { return (p[4] & 0x40) != 0 }
-func (p ICMP6NeighborAdvertisement) Override() bool        { return (p[4] & 0x20) != 0 }
-func (p ICMP6NeighborAdvertisement) TargetAddress() net.IP { return net.IP(p[8:24]) }
-func (p ICMP6NeighborAdvertisement) TargetLLA() net.HardwareAddr {
-	// TargetLLA option
-	if len(p) < 32 || p[24] != 2 || p[25] != 1 { // Option type TargetLLA, len 8 bytes
-		return nil
-	}
-	return net.HardwareAddr(p[26 : 26+6])
 }
 
 func ICMP6NeighborAdvertisementMarshal(router bool, solicited bool, override bool, targetAddr packet.Addr) []byte {
@@ -203,21 +272,7 @@ func ICMP6NeighborAdvertisementMarshal(router bool, solicited bool, override boo
 
 type ICMP6NeighborSolicitation []byte
 
-func (p ICMP6NeighborSolicitation) IsValid() bool { return len(p) >= 24 }
-
-func (p ICMP6NeighborSolicitation) String() string {
-	return fastlog.NewLine("", "").Struct(p).ToString()
-}
-
-// Print implements fastlog interface
-func (p ICMP6NeighborSolicitation) FastLog(line *fastlog.Line) *fastlog.Line {
-	line.String("type", "ns")
-	line.Uint8("code", p.Code())
-	line.IP("targetIP", p.TargetAddress())
-	line.MAC("sourceLLA", p.SourceLLA())
-	return line
-}
-
+func (p ICMP6NeighborSolicitation) IsValid() bool         { return len(p) >= 24 }
 func (p ICMP6NeighborSolicitation) Type() uint8           { return uint8(p[0]) }
 func (p ICMP6NeighborSolicitation) Code() byte            { return p[1] }
 func (p ICMP6NeighborSolicitation) Checksum() int         { return int(binary.BigEndian.Uint16(p[2:4])) }
@@ -228,6 +283,19 @@ func (p ICMP6NeighborSolicitation) SourceLLA() net.HardwareAddr {
 		return nil
 	}
 	return net.HardwareAddr(p[26 : 26+6])
+}
+
+func (p ICMP6NeighborSolicitation) String() string {
+	return fastlog.NewLine("", "").Struct(p).ToString()
+}
+
+// FastLog implements fastlog interface
+func (p ICMP6NeighborSolicitation) FastLog(line *fastlog.Line) *fastlog.Line {
+	line.String("type", "ns")
+	line.Uint8("code", p.Code())
+	line.IP("targetIP", p.TargetAddress())
+	line.MAC("sourceLLA", p.SourceLLA())
+	return line
 }
 
 func ICMP6NeighborSolicitationMarshal(targetAddr net.IP, sourceLLA net.HardwareAddr) ([]byte, error) {
@@ -245,10 +313,7 @@ func ICMP6NeighborSolicitationMarshal(targetAddr net.IP, sourceLLA net.HardwareA
 
 type ICMP6Redirect []byte
 
-func (p ICMP6Redirect) IsValid() bool { return len(p) >= 40 }
-func (p ICMP6Redirect) String() string {
-	return fmt.Sprintf("type=na code=%d targetIP=%s targetMAC=%s dstIP=%s", p.Code(), p.TargetAddress(), p.TargetLinkLayerAddr(), p.DstAddress())
-}
+func (p ICMP6Redirect) IsValid() bool         { return len(p) >= 40 }
 func (p ICMP6Redirect) Type() uint8           { return uint8(p[0]) }
 func (p ICMP6Redirect) Code() byte            { return p[1] }
 func (p ICMP6Redirect) Checksum() int         { return int(binary.BigEndian.Uint16(p[2:4])) }
@@ -260,4 +325,7 @@ func (p ICMP6Redirect) TargetLinkLayerAddr() net.HardwareAddr {
 		return nil
 	}
 	return net.HardwareAddr(p[42 : 42+6])
+}
+func (p ICMP6Redirect) String() string {
+	return fmt.Sprintf("type=na code=%d targetIP=%s targetMAC=%s dstIP=%s", p.Code(), p.TargetAddress(), p.TargetLinkLayerAddr(), p.DstAddress())
 }
