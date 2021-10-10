@@ -376,7 +376,8 @@ func (h *Handler) process8023Frame(ether packet.Ether) {
 	// To see these:
 	//    sudo tcpdump -vv -x not ip6 and not ip and not arp
 	//    then switch a mobile phone to airplane mode to force a network reconnect
-	fmt.Printf("packet: rcvd 802.3 LLC frame %s %s payload=[% x]\n", ether, llc, ether[:])
+	// fmt.Printf("packet: rcvd 802.3 LLC frame %s %s payload=[% x]\n", ether, llc, ether[:])
+	fastlog.NewLine(module, "802.3 LLC frame").Struct(ether).ByteArray("payload", ether.Payload()).Write()
 }
 
 func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.UDP) (*packet.Host, bool, error) {

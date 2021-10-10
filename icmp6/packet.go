@@ -31,8 +31,10 @@ func (p ICMP6) Payload() []byte {
 	}
 	return []byte{}
 }
+
 func (p ICMP6) String() string {
-	return fmt.Sprintf("type=%v code=%v checksum=%x payloadLen=%v\n", p.Type(), p.Code(), p.Checksum(), len(p.Payload()))
+	l := fastlog.NewLine("", "")
+	return l.Struct(p).ToString()
 }
 
 // Print implements fastlog interface
@@ -46,27 +48,31 @@ func (p ICMP6) FastLog(line *fastlog.Line) *fastlog.Line {
 
 type ICMPEcho []byte
 
-func (p ICMPEcho) IsValid() bool   { return len(p) >= 8 }
-func (p ICMPEcho) Type() uint8     { return uint8(p[0]) }
-func (p ICMPEcho) Code() int       { return int(p[1]) }
-func (p ICMPEcho) Checksum() int   { return int(binary.BigEndian.Uint16(p[2:4])) }
-func (p ICMPEcho) EchoID() uint16  { return binary.BigEndian.Uint16(p[4:6]) }
-func (p ICMPEcho) EchoSeq() uint16 { return binary.BigEndian.Uint16(p[6:8]) }
-func (p ICMPEcho) EchoData() string {
+func (p ICMPEcho) IsValid() bool    { return len(p) >= 8 }
+func (p ICMPEcho) Type() uint8      { return uint8(p[0]) }
+func (p ICMPEcho) Code() uint8      { return uint8(p[1]) }
+func (p ICMPEcho) Checksum() uint16 { return binary.BigEndian.Uint16(p[2:4]) }
+func (p ICMPEcho) EchoID() uint16   { return binary.BigEndian.Uint16(p[4:6]) }
+func (p ICMPEcho) EchoSeq() uint16  { return binary.BigEndian.Uint16(p[6:8]) }
+func (p ICMPEcho) EchoData() []byte {
 	if len(p) > 8 {
-		return string(p[8:])
+		return p[8:]
 	}
-	return ""
+	return nil
 }
-func (p ICMPEcho) String() string {
 
-	switch p.Type() {
-	case packet.ICMPTypeEchoReply:
-		return fmt.Sprintf("echo reply code=%v id=%v data=%v", p.EchoID(), p.Code(), string(p.EchoData()))
-	case packet.ICMPTypeEchoRequest:
-		return fmt.Sprintf("echo request code=%v id=%v data=%v", p.EchoID(), p.Code(), string(p.EchoData()))
-	}
-	return fmt.Sprintf("type=%v code=%v", p.Type(), p.Code())
+func (p ICMPEcho) String() string {
+	return fastlog.NewLine("", "").Struct(p).ToString()
+}
+
+func (p ICMPEcho) FastLog(line *fastlog.Line) *fastlog.Line {
+	line.Uint8("type", p.Type())
+	line.Uint8("code", p.Code())
+	line.Uint16Hex("checksum", p.Checksum())
+	line.Uint16Hex("id", p.EchoID())
+	line.Uint16Hex("seq", p.EchoSeq())
+	line.ByteArray("data", p.EchoData())
+	return line
 }
 
 type ICMP6RouterSolicitation []byte
@@ -82,7 +88,7 @@ func (p ICMP6RouterSolicitation) IsValid() error {
 }
 
 func (p ICMP6RouterSolicitation) String() string {
-	return fmt.Sprintf("type=ra code=%d sourceLLA=%s", p.Code(), p.SourceLLA())
+	return fastlog.NewLine("", "").Struct(p).ToString()
 }
 
 func (p ICMP6RouterSolicitation) FastLog(line *fastlog.Line) *fastlog.Line {
@@ -144,8 +150,9 @@ func (p ICMP6RouterAdvertisement) Options() (NewOptions, error) {
 type ICMP6NeighborAdvertisement []byte
 
 func (p ICMP6NeighborAdvertisement) IsValid() bool { return len(p) >= 24 }
+
 func (p ICMP6NeighborAdvertisement) String() string {
-	return fmt.Sprintf("type=na code=%d targetIP=%s targetLLA=%s", p.Code(), p.TargetAddress(), p.TargetLLA())
+	return fastlog.NewLine("", "").Struct(p).ToString()
 }
 
 // Print implements fastlog interface
@@ -197,8 +204,9 @@ func ICMP6NeighborAdvertisementMarshal(router bool, solicited bool, override boo
 type ICMP6NeighborSolicitation []byte
 
 func (p ICMP6NeighborSolicitation) IsValid() bool { return len(p) >= 24 }
+
 func (p ICMP6NeighborSolicitation) String() string {
-	return fmt.Sprintf("type=ns code=%d targetIP=%s sourceLLA=%s", p.Code(), p.TargetAddress(), p.SourceLLA())
+	return fastlog.NewLine("", "").Struct(p).ToString()
 }
 
 // Print implements fastlog interface

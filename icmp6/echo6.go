@@ -1,11 +1,11 @@
 package icmp6
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/fastlog"
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv6"
 )
@@ -46,7 +46,7 @@ func (h *Handler) SendEchoRequest(srcAddr packet.Addr, dstAddr packet.Addr, id u
 	}
 
 	if Debug {
-		fmt.Printf("icmp6 : echo request %s\n", packet.ICMPEcho(p))
+		fastlog.NewLine(module, "send echo request").IP("srcIP", srcAddr.IP).IP("dstIP", dstAddr.IP).Struct(ICMPEcho(p)).Write()
 	}
 	return h.sendPacket(srcAddr, dstAddr, p)
 }

@@ -57,7 +57,7 @@ func (h *Handler) lockAndMonitorRoute(now time.Time) (err error) {
 
 func (h *Handler) minuteChecker(now time.Time) {
 	if packet.Debug {
-		fmt.Printf("packet: running 1 minute checker %v\n", now)
+		fastlog.NewLine(module, "running 1 minute checker").Time("now", now).Write()
 	}
 
 	// ARP Handler - will global lock session

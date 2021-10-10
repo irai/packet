@@ -388,22 +388,23 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 		return packet.Result{}, nil
 
 	case ipv6.ICMPTypeEchoRequest: // 0x80
-		echo := packet.ICMPEcho(icmp6Frame)
+		echo := ICMPEcho(icmp6Frame)
 		if Debug {
-			fmt.Printf("icmp6 : echo request from ip=%s %s\n", ip6Frame.Src(), echo)
+			// fmt.Printf("icmp6 : echo request from ip=%s %s\n", ip6Frame.Src(), echo)
+			fastlog.NewLine(module, "echo recvd").IP("srcIP", ip6Frame.Src()).IP("dstIP", ip6Frame.Dst()).Struct(echo).Write()
 		}
 		return packet.Result{}, nil
 
 	case ipv6.ICMPTypeMulticastListenerReport:
-		fmt.Printf("icmp6 : multicast listener report from ip=%s \n", ip6Frame.Src())
+		fastlog.NewLine(module, "multicast listener report recv").IP("ip", ip6Frame.Src()).Write()
 		return packet.Result{}, nil
 
 	case ipv6.ICMPTypeVersion2MulticastListenerReport:
-		fmt.Printf("icmp6 : multicast listener report V2 from ip=%s \n", ip6Frame.Src())
+		fastlog.NewLine(module, "multicast listener report V2 recv").IP("ip", ip6Frame.Src()).Write()
 		return packet.Result{}, nil
 
 	case ipv6.ICMPTypeMulticastListenerQuery:
-		fmt.Printf("icmp6 : multicast listener query from ip=%s \n", ip6Frame.Src())
+		fastlog.NewLine(module, "multicast listener query recv").IP("ip", ip6Frame.Src()).Write()
 		return packet.Result{}, nil
 
 	case ipv6.ICMPTypeRedirect:
@@ -411,7 +412,9 @@ func (h *Handler) ProcessPacket(host *packet.Host, p []byte, header []byte) (res
 		if !redirect.IsValid() {
 			return packet.Result{}, fmt.Errorf("invalid icmp redirect msg len=%d", len(redirect))
 		}
-		fmt.Printf("icmp6 : redirect from ip=%s %s \n", ip6Frame.Src(), redirect)
+		// fmt.Printf("icmp6 : redirect from ip=%s %s \n", ip6Frame.Src(), redirect)
+		fastlog.NewLine(module, "redirect recv").IP("fromIP", ip6Frame.Src()).Stringer(redirect).Write()
+
 		return packet.Result{}, nil
 
 	case ipv6.ICMPTypeDestinationUnreachable:
