@@ -523,7 +523,9 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 
 	case udpDstPort == 3702:
 		// Web Services Discovery Protocol (WSD)
-		fastlog.NewLine(module, "ether").Struct(ether).Struct(udp).Struct(host).Write()
+		if packet.Debug {
+			fastlog.NewLine(module, "ether").Struct(ether).Struct(udp).Struct(host).Write()
+		}
 		fastlog.NewLine(module, "wsd frame").String("payload", string(udp.Payload())).Write()
 
 	case udpDstPort == 137 || udpDstPort == 138:
@@ -629,8 +631,6 @@ func (h *Handler) processPacket(ether packet.Ether) (err error) {
 		}
 		if packet.DebugIP6 {
 			fastlog.NewLine("ether", "").Struct(ether).LF().Module("ip6", "").Struct(ip6Frame).Write()
-			// fastlog.Strings("packet: ether ", ether.String())
-			// fastlog.Strings("packet: ip6 ", ip6Frame.String())
 		}
 
 		l4Proto = ip6Frame.NextHeader()
@@ -687,20 +687,18 @@ func (h *Handler) processPacket(ether packet.Ether) (err error) {
 			fastlog.NewLine(module, "invalid Ethernet pause frame").Error(err).ByteArray("frame", ether).Write()
 			return nil
 		}
-		fastlog.NewLine(module, "ether").Struct(ether).Module(module, "ethernet flow control frame").Struct(p).Write()
+		fastlog.NewLine(module, "ethernet flow control frame").Struct(ether).Struct(p).Write()
 		return nil
 
 	case 0x8899: // Realtek Remote Control Protocol (RRCP)
-		// This protocol allows an expernal application to control a dumb switch.
-		// TODO: Need to investigate this
-		// https://andreas.jakum.net/blog/2012/10/27/rrcp-realtek-remote-control-protocol
-		// Realtek's RTL8316B, RTL8324, RTL8326 and RTL8326S are supported
-		//
-		// See frames here:
-		// http://realtek.info/pdf/rtl8324.pdf  page 43
-		//
-		// fmt.Printf("packet: RRCP frame %s payload=[% x]\n", ether, ether[:])
-		fastlog.NewLine(module, "ether").Struct(ether).Module(module, "RRCP frame").ByteArray("payload", ether.Payload()).Write()
+		// proprietary protocol with scarce information available.
+		// A common packet is the loop detection packet (proprietary protocol 0x23).
+		p := packet.RRCP(ether.Payload())
+		if err := p.IsValid(); err != nil {
+			fastlog.NewLine(module, "invalid RRCP frame").Error(err).ByteArray("frame", ether).Write()
+			return nil
+		}
+		fastlog.NewLine(module, "RRCP frame").Struct(ether).ByteArray("payload", ether.Payload()).Write()
 		return nil
 
 	case 0x88cc: // Link Layer Discovery Protocol (LLDP)
@@ -709,7 +707,7 @@ func (h *Handler) processPacket(ether packet.Ether) (err error) {
 			fastlog.NewLine(module, "invalid LLDP frame").Error(err).ByteArray("frame", ether).Write()
 			return nil
 		}
-		fastlog.NewLine(module, "ether").Struct(ether).Module(module, "LLDP").Struct(p).Write()
+		fastlog.NewLine(module, "LLDP frame").Struct(ether).Struct(p).Write()
 		return nil
 
 	case 0x890d: // Fast Roaming Remote Request (802.11r)
@@ -718,7 +716,7 @@ func (h *Handler) processPacket(ether packet.Ether) (err error) {
 		// by ensuring that the client device does not need to re-authenticate to the RADIUS server
 		// every time it roams from one access point to another.
 		// fmt.Printf("packet: 802.11r Fast Roaming frame %s payload=[% x]\n", ether, ether[:])
-		fastlog.NewLine(module, "ether").Struct(ether).Module(module, "802.11r Fast Roaming frame").ByteArray("payload", ether.Payload()).Write()
+		fastlog.NewLine(module, "802.11r Fast Roaming frame").Struct(ether).ByteArray("payload", ether.Payload()).Write()
 		return nil
 
 	case 0x893a: // IEEE 1905.1 - network enabler for home networking
@@ -731,13 +729,13 @@ func (h *Handler) processPacket(ether packet.Ether) (err error) {
 			fastlog.NewLine(module, "invalid IEEE 1905 frame").Error(err).ByteArray("frame", ether).Write()
 			return nil
 		}
-		fastlog.NewLine(module, "ether").Struct(ether).Module(module, "IEEE 1905.1 frame").Struct(p).Write()
+		fastlog.NewLine(module, "IEEE 1905.1 frame").Struct(ether).Struct(p).Write()
 		return nil
 
 	case 0x6970: // Sonos Data Routing Optimisation
 		// References to type EthType 0x6970 appear in a Sonos patent
 		// https://portal.unifiedpatents.com/patents/patent/US-20160006778-A1
-		fastlog.NewLine(module, "ether").Struct(ether).Module(module, "Sonos data routing frame").ByteArray("payload", ether.Payload()).Write()
+		fastlog.NewLine(module, "Sonos data routing fram").Struct(ether).ByteArray("payload", ether.Payload()).Write()
 		return nil
 
 	case 0x880a: // Unknown protocol - but commonly seen in logs

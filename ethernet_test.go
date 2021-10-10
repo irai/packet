@@ -138,6 +138,7 @@ func TestLLPDFrame_IsValid(t *testing.T) {
 }
 
 /**
+TODO: create ethernet 0x880a frame type
 examples 0x880a packets
 Sep 30 03:09:39 netfilter netfilter[6597]: engine: "unexpected ethernet type" type=0x880a src=e0:19:54:cc:1c:6e dst=ff:ff:ff:ff:ff:ff len=60 payload=[0a 6c 6f 6f 70 62 61 63 6b 00 00 00 00 00 00 00 00 00 00 00 00 22 90 a8 a6 8e 0a 3c fd 0d f5 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00]
 Sep 30 03:09:39 netfilter netfilter[6597]: engine: "unexpected ethernet type" type=0x880a src=e0:19:54:cc:1c:6e dst=ff:ff:ff:ff:ff:ff len=60 payload=[0a 6c 6f 6f 70 62 61 63 6b 00 00 00 00 00 00 00 00 00 00 00 00 52 54 e5 52 60 83 e7 bd 10 ab 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00]
@@ -152,3 +153,38 @@ Sep 30 03:09:42 netfilter netfilter[6597]: engine: "unexpected ethernet type" ty
 Sep 30 03:09:42 netfilter netfilter[6597]: engine: "unexpected ethernet type" type=0x880a src=e0:19:54:cc:1c:6e dst=ff:ff:ff:ff:ff:ff len=60 payload=[0a 6c 6f 6f 70 62 61 63 6b 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 22 90 a8 a6 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00]
 
 */
+
+/**
+TODO: create RRCP frame type
+RRCP packets
+  16762  Oct 05 23:04:59 netfilter netfilter[1481]: engine: "ether" type=0x8899 src=2c:95:69:f6:04:cf dst=ff:ff:ff:ff:ff:ff len=60
+  16763: Oct 05 23:04:59 netfilter netfilter[1481]: engine: "RRCP frame" payload=[23 3c 7d e5 30 cd ae 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00]
+  16783  Oct 05 23:05:01 netfilter netfilter[1481]: engine: "ether" type=0x8899 src=2c:95:69:f6:04:cf dst=ff:ff:ff:ff:ff:ff len=60
+  16784: Oct 05 23:05:01 netfilter netfilter[1481]: engine: "RRCP frame" payload=[23 aa e4 0c 6b 17 10 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00]
+  16813  Oct 05 23:05:03 netfilter netfilter[1481]: engine: "ether" type=0x8899 src=2c:95:69:f6:04:cf dst=ff:ff:ff:ff:ff:ff len=60
+  16814: Oct 05 23:05:03 netfilter netfilter[1481]: engine: "RRCP frame" payload=[23 aa e4 0c 6b 17 10 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00]
+  16840  Oct 05 23:05:05 netfilter netfilter[1481]: engine: "ether" type=0x8899 src=2c:95:69:f6:04:cf dst=ff:ff:ff:ff:ff:ff len=60
+  16841: Oct 05 23:05:05 netfilter netfilter[1481]: engine: "RRCP frame" payload=[23 aa e4 0c 6b 17 10 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00]
+  17026  Oct 05 23:05:07 netfilter netfilter[1481]: engine: "ether" type=0x8899 src=2c:95:69:f6:04:cf dst=ff:ff:ff:ff:ff:ff len=60
+  17027: Oct 05 23:05:07 netfilter netfilter[1481]: engine: "RRCP frame" payload=[23 aa e4 0c 6b 17 10 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00]
+  17037  Oct 05 23:05:09 netfilter netfilter[1481]: engine: "ether" type=0x8899 src=2c:95:69:f6:04:cf dst=ff:ff:ff:ff:ff:ff len=60
+  17038: Oct 05 23:05:09 netfilter netfilter[1481]: engine: "RRCP frame" payload=[23 27 07 6e 2d 5f a3 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00]
+  17056  Oct 05 23:05:11 netfilter netfilter[1481]: engine: "ether" type=0x8899 src=2c:95:69:f6:04:cf dst=ff:ff:ff:ff:ff:ff len=60
+  17057: Oct 05 23:05:11 netfilter netfilter[1481]: engine: "RRCP frame" payload=[23 27 07 6e 2d 5f a3 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00]
+  17071  Oct 05 23:05:13 netfilter netfilter[1481]: engine: "ether" type=0x8899 src=2c:95:69:f6:04:cf dst=ff:ff:ff:ff:ff:ff len=60
+  17072: Oct 05 23:05:13 netfilter netfilter[1481]: engine: "RRCP frame" payload=[23 27 07 6e 2d 5f a3 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00]
+  17077  Oct 05 23:05:15 netfilter netfilter[1481]: engine: "ether" type=0x8899 src=2c:95:69:f6:04:cf dst=ff:ff:ff:ff:ff:ff len=60
+  17078: Oct 05 23:05:15 netfilter netfilter[1481]: engine: "RRCP frame" payload=[23 27 07 6e 2d 5f a3 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00]
+  17079  Oct 05 23:05:17 netfilter netfilter[1481]: engine: "ether" type=0x8899 src=2c:95:69:f6:04:cf dst=ff:ff:ff:ff:ff:ff len=60
+  17080: Oct 05 23:05:17 netfilter netfilter[1481]: engine: "RRCP frame" payload=[23 aa 47 4c f5 c0 d7 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00]
+  17081  Oct 05 23:05:19 netfilter netfilter[1481]: engine: "ether" type=0x8899 src=2c:95:69:f6:04:cf dst=ff:ff:ff:ff:ff:ff len=60
+  17082: Oct 05 23:05:19 netfilter netfilter[1481]: engine: "RRCP frame" payload=[23 aa 47 4c f5 c0 d7 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00]
+  17109  Oct 05 23:05:21 netfilter netfilter[1481]: engine: "ether" type=0x8899 src=2c:95:69:f6:04:cf dst=ff:ff:ff:ff:ff:ff len=60
+  17110: Oct 05 23:05:21 netfilter netfilter[1481]: engine: "RRCP frame" payload=[23 aa 47 4c f5 c0 d7 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00]
+  17119  Oct 05 23:05:23 netfilter netfilter[1481]: engine: "ether" type=0x8899 src=2c:95:69:f6:04:cf dst=ff:ff:ff:ff:ff:ff len=60
+  17120: Oct 05 23:05:23 netfilter netfilter[1481]: engine: "RRCP frame" payload=[23 aa 47 4c f5 c0 d7 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00]
+  17125  Oct 05 23:05:25 netfilter netfilter[1481]: engine: "ether" type=0x8899 src=2c:95:69:f6:04:cf dst=ff:ff:ff:ff:ff:ff len=60
+  17126: Oct 05 23:05:25 netfilter netfilter[1481]: engine: "RRCP frame" payload=[23 b6 e6 e8 ac e2 a5 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00]
+  17128  Oct 05 23:05:27 netfilter netfilter[1481]: engine: "ether" type=0x8899 src=2c:95:69:f6:04:cf dst=ff:ff:ff:ff:ff:ff len=60
+  17129: Oct 05 23:05:27 netfilter netfilter[1481]: engine: "RRCP frame" payload=[23 b6 e6 e8 ac e2 a5 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00]
+  ***/
