@@ -199,6 +199,7 @@ func (p ICMP6RouterAdvertisement) OtherConfiguration() bool   { return (p[5] & 0
 func (p ICMP6RouterAdvertisement) HomeAgent() bool            { return (p[5] & 0x20) != 0 } // HomeAgent for mobile IPv6?
 func (p ICMP6RouterAdvertisement) Preference() byte           { return (p[5] & 0x18) >> 3 } // Default route preference: 01 High, 00 medium, 11 low, 10 reserved
 func (p ICMP6RouterAdvertisement) ProxyFlag() bool            { return (p[5] & 0x04) != 0 } // Experimental ND proxy - proxy ARP like???
+func (p ICMP6RouterAdvertisement) Flags() byte                { return p[5] }               // All flags
 func (p ICMP6RouterAdvertisement) Lifetime() (seconds uint16) { return binary.BigEndian.Uint16(p[6:8]) }
 func (p ICMP6RouterAdvertisement) ReachableTime() (milliseconds uint32) {
 	return binary.BigEndian.Uint32(p[8:12])
@@ -213,8 +214,22 @@ func (p ICMP6RouterAdvertisement) Options() (NewOptions, error) {
 	return newParseOptions(p[16:])
 }
 func (p ICMP6RouterAdvertisement) String() string {
-	return fmt.Sprintf("type=ra code=%v hopLim=%d managed=%t other=%t preference=%d lifetimeSec=%d reacheableMSec=%d retransmitMSec=%d",
-		p.Code(), p.CurrentHopLimit(), p.ManagedConfiguration(), p.OtherConfiguration(), p.Preference(), p.Lifetime(), p.ReachableTime(), p.RetransmitTimer())
+	// return fmt.Sprintf("type=ra code=%v hopLim=%d flags=0x%x managed=%t other=%t preference=%d lifetimeSec=%d reacheableMSec=%d retransmitMSec=%d",
+	// p.Code(), p.CurrentHopLimit(), p.Flags(), p.ManagedConfiguration(), p.OtherConfiguration(), p.Preference(), p.Lifetime(), p.ReachableTime(), p.RetransmitTimer())
+	return fastlog.NewLine("", "").Struct(p).ToString()
+}
+func (p ICMP6RouterAdvertisement) FastLog(l *fastlog.Line) *fastlog.Line {
+	l.String("type", "ra")
+	l.Uint8("code", p.Code())
+	l.Uint8("hoplim", p.CurrentHopLimit())
+	l.Uint8Hex("flags", p.Flags())
+	l.Bool("managed", p.ManagedConfiguration())
+	l.Bool("other", p.OtherConfiguration())
+	l.Uint8("preference", p.Preference())
+	l.Uint16("lifetimesec", p.Lifetime())
+	l.Uint32("reacheablemsec", p.ReachableTime())
+	l.Uint32("retransmitmsec", p.RetransmitTimer())
+	return l
 }
 
 type ICMP6NeighborAdvertisement []byte
