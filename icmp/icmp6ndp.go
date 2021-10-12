@@ -232,6 +232,7 @@ func (h *Handler6) SendRouterAdvertisement(router Router, dstAddr packet.Addr) e
 	if len(router.Prefixes) == 0 {
 		return nil
 	}
+	fastlog.NewLine(module, "send router advertisement").Struct(router.Addr).Struct(dstAddr).Write()
 
 	var options []Option
 
