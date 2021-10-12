@@ -12,13 +12,6 @@ import (
 	"golang.org/x/net/ipv4"
 )
 
-const (
-	icmpv4EchoRequest = 8
-	icmpv4EchoReply   = 0
-	icmpv6EchoRequest = 128
-	icmpv6EchoReply   = 129
-)
-
 // SendEchoRequest transmit an icmp echo request
 // Do not wait for response
 func (h *Handler4) SendEchoRequest(srcAddr packet.Addr, dstAddr packet.Addr, id uint16, seq uint16) error {
