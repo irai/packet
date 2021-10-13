@@ -263,8 +263,8 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (pac
 	}
 
 	dhcpFrame := DHCP4(udp.Payload())
-	if !dhcpFrame.IsValid() {
-		return packet.Result{}, packet.ErrParseFrame
+	if err := dhcpFrame.IsValid(); err != nil {
+		return packet.Result{}, err
 	}
 
 	if udp.DstPort() == packet.DHCP4ClientPort {

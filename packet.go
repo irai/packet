@@ -12,6 +12,8 @@ import (
 	"inet.af/netaddr"
 )
 
+const module = "packet"
+
 // Global variables
 var (
 	Debug    bool

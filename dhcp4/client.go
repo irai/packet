@@ -138,9 +138,8 @@ func (h *Handler) sendDeclineReleasePacket(msgType MessageType, clientID []byte,
 
 func (h *Handler) processClientPacket(host *packet.Host, req DHCP4) error {
 	// req := DHCP4(buffer[:n])
-	if !req.IsValid() {
-		fmt.Println("dhcp4: clientLoop invalid packet len")
-		return packet.ErrParseFrame
+	if err := req.IsValid(); err != nil {
+		return err
 	}
 
 	options := req.ParseOptions()

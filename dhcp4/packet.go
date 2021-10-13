@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/irai/packet"
 	"github.com/irai/packet/fastlog"
 )
 
@@ -26,11 +27,14 @@ type MessageType byte // Option 53
 // A DHCP4 packet
 type DHCP4 []byte
 
-func (p DHCP4) IsValid() bool {
-	if len(p) < 240 || p.HLen() > 16 { // Invalid size
-		return false
+func (p DHCP4) IsValid() error {
+	if len(p) < 240 { // Invalid size
+		return packet.ErrFrameLen
 	}
-	return true
+	if p.HLen() != 6 { // Invalid frame - we only accept ethernet hardware addr
+		return packet.ErrInvalidMAC
+	}
+	return nil
 }
 
 func (p DHCP4) LogString(clientID []byte, reqIP net.IP, name string, serverIP net.IP) string {
@@ -86,11 +90,7 @@ func (p DHCP4) YIAddr() net.IP { return net.IP(p[16:20]) }
 func (p DHCP4) SIAddr() net.IP { return net.IP(p[20:24]) }
 func (p DHCP4) GIAddr() net.IP { return net.IP(p[24:28]) }
 func (p DHCP4) CHAddr() net.HardwareAddr {
-	hLen := p.HLen()
-	if hLen > 16 { // Prevent chaddr exceeding p boundary
-		hLen = 16
-	}
-	return net.HardwareAddr(p[28 : 28+hLen]) // max endPos 44
+	return net.HardwareAddr(p[28 : 28+6]) // max endPos 44
 }
 
 // 192 bytes of zeros BOOTP legacy

@@ -143,7 +143,8 @@ func (h *Session) findOrCreateHost(addr Addr) (host *Host, found bool) {
 	if host, ok := h.HostTable.Table[ipNew]; ok {
 		host.MACEntry.Row.Lock() // lock the row
 		if !bytes.Equal(host.MACEntry.MAC, addr.MAC) {
-			fmt.Println("packet: error mac address differ - duplicated IP???", host.MACEntry.MAC, addr.MAC, ipNew)
+			// fmt.Println("packet: error mac address differ - duplicated IP???", host.MACEntry.MAC, addr.MAC, ipNew)
+			fastlog.NewLine(module, "error mac address differ - duplicated IP?").Struct(addr).Struct(host).String("iplookup", ipNew.String()).Write()
 			h.printHostTable()
 			// TODO: previous host is offline then???
 			//       should we send notification?
