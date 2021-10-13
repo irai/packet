@@ -1,15 +1,12 @@
 // dhcp4 IPv4 DHCP Library for Parsing and Creating DHCP Packets, along with basic DHCP server functionality
 //
-// Author: http://richard.warburton.it/
-//
+// Mostly based on the code written by http://richard.warburton.it/
 // Copyright: 2014 Skagerrak Software - http://www.skagerraksoftware.com/
 package dhcp4
 
 import (
 	"encoding/binary"
-	"fmt"
 	"net"
-	"strings"
 	"time"
 
 	"github.com/irai/packet"
@@ -35,32 +32,6 @@ func (p DHCP4) IsValid() error {
 		return packet.ErrInvalidMAC
 	}
 	return nil
-}
-
-func (p DHCP4) LogString(clientID []byte, reqIP net.IP, name string, serverIP net.IP) string {
-	var b strings.Builder
-	b.Grow(80)
-	b.WriteString("xid=\"")
-	fmt.Fprintf(&b, "% x", p.XId())
-	b.WriteString("\" clientid=\"")
-	fmt.Fprintf(&b, "% x", clientID)
-	b.WriteString("\" name=\"")
-	b.WriteString(name)
-	b.WriteString("\" reqIP=")
-	b.WriteString(reqIP.String())
-	b.WriteString(" chaddr=")
-	b.WriteString(p.CHAddr().String())
-	if serverIP != nil {
-		b.WriteString(" serverIP=")
-		b.WriteString(serverIP.String())
-	}
-	if Debug {
-		b.WriteString(" ciaddr=")
-		b.WriteString(p.CIAddr().String())
-		b.WriteString(" brd=")
-		fmt.Fprintf(&b, "%v", p.Broadcast())
-	}
-	return b.String()
 }
 
 func (p DHCP4) String() string {
@@ -90,7 +61,7 @@ func (p DHCP4) YIAddr() net.IP { return net.IP(p[16:20]) }
 func (p DHCP4) SIAddr() net.IP { return net.IP(p[20:24]) }
 func (p DHCP4) GIAddr() net.IP { return net.IP(p[24:28]) }
 func (p DHCP4) CHAddr() net.HardwareAddr {
-	return net.HardwareAddr(p[28 : 28+6]) // max endPos 44
+	return net.HardwareAddr(p[28 : 28+6])
 }
 
 // 192 bytes of zeros BOOTP legacy
@@ -435,8 +406,3 @@ func OptionsLeaseTime(d time.Duration) []byte {
 	binary.BigEndian.PutUint32(leaseBytes, uint32(d/time.Second))
 	return leaseBytes
 }
-
-/* Notes
-A DHCP server always returns its own address in the 'server identifier' option.
-DHCP defines a new 'client identifier' option that is used to pass an explicit client identifier to a DHCP server.
-*/
