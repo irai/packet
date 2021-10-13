@@ -108,7 +108,7 @@ func newSubnet(config SubnetConfig) (*dhcpSubnet, error) {
 	// 43-Vendor specific;44-Netbios name; 47-Netbios scope;51-Lease time;58-Renewal time (t1); 59-rebind time(t2)
 	// 121-classless route option(takes precedence to 33)
 	subnet.options = Options{
-		OptionSubnetMask:       []byte(subnet.LAN.Mask), // must be before router
+		OptionSubnetMask:       []byte(subnet.LAN.Mask), // must occur before router
 		OptionRouter:           []byte(subnet.DefaultGW.To4()),
 		OptionDomainNameServer: []byte(subnet.DNSServer.To4()),
 	}
@@ -151,55 +151,6 @@ func (h *dhcpSubnet) appendRouteOptions(ip net.IP, mask net.IPMask, routeTo net.
 	copy(buf[1+octects:], routeTo.To4())
 	h.options[OptionClasslessRouteFormat] = buf
 }
-
-/***
-// MarshalYAML implements the YAML marshalling interface
-func (h *leaseTable) MarshalYAML() (interface{}, error) {
-	tmp := []LeaseNew{}
-	for _, v := range *h {
-		if v.State == StateAllocated2 {
-			tmp = append(tmp, *v)
-		}
-	}
-
-	return tmp, nil
-}
-
-type LeaseNew Lease
-// UnmarshalYAML implements the YAML marshalling interface
-func (h *Lease) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	tmp := LeaseNew{}
-
-	err := unmarshal(&tmp)
-	if err != nil {
-		fmt.Println("eeror entry ", err)
-		return err
-	}
-
-	fmt.Println("unmashal entry ", tmp)
-	h.ClientID = tmp.ClientID
-	h.DHCPExpiry = time.Now()
-	h.OfferExpiry = time.Now()
-	// h.subnet = &dhcpSubnet{}
-	h.XID = []byte{}
-
-	for i := range tmp {
-		if tmp[i].Addr.IP == nil {
-			continue
-		}
-		index := tmp[i].Addr.IP.To4()[3]
-		h[index].State = stringToState(tmp[i].State)
-		h[index].Name = tmp[i].Name
-		h[index].ClientID = dupBytes(tmp[i].ClientID)
-		h[index].IP = dupIP(tmp[i].IP)
-		h[index].MAC = dupMAC(tmp[i].MAC)
-		h[index].DHCPExpiry = tmp[i].DHCPExpiry
-
-	}
-
-	return nil
-}
-***/
 
 func loadConfig(fname string) (net1 *dhcpSubnet, net2 *dhcpSubnet, t leaseTable, err error) {
 	if fname == "" {
