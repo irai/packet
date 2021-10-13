@@ -101,14 +101,14 @@ func (h *Handler4) ProcessPacket(host *packet.Host, p []byte, header []byte) (pa
 			return packet.Result{}, fmt.Errorf("icmp invalid icmp4 packet")
 		}
 		if Debug {
-			fmt.Printf("icmp4: echo reply from ip=%s %s\n", ip4Frame.Src(), echo)
+			fastlog.NewLine(module, "echo reply recvd").IP("srcIP", ip4Frame.Src()).Struct(echo).Write()
 		}
 		echoNotify(echo.EchoID()) // unblock ping if waiting
 
 	case packet.ICMPTypeEchoRequest:
 		echo := ICMPEcho(icmpFrame)
 		if Debug {
-			fmt.Printf("icmp4: echo request from ip=%s %s\n", ip4Frame.Src(), echo)
+			fastlog.NewLine(module, "echo request recvd").IP("srcIP", ip4Frame.Src()).Struct(echo).Write()
 		}
 
 	case uint8(ipv4.ICMPTypeRedirect):

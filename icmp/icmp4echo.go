@@ -89,7 +89,7 @@ func (h *Handler4) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
 	// Test if client is online first
 	// If client does not respond to echo, there is little we can test
 	if err := h.Ping(addr, time.Second*2); err != nil {
-		fmt.Printf("icmp4 : not responding to ping ip=%s mac=%s\n", addr.IP, addr.MAC)
+		fastlog.NewLine(module, "not responding to ping").Struct(addr).Write()
 		return packet.StageNormal, packet.ErrTimeout
 	}
 
