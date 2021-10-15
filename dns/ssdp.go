@@ -84,9 +84,8 @@ func processSSDPNotify(raw []byte) (name packet.NameEntry, location string, err 
 
 // processSSDPSearchRequest process M-SEARCH SSDP packet
 //
-// TODO: identify system from Chrome
-// By default, Google Chrome sends SSDP network broadcast traffic on the LAN.
-// Chrome then appends a USERAGENT: field and we can use this to identify the OS.
+// By default, Chromium engine broadcasts SSDP discover on the LAN and
+// it appends a USERAGENT: field that we can use to identify the OS.
 //
 // Examples:
 //   USER-AGENT: Chromium/74.0.3729.131 Linux
@@ -173,7 +172,9 @@ ST: "ssdp:all"`), []byte{0x0d, 0x0a, 0x0d, 0x0a}...) // must have 0d0a,0d0a at t
 //       see: https://developer.samsung.com/smarttv/develop/legacy-platform-library/art00030/index.html#
 //
 func (h *DNSHandler) SendSSDPSearch() (err error) {
-	ether := packet.Ether(make([]byte, packet.EthMaxSize))
+	b := packet.EtherBufferPool.Get().(*[packet.EthMaxSize]byte)
+	defer packet.EtherBufferPool.Put(b)
+	ether := packet.Ether(b[0:])
 	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IP, h.session.NICInfo.HostMAC, ssdpIPv4Addr.MAC)
 	ip4 := packet.IP4MarshalBinary(ether.Payload(), 255, h.session.NICInfo.HostIP4.IP, ssdpIPv4Addr.IP)
 	udp := packet.UDPMarshalBinary(ip4.Payload(), 1900, 1900)
