@@ -25,12 +25,14 @@ type DNSHandler struct {
 	mconn4    *net.UDPConn
 	mconn6    *net.UDPConn
 	ssdpconn4 *net.UDPConn
+	mdnsCache map[string]cache
 }
 
 func New(session *packet.Session) (h *DNSHandler, err error) {
 	h = new(DNSHandler)
 	h.session = session
 	h.DNSTable = make(map[string]DNSEntry, 256)
+	h.mdnsCache = make(map[string]cache)
 
 	// Resgiter for MDNS multicast
 	if h.mconn4, err = net.ListenMulticastUDP("udp4", nil, &net.UDPAddr{IP: mdnsIPv4Addr.IP, Port: int(mdnsIPv4Addr.Port)}); err != nil {

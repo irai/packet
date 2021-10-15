@@ -41,8 +41,8 @@ func TestMDNSHandler_PTR(t *testing.T) {
 	if err != nil {
 		t.Error("unexpected error", err)
 	}
-	if ipv4Host.NameEntry.Name != "" || ipv6Host != nil {
-		t.Error("unexpected name", ipv4Host.NameEntry.Name, ipv6Host[0].NameEntry.Name)
+	if ipv4Host[0].NameEntry.Name != "" || ipv6Host != nil {
+		t.Error("unexpected name", ipv4Host[0].NameEntry.Name, ipv6Host[0].NameEntry.Name)
 	}
 }
 
@@ -167,11 +167,14 @@ func TestMDNSHandler_Sonos(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Error("unexpected error", err)
 			}
-			if ipv4Host.NameEntry.Name != tt.wantIPv4Host.Name {
-				t.Errorf("%s: unexpected mdnsname=%s want=%s", tt.name, ipv4Host.NameEntry.Name, tt.wantIPv4Host.Name)
+			if tt.wantIPv4Host.Name == "" && len(ipv4Host) > 0 {
+				t.Errorf("%s: unexpected ipv4=%s want=%s", tt.name, ipv4Host[0].NameEntry.Name, tt.wantIPv4Host.Name)
 			}
-			if !ipv4Host.Addr.IP.Equal(tt.wantIPv4Host.Addr.IP) {
-				t.Errorf("%s: unexpected ip=%s want=%s", tt.name, ipv4Host.Addr.IP, tt.wantIPv4Host.Addr.IP)
+			if len(ipv4Host) > 0 && ipv4Host[0].NameEntry.Name != tt.wantIPv4Host.Name {
+				t.Errorf("%s: unexpected mdnsname=%s want=%s", tt.name, ipv4Host[0].NameEntry.Name, tt.wantIPv4Host.Name)
+			}
+			if len(ipv4Host) > 0 && !ipv4Host[0].Addr.IP.Equal(tt.wantIPv4Host.Addr.IP) {
+				t.Errorf("%s: unexpected ip=%s want=%s", tt.name, ipv4Host[0].Addr.IP, tt.wantIPv4Host.Addr.IP)
 			}
 		})
 	}
@@ -301,7 +304,7 @@ func TestMDNSHandler_Apple(t *testing.T) {
 			wantIPv4Host: NameEntry{Name: "DESKTOP-EQ0BFB7", Addr: packet.Addr{IP: net.IPv4(192, 168, 0, 103)}, Model: ""},
 		},
 		{name: "WindowsAnnouncement", frame: frameWindows10AnnouncementiIP4, wantErr: false,
-			wantIPv4Host: NameEntry{Name: "DESKTOP-EQ0BFB7", Addr: packet.Addr{IP: net.IPv4(192, 168, 0, 103)}, Model: ""},
+			wantIPv4Host: NameEntry{Name: "", Addr: packet.Addr{IP: net.IPv4(192, 168, 0, 103)}, Model: ""},
 		},
 	}
 
@@ -332,14 +335,20 @@ func TestMDNSHandler_Apple(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Error("unexpected error", err)
 			}
-			if ipv4Host.NameEntry.Name != tt.wantIPv4Host.Name {
-				t.Errorf("%s: unexpected mdnsname=%s want=%s", tt.name, ipv4Host.NameEntry.Name, tt.wantIPv4Host.Name)
-			}
-			if ipv4Host.NameEntry.Model != tt.wantIPv4Host.Model {
-				t.Errorf("%s: unexpected model=%s want=%s", tt.name, ipv4Host.NameEntry.Model, tt.wantIPv4Host.Model)
-			}
-			if !ipv4Host.Addr.IP.Equal(tt.wantIPv4Host.Addr.IP) {
-				t.Errorf("%s: unexpected ip=%s want=%s", tt.name, ipv4Host.Addr.IP, tt.wantIPv4Host.Addr.IP)
+			if tt.wantIPv4Host.Name != "" {
+				if len(ipv4Host) <= 0 {
+					t.Errorf("%s: unexpected ipv4host zero len=%d", tt.name, len(ipv4Host))
+					return
+				}
+				if ipv4Host[0].NameEntry.Name != tt.wantIPv4Host.Name {
+					t.Errorf("%s: unexpected mdnsname=%s want=%s", tt.name, ipv4Host[0].NameEntry.Name, tt.wantIPv4Host.Name)
+				}
+				if ipv4Host[0].NameEntry.Model != tt.wantIPv4Host.Model {
+					t.Errorf("%s: unexpected model=%s want=%s", tt.name, ipv4Host[0].NameEntry.Model, tt.wantIPv4Host.Model)
+				}
+				if !ipv4Host[0].Addr.IP.Equal(tt.wantIPv4Host.Addr.IP) {
+					t.Errorf("%s: unexpected ip=%s want=%s", tt.name, ipv4Host[0].Addr.IP, tt.wantIPv4Host.Addr.IP)
+				}
 			}
 		})
 	}

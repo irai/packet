@@ -1,9 +1,11 @@
 package dns
 
 import (
+	"fmt"
 	"net"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/irai/packet"
 	"github.com/irai/packet/fastlog"
@@ -247,9 +249,45 @@ type HostName struct {
 	Attributes map[string]string
 }
 
+// cache implements a simple cache for DNS responses. Clients multicast the same answer several times
+// and at least twice, once for IPv4 and once for IPv6.
+type cache struct {
+	ipv4   []packet.IPNameEntry
+	ipv6   []packet.IPNameEntry
+	id     uint16
+	expiry time.Time
+}
+
+func (h *DNSHandler) getMDNSCache(mac net.HardwareAddr, id uint16) (c cache, found bool) {
+	h.mutex.RLock()
+	defer h.mutex.RUnlock()
+	key := make([]byte, 6+2)
+	copy(key, mac)
+	key[6] = byte(id >> 8)
+	key[7] = byte(id)
+	if c, found := h.mdnsCache[string(key)]; found {
+		if c.expiry.After(time.Now()) {
+			return c, true
+		}
+		delete(h.mdnsCache, string(key))
+	}
+	return cache{}, false
+}
+
+func (h *DNSHandler) putMDNSCache(mac net.HardwareAddr, id uint16, ipv4 []packet.IPNameEntry, ipv6 []packet.IPNameEntry) {
+	fmt.Println("TRACE add to cache", mac, id, ipv4, ipv6)
+	h.mutex.Lock()
+	key := make([]byte, 6+2)
+	copy(key, mac)
+	key[6] = byte(id >> 8)
+	key[7] = byte(id)
+	h.mdnsCache[string(key)] = cache{id: id, ipv4: ipv4, ipv6: ipv6, expiry: time.Now().Add(time.Minute * 5)}
+	h.mutex.Unlock()
+}
+
 // ProcesMDNS will process a multicast DNS packet.
 // Note: host cannot be nil.
-func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload []byte) (ipv4 packet.IPNameEntry, ipv6 []packet.IPNameEntry, err error) {
+func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload []byte) (ipv4 []packet.IPNameEntry, ipv6 []packet.IPNameEntry, err error) {
 	var p dnsmessage.Parser
 	dnsHeader, err := p.Start(payload)
 	if err != nil {
@@ -260,6 +298,7 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 	if host != nil {
 		addr = host.Addr
 	}
+
 	// not interested in queries
 	if !dnsHeader.Response {
 		if Debug {
@@ -269,8 +308,10 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 				for _, q := range questions {
 					line.Bytes("qname", q.Name.Data[:q.Name.Length])
 					if strings.Contains(string(q.Name.Data[:q.Name.Length]), "sleep-proxy") {
-						ipv4.NameEntry.Type = moduleMDNS
-						ipv4.NameEntry.Manufacturer = "Apple"
+						entry := packet.IPNameEntry{}
+						entry.NameEntry.Type = moduleMDNS
+						entry.NameEntry.Manufacturer = "Apple"
+						ipv4 = append(ipv4, entry)
 
 						// Advertise that we are a SpeepProxy server
 						// TODO: this is not working yet - September 2021
@@ -287,6 +328,13 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 		fastlog.NewLine(moduleMDNS, "response").Struct(addr).Struct(DNS(payload)).Write()
 	}
 
+	if _, found := h.getMDNSCache(ether.Src(), dnsHeader.ID); found {
+		if Debug {
+			fastlog.NewLine(moduleMDNS, "response cached - ignoring").Write()
+		}
+		return nil, nil, nil
+	}
+
 	//  Multicast DNS responses MUST NOT contain any questions in the
 	//  Question Section.  Any questions in the Question Section of a
 	//  received Multicast DNS response MUST be silently ignored.  Multicast
@@ -298,7 +346,7 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 		return ipv4, ipv6, err
 	}
 
-	ipv4.NameEntry.Type = moduleMDNS
+	model := ""
 	section := "answer"
 	for {
 		var hdr dnsmessage.ResourceHeader
@@ -320,13 +368,17 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 			if err == dnsmessage.ErrSectionDone {
 				// Model is saved in single ipv4 entry; copy to all IPv6 entries
 				// before returning
-				if ipv4.NameEntry.Model != "" {
+				if model != "" {
+					for i := range ipv4 {
+						ipv4[i].NameEntry.Model = model
+					}
 					for i := range ipv6 {
-						ipv6[i].NameEntry.Model = ipv4.NameEntry.Model
+						ipv6[i].NameEntry.Model = model
 					}
 				}
 
-				// this is the last section; return
+				// this is the last section; cache entry and return
+				h.putMDNSCache(ether.Src(), dnsHeader.ID, ipv4, ipv6)
 				return ipv4, ipv6, nil
 			}
 		}
@@ -340,12 +392,15 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 			if err != nil {
 				return ipv4, ipv6, err
 			}
-			ipv4.NameEntry.Name = strings.TrimSuffix(hdr.Name.String(), ".local.")
-			ipv4.Addr.MAC = packet.CopyMAC(ether.Src())
-			ipv4.Addr.IP = packet.CopyIP(r.A[:])
+			entry := packet.IPNameEntry{}
+			entry.NameEntry.Type = moduleMDNS
+			entry.NameEntry.Name = strings.TrimSuffix(hdr.Name.String(), ".local.")
+			entry.Addr.MAC = packet.CopyMAC(ether.Src())
+			entry.Addr.IP = packet.CopyIP(r.A[:])
 			if Debug {
-				fastlog.NewLine(moduleMDNS, "A resource").String("name", ipv4.NameEntry.Name).Struct(ipv4.Addr).Write()
+				fastlog.NewLine(moduleMDNS, "A resource").String("name", entry.NameEntry.Name).Struct(entry.Addr).Write()
 			}
+			ipv4 = append(ipv4, entry)
 
 		case dnsmessage.TypeAAAA:
 			r, err := p.AAAAResource()
@@ -405,11 +460,11 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 				p.SkipAnswer()
 				continue
 			}
-			if model := parseTXT(r.TXT); model != "" {
-				ipv4.NameEntry.Model = model
+			if m := parseTXT(r.TXT); m != "" {
+				model = m
 			}
 			if Debug {
-				fastlog.NewLine(moduleMDNS, "TXT resource").String("name", hdr.Name.String()).Sprintf("txt", r.TXT).String("model", ipv4.NameEntry.Model).Write()
+				fastlog.NewLine(moduleMDNS, "TXT resource").String("name", hdr.Name.String()).Sprintf("txt", r.TXT).String("model", model).Write()
 			}
 
 		case dnsmessage.TypeOPT:

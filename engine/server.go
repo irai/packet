@@ -424,21 +424,23 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 
 	case udpSrcPort == 5353 || udpDstPort == 5353: // Multicast DNS (MDNS)
 		if host != nil {
-			ipv4Name, ipv6Name, err := h.DNSHandler.ProcessMDNS(host, ether, udp.Payload())
+			ipv4Hosts, ipv6Hosts, err := h.DNSHandler.ProcessMDNS(host, ether, udp.Payload())
 			if err != nil {
 				fmt.Printf("packet: error processing mdns: %s\n", err)
 				break
 			}
-			ipv4Name.NameEntry, notify = host.MDNSName.Merge(ipv4Name.NameEntry)
-			if notify {
-				host.MACEntry.Row.Lock()
-				host.MDNSName = ipv4Name.NameEntry
-				fastlog.NewLine(module, "updated mdns name").Struct(host.Addr).Struct(host.MDNSName).Write()
-				host.MACEntry.MDNSName, _ = host.MACEntry.MDNSName.Merge(host.MDNSName)
-				host.MACEntry.Row.Unlock()
+			if len(ipv4Hosts) > 0 {
+				ipv4Hosts[0].NameEntry, notify = host.MDNSName.Merge(ipv4Hosts[0].NameEntry)
+				if notify {
+					host.MACEntry.Row.Lock()
+					host.MDNSName = ipv4Hosts[0].NameEntry
+					fastlog.NewLine(module, "updated mdns name").Struct(host.Addr).Struct(host.MDNSName).Write()
+					host.MACEntry.MDNSName, _ = host.MACEntry.MDNSName.Merge(host.MDNSName)
+					host.MACEntry.Row.Unlock()
+				}
 			}
 
-			for _, v := range ipv6Name {
+			for _, v := range ipv6Hosts {
 				fastlog.NewLine(module, "mdns ipv6 ignoring host").Struct(v).Write()
 			}
 		}
@@ -447,20 +449,22 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 		// Link Local Multicast Name Resolution (LLMNR)
 		fastlog.NewLine(module, "ether").Struct(ether).Module(module, "received llmnr packet").Struct(host).Write()
 		if host != nil {
-			ipv4Name, ipv6Names, err := h.DNSHandler.ProcessMDNS(host, ether, udp.Payload())
+			ipv4Hosts, ipv6Hosts, err := h.DNSHandler.ProcessMDNS(host, ether, udp.Payload())
 			if err != nil {
 				fmt.Printf("packet: error processing mdns: %s\n", err)
 				break
 			}
-			ipv4Name.NameEntry, notify = host.LLMNRName.Merge(ipv4Name.NameEntry)
-			if notify {
-				host.MACEntry.Row.Lock()
-				host.LLMNRName = ipv4Name.NameEntry
-				fastlog.NewLine(module, "updated llmnr name").Struct(host.Addr).Struct(host.LLMNRName).Write()
-				host.MACEntry.LLMNRName, _ = host.MACEntry.LLMNRName.Merge(host.LLMNRName)
-				host.MACEntry.Row.Unlock()
+			if len(ipv4Hosts) > 0 {
+				ipv4Hosts[0].NameEntry, notify = host.LLMNRName.Merge(ipv4Hosts[0].NameEntry)
+				if notify {
+					host.MACEntry.Row.Lock()
+					host.LLMNRName = ipv4Hosts[0].NameEntry
+					fastlog.NewLine(module, "updated llmnr name").Struct(host.Addr).Struct(host.LLMNRName).Write()
+					host.MACEntry.LLMNRName, _ = host.MACEntry.LLMNRName.Merge(host.LLMNRName)
+					host.MACEntry.Row.Unlock()
+				}
 			}
-			for _, v := range ipv6Names {
+			for _, v := range ipv6Hosts {
 				fastlog.NewLine(module, "mdns ipv6 ignoring host").Struct(v).Write()
 			}
 		}
