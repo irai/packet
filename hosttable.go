@@ -181,19 +181,23 @@ func (h *Session) findOrCreateHost(addr Addr) (host *Host, found bool) {
 }
 
 func (h *Session) DeleteHost(ip net.IP) {
-	if Debug {
-		fmt.Printf("packet : delete host ip=%s\n", ip)
-	}
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 
 	if host := h.findIP(ip); host != nil {
+		if Debug {
+			fastlog.NewLine(module, "delete host").IP("ip", ip).Struct(host).Write()
+		}
 		host.MACEntry.unlink(host)
 		newIP, _ := netaddr.FromStdIP(ip)
 		delete(h.HostTable.Table, newIP)
 		if len(host.MACEntry.HostList) == 0 { // delete if last host
 			h.MACTable.delete(host.MACEntry.MAC)
 		}
+		return
+	}
+	if Debug {
+		fastlog.NewLine(module, "delete host IP not found").IP("ip", ip).Write()
 	}
 }
 
