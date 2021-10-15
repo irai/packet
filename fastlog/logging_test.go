@@ -8,6 +8,35 @@ import (
 	"testing"
 )
 
+type testType struct{}
+
+func (t testType) FastLog(l *Line) *Line {
+	return l
+}
+func (t testType) String() string {
+	return "test"
+}
+
+type testComplex struct {
+	mac      net.HardwareAddr
+	ip       net.IP
+	str      string
+	buffer   []byte
+	ipArray  []net.IP
+	strArray []string
+	n        int
+}
+
+func (t testComplex) FastLog(l *Line) *Line {
+	l.MAC("mac", t.mac)
+	l.IP("ip", t.ip)
+	l.String("str", t.str)
+	l.ByteArray("buffer", t.buffer)
+	l.IPArray("iparray", t.ipArray)
+	l.StringArray("strarray", t.strArray)
+	return l
+}
+
 func TestLine_PrintUint32(t *testing.T) {
 	tests := []uint32{
 		4294967295,
@@ -133,15 +162,6 @@ func TestLine_appendIP6(t *testing.T) {
 	}
 }
 
-type testType struct{}
-
-func (t testType) FastLog(l *Line) *Line {
-	return l
-}
-func (t testType) String() string {
-	return "test"
-}
-
 func TestLine_Nil(t *testing.T) {
 	l := NewLine("test", "")
 	var line testType
@@ -153,3 +173,25 @@ func TestLine_Nil(t *testing.T) {
 	l.Stringer(line)
 	l.Stringer(ptr)
 }
+
+/**
+func TestLine_FastLogArray(t *testing.T) {
+	tests := []struct {
+		name    string
+		entry   []testComplex
+		wantLen int
+	}{
+		{name: "simple", wantLen: 171, entry: []testComplex{{str: "first str"}, {ip: net.IPv4(100, 100, 100, 100)}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			str := NewLine("test", "fastlog array").FastLogArray("entries", tt.entry).ToString()
+			if n := len(str); n != tt.wantLen {
+				fmt.Println("TEST fastlog", str)
+				t.Errorf("%s: Line.FastLogArray() invalid len=%v, want %v", tt.name, n, tt.wantLen)
+			}
+		})
+	}
+}
+
+**/

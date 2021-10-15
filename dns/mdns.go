@@ -1,7 +1,6 @@
 package dns
 
 import (
-	"fmt"
 	"net"
 	"strings"
 	"syscall"
@@ -267,15 +266,37 @@ func (h *DNSHandler) getMDNSCache(mac net.HardwareAddr, id uint16) (c cache, fou
 	key[7] = byte(id)
 	if c, found := h.mdnsCache[string(key)]; found {
 		if c.expiry.After(time.Now()) {
+			if Debug {
+				l := fastlog.NewLine(moduleMDNS, "found in mdns chache").MAC("mac", mac).Uint16("id", id)
+				for _, v := range c.ipv4 {
+					l.Struct(v)
+				}
+				for _, v := range c.ipv6 {
+					l.Struct(v)
+				}
+				l.Write()
+			}
 			return c, true
 		}
 		delete(h.mdnsCache, string(key))
+		if Debug {
+			fastlog.NewLine(moduleMDNS, "delete from mdns chache").MAC("mac", mac).Uint16("id", id).Write()
+		}
 	}
 	return cache{}, false
 }
 
 func (h *DNSHandler) putMDNSCache(mac net.HardwareAddr, id uint16, ipv4 []packet.IPNameEntry, ipv6 []packet.IPNameEntry) {
-	fmt.Println("TRACE add to cache", mac, id, ipv4, ipv6)
+	if Debug {
+		l := fastlog.NewLine(moduleMDNS, "add to mdns chache").MAC("mac", mac).Uint16("id", id)
+		for _, v := range ipv4 {
+			l.Struct(v)
+		}
+		for _, v := range ipv6 {
+			l.Struct(v)
+		}
+		l.Write()
+	}
 	h.mutex.Lock()
 	key := make([]byte, 6+2)
 	copy(key, mac)
@@ -325,13 +346,10 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 	}
 
 	if Debug {
-		fastlog.NewLine(moduleMDNS, "response").Struct(addr).Struct(DNS(payload)).Write()
+		fastlog.NewLine(moduleMDNS, "response rcvd").Struct(addr).Struct(DNS(payload)).Write()
 	}
 
 	if _, found := h.getMDNSCache(ether.Src(), dnsHeader.ID); found {
-		if Debug {
-			fastlog.NewLine(moduleMDNS, "response cached - ignoring").Write()
-		}
 		return nil, nil, nil
 	}
 

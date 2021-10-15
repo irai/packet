@@ -480,3 +480,44 @@ func (l *Line) ByteArray(name string, value []byte) *Line {
 	}
 	return l
 }
+
+/**
+[]interface() does not compile - this is a go design
+...Fastlog does not work either
+
+func (l *Line) FastLogArray(name string, value []interface{}) *Line {
+	if l.index+len(name)+4 > cap(l.buffer) {
+		return l
+	}
+	l.appendByte(' ')
+	l.index = l.index + copy(l.buffer[l.index:], name)
+	l.appendByte('=')
+	l.appendByte('[')
+	if len(value) <= 0 {
+		l.appendByte(']')
+		return l
+	}
+
+	tmp := Line{}
+	for _, v := range value {
+		tmp.index = 0
+		if fl, ok := v.(FastLog); ok {
+			fl.FastLog(&tmp)
+		} else {
+			tmp.index = tmp.index + copy(tmp.buffer[tmp.index:], "invalid fastlog interface")
+		}
+		if l.index+tmp.index+4 > cap(l.buffer) {
+			break
+		}
+		l.appendByte('{')
+		l.index = l.index + copy(l.buffer[l.index:], tmp.buffer[:tmp.index])
+		l.appendByte('}')
+		l.appendByte(',')
+		l.appendByte(' ')
+	}
+	l.index--
+	l.appendByte(']')
+	return l
+}
+
+**/
