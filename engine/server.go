@@ -479,7 +479,7 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 		if host != nil {
 			nameEntry, location, err := h.DNSHandler.ProcessSSDP(host, ether, udp.Payload())
 			if err != nil {
-				fastlog.NewLine(module, "error processing ssdp").Error(err).Write()
+				fastlog.NewLine(module, "error processing ssdp").Error(err).ByteArray("payload", udp.Payload()).Write()
 				break
 			}
 
