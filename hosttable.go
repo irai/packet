@@ -22,16 +22,17 @@ type HostTable struct {
 // Host has a RWMutex used to sync access to the record. This must be read locked to access fields or write locked for updating
 // When locking the engine, you must lock the engine first then row lock to avoid deadlocks
 type Host struct {
-	Addr      Addr      // MAC and IP
-	MACEntry  *MACEntry // pointer to mac entry
-	Online    bool      // keep host online / offline state
-	HuntStage HuntStage // keep host overall huntStage
-	LastSeen  time.Time // keep last packet time
-	DHCP4Name NameEntry
-	MDNSName  NameEntry
-	SSDPName  NameEntry
-	LLMNRName NameEntry
-	NBNSName  NameEntry
+	Addr         Addr      // MAC and IP
+	MACEntry     *MACEntry // pointer to mac entry
+	Online       bool      // keep host online / offline state
+	HuntStage    HuntStage // keep host overall huntStage
+	LastSeen     time.Time // keep last packet time
+	Manufacturer string    // Mac address manufacturer
+	DHCP4Name    NameEntry
+	MDNSName     NameEntry
+	SSDPName     NameEntry
+	LLMNRName    NameEntry
+	NBNSName     NameEntry
 }
 
 func (e *Host) String() string {
@@ -46,6 +47,7 @@ func (e Host) FastLog(l *fastlog.Line) *fastlog.Line {
 	l.Bool("online", e.Online)
 	l.Bool("captured", e.MACEntry.Captured)
 	l.String("stage", e.HuntStage.String())
+	l.String("manufacturer", e.Manufacturer)
 	l.Struct(e.DHCP4Name)
 	l.Struct(e.MDNSName)
 	l.Struct(e.SSDPName)
@@ -158,6 +160,7 @@ func (h *Session) findOrCreateHost(addr Addr) (host *Host, found bool) {
 			macEntry.Row.Lock()          // acquire lock on new macEntry
 			macEntry.link(host)          // link macEntry to host
 			host.Addr.MAC = macEntry.MAC // new mac
+			host.Manufacturer = findManufacturer(macEntry.MAC)
 			host.MACEntry = macEntry     // link host to macEntry
 			host.HuntStage = StageNormal // reset stage
 			// host.DHCP4Name.Name = ""     // clear name from previous host
@@ -170,6 +173,7 @@ func (h *Session) findOrCreateHost(addr Addr) (host *Host, found bool) {
 	macEntry := h.MACTable.FindOrCreateNoLock(CopyMAC(addr.MAC))
 	host = &Host{Addr: Addr{IP: CopyIP(addr.IP), MAC: macEntry.MAC}, MACEntry: macEntry, Online: false} // set Online to false to trigger Online transition
 	host.LastSeen = now
+	host.Manufacturer = findManufacturer(macEntry.MAC)
 	host.HuntStage = StageNormal
 	host.MACEntry.LastSeen = now
 	// host.MACEntry.UpdateIPNoLock(host.IP)
