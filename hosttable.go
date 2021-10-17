@@ -160,10 +160,12 @@ func (h *Session) findOrCreateHost(addr Addr) (host *Host, found bool) {
 			macEntry.Row.Lock()          // acquire lock on new macEntry
 			macEntry.link(host)          // link macEntry to host
 			host.Addr.MAC = macEntry.MAC // new mac
-			host.Manufacturer = findManufacturer(macEntry.MAC)
 			host.MACEntry = macEntry     // link host to macEntry
+			host.Manufacturer = FindManufacturer(host.Addr.MAC)
+			if host.Manufacturer != "" && host.Manufacturer != host.MACEntry.Manufacturer {
+				host.MACEntry.Manufacturer = host.Manufacturer
+			}
 			host.HuntStage = StageNormal // reset stage
-			// host.DHCP4Name.Name = ""     // clear name from previous host
 		}
 		host.LastSeen = now
 		host.MACEntry.LastSeen = now
@@ -172,9 +174,12 @@ func (h *Session) findOrCreateHost(addr Addr) (host *Host, found bool) {
 	}
 	macEntry := h.MACTable.FindOrCreateNoLock(CopyMAC(addr.MAC))
 	host = &Host{Addr: Addr{IP: CopyIP(addr.IP), MAC: macEntry.MAC}, MACEntry: macEntry, Online: false} // set Online to false to trigger Online transition
-	host.LastSeen = now
-	host.Manufacturer = findManufacturer(macEntry.MAC)
+	host.Manufacturer = FindManufacturer(macEntry.MAC)
+	if host.Manufacturer != "" && host.Manufacturer != host.MACEntry.Manufacturer {
+		host.MACEntry.Manufacturer = host.Manufacturer
+	}
 	host.HuntStage = StageNormal
+	host.LastSeen = now
 	host.MACEntry.LastSeen = now
 	// host.MACEntry.UpdateIPNoLock(host.IP)
 	h.HostTable.Table[ipNew] = host

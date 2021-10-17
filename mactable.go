@@ -13,23 +13,24 @@ import (
 // MACEntry stores mac details
 // Each host has one MACEntry
 type MACEntry struct {
-	MAC       net.HardwareAddr // unique mac address
-	Captured  bool             // true if mac is in capture mode
-	IP4       net.IP           // keep current IP4 to detect ip changes
-	IP4Offer  net.IP           // keep dhcp4 IP offer
-	IP6GUA    net.IP           // keep current ip6 global unique address
-	IP6LLA    net.IP           // keep current ip6 local link address
-	IP6Offer  net.IP           // keep ip6 GUA offer
-	Online    bool             // true is mac is online
-	IsRouter  bool             // Set to true if this is a router
-	HostList  []*Host          // IPs associated with this mac
-	Row       sync.RWMutex     // Row level mutex - must lock/unlock if reading/updating MACEntry and Host entry
-	LastSeen  time.Time
-	DHCP4Name NameEntry
-	MDNSName  NameEntry
-	SSDPName  NameEntry
-	LLMNRName NameEntry
-	NBNSName  NameEntry
+	MAC          net.HardwareAddr // unique mac address
+	Captured     bool             // true if mac is in capture mode
+	IP4          net.IP           // keep current IP4 to detect ip changes
+	IP4Offer     net.IP           // keep dhcp4 IP offer
+	IP6GUA       net.IP           // keep current ip6 global unique address
+	IP6LLA       net.IP           // keep current ip6 local link address
+	IP6Offer     net.IP           // keep ip6 GUA offer
+	Online       bool             // true is mac is online
+	IsRouter     bool             // Set to true if this is a router
+	HostList     []*Host          // IPs associated with this mac
+	Row          sync.RWMutex     // Row level mutex - must lock/unlock if reading/updating MACEntry and Host entry
+	Manufacturer string           // Ethernet card manufacturer name
+	DHCP4Name    NameEntry
+	MDNSName     NameEntry
+	SSDPName     NameEntry
+	LLMNRName    NameEntry
+	NBNSName     NameEntry
+	LastSeen     time.Time
 }
 
 func (e *MACEntry) String() string {
@@ -51,6 +52,9 @@ func (e *MACEntry) FastLog(l *fastlog.Line) *fastlog.Line {
 	l.IP("ip4offer", e.IP4Offer)
 	l.Int("hosts", len(e.HostList))
 	l.String("lastSeen", time.Since(e.LastSeen).String())
+	if e.Manufacturer != "" {
+		l.String("manufacturer", e.Manufacturer)
+	}
 	l.Struct(e.DHCP4Name)
 	l.Struct(e.MDNSName)
 	l.Struct(e.SSDPName)

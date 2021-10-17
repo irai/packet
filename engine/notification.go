@@ -31,7 +31,9 @@ func (n Notification) String() string {
 func (n Notification) FastLog(l *fastlog.Line) *fastlog.Line {
 	l.Struct(n.Addr)
 	l.Bool("online", n.Online)
-	l.String("manufacturer", n.Manufacturer)
+	if n.Manufacturer != "" {
+		l.String("manufacturer", n.Manufacturer)
+	}
 	l.Struct(n.DHCP4Name)
 	l.Struct(n.MDNSName)
 	l.Struct(n.SSDPName)
@@ -105,7 +107,7 @@ func (h *Handler) purge(now time.Time, probeDur time.Duration, offlineDur time.D
 
 func toNotification(host *packet.Host) Notification {
 	// send the MACEntry name as there can be many IPv6 hosts, some with name entries not populated yet
-	return Notification{Addr: host.Addr, Online: host.Online, Manufacturer: host.Manufacturer,
+	return Notification{Addr: host.Addr, Online: host.Online, Manufacturer: host.MACEntry.Manufacturer,
 		DHCP4Name: host.MACEntry.DHCP4Name, MDNSName: host.MACEntry.MDNSName, SSDPName: host.MACEntry.SSDPName,
 		LLMNRName: host.LLMNRName, NBNSName: host.MACEntry.NBNSName,
 		IsRouter: host.MACEntry.IsRouter}
