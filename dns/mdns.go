@@ -320,26 +320,37 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 		addr = host.Addr
 	}
 
-	// not interested in queries
+	// if query, we can infer some information.
 	if !dnsHeader.Response {
+		var line *fastlog.Line
 		if Debug {
-			line := fastlog.NewLine(moduleMDNS, "query rcvd").Struct(addr).Struct(DNS(payload))
-			questions, err := p.AllQuestions()
-			if err == nil { // ignore error
-				for _, q := range questions {
-					line.Bytes("qname", q.Name.Data[:q.Name.Length])
-					if strings.Contains(string(q.Name.Data[:q.Name.Length]), "sleep-proxy") {
-						entry := packet.IPNameEntry{}
-						entry.NameEntry.Type = moduleMDNS
-						entry.NameEntry.Manufacturer = "Apple"
-						ipv4 = append(ipv4, entry)
-
-						// Advertise that we are a SpeepProxy server
-						// TODO: this is not working yet - September 2021
-						go h.SendSleepProxyResponse(h.session.NICInfo.HostAddr4, mdnsIPv4Addr, dnsHeader.ID, "sleepproxy")
-					}
+			line = fastlog.NewLine(moduleMDNS, "query rcvd").Struct(addr).Struct(DNS(payload))
+		}
+		if questions, err := p.AllQuestions(); err == nil {
+			entry := packet.IPNameEntry{}
+			entry.NameEntry.Type = moduleMDNS
+			for _, q := range questions {
+				name := string(q.Name.Data[:q.Name.Length])
+				if Debug {
+					line.String("qname", name)
+				}
+				// mdns query sends the name to validate it is unique
+				// example: qname=Test-iPad.local.
+				if !strings.HasSuffix(name, "_tcp.local.") && !strings.HasSuffix(name, "_udp.local.") && strings.HasSuffix(name, ".local.") {
+					entry.NameEntry.Name = strings.TrimSuffix(name, ".local.")
+				}
+				if strings.Contains(name, "sleep-proxy") {
+					entry.NameEntry.Manufacturer = "Apple"
+					// Advertise that we are a SpeepProxy server
+					// TODO: this is not working yet - September 2021
+					// go h.SendSleepProxyResponse(h.session.NICInfo.HostAddr4, mdnsIPv4Addr, dnsHeader.ID, "sleepproxy")
 				}
 			}
+			if entry.NameEntry.Name != "" || entry.NameEntry.Manufacturer != "" {
+				ipv4 = append(ipv4, entry)
+			}
+		}
+		if Debug {
 			line.Write()
 		}
 		return ipv4, ipv6, nil
