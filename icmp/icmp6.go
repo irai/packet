@@ -152,6 +152,9 @@ func (h *Handler6) MinuteTicker(now time.Time) error {
 
 // HuntStage implements PacketProcessor interface
 func (h *Handler6) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
+	if h.session.NICInfo.HostLLA.IP == nil { // in case host does not have IPv6
+		return packet.StageNoChange, nil
+	}
 	srcAddr := packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostLLA.IP}
 
 	// Neigbour solicitation almost always result in a response from host if online unless
