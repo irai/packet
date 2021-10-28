@@ -98,7 +98,6 @@ type ICMP4Redirect []byte
 
 func (p ICMP4Redirect) IsValid() error {
 	if len(p) < 8 || len(p) < 8+int(p.NumAddrs())*int(p.AddrSize())*4 {
-		fmt.Println("TRACE    ", len(p), p.NumAddrs(), p.AddrSize())
 		return packet.ErrFrameLen
 	}
 	if p[0] != byte(ipv6.ICMPTypeRedirect) {

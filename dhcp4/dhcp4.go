@@ -1,3 +1,8 @@
+// Package dhcp4 implements a dhcp server designed to operate as a secondary
+// dhcp server on the same lan.
+//
+// Initial implementation inspired by code written by http://richard.warburton.it/
+// see: https://github.com/krolaw/dhcp4
 package dhcp4
 
 import (
@@ -11,6 +16,20 @@ import (
 	"github.com/irai/packet/fastlog"
 )
 
+// Debug enable/disable debug messages
+var Debug bool
+
+const module = "dhcp4"
+
+type Mode int32
+
+// Mode type for operational mode: Primary or Secondary server
+const (
+	ModePrimaryServer       Mode = iota + 1 // sets the server to operate as the single DHCP on the LAN
+	ModeSecondaryServer                     // sets the server to operate as a secondary DHCP on the LAN; will attack the primary
+	ModeSecondaryServerNice                 // sets the server to operate nice; i.e. will attack captured entries only
+)
+
 const (
 	rebinding uint8 = iota
 	selecting
@@ -18,28 +37,10 @@ const (
 	rebooting
 )
 
-var (
-	// Debug module variable to enable/disable debug & trace messages
-	Debug bool
-)
-
-const module = "dhcp4"
-
-// Mode type for operational mode: Primary or Secondary server
-type Mode int32
-
-const (
-	// ModePrimaryServer sets the server to operate as the single DHCP on the LAN
-	ModePrimaryServer Mode = iota + 1
-	// ModeSecondaryServer sets the server to operate as a secondary DHCP on the LAN; will attack the primary
-	ModeSecondaryServer
-	// ModeSecondaryServerNice sets the server to operate nice; i.e. will attack captured entries only
-	ModeSecondaryServerNice
-)
-
 // Config contains configuration overrides
 type Config struct {
 	ClientConn net.PacketConn
+	Mode       Mode
 }
 
 type DHCP4Handler interface {
@@ -48,58 +49,25 @@ type DHCP4Handler interface {
 
 var _ DHCP4Handler = &Handler{}
 
-// Start implements PacketProcessor interface
-func (h *Handler) Start() error {
-	return nil
-}
-
-// Stop implements PacketProcessor interface
-func (h *Handler) Stop() error {
-	h.Close()
-	return nil
-}
-
-// MinuteTicker implements packet processor interface
-func (h *Handler) MinuteTicker(now time.Time) error {
-	h.Lock()
-	defer h.Unlock()
-	h.freeLeases(now)
-	return nil
-}
-
-func configChanged(config SubnetConfig, current SubnetConfig) bool {
-	if !config.LAN.IP.Equal(current.LAN.IP) ||
-		!config.DefaultGW.Equal(current.DefaultGW) ||
-		!config.DNSServer.Equal(current.DNSServer) ||
-		!config.DHCPServer.Equal(current.DHCPServer) ||
-		(config.Duration != 0 && config.Duration != current.Duration) ||
-		(config.FirstIP != nil && !config.FirstIP.Equal(current.FirstIP)) ||
-		(config.LastIP != nil && !config.LastIP.Equal(current.LastIP)) {
-		fmt.Printf("dhcp4: config parameters changed  config=%+v", config)
-		fmt.Printf("dhcp4: config parameters changed current=%+v", current)
-		return true
-	}
-	return false
-}
+type leaseTable map[string]*Lease
 
 // Handler is the main dhcp4 handler
 type Handler struct {
-	session *packet.Session // engine handler
-	// clientConn net.PacketConn  // Listen DHCP client port
-	mode      Mode        // if true, force decline and release packets to homeDHCPServer
-	filename  string      // leases filename
-	closed    bool        // indicates that detach function was called
-	closeChan chan bool   // channel to close underlying goroutines
-	table     leaseTable  // lease table
-	net1      *dhcpSubnet // home LAN
-	net2      *dhcpSubnet // netfilter LAN
+	session   *packet.Session // engine handler
+	mode      Mode            // if true, force decline and release packets to homeDHCPServer
+	filename  string          // leases filename
+	closed    bool            // indicates that detach function was called
+	closeChan chan bool       // channel to close underlying goroutines
+	table     leaseTable      // lease table
+	net1      *dhcpSubnet     // home LAN
+	net2      *dhcpSubnet     // netfilter LAN
 	sync.Mutex
 }
 
 // New return a dhcp handler with two internal subnets.
 // func New(home SubnetConfig, netfilter SubnetConfig, filename string) (handler *DHCPHandler, err error) {
 func New(session *packet.Session, netfilterIP net.IPNet, dnsServer net.IP, filename string) (handler *Handler, err error) {
-	return Config{}.New(session, netfilterIP, dnsServer, filename)
+	return Config{Mode: ModeSecondaryServerNice}.New(session, netfilterIP, dnsServer, filename)
 }
 
 // New accepts a configuration structure and return a dhcp handler
@@ -111,10 +79,11 @@ func (config Config) New(session *packet.Session, netfilterIP net.IPNet, dnsServ
 	}
 
 	h = &Handler{table: map[string]*Lease{}}
-	// handler.captureTable = make(map[string]bool)
 	h.filename = filename
-	h.mode = ModeSecondaryServerNice
-	h.closeChan = make(chan bool) // goroutines listen on this for closure
+	if config.Mode != ModePrimaryServer && config.Mode != ModeSecondaryServer && config.Mode != ModeSecondaryServerNice {
+		config.Mode = ModeSecondaryServerNice
+	}
+	h.mode = config.Mode
 
 	if dnsServer == nil {
 		dnsServer = session.NICInfo.RouterIP4.IP
@@ -163,24 +132,46 @@ func (config Config) New(session *packet.Session, netfilterIP net.IPNet, dnsServ
 
 	// Add static and classless route options
 	h.net2.appendRouteOptions(h.net1.DefaultGW, h.net1.LAN.Mask, h.net2.DefaultGW)
-
-	// if Debug {
-	// log.WithFields(log.Fields{"netfilterLAN": h.net2.LAN.String(), "netfilterGW": h.net2.DefaultGW, "firstIP": h.net2.FirstIP,
-	// "lastIP": h.net2.LastIP}).Debug("dhcp4: Server Config")
-	// }
-
 	h.session = session
-	// session.HandlerDHCP4 = h
-
 	h.saveConfig(h.filename)
 	return h, nil
 }
 
-// Detach implements the PacketProcessor interface
-func (h *Handler) Close() error {
+// Start implements PacketProcessor interface
+func (h *Handler) Start() error {
+	h.closed = false
+	h.closeChan = make(chan bool) // goroutines listen on this for closure
+	return nil
+}
+
+// Stop implements PacketProcessor interface
+func (h *Handler) Stop() error {
 	h.closed = true
 	close(h.closeChan)
 	return nil
+}
+
+// MinuteTicker implements packet processor interface
+func (h *Handler) MinuteTicker(now time.Time) error {
+	h.Lock()
+	defer h.Unlock()
+	h.freeLeases(now)
+	return nil
+}
+
+func configChanged(config SubnetConfig, current SubnetConfig) bool {
+	if !config.LAN.IP.Equal(current.LAN.IP) ||
+		!config.DefaultGW.Equal(current.DefaultGW) ||
+		!config.DNSServer.Equal(current.DNSServer) ||
+		!config.DHCPServer.Equal(current.DHCPServer) ||
+		(config.Duration != 0 && config.Duration != current.Duration) ||
+		(config.FirstIP != nil && !config.FirstIP.Equal(current.FirstIP)) ||
+		(config.LastIP != nil && !config.LastIP.Equal(current.LastIP)) {
+		fmt.Printf("dhcp4: config parameters changed  config=%+v", config)
+		fmt.Printf("dhcp4: config parameters changed current=%+v", current)
+		return true
+	}
+	return false
 }
 
 // Mode return the disrupt flag
@@ -222,7 +213,6 @@ func (h *Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
 		if h.mode == ModeSecondaryServer || h.mode == ModeSecondaryServerNice {
 			h.forceRelease(lease.ClientID, h.net1.DefaultGW, lease.Addr.MAC, lease.Addr.IP, nil)
 		}
-		// h.engine.SetIP4Offer(host, net.IPv4zero)
 	}
 	return packet.StageHunt, nil
 }
@@ -282,7 +272,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (pac
 	options := dhcpFrame.ParseOptions()
 	var reqType MessageType
 	if t := options[OptionDHCPMessageType]; len(t) != 1 {
-		fmt.Println("dhcp4 : skiping dhcp packet with len not 1")
+		fmt.Println("dhcp4 : skiping dhcp - missing message type")
 		return packet.Result{}, packet.ErrParseFrame
 	} else {
 		reqType = MessageType(t[0])
@@ -292,52 +282,37 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (pac
 		}
 	}
 
-	// retrieve the sender IP address
-	// ipStr , portStr, err := net.SplitHostPort(addr.String())
-
-	// if res := h.processDHCP(req, reqType, options, ip4.Src()); res != nil {
 	var response DHCP4
 	var result packet.Result
 
 	h.Lock()
-
 	switch reqType {
 	case Discover:
 		result, response = h.handleDiscover(dhcpFrame, options)
-
 	case Request:
 		result, response = h.handleRequest(host, dhcpFrame, options, ip4.Src())
-
 	case Decline:
 		response = h.handleDecline(dhcpFrame, options)
-
 	case Release:
 		response = h.handleRelease(dhcpFrame, options)
-
 	case Offer:
 		fmt.Println("dhcp4: error got dhcp offer")
-
 	default:
 		fmt.Printf("dhcp4: message type not supported %v", reqType)
 	}
-
 	h.Unlock()
 
 	if response != nil {
-		// If IP not available, broadcast
-
 		var dstAddr packet.Addr
+		// If IP not available, broadcast
 		if ip4.Src().Equal(net.IPv4zero) || dhcpFrame.Broadcast() {
 			dstAddr = packet.Addr{MAC: packet.EthBroadcast, IP: net.IPv4bcast, Port: packet.DHCP4ClientPort}
 		} else {
 			dstAddr = packet.Addr{MAC: ether.Src(), IP: ip4.Src(), Port: packet.DHCP4ClientPort}
 		}
-
 		if Debug {
-			// fmt.Println("dhcp4 : send reply to ", dstAddr, response)
 			fastlog.NewLine(module, "send reply to").Struct(dstAddr).Struct(response).Write()
 		}
-
 		srcAddr := packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostIP4.IP, Port: packet.DHCP4ServerPort}
 		if err := sendDHCP4Packet(h.session.Conn, srcAddr, dstAddr, response); err != nil {
 			fmt.Printf("dhcp4: failed sending packet error=%s", err)

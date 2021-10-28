@@ -37,7 +37,6 @@ type PacketProcessor interface {
 	StopHunt(Addr) (HuntStage, error)
 	CheckAddr(Addr) (HuntStage, error)
 	MinuteTicker(time.Time) error
-	Close() error
 }
 
 // PacketNOOP is a no op packet processor

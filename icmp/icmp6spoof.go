@@ -60,14 +60,14 @@ func (h *Handler6) spoofLoop(dstAddr packet.Addr) {
 		dstAddr.IP = packet.IP6AllNodesMulticast
 	}
 	// fmt.Printf("icmp6 : na attack %s time=%v\n", dstAddr, startTime)
-	fastlog.NewLine(module, "NA attack start").Struct(dstAddr).Time("time", startTime).Write()
+	fastlog.NewLine(module6, "NA attack start").Struct(dstAddr).Time("time", startTime).Write()
 	for {
 		h.Lock()
 
 		if h.huntList.Index(dstAddr.MAC) == -1 || h.closed {
 			h.Unlock()
 			// fmt.Printf("icmp6 : attack end %s repeat=%v duration=%v\n", dstAddr, nTimes, time.Since(startTime))
-			fastlog.NewLine(module, "NA attack end").Struct(dstAddr).Int("repeat", nTimes).Duration("duration", time.Since(startTime)).Write()
+			fastlog.NewLine(module6, "NA attack end").Struct(dstAddr).Int("repeat", nTimes).Duration("duration", time.Since(startTime)).Write()
 			return
 		}
 
@@ -97,7 +97,7 @@ func (h *Handler6) spoofLoop(dstAddr packet.Addr) {
 
 				if nTimes%16 == 0 {
 					// fmt.Printf("icmp6 : attack src %s dst %s target %s repeat=%v duration=%v\n", hostAddr, dstAddr, targetAddr, nTimes, time.Since(startTime))
-					fastlog.NewLine(module, "NA attack src").Struct(hostAddr).Label("dst").Struct(dstAddr).Label("target").Struct(targetAddr).
+					fastlog.NewLine(module6, "NA attack src").Struct(hostAddr).Label("dst").Struct(dstAddr).Label("target").Struct(targetAddr).
 						Int("repeat", nTimes).Duration("duration", time.Since(startTime)).Write()
 				}
 				nTimes++

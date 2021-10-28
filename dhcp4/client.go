@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"net"
+	"syscall"
 	"time"
 
 	"github.com/irai/packet"
@@ -28,7 +29,7 @@ func (h *Handler) attackDHCPServer(options Options) {
 	for i := 0; i < 256; i++ {
 		xID[3] = byte(i)
 		tmpMAC[5] = byte(i)
-		h.SendDiscoverPacket(tmpMAC, net.IPv4zero, xID, nil)
+		h.SendDiscoverPacket(tmpMAC, net.IPv4zero, xID, "")
 	}
 
 	// Wait a few seconds before storming again
@@ -41,25 +42,21 @@ func (h *Handler) attackDHCPServer(options Options) {
 // In most cases the home dhcp will mark the entry but keep the entry in the table
 // This is an error state and the DHCP server should tell the administrator
 func (h *Handler) forceDecline(clientID []byte, serverIP net.IP, chAddr net.HardwareAddr, clientIP net.IP, xid []byte) {
-	// fields := log.Fields{"clientID": clientID, "ip": clientIP, "xid": xid, "serverIP": serverIP}
-	// if Debug {
-	// fields["mac"] = chAddr
-	// }
-	// fmt.Printf("dhcp4: client send decline to server clientID=%v\n", clientID)
-	fastlog.NewLine("dhcp4", "client send decline to server").ByteArray("clientid", clientID).IP("ip", clientIP).ByteArray("xid", xid).Write()
+	fastlog.NewLine("dhcp4", "client send decline to server").ByteArray("xid", xid).ByteArray("clientid", clientID).IP("ip", clientIP).Write()
 
 	// use a copy in the goroutine
 	clientID = dupBytes(clientID)
-	ciAddr := net.IPv4zero // as per rfc
 	chAddr = dupMAC(chAddr)
+	ciAddr := net.IPv4zero // as per rfc
 	serverIP = dupIP(serverIP)
 	xid = dupBytes(xid)
-	options := Options{
-		OptionRequestedIPAddress: []byte(clientIP.To4()), // as per rfc
-	}
-
+	opts := Options{}
+	opts[OptionClientIdentifier] = clientID
+	opts[OptionServerIdentifier] = serverIP.To4()
+	opts[OptionMessage] = []byte("netfilter decline")
+	opts[OptionRequestedIPAddress] = []byte(clientIP.To4())
 	go func() {
-		err := h.sendDeclineReleasePacket(Decline, clientID, serverIP, chAddr, ciAddr, xid, options)
+		err := h.sendDeclineReleasePacket(Decline, clientID, serverIP, chAddr, ciAddr, xid, opts)
 		if err != nil {
 			fmt.Println("dhcp4: error in send decline packet ", err)
 		}
@@ -74,12 +71,7 @@ func (h *Handler) forceDecline(clientID []byte, serverIP net.IP, chAddr net.Hard
 //
 // Jan 21 - NOT working; the test router does not drop the entry. WHY?
 func (h *Handler) forceRelease(clientID []byte, serverIP net.IP, chAddr net.HardwareAddr, clientIP net.IP, xid []byte) {
-	// fields := log.Fields{"clientID": clientID, "ip": clientIP, "xid": xid, "serverIP": serverIP}
-	// if Debug {
-	// fields["mac"] = chAddr
-	// }
-	// fmt.Printf("dhcp4: sent force release to server clientID=%v\n", clientID)
-	fastlog.NewLine("dhcp4", "client send release to server").ByteArray("clientid", clientID).IP("ip", clientIP).ByteArray("xid", xid).Write()
+	fastlog.NewLine("dhcp4", "client send release to server").ByteArray("xid", xid).ByteArray("clientid", clientID).IP("ip", clientIP).Write()
 
 	// use a copy in the goroutine
 	clientIP = dupIP(clientIP)
@@ -87,6 +79,10 @@ func (h *Handler) forceRelease(clientID []byte, serverIP net.IP, chAddr net.Hard
 	clientID = dupBytes(clientID)
 	serverIP = dupIP(serverIP)
 	xid = dupBytes(xid)
+	opts := Options{}
+	opts[OptionClientIdentifier] = clientID
+	opts[OptionServerIdentifier] = serverIP.To4()
+	opts[OptionMessage] = []byte("netfilter release")
 
 	go func() {
 		err := h.sendDeclineReleasePacket(Release, clientID, serverIP, chAddr, clientIP, xid, nil)
@@ -97,47 +93,67 @@ func (h *Handler) forceRelease(clientID []byte, serverIP net.IP, chAddr net.Hard
 	}()
 }
 
-// SendDiscoverPacket send a DHCP discover packet to target
-func (h *Handler) SendDiscoverPacket(chAddr net.HardwareAddr, cIAddr net.IP, xID []byte, options Options) (err error) {
-	if Debug {
-		fastlog.NewLine(module, "send discover packet").ByteArray("xid", xID).MAC("from", chAddr).IP("ciaddr", cIAddr).Write()
-	}
-	p := RequestPacket(Discover, chAddr, cIAddr, xID, false, options.SelectOrderOrAll(nil))
-	srcAddr := packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostIP4.IP, Port: packet.DHCP4ClientPort}
-	dstAddr := packet.Addr{MAC: h.session.NICInfo.RouterMAC, IP: h.session.NICInfo.RouterIP4.IP, Port: packet.DHCP4ServerPort}
-	err = sendDHCP4Packet(h.session.Conn, srcAddr, dstAddr, p)
-	return err
-}
-
-func (h *Handler) sendDeclineReleasePacket(msgType MessageType, clientID []byte, serverIP net.IP, chAddr net.HardwareAddr, ciAddr net.IP, xid []byte, options Options) (err error) {
+func mustXID(xid []byte) []byte {
 	if xid == nil {
 		xid = make([]byte, 4)
 		if _, err := rand.Read(xid); err != nil {
 			panic(err)
 		}
 	}
+	return xid
+}
 
-	p := NewPacket(BootRequest)
-	p.SetCHAddr(chAddr)
-	p.SetCIAddr(ciAddr)
-	p.SetXId(xid)
-	p.AddOption(OptionClientIdentifier, clientID)
-	p.AddOption(OptionDHCPMessageType, []byte{byte(msgType)})
-	p.AddOption(OptionServerIdentifier, serverIP.To4())
-	p.AddOption(OptionMessage, []byte("netfilter decline"))
-	for k, v := range options {
-		p.AddOption(k, v)
-	}
-	p.PadToMinSize()
+func (h *Handler) sendDeclineReleasePacket(msgType MessageType, clientID []byte, serverIP net.IP, chAddr net.HardwareAddr, ciAddr net.IP, xid []byte, options Options) (err error) {
+	b := packet.EtherBufferPool.Get().(*[packet.EthMaxSize]byte)
+	defer packet.EtherBufferPool.Put(b)
+	xid = mustXID(xid)
+	p := Marshall(b[0:], BootRequest, msgType, chAddr, ciAddr, net.IPv4zero, xid, false, options, nil)
+
 	srcAddr := packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostIP4.IP, Port: packet.DHCP4ClientPort}
 	dstAddr := packet.Addr{MAC: h.session.NICInfo.RouterMAC, IP: h.session.NICInfo.RouterIP4.IP, Port: packet.DHCP4ServerPort}
 	err = sendDHCP4Packet(h.session.Conn, srcAddr, dstAddr, p)
-	// err = h.sendDHCPPacket(serverIP, packet)
 	return err
 }
 
+// SendDiscoverPacket send a DHCP discover packet to target
+func (h *Handler) SendDiscoverPacket(chAddr net.HardwareAddr, ciAddr net.IP, xid []byte, name string) (err error) {
+	if Debug {
+		fastlog.NewLine(module, "send discover packet").ByteArray("xid", xid).MAC("from", chAddr).IP("ciaddr", ciAddr).Write()
+	}
+	// Commond options seen on many dhcp clients
+	options := Options{}
+	if name != "" {
+		options[OptionHostName] = []byte(name)
+	}
+	options[OptionParameterRequestList] = []byte{
+		byte(OptionDHCPMessageType), byte(OptionSubnetMask),
+		byte(OptionClasslessRouteFormat), byte(OptionRouter),
+		byte(OptionDomainNameServer), byte(OptionDomainName),
+	}
+
+	srcAddr := packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostIP4.IP, Port: packet.DHCP4ClientPort}
+	dstAddr := packet.Addr{MAC: h.session.NICInfo.RouterMAC, IP: h.session.NICInfo.RouterIP4.IP, Port: packet.DHCP4ServerPort}
+
+	b := packet.EtherBufferPool.Get().(*[packet.EthMaxSize]byte)
+	defer packet.EtherBufferPool.Put(b)
+	ether := packet.Ether(b[0:])
+	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IP, srcAddr.MAC, dstAddr.MAC)
+	ip4 := packet.IP4MarshalBinary(ether.Payload(), 50, srcAddr.IP, dstAddr.IP)
+	udp := packet.UDPMarshalBinary(ip4.Payload(), srcAddr.Port, dstAddr.Port)
+	dhcp := Marshall(udp.Payload(), BootRequest, Discover, chAddr, ciAddr, net.IPv4zero, xid, false, options, nil)
+	udp = udp.SetPayload(dhcp)
+	ip4 = ip4.SetPayload(udp, syscall.IPPROTO_UDP)
+	if ether, err = ether.SetPayload(ip4); err != nil {
+		return err
+	}
+	if _, err := h.session.Conn.WriteTo(ether, &dstAddr); err != nil {
+		fmt.Println("icmp failed to write ", err)
+		return err
+	}
+	return nil
+}
+
 func (h *Handler) processClientPacket(host *packet.Host, req DHCP4) error {
-	// req := DHCP4(buffer[:n])
 	if err := req.IsValid(); err != nil {
 		return err
 	}
@@ -150,13 +166,11 @@ func (h *Handler) processClientPacket(host *packet.Host, req DHCP4) error {
 	}
 
 	clientID := getClientID(req, options)
-
 	serverIP := net.IPv4zero
 	if tmp, ok := options[OptionServerIdentifier]; ok {
 		serverIP = net.IP(tmp)
 	}
 
-	// fields := log.Fields{"clientID": clientID, "ip": req.YIAddr(), "server": serverIP, "xid": req.XId()}
 	if serverIP.IsUnspecified() {
 		fmt.Printf("dhcp4: error client offer invalid serverIP=%v clientID=%v\n", serverIP, clientID)
 		return packet.ErrParseFrame
@@ -174,19 +188,12 @@ func (h *Handler) processClientPacket(host *packet.Host, req DHCP4) error {
 		return nil
 	}
 
-	// if Debug {
-	// fields["msgType"] = reqType
-	// fields["mac"] = req.CHAddr()
-	// log.WithFields(fields).Debug("dhcp4: client dhcp received")
-	// }
-
 	// only interested in offer packets
 	if reqType != Offer {
 		return nil
 	}
 
-	// fmt.Printf("dhcp4: client offer from another dhcp server")
-	fastlog.NewLine("dhcp4", "client offer from another dhcp server").ByteArray("clientid", clientID).IP("ip", req.YIAddr()).Write()
+	fastlog.NewLine("dhcp4", "client offer from another dhcp server").ByteArray("xid", req.XId()).ByteArray("clientid", clientID).IP("ip", req.YIAddr()).Write()
 
 	// Force dhcp server to release the IP
 	if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && h.session.IsCaptured(req.CHAddr())) {

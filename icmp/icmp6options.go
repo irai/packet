@@ -708,7 +708,7 @@ func newParseOptions(b []byte) (NewOptions, error) {
 			}
 		case optMTU:
 			if err := options.MTU.unmarshal(b[i : i+l]); err != nil {
-				fastlog.NewLine(module, "ignore invalid MTU option").Error(err).ByteArray("options", b).Write()
+				fastlog.NewLine(module6, "ignore invalid MTU option").Error(err).ByteArray("options", b).Write()
 			}
 		case optPrefixInformation:
 			p := PrefixInformation{}
@@ -722,15 +722,15 @@ func newParseOptions(b []byte) (NewOptions, error) {
 			}
 		case optRouteInformation:
 			if err := options.RouteInformation.unmarshal(b[i : i+l]); err != nil {
-				fastlog.NewLine(module, "ignore invalid route information option").Error(err).ByteArray("options", b).Write()
+				fastlog.NewLine(module6, "ignore invalid route information option").Error(err).ByteArray("options", b).Write()
 			}
 		case optRDNSS:
 			if err := options.RDNSS.unmarshal(b[i : i+l]); err != nil {
-				fastlog.NewLine(module, "ignore invalid RDNSS option").Error(err).ByteArray("options", b).Write()
+				fastlog.NewLine(module6, "ignore invalid RDNSS option").Error(err).ByteArray("options", b).Write()
 			}
 		case optDNSSL:
 			if err := options.DNSSearchList.unmarshal(b[i : i+l]); err != nil {
-				fastlog.NewLine(module, "ignore invalid DNSSearchList option").Error(err).ByteArray("options", b).Write()
+				fastlog.NewLine(module6, "ignore invalid DNSSearchList option").Error(err).ByteArray("options", b).Write()
 			}
 		default:
 			fmt.Println("icmp6 : invalid option - ignoring ", t)

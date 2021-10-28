@@ -283,11 +283,10 @@ func (p UDP) IsValid() bool {
 }
 
 func UDPMarshalBinary(p []byte, srcPort uint16, dstPort uint16) UDP {
-	if p == nil || cap(p) < UDPHeaderLen {
-		p = make([]byte, EthMaxSize) // enough capacity for a max ethernet
+	if cap(p) < UDPHeaderLen {
+		return nil
 	}
 	p = p[:UDPHeaderLen] // change slice in case slice is less than header
-
 	binary.BigEndian.PutUint16(p[0:2], srcPort)
 	binary.BigEndian.PutUint16(p[2:4], dstPort)
 	binary.BigEndian.PutUint16(p[4:6], 0) // len zero - no payload

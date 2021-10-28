@@ -18,7 +18,8 @@ import (
 // Debug turn on logging
 var Debug bool
 
-const module = "icmp"
+const module4 = "icmp4"
+const module6 = "icmp6"
 
 // Event represents and ICMP6 event from a host
 type Event struct {
@@ -225,7 +226,7 @@ func (h *Handler6) ProcessPacket(host *packet.Host, p []byte, header []byte) (re
 	icmp6Frame := ICMP(header)
 
 	if !icmp6Frame.IsValid() {
-		fastlog.NewLine(module, "error invalid icmp frame").Struct(ether).Int("len", len(header)).ByteArray("frame", header).Write()
+		fastlog.NewLine(module6, "error invalid icmp frame").Struct(ether).Int("len", len(header)).ByteArray("frame", header).Write()
 		return packet.Result{}, errParseMessage
 	}
 
@@ -251,9 +252,9 @@ func (h *Handler6) ProcessPacket(host *packet.Host, p []byte, header []byte) (re
 		// source IP is sometimes ff02::1 multicast, which means the host is nil.
 		// If unsolicited and Override, it is an indication the IPv6 that corresponds to a link layer address has changed.
 		if frame.Override() && !frame.Solicited() {
-			fastlog.NewLine(module, "neighbor advertisement overrid IP").Struct(ip6Frame).Module(module, "neighbour advertisement").Struct(frame).Write()
+			fastlog.NewLine(module6, "neighbor advertisement overrid IP").Struct(ip6Frame).Module(module6, "neighbour advertisement").Struct(frame).Write()
 			if frame.TargetLLA() == nil {
-				fastlog.NewLine(module, "error na override with nil targetLLA").Error(packet.ErrInvalidMAC).Write()
+				fastlog.NewLine(module6, "error na override with nil targetLLA").Error(packet.ErrInvalidMAC).Write()
 				return packet.Result{}, packet.ErrInvalidMAC
 			}
 			result.Update = true
@@ -393,20 +394,20 @@ func (h *Handler6) ProcessPacket(host *packet.Host, p []byte, header []byte) (re
 		echo := ICMPEcho(icmp6Frame)
 		if Debug {
 			// fmt.Printf("icmp6 : echo request from ip=%s %s\n", ip6Frame.Src(), echo)
-			fastlog.NewLine(module, "echo recvd").IP("srcIP", ip6Frame.Src()).IP("dstIP", ip6Frame.Dst()).Struct(echo).Write()
+			fastlog.NewLine(module6, "echo recvd").IP("srcIP", ip6Frame.Src()).IP("dstIP", ip6Frame.Dst()).Struct(echo).Write()
 		}
 		return packet.Result{}, nil
 
 	case ipv6.ICMPTypeMulticastListenerReport:
-		fastlog.NewLine(module, "multicast listener report recv").IP("ip", ip6Frame.Src()).Write()
+		fastlog.NewLine(module6, "multicast listener report recv").IP("ip", ip6Frame.Src()).Write()
 		return packet.Result{}, nil
 
 	case ipv6.ICMPTypeVersion2MulticastListenerReport:
-		fastlog.NewLine(module, "multicast listener report V2 recv").IP("ip", ip6Frame.Src()).Write()
+		fastlog.NewLine(module6, "multicast listener report V2 recv").IP("ip", ip6Frame.Src()).Write()
 		return packet.Result{}, nil
 
 	case ipv6.ICMPTypeMulticastListenerQuery:
-		fastlog.NewLine(module, "multicast listener query recv").IP("ip", ip6Frame.Src()).Write()
+		fastlog.NewLine(module6, "multicast listener query recv").IP("ip", ip6Frame.Src()).Write()
 		return packet.Result{}, nil
 
 	case ipv6.ICMPTypeRedirect:
@@ -415,13 +416,13 @@ func (h *Handler6) ProcessPacket(host *packet.Host, p []byte, header []byte) (re
 			return packet.Result{}, fmt.Errorf("invalid icmp redirect msg len=%d", len(redirect))
 		}
 		// fmt.Printf("icmp6 : redirect from ip=%s %s \n", ip6Frame.Src(), redirect)
-		fastlog.NewLine(module, "redirect recv").IP("fromIP", ip6Frame.Src()).Stringer(redirect).Write()
+		fastlog.NewLine(module6, "redirect recv").IP("fromIP", ip6Frame.Src()).Stringer(redirect).Write()
 
 		return packet.Result{}, nil
 
 	case ipv6.ICMPTypeDestinationUnreachable:
 		if Debug {
-			fastlog.NewLine(module, "destination unreachable").Struct(ip6Frame).Struct(icmp6Frame).Write()
+			fastlog.NewLine(module6, "destination unreachable").Struct(ip6Frame).Struct(icmp6Frame).Write()
 		}
 		return packet.Result{}, nil
 

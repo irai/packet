@@ -46,7 +46,7 @@ func (h *Handler6) SendEchoRequest(srcAddr packet.Addr, dstAddr packet.Addr, id 
 	}
 
 	if Debug {
-		fastlog.NewLine(module, "send echo6 request").IP("srcIP", srcAddr.IP).IP("dstIP", dstAddr.IP).Struct(ICMPEcho(p)).Write()
+		fastlog.NewLine(module6, "send echo6 request").IP("srcIP", srcAddr.IP).IP("dstIP", dstAddr.IP).Struct(ICMPEcho(p)).Write()
 	}
 	return h.sendPacket(srcAddr, dstAddr, p)
 }

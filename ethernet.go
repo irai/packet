@@ -69,7 +69,6 @@ func (p Ether) DstIP() net.IP {
 
 func (p Ether) Payload() []byte {
 	if p.EtherType() == syscall.ETH_P_IP || p.EtherType() == syscall.ETH_P_IPV6 || p.EtherType() == syscall.ETH_P_ARP {
-		// fmt.Println("DEBUG: arp payload ", len(p), cap(p))
 		if len(p) <= 14 { // change p in case the payload is empty
 			p = p[:cap(p)]
 		}

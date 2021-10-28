@@ -232,7 +232,7 @@ func (h *Handler6) SendRouterAdvertisement(router Router, dstAddr packet.Addr) e
 	if len(router.Prefixes) == 0 {
 		return nil
 	}
-	fastlog.NewLine(module, "send router advertisement").Struct(router.Addr).Struct(dstAddr).Write()
+	fastlog.NewLine(module6, "send router advertisement").Struct(router.Addr).Struct(dstAddr).Write()
 
 	var options []Option
 
@@ -309,7 +309,6 @@ func (h *Handler6) SendNeighborAdvertisement(srcAddr packet.Addr, dstAddr packet
 func (h *Handler6) SendNeighbourSolicitation(srcAddr packet.Addr, dstAddr packet.Addr, targetIP net.IP) error {
 	p, _ := ICMP6NeighborSolicitationMarshal(targetIP, h.session.NICInfo.HostMAC)
 
-	// fmt.Printf("icmp6 : sending NS src %s dst %s targetIP=%s\n", srcAddr, dstAddr, targetIP)
-	fastlog.NewLine(module, "sending NS src").Struct(srcAddr).Label("dst").Struct(dstAddr).IP("targetip", targetIP).Write()
+	fastlog.NewLine(module6, "sending NS src").Struct(srcAddr).Label("dst").Struct(dstAddr).IP("targetip", targetIP).Write()
 	return h.sendPacket(srcAddr, dstAddr, p)
 }

@@ -1,7 +1,6 @@
 package packet
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"time"
@@ -50,16 +49,11 @@ func (p *bufferedPacketConn) WriteTo(b []byte, addr net.Addr) (int, error) {
 }
 
 // TestReadAndDiscardLoop is a helper function to cleanup buffer
-func TestReadAndDiscardLoop(ctx context.Context, conn net.PacketConn) error {
+func TestReadAndDiscardLoop(conn net.PacketConn) error {
 	buf := make([]byte, 2000)
 	for {
 		n, _, err := conn.ReadFrom(buf)
 		if err != nil {
-			if ctx.Err() != context.Canceled {
-				panic(err)
-			}
-		}
-		if ctx.Err() == context.Canceled {
 			return nil
 		}
 

@@ -30,8 +30,6 @@ func (e State) String() string {
 	return "free"
 }
 
-type leaseTable map[string]*Lease
-
 // Lease stores a client lease
 type Lease struct {
 	ClientID    []byte `yaml:",omitempty"`
@@ -49,7 +47,6 @@ type Lease struct {
 func (l Lease) String() string {
 	line := fastlog.NewLine("", "")
 	return l.FastLog(line).ToString()
-	// return fmt.Sprintf("id=% x state=%s %s name=%s offer=%s captured=%v gw=%s mask=%v", l.ClientID, l.State, l.Addr, l.Name, l.IPOffer, l.subnet.Stage, l.subnet.DefaultGW, l.subnet.LAN.Mask)
 }
 
 func (l Lease) FastLog(line *fastlog.Line) *fastlog.Line {
@@ -85,12 +82,10 @@ func (h *Handler) findOrCreate(clientID []byte, mac net.HardwareAddr, name strin
 		if name != "" && lease.Name != name {
 			lease.Name = name
 		}
-
 		if lease.subnet.LAN.IP.Mask(lease.subnet.LAN.Mask).Equal(subnet.LAN.IP.Mask(subnet.LAN.Mask)) &&
 			bytes.Equal(lease.Addr.MAC, mac) {
 			return lease
 		}
-		// fmt.Printf("dhcp4 : client changed subnet clientID=%v from=%v to=%v\n", lease.ClientID, lease.subnet.LAN, subnet.LAN)
 		fastlog.NewLine(module, "client changed subnet").ByteArray("clientID", lease.ClientID).
 			String("from", lease.subnet.LAN.String()).String("to", subnet.LAN.String()).Write()
 	}
@@ -115,21 +110,19 @@ func (h *Handler) delete(lease *Lease) {
 	delete(h.table, string(lease.ClientID))
 }
 
-// allocIP allocates a free IP
+// allocIPOffer allocates a free IP to the lease entry
 func (h *Handler) allocIPOffer(lease *Lease, reqIP net.IP) error {
 	if reqIP != nil {
 		if l := h.findByIP(reqIP); l == nil || l.State == StateFree || bytes.Equal(l.ClientID, lease.ClientID) {
 			if h.session.FindIP(reqIP) == nil {
 				lease.IPOffer = packet.CopyIP(reqIP).To4()
 				if Debug {
-					// fmt.Printf("dhcp4 : offer ip=%s\n", lease.IPOffer)
 					fastlog.NewLine(module, "offer").IP("ip", lease.IPOffer).Write()
 				}
 				return nil
 			}
 		}
 	}
-
 	tmpIP := dupIP(lease.subnet.LAN.IP).To4() // copy to update array
 	end := uint(lease.subnet.LastIP[3])
 
@@ -165,7 +158,6 @@ func (h *Handler) allocIPOffer(lease *Lease, reqIP net.IP) error {
 	if ip == nil {
 		return errors.New("exhausted all ips")
 	}
-
 	lease.IPOffer = ip
 	if Debug {
 		fastlog.NewLine(module, "offer").IP("ip", lease.IPOffer).Write()

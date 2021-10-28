@@ -108,7 +108,8 @@ func newSubnet(config SubnetConfig) (*dhcpSubnet, error) {
 	// 43-Vendor specific;44-Netbios name; 47-Netbios scope;51-Lease time;58-Renewal time (t1); 59-rebind time(t2)
 	// 121-classless route option(takes precedence to 33)
 	subnet.options = Options{
-		OptionSubnetMask:       []byte(subnet.LAN.Mask), // must occur before router
+		OptionServerIdentifier: []byte(subnet.DHCPServer),
+		OptionSubnetMask:       []byte(subnet.LAN.Mask), // must occur before router - need to sort the map
 		OptionRouter:           []byte(subnet.DefaultGW.To4()),
 		OptionDomainNameServer: []byte(subnet.DNSServer.To4()),
 	}
@@ -119,6 +120,15 @@ func newSubnet(config SubnetConfig) (*dhcpSubnet, error) {
 	}
 
 	return &subnet, nil
+}
+
+// CopyOptions returns the default options for this subnet
+func (h *dhcpSubnet) CopyOptions() Options {
+	opts := make(Options, len(h.options)+5)
+	for k, v := range h.options {
+		opts[k] = v
+	}
+	return opts
 }
 
 func (h *dhcpSubnet) appendRouteOptions(ip net.IP, mask net.IPMask, routeTo net.IP) {

@@ -19,13 +19,19 @@ func Test_declineSimple(t *testing.T) {
 	defer tc.Close()
 
 	srcAddr := packet.Addr{MAC: mac5, IP: net.IPv4zero, Port: packet.DHCP4ClientPort}
+	dstAddr := packet.Addr{MAC: hostMAC, IP: hostIP4, Port: packet.DHCP4ServerPort}
 	xid := newDHCPHost(t, tc, srcAddr.MAC)
 	checkLeaseTable(t, tc, 1, 0, 0)
 
-	dhcpFrame := newDHCP4DeclineFrame(srcAddr, tc.IPOffer, hostIP4, xid)
-	dstAddr := packet.Addr{MAC: hostMAC, IP: hostIP4, Port: packet.DHCP4ServerPort}
-	processTestDHCP4Packet(t, tc, srcAddr, dstAddr, dhcpFrame)
-	time.Sleep(time.Millisecond * 10)
+	ether := newDHCP4DeclineFrame(srcAddr, dstAddr, tc.IPOffer, hostIP4, xid)
+	if _, err := tc.h.ProcessPacket(nil, ether, packet.UDP(packet.IP4(ether.Payload()).Payload()).Payload()); err != nil {
+		t.Fatalf("Test_Requests:%s error = %v", "newDHCPHOst", err)
+	}
+	select {
+	case <-tc.notifyReply:
+		t.Fatal("failed invalid reply")
+	case <-time.After(time.Millisecond * 10):
+	}
 	checkLeaseTable(t, tc, 0, 0, 1)
 }
 func Test_DeclineFromAnotherServer(t *testing.T) {
@@ -42,24 +48,34 @@ func Test_DeclineFromAnotherServer(t *testing.T) {
 	dstAddr := packet.Addr{MAC: arp.EthernetBroadcast, IP: net.IPv4zero, Port: packet.DHCP4ServerPort}
 
 	// discover packet
-	dhcpFrame := newDHCP4DiscoverFrame(srcAddr, "name1", xid)
-	processTestDHCP4Packet(t, tc, srcAddr, dstAddr, dhcpFrame)
-	time.Sleep(time.Millisecond * 10)
+	ether := newDHCP4DiscoverFrame(srcAddr, dstAddr, "name1", xid)
+	if _, err := tc.h.ProcessPacket(nil, ether, packet.UDP(packet.IP4(ether.Payload()).Payload()).Payload()); err != nil {
+		t.Fatalf("Test_Requests:%s error = %v", "newDHCPHOst", err)
+	}
+	select {
+	case <-tc.notifyReply:
+	case <-time.After(time.Millisecond * 10):
+		t.Fatal("failed invalid reply")
+	}
 	checkLeaseTable(t, tc, 0, 1, 0)
 
 	// decline for other host
-	dhcpFrame = newDHCP4DeclineFrame(srcAddr, ip5, routerIP4, xid)
 	dstAddr = packet.Addr{MAC: routerMAC, IP: routerIP4, Port: packet.DHCP4ServerPort}
-	processTestDHCP4Packet(t, tc, srcAddr, dstAddr, dhcpFrame)
-	time.Sleep(time.Millisecond * 10)
+	ether = newDHCP4DeclineFrame(srcAddr, dstAddr, ip5, routerIP4, xid)
+	if _, err := tc.h.ProcessPacket(nil, ether, packet.UDP(packet.IP4(ether.Payload()).Payload()).Payload()); err != nil {
+		t.Fatalf("Test_Requests:%s error = %v", "newDHCPHOst", err)
+	}
+	select {
+	case <-tc.notifyReply:
+		t.Fatal("failed to receive reply")
+	case <-time.After(time.Millisecond * 10):
+	}
 	checkLeaseTable(t, tc, 0, 1, 0)
 
 	// request for our server
 	newDHCPHost(t, tc, srcAddr.MAC)
-	time.Sleep(time.Millisecond * 10)
 	if tc.count != 2 { // count offers
 		t.Errorf("DHCPHandler.handleDiscover() invalid response count=%d want=%d", tc.count, 2)
 	}
 	checkLeaseTable(t, tc, 1, 0, 0)
-
 }

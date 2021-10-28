@@ -1,7 +1,3 @@
-// dhcp4 IPv4 DHCP Library for Parsing and Creating DHCP Packets, along with basic DHCP server functionality
-//
-// Mostly based on the code written by http://richard.warburton.it/
-// Copyright: 2014 Skagerrak Software - http://www.skagerraksoftware.com/
 package dhcp4
 
 import (
@@ -13,34 +9,86 @@ import (
 	"github.com/irai/packet/fastlog"
 )
 
-type Option struct {
-	Code  OptionCode
-	Value []byte
-}
-type OptionCode byte
-type OpCode byte
-type MessageType byte // Option 53
-
 // A DHCP4 packet
 type DHCP4 []byte
+
+// DHCPv4 frame format
+// 0                   1                   2                   3
+// 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+// |     op (1)    |   htype (1)   |   hlen (1)    |   hops (1)    |
+// +---------------+---------------+---------------+---------------+
+// |                            xid (4)                            |
+// +-------------------------------+-------------------------------+
+// |           secs (2)            |           flags (2)           |
+// +-------------------------------+-------------------------------+
+// |                          ciaddr  (4)                          |
+// +---------------------------------------------------------------+
+// |                          yiaddr  (4)                          |
+// +---------------------------------------------------------------+
+// |                          siaddr  (4)                          |
+// +---------------------------------------------------------------+
+// |                          giaddr  (4)                          |
+// +---------------------------------------------------------------+
+// |                                                               |
+// |                          chaddr  (16)                         |
+// |                                                               |
+// |                                                               |
+// +---------------------------------------------------------------+
+// |                                                               |
+// |                          sname   (64)                         |
+// +---------------------------------------------------------------+
+// |                                                               |
+// |                          file    (128)                        |
+// +---------------------------------------------------------------+
+// |cookie(4bytes)                                                 |
+// |                          options (variable)                   |
+// +---------------------------------------------------------------+
+func (p DHCP4) OpCode() OpCode           { return OpCode(p[0]) }
+func (p DHCP4) HType() byte              { return p[1] }
+func (p DHCP4) HLen() byte               { return p[2] }
+func (p DHCP4) Hops() byte               { return p[3] }
+func (p DHCP4) XId() []byte              { return p[4:8] }
+func (p DHCP4) Secs() uint16             { return binary.BigEndian.Uint16(p[8:10]) }
+func (p DHCP4) Flags() uint16            { return binary.BigEndian.Uint16(p[10:12]) }
+func (p DHCP4) CIAddr() net.IP           { return net.IP(p[12:16]) }
+func (p DHCP4) YIAddr() net.IP           { return net.IP(p[16:20]) }
+func (p DHCP4) SIAddr() net.IP           { return net.IP(p[20:24]) }
+func (p DHCP4) GIAddr() net.IP           { return net.IP(p[24:28]) }
+func (p DHCP4) CHAddr() net.HardwareAddr { return net.HardwareAddr(p[28 : 28+6]) }
+func (p DHCP4) SName() []byte            { return trimNull(p[44 : 44+64]) }    // BOOTP legacy
+func (p DHCP4) File() []byte             { return trimNull(p[108 : 108+128]) } // BOOTP legacy
+func (p DHCP4) Cookie() []byte           { return p[236:240] }
+func (p DHCP4) Options() []byte {
+	if len(p) > 240 {
+		return p[240:]
+	}
+	return nil
+}
 
 func (p DHCP4) IsValid() error {
 	if len(p) < 240 { // Invalid size
 		return packet.ErrFrameLen
 	}
+	if p.OpCode() != BootRequest && p.OpCode() != BootReply {
+		return packet.ErrParseFrame
+	}
 	if p.HLen() != 6 { // Invalid frame - we only accept ethernet hardware addr
 		return packet.ErrInvalidMAC
+	}
+	if err := p.validateOptions(); err != nil {
+		return err
 	}
 	return nil
 }
 
 func (p DHCP4) String() string {
-	// return fmt.Sprintf("opcode=%v chaddr=%s ciaddr=%s yiaddr=%s len=%d", p.OpCode(), p.CHAddr(), p.CIAddr(), p.YIAddr(), len(p))
 	l := fastlog.NewLine("", "")
 	return p.FastLog(l).ToString()
 }
 
 func (p DHCP4) FastLog(line *fastlog.Line) *fastlog.Line {
+	line.ByteArray("xid", p.XId())
 	line.Uint8("opcode", uint8(p.OpCode()))
 	line.MAC("chaddr", p.CHAddr())
 	line.IP("ciaddr", p.CIAddr())
@@ -48,29 +96,6 @@ func (p DHCP4) FastLog(line *fastlog.Line) *fastlog.Line {
 	line.Int("len", len(p))
 	return line
 }
-
-func (p DHCP4) OpCode() OpCode { return OpCode(p[0]) }
-func (p DHCP4) HType() byte    { return p[1] }
-func (p DHCP4) HLen() byte     { return p[2] }
-func (p DHCP4) Hops() byte     { return p[3] }
-func (p DHCP4) XId() []byte    { return p[4:8] }
-func (p DHCP4) Secs() []byte   { return p[8:10] } // Never Used?
-func (p DHCP4) Flags() []byte  { return p[10:12] }
-func (p DHCP4) CIAddr() net.IP { return net.IP(p[12:16]) }
-func (p DHCP4) YIAddr() net.IP { return net.IP(p[16:20]) }
-func (p DHCP4) SIAddr() net.IP { return net.IP(p[20:24]) }
-func (p DHCP4) GIAddr() net.IP { return net.IP(p[24:28]) }
-func (p DHCP4) CHAddr() net.HardwareAddr {
-	return net.HardwareAddr(p[28 : 28+6])
-}
-
-// 192 bytes of zeros BOOTP legacy
-
-// BOOTP legacy
-func (p DHCP4) SName() []byte { return trimNull(p[44:108]) }
-
-// BOOTP legacy
-func (p DHCP4) File() []byte { return trimNull(p[108:236]) }
 
 func trimNull(d []byte) []byte {
 	for i, v := range d {
@@ -81,19 +106,11 @@ func trimNull(d []byte) []byte {
 	return d
 }
 
-func (p DHCP4) Cookie() []byte { return p[236:240] }
-func (p DHCP4) Options() []byte {
-	if len(p) > 240 {
-		return p[240:]
-	}
-	return nil
-}
-
-func (p DHCP4) Broadcast() bool { return p.Flags()[0] > 127 }
+func (p DHCP4) Broadcast() bool { return (p.Flags() & 0x8000) == 0x8000 }
 
 func (p DHCP4) SetBroadcast(broadcast bool) {
 	if p.Broadcast() != broadcast {
-		p.Flags()[0] ^= 128
+		p[10] ^= 128
 	}
 }
 
@@ -103,11 +120,12 @@ func (p DHCP4) SetCHAddr(a net.HardwareAddr) {
 	p[2] = byte(len(a))
 }
 func (p DHCP4) SetHType(hType byte)     { p[1] = hType }
+func (p DHCP4) SetHLen(hLen byte)       { p[2] = hLen }
 func (p DHCP4) SetCookie(cookie []byte) { copy(p.Cookie(), cookie) }
 func (p DHCP4) SetHops(hops byte)       { p[3] = hops }
 func (p DHCP4) SetXId(xId []byte)       { copy(p.XId(), xId) }
-func (p DHCP4) SetSecs(secs []byte)     { copy(p.Secs(), secs) }
-func (p DHCP4) SetFlags(flags []byte)   { copy(p.Flags(), flags) }
+func (p DHCP4) SetSecs(secs uint16)     { binary.BigEndian.PutUint16(p[8:10], secs) }
+func (p DHCP4) SetFlags(flags uint16)   { binary.BigEndian.PutUint16(p[10:12], flags) }
 func (p DHCP4) SetCIAddr(ip net.IP)     { copy(p.CIAddr(), ip.To4()) }
 func (p DHCP4) SetYIAddr(ip net.IP)     { copy(p.YIAddr(), ip.To4()) }
 func (p DHCP4) SetSIAddr(ip net.IP)     { copy(p.SIAddr(), ip.To4()) }
@@ -132,7 +150,27 @@ func (p DHCP4) SetFile(file []byte) {
 // Map of DHCP options
 type Options map[OptionCode][]byte
 
+func (p DHCP4) validateOptions() error {
+	opts := p.Options()
+	if len(opts) < 2 {
+		return packet.ErrParseFrame
+	}
+	for len(opts) >= 2 && OptionCode(opts[0]) != End {
+		if OptionCode(opts[0]) == Pad {
+			opts = opts[1:]
+			continue
+		}
+		size := int(opts[1])
+		if len(opts) < 2+size {
+			return packet.ErrParseFrame
+		}
+		opts = opts[2+size:]
+	}
+	return nil
+}
+
 // Parses the packet's options into an Options map
+// Caution: we return slices to the underlying byte array
 func (p DHCP4) ParseOptions() Options {
 	opts := p.Options()
 	options := make(Options, 10)
@@ -151,93 +189,113 @@ func (p DHCP4) ParseOptions() Options {
 	return options
 }
 
-func NewPacket(opCode OpCode) DHCP4 {
-	p := make(DHCP4, 241)
-	p.SetOpCode(opCode)
+func (p DHCP4) appendOptions(options Options, order []byte) int {
+	if cap(p) < 240 {
+		return 0
+	}
+	pos := 0
+	buffer := make([]byte, 1024) // use a tmp buffer in case options point to the underlying array
+
+	var optionsReplyParametersList = []byte{
+		byte(OptionSubnetMask), // must appear before router options
+		byte(OptionStaticRoute),
+		byte(OptionRouter),
+	}
+	order = append(order, optionsReplyParametersList...)
+
+	// first copy parameters in order
+	for _, code := range order {
+		if value, ok := options[OptionCode(code)]; ok {
+			buffer[pos] = byte(code)
+			buffer[pos+1] = byte(len(value))
+			pos = pos + 2
+			pos = pos + copy(buffer[pos:], value)
+			delete(options, OptionCode(code))
+		}
+	}
+	// second, copy any remaining options
+	for code, value := range options {
+		buffer[pos] = byte(code)
+		buffer[pos+1] = byte(len(value))
+		pos = pos + 2
+		pos = pos + copy(buffer[pos:], value)
+	}
+	copy(p[240:cap(p)], buffer[:pos])
+	return pos
+}
+
+// optionsLeaseTime - converts a time.Duration to a 4 byte slice, compatible
+// with OptionIPAddressLeaseTime.
+func optionsLeaseTime(d time.Duration) []byte {
+	leaseBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(leaseBytes, uint32(d/time.Second))
+	return leaseBytes
+}
+
+func zeroes(b []byte) {
+	for i := 0; i < len(b); i++ {
+		b[i] = 0x00
+	}
+}
+
+// Marshal returns the underlying slice as a DHCP4 frame. The returned slice is adjusted to the length of the DHCP frame.
+// When replying to a DHCP request, you can pass nil to chaddr, ciaddr, yiadd, and xid to keep the underlying values.
+func Marshall(b []byte, opcode OpCode, mt MessageType, chaddr net.HardwareAddr, ciaddr net.IP, yiaddr net.IP, xid []byte, broadcast bool, options Options, order []byte) DHCP4 {
+	if cap(b) < 300 { // minimum packet size
+		return nil
+	}
+	p := DHCP4(b[:cap(b)])
+	zeroes(p[28+6 : 236]) // zero from chaddr (but keep first 6b of existing mac) , fname, file
+	p.SetOpCode(opcode)
 	p.SetHType(1) // Ethernet
+	p.SetHLen(6)  // Ethernet mac len
+	p.SetHops(0)
+	if xid != nil {
+		p.SetXId(xid)
+	}
+	p.SetSecs(0)
+	p.SetFlags(0)
 	p.SetCookie([]byte{99, 130, 83, 99})
-	p[240] = byte(End)
-	return p
-}
-
-// Appends a DHCP option to the end of a packet
-func (p *DHCP4) AddOption(o OptionCode, value []byte) {
-	*p = append((*p)[:len(*p)-1], []byte{byte(o), byte(len(value))}...) // Strip off End, Add OptionCode and Length
-	*p = append(*p, value...)                                           // Add Option Value
-	*p = append(*p, byte(End))                                          // Add on new End
-}
-
-// Removes all options from packet.
-func (p *DHCP4) StripOptions() {
-	*p = append((*p)[:240], byte(End))
-}
-
-// Creates a request packet that a Client would send to a server.
-func RequestPacket(mt MessageType, chAddr net.HardwareAddr, cIAddr net.IP, xId []byte, broadcast bool, options []Option) DHCP4 {
-	p := NewPacket(BootRequest)
-	p.SetCHAddr(chAddr)
-	p.SetXId(xId)
-	if cIAddr != nil {
-		p.SetCIAddr(cIAddr)
+	if ciaddr != nil {
+		p.SetCIAddr(ciaddr)
+	}
+	if yiaddr != nil {
+		p.SetYIAddr(yiaddr)
+	}
+	p.SetSIAddr(net.IPv4zero)
+	p.SetGIAddr(net.IPv4zero)
+	if chaddr != nil {
+		p.SetCHAddr(chaddr)
 	}
 	p.SetBroadcast(broadcast)
-	p.AddOption(OptionDHCPMessageType, []byte{byte(mt)})
-	for _, o := range options {
-		p.AddOption(o.Code, o.Value)
+	if options == nil {
+		options = Options{}
 	}
-	p.PadToMinSize()
-	return p
+	options[OptionCode(OptionDHCPMessageType)] = []byte{byte(mt)}
+	n := 240 + p.appendOptions(options, order)
+	p[n] = byte(End)
+	n++
+
+	// PadToMinSize pads a packet so that when sent over UDP, the entire packet,
+	// is 300 bytes (BOOTP min), to be compatible with really old devices.
+	for ; n < 300; n++ {
+		p[n] = 0x00
+	}
+	return p[:n]
 }
 
-// ReplyPacket creates a reply packet that a Server would send to a client.
-// It uses the req Packet param to copy across common/necessary fields to
-// associate the reply the request.
-func ReplyPacket(req DHCP4, mt MessageType, serverID, yIAddr net.IP, leaseDuration time.Duration, options []Option) DHCP4 {
-	p := NewPacket(BootReply)
-	p.SetXId(req.XId())
-	p.SetFlags(req.Flags())
-	p.SetYIAddr(yIAddr)
-	p.SetGIAddr(req.GIAddr())
-	p.SetCHAddr(req.CHAddr())
-	p.AddOption(OptionDHCPMessageType, []byte{byte(mt)})
-	p.AddOption(OptionServerIdentifier, []byte(serverID))
-	if leaseDuration > 0 {
-		p.AddOption(OptionIPAddressLeaseTime, OptionsLeaseTime(leaseDuration))
+// nakPacket returns a NACK reply packet.
+// It reuses the buffer updating fields as required returning the same slice with updated len.
+func nakPacket(req DHCP4, serverID, clientID []byte) DHCP4 {
+	options := Options{}
+	options[OptionServerIdentifier] = []byte(serverID) // rfc: must include
+	if clientID != nil {
+		options[OptionClientIdentifier] = clientID
 	}
-	for _, o := range options {
-		p.AddOption(o.Code, o.Value)
-	}
-	p.PadToMinSize()
-	return p
+	return Marshall(req, BootReply, NAK, nil, net.IPv4zero, net.IPv4zero, nil, false, options, nil)
 }
 
-func DeclinePacket(mt MessageType, chAddr net.HardwareAddr, ciAddr net.IP, xId []byte, serverIP net.IP, options []Option) DHCP4 {
-	p := NewPacket(BootRequest)
-	p.SetCHAddr(chAddr)
-	p.SetCIAddr(ciAddr)
-	p.SetXId(xId)
-	// p.AddOption(OptionClientIdentifier, clientID)
-	p.AddOption(OptionServerIdentifier, serverIP.To4())
-	p.AddOption(OptionDHCPMessageType, []byte{byte(mt)})
-	p.AddOption(OptionMessage, []byte("netfilter decline"))
-	for _, v := range options {
-		p.AddOption(v.Code, v.Value)
-	}
-	p.PadToMinSize()
-	return p
-}
-
-// PadToMinSize pads a packet so that when sent over UDP, the entire packet,
-// is 300 bytes (BOOTP min), to be compatible with really old devices.
-var padder [272]byte
-
-func (p *DHCP4) PadToMinSize() {
-	if n := len(*p); n < 272 {
-		*p = append(*p, padder[:272-n]...)
-	}
-}
-
-//go:generate stringer -type=OpCode
+type OpCode byte
 
 // OpCodes
 const (
@@ -245,164 +303,74 @@ const (
 	BootReply   OpCode = 2 // From Server
 )
 
-//go:generate stringer -type=MessageType
+type MessageType byte
 
 // DHCP Message Type 53
 const (
-	Discover MessageType = 1 // Broadcast Packet From Client - Can I have an IP?
-	Offer    MessageType = 2 // Broadcast From Server - Here's an IP
-	Request  MessageType = 3 // Broadcast From Client - I'll take that IP (Also start for renewals)
-	Decline  MessageType = 4 // Broadcast From Client - Sorry I can't use that IP
-	ACK      MessageType = 5 // From Server, Yes you can have that IP
-	NAK      MessageType = 6 // From Server, No you cannot have that IP
-	Release  MessageType = 7 // From Client, I don't need that IP anymore
-	Inform   MessageType = 8 // From Client, I have this IP and there's nothing you can do about it
+	Discover MessageType = 1
+	Offer    MessageType = 2
+	Request  MessageType = 3
+	Decline  MessageType = 4
+	ACK      MessageType = 5
+	NAK      MessageType = 6
+	Release  MessageType = 7
+	Inform   MessageType = 8
 )
 
-//go:generate stringer -type=OptionCode
+type OptionCode byte
 
 // DHCP Options
+// see complete list here: https://www.iana.org/assignments/bootp-dhcp-parameters/bootp-dhcp-parameters.xhtml
 const (
-	End                          OptionCode = 255
-	Pad                          OptionCode = 0
-	OptionSubnetMask             OptionCode = 1
-	OptionTimeOffset             OptionCode = 2
-	OptionRouter                 OptionCode = 3
-	OptionTimeServer             OptionCode = 4
-	OptionNameServer             OptionCode = 5
-	OptionDomainNameServer       OptionCode = 6
-	OptionLogServer              OptionCode = 7
-	OptionCookieServer           OptionCode = 8
-	OptionLPRServer              OptionCode = 9
-	OptionImpressServer          OptionCode = 10
-	OptionResourceLocationServer OptionCode = 11
-	OptionHostName               OptionCode = 12
-	OptionBootFileSize           OptionCode = 13
-	OptionMeritDumpFile          OptionCode = 14
-	OptionDomainName             OptionCode = 15
-	OptionSwapServer             OptionCode = 16
-	OptionRootPath               OptionCode = 17
-	OptionExtensionsPath         OptionCode = 18
-
-	// IP Layer Parameters per Host
-	OptionIPForwardingEnableDisable          OptionCode = 19
+	End                                      OptionCode = 255
+	Pad                                      OptionCode = 0
+	OptionSubnetMask                         OptionCode = 1
+	OptionTimeOffset                         OptionCode = 2
+	OptionRouter                             OptionCode = 3
+	OptionTimeServer                         OptionCode = 4
+	OptionNameServer                         OptionCode = 5
+	OptionDomainNameServer                   OptionCode = 6
+	OptionLogServer                          OptionCode = 7
+	OptionCookieServer                       OptionCode = 8
+	OptionLPRServer                          OptionCode = 9
+	OptionImpressServer                      OptionCode = 10
+	OptionResourceLocationServer             OptionCode = 11
+	OptionHostName                           OptionCode = 12
+	OptionBootFileSize                       OptionCode = 13
+	OptionMeritDumpFile                      OptionCode = 14
+	OptionDomainName                         OptionCode = 15
+	OptionSwapServer                         OptionCode = 16
+	OptionRootPath                           OptionCode = 17
+	OptionExtensionsPath                     OptionCode = 18
+	OptionIPForwardingEnableDisable          OptionCode = 19 // IP Layer Parameters per Host
 	OptionNonLocalSourceRoutingEnableDisable OptionCode = 20
 	OptionPolicyFilter                       OptionCode = 21
 	OptionMaximumDatagramReassemblySize      OptionCode = 22
 	OptionDefaultIPTimeToLive                OptionCode = 23
 	OptionPathMTUAgingTimeout                OptionCode = 24
 	OptionPathMTUPlateauTable                OptionCode = 25
-
-	// IP Layer Parameters per Interface
-	OptionInterfaceMTU              OptionCode = 26
-	OptionAllSubnetsAreLocal        OptionCode = 27
-	OptionBroadcastAddress          OptionCode = 28
-	OptionPerformMaskDiscovery      OptionCode = 29
-	OptionMaskSupplier              OptionCode = 30
-	OptionPerformRouterDiscovery    OptionCode = 31
-	OptionRouterSolicitationAddress OptionCode = 32
-	OptionStaticRoute               OptionCode = 33
-
-	// Link Layer Parameters per Interface
-	OptionTrailerEncapsulation  OptionCode = 34
-	OptionARPCacheTimeout       OptionCode = 35
-	OptionEthernetEncapsulation OptionCode = 36
-
-	// TCP Parameters
-	OptionTCPDefaultTTL        OptionCode = 37
-	OptionTCPKeepaliveInterval OptionCode = 38
-	OptionTCPKeepaliveGarbage  OptionCode = 39
-
-	// Application and Service Parameters
-	OptionNetworkInformationServiceDomain            OptionCode = 40
-	OptionNetworkInformationServers                  OptionCode = 41
-	OptionNetworkTimeProtocolServers                 OptionCode = 42
-	OptionVendorSpecificInformation                  OptionCode = 43
-	OptionNetBIOSOverTCPIPNameServer                 OptionCode = 44
-	OptionNetBIOSOverTCPIPDatagramDistributionServer OptionCode = 45
-	OptionNetBIOSOverTCPIPNodeType                   OptionCode = 46
-	OptionNetBIOSOverTCPIPScope                      OptionCode = 47
-	OptionXWindowSystemFontServer                    OptionCode = 48
-	OptionXWindowSystemDisplayManager                OptionCode = 49
-	OptionNetworkInformationServicePlusDomain        OptionCode = 64
-	OptionNetworkInformationServicePlusServers       OptionCode = 65
-	OptionMobileIPHomeAgent                          OptionCode = 68
-	OptionSimpleMailTransportProtocol                OptionCode = 69
-	OptionPostOfficeProtocolServer                   OptionCode = 70
-	OptionNetworkNewsTransportProtocol               OptionCode = 71
-	OptionDefaultWorldWideWebServer                  OptionCode = 72
-	OptionDefaultFingerServer                        OptionCode = 73
-	OptionDefaultInternetRelayChatServer             OptionCode = 74
-	OptionStreetTalkServer                           OptionCode = 75
-	OptionStreetTalkDirectoryAssistance              OptionCode = 76
-
-	OptionRelayAgentInformation OptionCode = 82
-
-	// DHCP Extensions
-	OptionRequestedIPAddress     OptionCode = 50
-	OptionIPAddressLeaseTime     OptionCode = 51
-	OptionOverload               OptionCode = 52
-	OptionDHCPMessageType        OptionCode = 53
-	OptionServerIdentifier       OptionCode = 54
-	OptionParameterRequestList   OptionCode = 55
-	OptionMessage                OptionCode = 56
-	OptionMaximumDHCPMessageSize OptionCode = 57
-	OptionRenewalTimeValue       OptionCode = 58
-	OptionRebindingTimeValue     OptionCode = 59
-	OptionVendorClassIdentifier  OptionCode = 60
-	OptionClientIdentifier       OptionCode = 61
-
-	OptionTFTPServerName OptionCode = 66
-	OptionBootFileName   OptionCode = 67
-
-	OptionUserClass OptionCode = 77
-
-	OptionClientArchitecture OptionCode = 93
-
-	OptionTZPOSIXString    OptionCode = 100
-	OptionTZDatabaseString OptionCode = 101
-
-	OptionDomainSearch OptionCode = 119
-
-	OptionClasslessRouteFormat OptionCode = 121
-
-	// From RFC3942 - Options Used by PXELINUX
-	OptionPxelinuxMagic      OptionCode = 208
-	OptionPxelinuxConfigfile OptionCode = 209
-	OptionPxelinuxPathprefix OptionCode = 210
-	OptionPxelinuxReboottime OptionCode = 211
+	OptionInterfaceMTU                       OptionCode = 26 // IP Layer Parameters per Interface
+	OptionAllSubnetsAreLocal                 OptionCode = 27
+	OptionBroadcastAddress                   OptionCode = 28
+	OptionPerformMaskDiscovery               OptionCode = 29
+	OptionMaskSupplier                       OptionCode = 30
+	OptionPerformRouterDiscovery             OptionCode = 31
+	OptionRouterSolicitationAddress          OptionCode = 32
+	OptionStaticRoute                        OptionCode = 33
+	OptionTrailerEncapsulation               OptionCode = 34
+	OptionARPCacheTimeout                    OptionCode = 35
+	OptionEthernetEncapsulation              OptionCode = 36
+	OptionRequestedIPAddress                 OptionCode = 50 // DHCP Extensions
+	OptionIPAddressLeaseTime                 OptionCode = 51
+	OptionOverload                           OptionCode = 52
+	OptionDHCPMessageType                    OptionCode = 53
+	OptionServerIdentifier                   OptionCode = 54
+	OptionParameterRequestList               OptionCode = 55
+	OptionMessage                            OptionCode = 56
+	OptionMaximumDHCPMessageSize             OptionCode = 57
+	OptionRenewalTimeValue                   OptionCode = 58
+	OptionRebindingTimeValue                 OptionCode = 59
+	OptionVendorClassIdentifier              OptionCode = 60
+	OptionClientIdentifier                   OptionCode = 61
+	OptionClasslessRouteFormat               OptionCode = 121
 )
-
-// SelectOrderOrAll has same functionality as SelectOrder, except if the order
-// param is nil, whereby all options are added (in arbitrary order).
-func (o Options) SelectOrderOrAll(order []byte) []Option {
-	if order == nil {
-		opts := make([]Option, 0, len(o))
-		for i, v := range o {
-			opts = append(opts, Option{Code: i, Value: v})
-		}
-		return opts
-	}
-	return o.SelectOrder(order)
-}
-
-// SelectOrder returns a slice of options ordered and selected by a byte array
-// usually defined by OptionParameterRequestList.  This result is expected to be
-// used in ReplyPacket()'s []Option parameter.
-func (o Options) SelectOrder(order []byte) []Option {
-	opts := make([]Option, 0, len(order))
-	for _, v := range order {
-		if data, ok := o[OptionCode(v)]; ok {
-			opts = append(opts, Option{Code: OptionCode(v), Value: data})
-		}
-	}
-	return opts
-}
-
-// OptionsLeaseTime - converts a time.Duration to a 4 byte slice, compatible
-// with OptionIPAddressLeaseTime.
-func OptionsLeaseTime(d time.Duration) []byte {
-	leaseBytes := make([]byte, 4)
-	binary.BigEndian.PutUint32(leaseBytes, uint32(d/time.Second))
-	return leaseBytes
-}

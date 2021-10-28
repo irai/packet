@@ -29,19 +29,20 @@ func (h *Handler) handleDecline(p DHCP4, options Options) (d DHCP4) {
 
 	lease := h.findOrCreate(clientID, p.CHAddr(), "")
 
-	if !lease.subnet.DHCPServer.Equal(serverIP) ||
-		lease == nil || !lease.Addr.IP.Equal(reqIP) || !bytes.Equal(lease.Addr.MAC, p.CHAddr()) {
+	if !lease.subnet.DHCPServer.Equal(serverIP) {
+		fastlog.NewLine("dhcp4", "decline for another server - ignore").ByteArray("clientid", clientID).IP("ip", reqIP).IP("serverIP", serverIP).Write()
+		return nil
+	}
+
+	if lease == nil || !lease.Addr.IP.Equal(reqIP) || !bytes.Equal(lease.Addr.MAC, p.CHAddr()) {
 		lxid := []byte{}
 		if lease != nil {
 			lxid = lease.XID
 		}
-		// log.WithFields(log.Fields{"clientid": clientID, "mac": p.CHAddr().String(),
-		// "xid": p.XId(), "leasexid": lxid, "serverip": serverIP, "reqip": reqIP}).Infof("dhcp4: decline for another server - ignore")
-		fastlog.NewLine("dhcp4", "decline for another server - ignore").ByteArray("clientid", clientID).IP("serverIP", serverIP).ByteArray("lxid", lxid).Write()
+		fastlog.NewLine("dhcp4", "decline for invalid lease - gnore").ByteArray("clientid", clientID).IP("ip", reqIP).IP("serverIP", serverIP).ByteArray("lxid", lxid).Write()
 		return nil
 	}
 
-	// log.WithFields(log.Fields{"clientid": clientID, "mac": lease.Addr.MAC, "ip": lease.Addr.IP, "xid": p.XId()}).Info("dhcp4: decline")
 	fastlog.NewLine("dhcp4", "decline").ByteArray("clientid", clientID).IP("serverIP", serverIP).IP("ip", lease.Addr.IP).Write()
 	lease.State = StateFree
 	lease.Addr.IP = nil
@@ -59,21 +60,15 @@ func (h *Handler) handleDecline(p DHCP4, options Options) (d DHCP4) {
 //
 // The client unicasts DHCPRELEASE messages to the server.
 func (h *Handler) handleRelease(p DHCP4, options Options) (d DHCP4) {
-
 	reqIP := p.CIAddr()
 	serverIP := net.IP(options[OptionServerIdentifier]).To4()
 	clientID := getClientID(p, options)
 
 	lease := h.findOrCreate(clientID, p.CHAddr(), "")
-
 	if !lease.subnet.DHCPServer.Equal(serverIP) || lease == nil || !lease.Addr.IP.Equal(reqIP) {
-		// log.WithFields(log.Fields{"clientid": clientID, "mac": p.CHAddr(), "serverip": serverIP, "reqip": reqIP, "lease": lease}).Infof("dhcp4: release - discard invalid packet")
 		fastlog.NewLine("dhcp4", "release - discard invalid packet").ByteArray("clientid", clientID).IP("serverIP", serverIP).IP("reqip", reqIP).Write()
 		return nil
 	}
-
 	fastlog.NewLine("dhcp4", "release").ByteArray("clientid", clientID).IP("ip", lease.Addr.IP).MAC("mac", lease.Addr.MAC).ByteArray("xid", p.XId()).Write()
-	// log.WithFields(log.Fields{"clientid": clientID, "mac": lease.Addr.MAC, "ip": lease.Addr.IP, "xid": p.XId()}).Info("dhcp4: release")
-
 	return nil
 }

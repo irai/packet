@@ -6,7 +6,6 @@ import (
 	"compress/gzip"
 	_ "embed"
 	"encoding/hex"
-	"fmt"
 	"net"
 	"strings"
 
@@ -44,7 +43,6 @@ func init() {
 
 		s := strings.Split(line, "\t")
 		if len(s) < 2 || len(s[0]) != 6 {
-			fmt.Println("TRACE manufacturer", s, line)
 			countErrors++
 			continue
 		}

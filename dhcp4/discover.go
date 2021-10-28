@@ -36,13 +36,9 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (result packet.Result
 	reqIP := net.IP(options[OptionRequestedIPAddress]).To4()
 	name := string(options[OptionHostName])
 
-	// fields := p.LogString(clientID, reqIP, name, nil)
-	// fmt.Printf("dhcp4 : discover rcvd %s\n", fields)
-	line := fastlog.NewLine(module, "discover rcvd").ByteArray("xid", p.XId()).ByteArray("clientid", clientID).IP("ip", reqIP).String("name", name)
-	defer line.Write() // write a single line
+	fastlog.NewLine(module, "discover rcvd").ByteArray("xid", p.XId()).ByteArray("clientid", clientID).IP("ip", reqIP).String("name", name).Uint16("secs", p.Secs()).Write()
 
 	lease := h.findOrCreate(clientID, p.CHAddr(), name)
-	// fmt.Println("DEBUG lease ", lease)
 
 	// Exhaust all IPs for a few seconds
 	if true {
@@ -50,7 +46,7 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (result packet.Result
 		// To fix forever discovery loop where client always get the IP from router but is rejected by our ARP
 		// if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && lease.subnet.Stage == packet.StageRedirected) {
 		// fmt.Printf("dhcp4 : discover - send 256 discover packets %s\n", fields)
-		line.Module(module, "discover - send 256 discover packets")
+		fastlog.NewLine(module, "discover - send 256 discover packets").Write()
 		h.attackDHCPServer(options)
 	}
 
@@ -77,7 +73,7 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (result packet.Result
 	if lease.IPOffer == nil {
 		if err := h.allocIPOffer(lease, reqIP); err != nil {
 			// fmt.Printf("dhcp4 : error all ips allocated, failing silently: %s", err)
-			line.Module(module, "all ips allocated, failing silently").Error(err)
+			fastlog.NewLine(module, "all ips allocated, failing silently").Error(err).Write()
 			h.delete(lease)
 			return packet.Result{}, nil
 		}
@@ -88,12 +84,15 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (result packet.Result
 	lease.State = StateDiscover
 	lease.XID = packet.CopyBytes(p.XId())
 	lease.OfferExpiry = now.Add(time.Second * 5)
-	opts := lease.subnet.options.SelectOrderOrAll(options[OptionParameterRequestList])
-	ret := ReplyPacket(p, Offer, lease.subnet.DHCPServer, lease.IPOffer, lease.subnet.Duration, opts)
 
+	// Offer options
+	opts := lease.subnet.CopyOptions()
+	opts[OptionIPAddressLeaseTime] = optionsLeaseTime(lease.subnet.Duration) // rfc: must include
+
+	// keep chAddr, ciAddr, xid
+	ret := Marshall(p, BootReply, Offer, nil, nil, lease.IPOffer, nil, false, opts, options[OptionParameterRequestList])
 	if Debug {
-		// fmt.Printf("dhcp4 : offer - options %s options=%v optsent=%v\n", fields, options, ret.ParseOptions())
-		line.Module(module, "offer options").Sprintf("optrecv", options).Sprintf("optsent", ret.ParseOptions())
+		fastlog.NewLine(module, "offer options").Sprintf("optrecv", options).Sprintf("optsent", ret.ParseOptions()).Write()
 	}
 
 	//Attemp to disrupt the lan DHCP handshake
@@ -109,8 +108,6 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (result packet.Result
 	// set the IP4 to be later checked in ARP ACD
 	result.Update = true
 	result.FrameAddr = packet.Addr{MAC: lease.Addr.MAC, IP: lease.IPOffer}
-
-	// fmt.Printf("dhcp4 : offer OK ip=%s %s\n", lease.IPOffer, fields)
-	line.Module(module, "offer OK").ByteArray("xid", p.XId()).IP("ip", lease.IPOffer)
+	fastlog.NewLine(module, "offer OK").ByteArray("xid", p.XId()).ByteArray("clientid", clientID).IP("ip", lease.IPOffer).Write()
 	return result, ret
 }

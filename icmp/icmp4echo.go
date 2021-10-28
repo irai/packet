@@ -34,7 +34,7 @@ func (h *Handler4) SendEchoRequest(srcAddr packet.Addr, dstAddr packet.Addr, id 
 	}
 
 	if Debug {
-		fastlog.NewLine(module, "send echo4 request").IP("srcIP", srcAddr.IP).IP("dstIP", dstAddr.IP).Struct(ICMPEcho(p)).Write()
+		fastlog.NewLine(module4, "send echo4 request").IP("srcIP", srcAddr.IP).IP("dstIP", dstAddr.IP).Struct(ICMPEcho(p)).Write()
 	}
 	return h.sendPacket(srcAddr, dstAddr, p)
 }
@@ -89,7 +89,7 @@ func (h *Handler4) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
 	// Test if client is online first
 	// If client does not respond to echo, there is little we can test
 	if err := h.Ping(addr, time.Second*2); err != nil {
-		fastlog.NewLine(module, "not responding to ping").Struct(addr).Write()
+		fastlog.NewLine(module4, "not responding to ping").Struct(addr).Write()
 		return packet.StageNormal, packet.ErrTimeout
 	}
 

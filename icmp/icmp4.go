@@ -101,18 +101,18 @@ func (h *Handler4) ProcessPacket(host *packet.Host, p []byte, header []byte) (pa
 			return packet.Result{}, fmt.Errorf("icmp invalid icmp4 packet")
 		}
 		if Debug {
-			fastlog.NewLine(module, "echo reply recvd").IP("srcIP", ip4Frame.Src()).Struct(echo).Write()
+			fastlog.NewLine(module4, "echo reply recvd").IP("srcIP", ip4Frame.Src()).Struct(echo).Write()
 		}
 		echoNotify(echo.EchoID()) // unblock ping if waiting
 
 	case packet.ICMPTypeEchoRequest:
 		echo := ICMPEcho(icmpFrame)
 		if Debug {
-			fastlog.NewLine(module, "echo request recvd").IP("srcIP", ip4Frame.Src()).Struct(echo).Write()
+			fastlog.NewLine(module4, "echo request recvd").IP("srcIP", ip4Frame.Src()).Struct(echo).Write()
 		}
 
 	case uint8(ipv4.ICMPTypeRedirect):
-		fastlog.NewLine(module, "icmp4 redirect recv").Struct(ether).IP("srcIP", ether.SrcIP()).IP("dstIP", ether.DstIP()).ByteArray("payload", header).Write()
+		fastlog.NewLine(module4, "icmp4 redirect recv").Struct(ether).IP("srcIP", ether.SrcIP()).IP("dstIP", ether.DstIP()).ByteArray("payload", header).Write()
 
 	case uint8(ipv4.ICMPTypeDestinationUnreachable):
 		switch icmpFrame.Code() {
@@ -147,8 +147,7 @@ func (h *Handler4) ProcessPacket(host *packet.Host, p []byte, header []byte) (pa
 			}
 			port = tcp.DstPort()
 		}
-		// fmt.Printf("icmp4 : destination unreacheable from ip=%s failIP=%s failPort=%d code=%d\n", ip4Frame.Src(), originalIP4Frame.Dst(), port, icmpFrame.Code())
-		fastlog.NewLine(module, "ether").Struct(ether).IP("srcIP", ether.SrcIP()).IP("dstIP", ether.DstIP()).Module(module, "icmp4").
+		fastlog.NewLine(module4, "destination unreacheable").MAC("srcMAC", ether.Src()).MAC("dstMAC", ether.Dst()).IP("srcIP", ether.SrcIP()).IP("dstIP", ether.DstIP()).
 			Uint8("code", icmpFrame.Code()).IP("origIP", originalIP4Frame.Dst()).Uint16Hex("origPort", port).Write()
 
 	default:

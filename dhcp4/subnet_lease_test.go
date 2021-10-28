@@ -1,3 +1,4 @@
+//go:build !arp
 // +build !arp
 
 package dhcp4
@@ -11,114 +12,11 @@ import (
 
 const testDHCPFilename = "./testDHCPConfig.yml"
 
-type netStruct struct {
-	home      SubnetConfig
-	netfilter SubnetConfig
-}
-
 var (
 	// test table: add subnet combinations here to test the model
 	//
-	nets = []netStruct{
-		{
-			home: SubnetConfig{
-				LAN:        net.IPNet{IP: net.ParseIP("192.168.0.0").To4(), Mask: net.CIDRMask(24, 32)},
-				DefaultGW:  net.ParseIP("192.168.0.1").To4(),
-				DHCPServer: net.ParseIP("192.168.0.1").To4(),
-				FirstIP:    net.ParseIP("192.168.0.1").To4(),
-				LastIP:     net.ParseIP("192.168.0.255").To4(),
-				DNSServer:  dns1,
-			},
-			netfilter: SubnetConfig{
-				LAN:        net.IPNet{IP: net.ParseIP("192.168.0.128").To4(), Mask: net.CIDRMask(25, 32)},
-				DefaultGW:  net.ParseIP("192.168.0.129").To4(),
-				DHCPServer: net.ParseIP("192.168.0.129").To4(),
-				FirstIP:    net.ParseIP("192.168.0.129").To4(),
-				LastIP:     net.ParseIP("192.168.0.255").To4(),
-				DNSServer:  dns2,
-			},
-		},
-		{
-			home: SubnetConfig{
-				LAN:       net.IPNet{IP: net.ParseIP("192.168.1.1").To4(), Mask: net.CIDRMask(24, 32)},
-				DefaultGW: net.ParseIP("192.168.1.130").To4(), DHCPServer: net.ParseIP("192.168.1.10").To4(), DNSServer: dns1,
-				FirstIP: net.ParseIP("192.168.1.1").To4(),
-				LastIP:  net.ParseIP("192.168.1.255").To4(),
-			},
-			netfilter: SubnetConfig{
-				LAN:       net.IPNet{IP: net.ParseIP("192.168.1.0").To4(), Mask: net.CIDRMask(25, 32)},
-				DefaultGW: net.ParseIP("192.168.1.10").To4(), DHCPServer: net.ParseIP("192.168.1.10").To4(), DNSServer: dns1,
-				FirstIP: net.ParseIP("192.168.1.1").To4(),
-				LastIP:  net.ParseIP("192.168.1.90").To4(),
-			},
-		},
-		{
-			home: SubnetConfig{
-				LAN:       net.IPNet{IP: net.ParseIP("192.168.70.1").To4(), Mask: net.CIDRMask(24, 32)},
-				DefaultGW: net.ParseIP("192.168.70.254").To4(), DHCPServer: net.ParseIP("192.168.70.1").To4(), DNSServer: dns1,
-				FirstIP: net.ParseIP("192.168.70.1").To4(),
-				LastIP:  net.ParseIP("192.168.70.255").To4(),
-			},
-			netfilter: SubnetConfig{
-				LAN:       net.IPNet{IP: net.ParseIP("192.168.70.0").To4(), Mask: net.CIDRMask(25, 32)},
-				DefaultGW: net.ParseIP("192.168.70.1").To4(), DHCPServer: net.ParseIP("192.168.70.1").To4(), DNSServer: dns1,
-				FirstIP: net.ParseIP("192.168.70.50").To4(),
-				LastIP:  net.ParseIP("192.168.70.127").To4(),
-			},
-		},
-		{
-			home: SubnetConfig{
-				LAN:       net.IPNet{IP: net.ParseIP("192.168.0.0").To4(), Mask: net.CIDRMask(24, 32)},
-				DefaultGW: net.ParseIP("192.168.0.254").To4(), DHCPServer: net.ParseIP("192.168.0.1").To4(), DNSServer: dns1,
-				FirstIP: net.ParseIP("192.168.0.1").To4(),
-				LastIP:  net.ParseIP("192.168.0.255").To4(),
-			},
-			netfilter: SubnetConfig{
-				LAN:       net.IPNet{IP: net.ParseIP("192.168.70.0").To4(), Mask: net.CIDRMask(25, 32)},
-				DefaultGW: net.ParseIP("192.168.70.1").To4(), DHCPServer: net.ParseIP("192.168.70.1").To4(), DNSServer: dns1,
-				FirstIP: net.ParseIP("192.168.70.40").To4(),
-				LastIP:  net.ParseIP("192.168.70.50").To4(),
-			},
-		},
-	}
-
-	dns1 = net.ParseIP("8.8.8.8")
-	dns2 = net.ParseIP("8.8.8.9")
-
 	mac0 = net.HardwareAddr{0xff, 0xff, 0xff, 0xff, 0xff, 0x0}
 )
-
-func setupSubnets() (net1 *dhcpSubnet, net2 *dhcpSubnet) {
-
-	// 192.168.0.0
-	config := SubnetConfig{
-		LAN:        net.IPNet{IP: net.ParseIP("192.168.0.0").To4(), Mask: net.CIDRMask(24, 32)},
-		DefaultGW:  net.ParseIP("192.168.0.1").To4(),
-		DHCPServer: net.ParseIP("192.168.0.1").To4(),
-		FirstIP:    net.ParseIP("192.168.0.0").To4(),
-		LastIP:     net.ParseIP("192.168.0.255").To4(),
-		DNSServer:  dns1,
-	}
-	net1, err1 := newSubnet(config)
-	// net1.printSubnet()
-
-	config = SubnetConfig{
-		LAN:        net.IPNet{IP: net.ParseIP("192.168.0.128").To4(), Mask: net.CIDRMask(25, 32)},
-		DefaultGW:  net.ParseIP("192.168.0.129").To4(),
-		DHCPServer: net.ParseIP("192.168.0.129").To4(),
-		FirstIP:    net.ParseIP("192.168.0.130").To4(),
-		LastIP:     net.ParseIP("192.168.0.240").To4(),
-		DNSServer:  dns2,
-	}
-	net2, err2 := newSubnet(config)
-	// net2.printSubnet()
-
-	if net1 == nil || net2 == nil {
-		panic(fmt.Sprint("cannot create subnets", err1, err2))
-	}
-
-	return net1, net2
-}
 
 func Test_Subnet_Save(t *testing.T) {
 
@@ -152,7 +50,7 @@ func Test_Subnet_Save(t *testing.T) {
 	lease.State = StateAllocated
 
 	// lease 4
-	lease = tc.h.findOrCreate(mac4, mac4, "mac4")
+	tc.h.findOrCreate(mac4, mac4, "mac4")
 
 	checkLeaseTable(t, tc, 2, 1, 1)
 

@@ -67,7 +67,7 @@ func setupTestHandler() *testContext {
 
 	// fake conn
 	tc.inConn, tc.outConn = packet.TestNewBufferedConn()
-	go packet.TestReadAndDiscardLoop(tc.ctx, tc.outConn) // MUST read the out conn to avoid blocking the sender
+	go packet.TestReadAndDiscardLoop(tc.outConn) // MUST read the out conn to avoid blocking the sender
 	// go readResponse(tc.ctx, &tc) // MUST read the out conn to avoid blocking the sender
 	tc.session.Conn = tc.inConn
 
