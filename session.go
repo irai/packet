@@ -8,12 +8,11 @@ import (
 )
 
 type Session struct {
-	Conn         net.PacketConn
-	NICInfo      *NICInfo
-	HostTable    HostTable    // store IP list - one for each host
-	MACTable     MACTable     // store mac list
-	mutex        sync.RWMutex // global session mutex
-	eventChannel chan NetEvent
+	Conn      net.PacketConn
+	NICInfo   *NICInfo
+	HostTable HostTable    // store IP list - one for each host
+	MACTable  MACTable     // store mac list
+	mutex     sync.RWMutex // global session mutex
 }
 
 func NewEmptySession() *Session {
@@ -73,46 +72,4 @@ func (h *Session) GlobalLock() {
 
 func (h *Session) GlobalUnlock() {
 	h.mutex.Unlock()
-}
-func (h *Session) GlobalRLock() {
-	h.mutex.RLock()
-}
-
-func (h *Session) GlobalRUnlock() {
-	h.mutex.RUnlock()
-}
-
-// NetEventType defines possible net events
-type NetEventType int
-
-const (
-	NetEventRouter = 1 // a router event occurred
-)
-
-// NetEvent is a mechanism to communicate network events upstream.
-//
-// A plugins will raise a network event when there is a need to communicate network changes
-// to the controlling engine. For example, when the plugin detected a new router on the network.
-type NetEvent struct {
-	Type NetEventType
-	Addr Addr
-}
-
-func (n NetEvent) String() string {
-	return fmt.Sprintf("type=%d %s", n.Type, n.Addr)
-}
-
-func (s *Session) RaiseNetEvent(e NetEvent) error {
-	if s.eventChannel == nil {
-		return ErrNoReader
-	}
-	s.eventChannel <- e
-	return nil
-}
-
-func (s *Session) NetEventChannel() <-chan NetEvent {
-	if s.eventChannel == nil {
-		s.eventChannel = make(chan NetEvent, 16)
-	}
-	return s.eventChannel
 }

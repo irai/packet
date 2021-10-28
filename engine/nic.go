@@ -92,7 +92,6 @@ func GetLinuxDefaultGateway() (gw net.IP, err error) {
 	}
 	defer file.Close()
 
-	ipd32 := net.IP{}
 	scanner := bufio.NewScanner(file)
 	if scanner.Scan() {
 		// jump to line containing the gateway address
@@ -106,9 +105,8 @@ func GetLinuxDefaultGateway() (gw net.IP, err error) {
 
 		d, _ := strconv.ParseInt(gatewayHex, 0, 64)
 		d32 := uint32(d)
-		ipd32 = make(net.IP, 4)
-		binary.LittleEndian.PutUint32(ipd32, d32)
-		gw = net.IP(ipd32)
+		gw = make(net.IP, 4)
+		binary.LittleEndian.PutUint32(gw, d32)
 		if gw.IsUnspecified() {
 			return nil, packet.ErrInvalidIP
 		}
