@@ -106,7 +106,7 @@ func (p IP4) String() string {
 	return fastlog.NewLine("", "").Struct(p).ToString()
 }
 
-// Print implements fastlog struct interface
+// FastLog implements fastlog interface
 func (p IP4) FastLog(line *fastlog.Line) *fastlog.Line {
 	line.Int("version", p.Version())
 	line.IP("src", p.Src())

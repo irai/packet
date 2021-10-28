@@ -1,6 +1,7 @@
+//go:build linux
 // +build linux
 
-package engine
+package packet
 
 // This is file was originally created by Matt Layher
 // as part of the raw package github.com/mdlayher/raw
@@ -12,7 +13,6 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/irai/packet"
 	"golang.org/x/net/bpf"
 	"golang.org/x/sys/unix"
 )
@@ -192,7 +192,7 @@ func (p *packetConn) ReadFrom(b []byte) (int, net.Addr, error) {
 	//   information.
 	// TODO(mdlayher): determine if similar fields exist and are useful on
 	// non-Linux platforms
-	return n, &packet.Addr{
+	return n, &Addr{
 		MAC: mac,
 	}, nil
 }
@@ -200,7 +200,7 @@ func (p *packetConn) ReadFrom(b []byte) (int, net.Addr, error) {
 // WriteTo implements the net.PacketConn.WriteTo method.
 func (p *packetConn) WriteTo(b []byte, addr net.Addr) (int, error) {
 	// Ensure correct Addr type.
-	a, ok := addr.(*packet.Addr)
+	a, ok := addr.(*Addr)
 	if !ok || a.MAC == nil {
 		return 0, unix.EINVAL
 	}
@@ -231,7 +231,7 @@ func (p *packetConn) Close() error {
 
 // LocalAddr returns the local network address.
 func (p *packetConn) LocalAddr() net.Addr {
-	return &packet.Addr{
+	return &Addr{
 		MAC: p.ifi.HardwareAddr,
 	}
 }

@@ -18,7 +18,6 @@ import (
 	"github.com/irai/packet/dns"
 	"github.com/irai/packet/fastlog"
 	"github.com/irai/packet/icmp"
-	"golang.org/x/net/bpf"
 )
 
 const module = "engine"
@@ -210,66 +209,20 @@ func (h *Handler) DetachDHCP4() error {
 }
 
 func (h *Handler) setupConn() (conn net.PacketConn, err error) {
-
-	// see syscall constants for full list of available network protocols
-	// https://golang.org/pkg/syscall/
-	//
-	// For a list of bpf instructions
-	// https://tshark.dev/packetcraft/arcana/bpf_instructions/
-	//
-	// TODO: Set direction - aparently this only works on bsd
-	// https://github.com/google/gopacket/blob/master/pcap/pcap.go
-	// https://github.com/mdlayher/raw/blob/master/raw.go
-	//
-	// TODO: use zero copy in bpf
-	// https://www.gsp.com/cgi-bin/man.cgi?topic=BPF
-	_, err = bpf.Assemble([]bpf.Instruction{
-		// Check EtherType
-		bpf.LoadAbsolute{Off: 12, Size: 2},
-		// 80221Q? Virtual LAN over 802.3 Ethernet
-		bpf.JumpIf{Cond: bpf.JumpEqual, Val: syscall.ETH_P_8021Q, SkipFalse: 1}, // EtherType is 2 pushed out by two bytes
-		bpf.LoadAbsolute{Off: 14, Size: 2},
-		// IPv4?
-		bpf.JumpIf{Cond: bpf.JumpEqual, Val: syscall.ETH_P_IP, SkipFalse: 1},
-		bpf.RetConstant{Val: packet.EthMaxSize},
-		// IPv6?
-		bpf.JumpIf{Cond: bpf.JumpEqual, Val: syscall.ETH_P_IPV6, SkipFalse: 1},
-		bpf.RetConstant{Val: packet.EthMaxSize},
-		// ARP?
-		bpf.JumpIf{Cond: bpf.JumpEqual, Val: syscall.ETH_P_ARP, SkipFalse: 1},
-		bpf.RetConstant{Val: packet.EthMaxSize},
-		bpf.RetConstant{Val: 0},
-	})
-	if err != nil {
-		panic(err)
-	}
-
-	// removed bpf filter : June 21
-	conn, err = NewServerConn(h.session.NICInfo.IFI, syscall.ETH_P_ALL, SocketConfig{Filter: nil, Promiscuous: true})
+	conn, err = packet.NewServerConn(h.session.NICInfo.IFI, syscall.ETH_P_ALL, packet.SocketConfig{Filter: nil, Promiscuous: true})
 	if err != nil {
 		return nil, fmt.Errorf("packet.ListenPacket error: %w", err)
 	}
-
 	// don't timeout during write
 	if err := conn.SetWriteDeadline(time.Time{}); err != nil {
 		return nil, err
 	}
-
 	return conn, nil
 }
 
 // PrintTable logs the table to standard out
 func (h *Handler) PrintTable() {
 	h.session.PrintTable()
-}
-
-// isUnicastMAC return true if the mac address is unicast
-//
-// Bit 0 in the first octet is reserved for broadcast or multicast traffic.
-// When we have unicast traffic this bit will be set to 0.
-// For broadcast or multicast traffic this bit will be set to 1.
-func isUnicastMAC(mac net.HardwareAddr) bool {
-	return mac[0]&0x01 == 0x00
 }
 
 func (h *Handler) startPlugins() error {
@@ -922,7 +875,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		}
 
 		// Only interested in unicast ethernet
-		if !isUnicastMAC(ether.Src()) {
+		if !packet.IsUnicastMAC(ether.Src()) {
 			continue
 		}
 

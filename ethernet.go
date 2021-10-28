@@ -23,6 +23,15 @@ const (
 // EtherBufferPool implemts a simple buffer pool for Ethernet packets
 var EtherBufferPool = sync.Pool{New: func() interface{} { return new([EthMaxSize]byte) }}
 
+// isUnicastMAC return true if the mac address is unicast
+//
+// Bit 0 in the first octet is reserved for broadcast or multicast traffic.
+// When we have unicast traffic this bit will be set to 0.
+// For broadcast or multicast traffic this bit will be set to 1.
+func IsUnicastMAC(mac net.HardwareAddr) bool {
+	return mac[0]&0x01 == 0x00
+}
+
 // Ether provide access to ethernet II fields without copying the structure
 // see: https://medium.com/@mdlayher/network-protocol-breakdown-ethernet-and-go-de985d726cc1
 //
