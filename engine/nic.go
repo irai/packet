@@ -73,10 +73,9 @@ func GetNICInfo(nic string) (info *packet.NICInfo, err error) {
 }
 
 const (
-	file  = "/proc/net/route"
-	line  = 1    // line containing the gateway addr. (first line: 0)
-	sep   = "\t" // field separator
-	field = 2    // field containing hex gateway address (first field: 0)
+	file = "/proc/net/route"
+	line = 1    // line containing the gateway addr. (first line: 0)
+	sep  = "\t" // field separator
 )
 
 // GetLinuxDefaultGateway read the default gateway from linux route file
@@ -87,7 +86,6 @@ const (
 //   eth0    0000A8C0    00000000    0001    0   0   100 00FFFFFF    0   00
 //
 func GetLinuxDefaultGateway() (gw net.IP, err error) {
-
 	file, err := os.Open(file)
 	if err != nil {
 		return net.IPv4zero, err
@@ -96,8 +94,7 @@ func GetLinuxDefaultGateway() (gw net.IP, err error) {
 
 	ipd32 := net.IP{}
 	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-
+	if scanner.Scan() {
 		// jump to line containing the gateway address
 		for i := 0; i < line; i++ {
 			scanner.Scan()
@@ -105,25 +102,18 @@ func GetLinuxDefaultGateway() (gw net.IP, err error) {
 
 		// get field containing gateway address
 		tokens := strings.Split(scanner.Text(), sep)
-		gatewayHex := "0x" + tokens[field]
+		gatewayHex := "0x" + tokens[2] // field containing hex gateway address (first field: 0)
 
-		// cast hex address to uint32
 		d, _ := strconv.ParseInt(gatewayHex, 0, 64)
 		d32 := uint32(d)
-
-		// make net.IP address from uint32
 		ipd32 = make(net.IP, 4)
 		binary.LittleEndian.PutUint32(ipd32, d32)
-		// fmt.Printf("NIC default gateway is %T --> %[1]v\n", ipd32)
-
-		// format net.IP to dotted ipV4 string
-		//ip := net.IP(ipd32).String()
-		//fmt.Printf("%T --> %[1]v\n", ip)
-
-		// exit scanner
-		break
+		gw = net.IP(ipd32)
+		if gw.IsUnspecified() {
+			return nil, packet.ErrInvalidIP
+		}
 	}
-	return ipd32, nil
+	return gw, nil
 }
 
 // LoadLinuxARPTable read arp entries from linux proc file

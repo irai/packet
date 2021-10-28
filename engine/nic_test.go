@@ -94,3 +94,11 @@ func TestSegmentLAN(t *testing.T) {
 		})
 	}
 }
+
+func TestGetLinuxDefaultGateway(t *testing.T) {
+	_, err := GetLinuxDefaultGateway()
+	if err != nil {
+		t.Errorf("GetLinuxDefaultGateway() error = %v", err)
+		return
+	}
+}
