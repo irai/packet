@@ -101,7 +101,7 @@ type MACTable struct {
 	Table []*MACEntry
 }
 
-func NewMACTable() MACTable {
+func newMACTable() MACTable {
 	return MACTable{Table: []*MACEntry{}}
 }
 

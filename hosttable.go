@@ -24,9 +24,9 @@ type HostTable struct {
 type Host struct {
 	Addr         Addr      // MAC and IP
 	MACEntry     *MACEntry // pointer to mac entry
-	Online       bool      // keep host online / offline state
-	HuntStage    HuntStage // keep host overall huntStage
-	LastSeen     time.Time // keep last packet time
+	Online       bool      // host online / offline state
+	HuntStage    HuntStage // host huntStage
+	LastSeen     time.Time // last packet time
 	Manufacturer string    // Mac address manufacturer
 	DHCP4Name    NameEntry
 	MDNSName     NameEntry
@@ -36,9 +36,7 @@ type Host struct {
 }
 
 func (e *Host) String() string {
-	line := fastlog.NewLine("", "")
-	e.FastLog(line)
-	return line.ToString()
+	return fastlog.NewLine("", "").Struct(e).ToString()
 }
 
 func (e Host) FastLog(l *fastlog.Line) *fastlog.Line {
@@ -65,17 +63,16 @@ const (
 	StageNoChange   HuntStage = 0 // no change to stage - used as no op
 	StageNormal     HuntStage = 1 // not captured
 	StageHunt       HuntStage = 2 // host is not redirected
-	StageRedirected HuntStage = 3 // host is not redirected
+	StageRedirected HuntStage = 3 // host is redirected via dhcp
 )
 
 func (s HuntStage) String() string {
-	if s == StageNormal {
+	switch s {
+	case StageNormal:
 		return "normal"
-	}
-	if s == StageRedirected {
+	case StageRedirected:
 		return "redirected"
-	}
-	if s == StageHunt {
+	case StageHunt:
 		return "hunt"
 	}
 	return "noop"
@@ -95,7 +92,7 @@ func (e Result) String() string {
 }
 
 // newHostTable returns a HostTable Session
-func NewHostTable() HostTable {
+func newHostTable() HostTable {
 	return HostTable{Table: make(map[netaddr.IP]*Host, 64)}
 }
 
@@ -145,7 +142,6 @@ func (h *Session) findOrCreateHost(addr Addr) (host *Host, found bool) {
 	if host, ok := h.HostTable.Table[ipNew]; ok {
 		host.MACEntry.Row.Lock() // lock the row
 		if !bytes.Equal(host.MACEntry.MAC, addr.MAC) {
-			// fmt.Println("packet: error mac address differ - duplicated IP???", host.MACEntry.MAC, addr.MAC, ipNew)
 			fastlog.NewLine(module, "error mac address differ - duplicated IP?").Struct(addr).Struct(host).String("iplookup", ipNew.String()).Write()
 			h.printHostTable()
 			// TODO: previous host is offline then???
@@ -181,7 +177,6 @@ func (h *Session) findOrCreateHost(addr Addr) (host *Host, found bool) {
 	host.HuntStage = StageNormal
 	host.LastSeen = now
 	host.MACEntry.LastSeen = now
-	// host.MACEntry.UpdateIPNoLock(host.IP)
 	h.HostTable.Table[ipNew] = host
 
 	// link host to macEntry
@@ -219,23 +214,7 @@ func (h *Session) FindIP(ip net.IP) *Host {
 	return h.HostTable.Table[newIP]
 }
 
-// MustFindIP returns the host for IP or panic if IP is not found
-func (h *Session) MustFindIP(ip net.IP) *Host {
-	if host := h.FindIP(ip); host != nil {
-		return host
-	}
-	panic(fmt.Sprintf("MustFindIP not found ip=%s", ip))
-}
-
-func (h *Session) CaptureNoLock(mac net.HardwareAddr) *MACEntry {
-	macEntry := h.MACTable.FindOrCreateNoLock(mac)
-	if !macEntry.Captured {
-		macEntry.Captured = true
-	}
-	return macEntry
-}
-
-// IsCaptured return true is mac is in capture mode
+// IsCaptured returns true is mac is in capture mode
 func (h *Session) IsCaptured(mac net.HardwareAddr) bool {
 	h.mutex.RLock()
 	defer h.mutex.RUnlock()
@@ -252,7 +231,7 @@ func (h *Session) findIP(ip net.IP) *Host {
 	return h.HostTable.Table[newIP]
 }
 
-// FindByMAC return a list of IP addresses for mac
+// FindByMAC returns a list of IP addresses for mac
 func (h *Session) FindByMAC(mac net.HardwareAddr) (list []Addr) {
 	h.mutex.RLock()
 	defer h.mutex.RUnlock()

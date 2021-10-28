@@ -17,8 +17,8 @@ type Session struct {
 
 func NewEmptySession() *Session {
 	session := new(Session)
-	session.MACTable = NewMACTable()
-	session.HostTable = NewHostTable()
+	session.MACTable = newMACTable()
+	session.HostTable = newHostTable()
 	session.NICInfo = &NICInfo{HostAddr4: Addr{MAC: EthBroadcast, IP: IP4Broadcast}}
 
 	// TODO: fix this to discard writes like ioutil.Discard

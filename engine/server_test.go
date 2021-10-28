@@ -19,7 +19,8 @@ func setupTestHandler() *Handler {
 	h.ICMP4Handler = icmp.ICMP4NOOP{}
 	h.ICMP6Handler = icmp.ICMP6NOOP{}
 	h.DHCP4Handler = packet.PacketNOOP{}
-	h.session = &packet.Session{HostTable: packet.NewHostTable(), MACTable: packet.NewMACTable()}
+	// h.session = &packet.Session{HostTable: packet.NewHostTable(), MACTable: packet.NewMACTable()}
+	h.session = packet.NewEmptySession()
 	return h
 }
 
