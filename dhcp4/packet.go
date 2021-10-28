@@ -9,6 +9,12 @@ import (
 	"github.com/irai/packet/fastlog"
 )
 
+// DHCP4 port numbers
+const (
+	DHCP4ServerPort = 67
+	DHCP4ClientPort = 68
+)
+
 // A DHCP4 packet
 type DHCP4 []byte
 

@@ -392,7 +392,7 @@ func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.U
 		// do nothing
 		return host, false, nil
 
-	case udpDstPort == packet.DHCP4ServerPort || udpDstPort == packet.DHCP4ClientPort: // DHCP4 packet?
+	case udpDstPort == dhcp4.DHCP4ServerPort || udpDstPort == dhcp4.DHCP4ClientPort: // DHCP4 packet?
 		if result, err = h.DHCP4Handler.ProcessPacket(host, ether, udp.Payload()); err != nil {
 			fmt.Printf("packet: error processing dhcp4: %s\n", err)
 		}

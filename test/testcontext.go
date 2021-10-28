@@ -124,7 +124,7 @@ func readResponse(ctx context.Context, tc *TestContext) error {
 				continue
 			}
 			if ip4.Protocol() == syscall.IPPROTO_UDP { // UDP?
-				if udp := packet.UDP(ip4.Payload()); udp.DstPort() == packet.DHCP4ClientPort { // DHCP client port?
+				if udp := packet.UDP(ip4.Payload()); udp.DstPort() == dhcp4.DHCP4ClientPort { // DHCP client port?
 					fmt.Printf("test  : got dhcp test %d response=%s\n", count, udp)
 					dhcp4Frame := dhcp4.DHCP4(udp.Payload())
 					options := dhcp4Frame.ParseOptions()
@@ -369,7 +369,7 @@ func NewHostEvents(addr packet.Addr, hostName string, hostInc int, macInc int) [
 }
 
 func runAction(t *testing.T, tc *TestContext, tt TestEvent) {
-	dhcpDst := packet.Addr{MAC: packet.EthBroadcast, IP: net.IPv4zero, Port: packet.DHCP4ServerPort}
+	dhcpDst := packet.Addr{MAC: packet.EthBroadcast, IP: net.IPv4zero, Port: dhcp4.DHCP4ServerPort}
 	sendPacket := true
 
 	switch tt.action {

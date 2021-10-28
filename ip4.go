@@ -7,7 +7,6 @@ import (
 	"net"
 
 	"github.com/irai/packet/fastlog"
-	"github.com/mdlayher/netx/rfc4193"
 	"golang.org/x/net/ipv4"
 	"inet.af/netaddr"
 )
@@ -59,56 +58,6 @@ var (
 	OpenDNS2 = net.IPv4(208, 67, 220, 123)
 )
 
-// DHCP4 port numbers
-const (
-	DHCP4ServerPort = 67
-	DHCP4ClientPort = 68
-)
-
-func IPv6SolicitedNode(lla net.IP) Addr {
-	lla = lla.To16()
-	return Addr{
-		IP:  net.IP{0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01, 0xff, lla[13], lla[14], lla[15]}, // prefix: 0xff, 0x02::0x01,0xff + last 3 bytes of mac address
-		MAC: net.HardwareAddr{0x33, 0x33, 0xff, lla[13], lla[14], lla[15]},                        // prefix: 0x33, 0x33 + last 4 bytes of IP address
-	}
-}
-
-// IPv6NewULA create a universal local address
-// Usefule to create a IPv6 prefix when there is no global IPv6 routing
-func IPv6NewULA(mac net.HardwareAddr, subnet uint16) (*net.IPNet, error) {
-	prefix, err := rfc4193.Generate(mac)
-	if err != nil {
-		return nil, err
-	}
-	return prefix.Subnet(subnet).IPNet(), nil
-}
-
-// IPv6NewLLA produce a local link layer address with an EUI-64 value for mac.
-// Reference: https://packetlife.net/blog/2008/aug/4/eui-64-ipv6/.
-func IPv6NewLLA(mac net.HardwareAddr) net.IP {
-	if len(mac) != 6 {
-		fmt.Printf("packet: error in ipv6newlla invalid mac=%s\n", mac)
-		return nil
-	}
-	ip := net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xfe, 0, 0, 0}
-	ip[11] = 0xff
-	ip[12] = 0xfe
-	copy(ip[8:], mac[:3])
-	copy(ip[13:], mac[3:])
-	ip[8] ^= 0x02
-	return CopyIP(ip)
-}
-
-// Ethernet packet types - ETHER_TYPE
-const (
-
-	// ICMP Packet types
-	ICMPTypeEchoReply   = 0
-	ICMPTypeEchoRequest = 8
-
-	IP6HeaderLen = 40 // IP6 header len
-)
-
 // Sentinel errors
 var (
 	ErrInvalidLen    = errors.New("invalid len")
@@ -125,13 +74,6 @@ var (
 	ErrIsRouter      = errors.New("host is router")
 	ErrNoReader      = errors.New("no reader")
 )
-
-func IsIP6(ip net.IP) bool {
-	if ip.To16() != nil && ip.To4() == nil {
-		return true
-	}
-	return false
-}
 
 // IP4 provide access to IP fields without copying data.
 // see: ipv4.ParseHeader in https://raw.githubusercontent.com/golang/net/master/ipv4/header.go
@@ -161,7 +103,7 @@ func (p IP4) NetaddrDst() netaddr.IP { return netaddr.IPv4(p[16], p[17], p[18], 
 func (p IP4) TotalLen() int          { return int(binary.BigEndian.Uint16(p[2:4])) }
 func (p IP4) Payload() []byte        { return p[p.IHL():] }
 func (p IP4) String() string {
-	return fmt.Sprintf("version=%v src=%v dst=%v proto=%v ttl=%v tos=%v", p.Version(), p.Src(), p.Dst(), p.Protocol(), p.TTL(), p.TOS())
+	return fastlog.NewLine("", "").Struct(p).ToString()
 }
 
 // Print implements fastlog struct interface

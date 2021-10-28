@@ -92,7 +92,7 @@ func (h *Handler4) ProcessPacket(host *packet.Host, p []byte, header []byte) (pa
 	icmpFrame := ICMP(header)
 
 	switch icmpFrame.Type() {
-	case packet.ICMPTypeEchoReply:
+	case uint8(ipv4.ICMPTypeEchoReply):
 
 		// ICMPEcho start from icmp frame
 		echo := ICMPEcho(icmpFrame)
@@ -105,7 +105,7 @@ func (h *Handler4) ProcessPacket(host *packet.Host, p []byte, header []byte) (pa
 		}
 		echoNotify(echo.EchoID()) // unblock ping if waiting
 
-	case packet.ICMPTypeEchoRequest:
+	case uint8(ipv4.ICMPTypeEcho):
 		echo := ICMPEcho(icmpFrame)
 		if Debug {
 			fastlog.NewLine(module4, "echo request recvd").IP("srcIP", ip4Frame.Src()).Struct(echo).Write()

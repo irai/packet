@@ -257,7 +257,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (pac
 		return packet.Result{}, err
 	}
 
-	if udp.DstPort() == packet.DHCP4ClientPort {
+	if udp.DstPort() == DHCP4ClientPort {
 		if Debug {
 			fastlog.NewLine(module, "dhcp client packet").Struct(dhcpFrame).Write()
 		}
@@ -306,14 +306,14 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (pac
 		var dstAddr packet.Addr
 		// If IP not available, broadcast
 		if ip4.Src().Equal(net.IPv4zero) || dhcpFrame.Broadcast() {
-			dstAddr = packet.Addr{MAC: packet.EthBroadcast, IP: net.IPv4bcast, Port: packet.DHCP4ClientPort}
+			dstAddr = packet.Addr{MAC: packet.EthBroadcast, IP: net.IPv4bcast, Port: DHCP4ClientPort}
 		} else {
-			dstAddr = packet.Addr{MAC: ether.Src(), IP: ip4.Src(), Port: packet.DHCP4ClientPort}
+			dstAddr = packet.Addr{MAC: ether.Src(), IP: ip4.Src(), Port: DHCP4ClientPort}
 		}
 		if Debug {
 			fastlog.NewLine(module, "send reply to").Struct(dstAddr).Struct(response).Write()
 		}
-		srcAddr := packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostIP4.IP, Port: packet.DHCP4ServerPort}
+		srcAddr := packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostIP4.IP, Port: DHCP4ServerPort}
 		if err := sendDHCP4Packet(h.session.Conn, srcAddr, dstAddr, response); err != nil {
 			fmt.Printf("dhcp4: failed sending packet error=%s", err)
 			return packet.Result{}, err

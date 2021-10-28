@@ -36,24 +36,24 @@ func TestDHCPHandler_handleDiscover(t *testing.T) {
 	}{
 		{name: "discover-mac1", wantResponse: true, responseCount: 1,
 			packet: testRequestPacket(Discover, mac1, ip1, []byte{0x01}, false, options), tableLen: 1,
-			srcAddr: packet.Addr{MAC: routerMAC, IP: routerIP4, Port: packet.DHCP4ClientPort},
-			dstAddr: packet.Addr{MAC: mac1, IP: ip1, Port: packet.DHCP4ServerPort}},
+			srcAddr: packet.Addr{MAC: routerMAC, IP: routerIP4, Port: DHCP4ClientPort},
+			dstAddr: packet.Addr{MAC: mac1, IP: ip1, Port: DHCP4ServerPort}},
 		{name: "discover-mac1", wantResponse: true, responseCount: 2,
 			packet: testRequestPacket(Discover, mac1, ip1, []byte{0x01}, false, options), tableLen: 1,
-			srcAddr: packet.Addr{MAC: routerMAC, IP: routerIP4, Port: packet.DHCP4ClientPort},
-			dstAddr: packet.Addr{MAC: mac1, IP: ip1, Port: packet.DHCP4ServerPort}},
+			srcAddr: packet.Addr{MAC: routerMAC, IP: routerIP4, Port: DHCP4ClientPort},
+			dstAddr: packet.Addr{MAC: mac1, IP: ip1, Port: DHCP4ServerPort}},
 		{name: "discover-mac1", wantResponse: true, responseCount: 3,
 			packet: testRequestPacket(Discover, mac1, ip1, []byte{0x02}, false, options), tableLen: 1,
-			srcAddr: packet.Addr{MAC: routerMAC, IP: routerIP4, Port: packet.DHCP4ClientPort},
-			dstAddr: packet.Addr{MAC: mac1, IP: ip1, Port: packet.DHCP4ServerPort}},
+			srcAddr: packet.Addr{MAC: routerMAC, IP: routerIP4, Port: DHCP4ClientPort},
+			dstAddr: packet.Addr{MAC: mac1, IP: ip1, Port: DHCP4ServerPort}},
 		{name: "discover-mac1", wantResponse: true, responseCount: 4,
 			packet: testRequestPacket(Discover, mac1, ip1, []byte{0x03}, false, options), tableLen: 1,
-			srcAddr: packet.Addr{MAC: routerMAC, IP: routerIP4, Port: packet.DHCP4ClientPort},
-			dstAddr: packet.Addr{MAC: mac1, IP: ip1, Port: packet.DHCP4ServerPort}},
+			srcAddr: packet.Addr{MAC: routerMAC, IP: routerIP4, Port: DHCP4ClientPort},
+			dstAddr: packet.Addr{MAC: mac1, IP: ip1, Port: DHCP4ServerPort}},
 		{name: "discover-mac2", wantResponse: true, responseCount: 5,
 			packet: testRequestPacket(Discover, mac2, ip2, []byte{0x01}, false, options), tableLen: 2,
-			srcAddr: packet.Addr{MAC: routerMAC, IP: routerIP4, Port: packet.DHCP4ClientPort},
-			dstAddr: packet.Addr{MAC: mac2, IP: ip2, Port: packet.DHCP4ServerPort}},
+			srcAddr: packet.Addr{MAC: routerMAC, IP: routerIP4, Port: DHCP4ClientPort},
+			dstAddr: packet.Addr{MAC: mac2, IP: ip2, Port: DHCP4ServerPort}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -120,8 +120,8 @@ func TestDHCPHandler_exhaust(t *testing.T) {
 	}{
 		{name: "discover-mac1", wantResponse: true, responseCount: 260,
 			packet: testRequestPacket(Discover, mac1, ip1, []byte{0x01}, false, options), tableLen: 256, // maximum unique macs
-			srcAddr: packet.Addr{MAC: routerMAC, IP: routerIP4, Port: packet.DHCP4ClientPort},
-			dstAddr: packet.Addr{MAC: mac1, IP: ip1, Port: packet.DHCP4ServerPort}},
+			srcAddr: packet.Addr{MAC: routerMAC, IP: routerIP4, Port: DHCP4ClientPort},
+			dstAddr: packet.Addr{MAC: mac1, IP: ip1, Port: DHCP4ServerPort}},
 	}
 
 	for _, tt := range tests {
