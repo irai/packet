@@ -3,7 +3,6 @@ package packet
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"net"
 
 	"github.com/irai/packet/fastlog"
@@ -79,17 +78,6 @@ var (
 // see: ipv4.ParseHeader in https://raw.githubusercontent.com/golang/net/master/ipv4/header.go
 type IP4 []byte
 
-func (p IP4) IsValid() bool {
-	if len(p) < 20 {
-		return false
-	}
-
-	if len(p) < p.IHL() {
-		return false
-	}
-	return true
-}
-
 func (p IP4) IHL() int               { return int(p[0]&0x0f) << 2 } // Internet header length
 func (p IP4) Version() int           { return int(p[0] >> 4) }
 func (p IP4) Protocol() int          { return int(p[9]) }
@@ -104,6 +92,17 @@ func (p IP4) TotalLen() int          { return int(binary.BigEndian.Uint16(p[2:4]
 func (p IP4) Payload() []byte        { return p[p.IHL():] }
 func (p IP4) String() string {
 	return fastlog.NewLine("", "").Struct(p).ToString()
+}
+
+func (p IP4) IsValid() bool {
+	if len(p) < 20 {
+		return false
+	}
+
+	if len(p) < p.IHL() {
+		return false
+	}
+	return true
 }
 
 // FastLog implements fastlog interface
@@ -199,13 +198,14 @@ func Checksum(b []byte) uint16 {
 
 const UDPHeaderLen = 8
 
+// UDP provides decoding and encoding of udp frames
 type UDP []byte
 
 func (p UDP) String() string {
-	return fmt.Sprintf("srcport=%d dstport=%d len=%d payloadlen=%d", p.SrcPort(), p.DstPort(), p.Len(), len(p.Payload()))
+	return fastlog.NewLine("", "").Struct(p).ToString()
 }
 
-// Print implements fastlog interface
+// FastLog implements fastlog interface
 func (p UDP) FastLog(line *fastlog.Line) *fastlog.Line {
 	line.Uint16("srcport", p.SrcPort())
 	line.Uint16("dstport", p.DstPort())
@@ -252,8 +252,7 @@ func (p UDP) AppendPayload(b []byte) (UDP, error) {
 	return p, nil
 }
 
-// For future usage: See tcp header
-// https://github.com/grahamking/latency
+// TCP provides decoding of tcp frames
 type TCP []byte
 
 func (p TCP) IsValid() bool {
