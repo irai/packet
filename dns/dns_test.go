@@ -248,7 +248,7 @@ func TestDNS_DecodePTR(t *testing.T) {
 }
 
 func TestDNS_ProcessDNS(t *testing.T) {
-	session := packet.NewEmptySession()
+	session := packet.NewSession()
 	dnsHandler, _ := New(session)
 	Debug = true
 
@@ -269,7 +269,7 @@ func TestDNS_ProcessDNS(t *testing.T) {
 }
 
 func TestDNS_reverseDNS(t *testing.T) {
-	session := packet.NewEmptySession()
+	session := packet.NewSession()
 	dnsHandler, _ := New(session)
 	Debug = true
 
@@ -301,7 +301,7 @@ func TestDNS_reverseDNS(t *testing.T) {
 // Benchmark_DNSConcurrentAccess test concurrent access performance
 // Benchmark_DNSConcurrentAccess-8   	  114400	     10260 ns/op	    6267 B/op	      52 allocs/op
 func Benchmark_DNSConcurrentAccess(b *testing.B) {
-	session := packet.NewEmptySession()
+	session := packet.NewSession()
 	dnsHandler, _ := New(session)
 
 	b.RunParallel(func(pb *testing.PB) {

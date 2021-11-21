@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -40,8 +39,7 @@ type buffer struct {
 	n int                     // buffer len
 }
 
-// Handler implements ICMPv6 Neighbor Discovery Protocol
-// see: https://mdlayher.com/blog/network-protocol-breakdown-ndp-and-go/
+// Handler implements network handler
 type Handler struct {
 	session                 *packet.Session // store shared session values
 	HandlerIP4              packet.PacketProcessor
@@ -57,8 +55,8 @@ type Handler struct {
 	PurgeDeadline           time.Duration // purge entry if no updates
 	closed                  bool          // set to true when handler is closed
 	closeChan               chan bool     // close goroutines channel
-	notificationChannel     chan Notification
 	dnsChannel              chan dns.DNSEntry
+	LayerTable              []LayerProcessor
 }
 
 // monitorNICFrequency set the frequency to validate NIC is working ok
@@ -69,6 +67,14 @@ func NewEngine(nic string) (*Handler, error) {
 	return Config{}.NewEngine(nic)
 }
 
+func quickArpHandler(h *Handler) func(frame packet.Frame, pos int) (packet.Result, error) {
+	return func(frame packet.Frame, pos int) (packet.Result, error) {
+		// case syscall.ETH_P_ARP: // 0x806
+		_, err := h.ARPHandler.ProcessPacket(nil, frame.Ether, frame.Payload())
+		return packet.Result{}, err
+	}
+}
+
 // NewEngine creates an packet handler with config values
 func (config Config) NewEngine(nic string) (*Handler, error) {
 
@@ -77,17 +83,25 @@ func (config Config) NewEngine(nic string) (*Handler, error) {
 	h := &Handler{closeChan: make(chan bool)}
 
 	// session holds shared data for all plugins
-	h.session = packet.NewEmptySession()
-	h.dnsChannel = make(chan dns.DNSEntry, 128)          // plenty of capacity to prevent blocking
-	h.notificationChannel = make(chan Notification, 128) // plenty of capacity to prevent blocking
+	h.session = packet.NewSession()
+	h.dnsChannel = make(chan dns.DNSEntry, 128) // plenty of capacity to prevent blocking
 
 	h.session.NICInfo = config.NICInfo
 	if h.session.NICInfo == nil {
-		h.session.NICInfo, err = GetNICInfo(nic)
+		h.session.NICInfo, err = packet.GetNICInfo(nic)
 		if err != nil {
 			return nil, fmt.Errorf("interface not found nic=%s: %w", nic, err)
 		}
 	}
+
+	// Ethernet layers
+	h.LayerTable = append(h.LayerTable, LayerProcessor{EtherType: 0x8808, Function: ProcessEthernetPause})
+	h.LayerTable = append(h.LayerTable, LayerProcessor{EtherType: 0x8899, Function: ProcessRRCP})
+	h.LayerTable = append(h.LayerTable, LayerProcessor{EtherType: 0x88cc, Function: ProcessLLDP})
+	h.LayerTable = append(h.LayerTable, LayerProcessor{EtherType: 0x890d, Function: Process802_11r})
+	h.LayerTable = append(h.LayerTable, LayerProcessor{EtherType: 0x893a, Function: ProcessIEEE1905})
+	h.LayerTable = append(h.LayerTable, LayerProcessor{EtherType: 0x6970, Function: ProcessSonos})
+	h.LayerTable = append(h.LayerTable, LayerProcessor{EtherType: 0x880a, Function: Process880a})
 
 	h.FullNetworkScanInterval = config.FullNetworkScanInterval
 	if h.FullNetworkScanInterval != -1 && (h.FullNetworkScanInterval <= 0 || h.FullNetworkScanInterval > time.Hour*12) {
@@ -280,516 +294,6 @@ func (h *Handler) FindIP6Router(ip net.IP) icmp.Router {
 
 var stpCount int
 var stpNextLog time.Time
-
-// process8023Frame handle general layer 2 packets in Ethernet 802.3 format.
-//
-// see https://macaddress.io/faq/how-to-recognise-an-ieee-802-1x-mac-address-application
-// see https://networkengineering.stackexchange.com/questions/64757/unknown-ethertype
-// see https://www.mit.edu/~map/Ethernet/multicast.html
-func (h *Handler) process8023Frame(ether packet.Ether) {
-	llc := packet.LLC(ether.Payload())
-	if err := llc.IsValid(); err != nil {
-		fmt.Printf("packet: err invalid LLC err=%s\n", err)
-		return
-	}
-
-	// SONOS - LLC, dsap STP (0x42) Individual, ssap STP (0x42) Command
-	// uses "01:80:c2:00:00:00" destination MAC
-	// http://www.netrounds.com/wp-content/uploads/public/layer-2-control-protocol-handling.pdf
-	// https://techhub.hpe.com/eginfolib/networking/docs/switches/5980/5200-3921_l2-lan_cg/content/499036672.htm#:~:text=STP%20protocol%20frames%20STP%20uses%20bridge%20protocol%20data,devices%20exchange%20BPDUs%20to%20establish%20a%20spanning%20tree.
-	if llc.DSAP() == 0x42 && llc.SSAP() == 0x42 {
-		stpCount++
-		now := time.Now()
-		if stpNextLog.Before(now) {
-			// fmt.Printf("packet: LLC STP protocol %s %s count=%d payload=[% x]\n", ether, llc, stpCount, ether[:])
-			fastlog.NewLine(module, "LLC STP protocol").Struct(ether).Struct(llc).Int("count", stpCount).ByteArray("payload", ether.Payload()).Write()
-			stpNextLog = now.Add(time.Minute * 5)
-		}
-		return
-	}
-
-	if llc.DSAP() == 0xaa && llc.SSAP() == 0xaa && llc.Control() == 0x03 {
-		snap := packet.SNAP(llc)
-		if err := snap.IsValid(); err != nil {
-			fmt.Printf("packet: err invalid SNAP packet err=%s\n", err)
-			return
-		}
-		// fmt.Printf("packet: LLC SNAP protocol %s %s payload=[% x]\n", ether, snap, ether[:])
-		fastlog.NewLine(module, "LLC SNAP protocol").Struct(ether).Struct(snap).ByteArray("payload", ether.Payload()).Write()
-		return
-	}
-
-	if llc.DSAP() == 0xe0 && llc.SSAP() == 0xe0 {
-		fastlog.NewLine(module, "IPX protocol").Struct(ether).ByteArray("payload", ether.Payload()).Write()
-		return
-	}
-
-	// wifi mac notification -
-	// To see these:
-	//    sudo tcpdump -vv -x not ip6 and not ip and not arp
-	//    then switch a mobile phone to airplane mode to force a network reconnect
-	// fmt.Printf("packet: rcvd 802.3 LLC frame %s %s payload=[% x]\n", ether, llc, ether[:])
-	fastlog.NewLine(module, "802.3 LLC frame").Struct(ether).ByteArray("payload", ether.Payload()).Write()
-}
-
-func (h *Handler) processUDP(host *packet.Host, ether packet.Ether, udp packet.UDP) (*packet.Host, bool, error) {
-	udpSrcPort := udp.SrcPort()
-	udpDstPort := udp.DstPort()
-	var err error
-	var notify bool
-	var result packet.Result
-
-	switch {
-	case udpSrcPort == 443 || udpDstPort == 443:
-		// ssl udp - likely quic?
-		// do nothing
-		return host, false, nil
-
-	case udpDstPort == dhcp4.DHCP4ServerPort || udpDstPort == dhcp4.DHCP4ClientPort: // DHCP4 packet?
-		if result, err = h.DHCP4Handler.ProcessPacket(host, ether, udp.Payload()); err != nil {
-			fmt.Printf("packet: error processing dhcp4: %s\n", err)
-		}
-		if result.Update {
-			if result.IsRouter { // IsRouter is true if this is a new host from a DHCP request
-				host, _ = h.session.FindOrCreateHost(result.FrameAddr)
-			}
-			if h.lockAndProcessDHCP4Update(host, result) {
-				notify = true
-			}
-		}
-
-	case udpDstPort == 546 || udpDstPort == 547: // DHCP6
-		fastlog.NewLine("ether", "dhcp6 packet").Struct(ether).LF().Module("udp", "dhcp6 packet").Struct(udp).Write()
-		fastlog.NewLine("packet", "ignore dhcp6 packet").ByteArray("payload", udp.Payload()).Write()
-
-	case udpSrcPort == 53: // DNS response
-		dnsEntry, err := h.DNSHandler.ProcessDNS(host, ether, udp.Payload())
-		if err != nil {
-			fmt.Printf("packet: error processing dns: %s\n", err)
-			break
-		}
-		if dnsEntry.Name != "" {
-			h.sendDNSNotification(dnsEntry)
-		}
-
-	case udpDstPort == 53: // DNS request
-	// do nothing
-
-	case udpSrcPort == 5353 || udpDstPort == 5353: // Multicast DNS (MDNS)
-		if host != nil {
-			ipv4Hosts, ipv6Hosts, err := h.DNSHandler.ProcessMDNS(host, ether, udp.Payload())
-			if err != nil {
-				fmt.Printf("packet: error processing mdns: %s\n", err)
-				break
-			}
-			if len(ipv4Hosts) > 0 {
-				ipv4Hosts[0].NameEntry, notify = host.MDNSName.Merge(ipv4Hosts[0].NameEntry)
-				if notify {
-					host.MACEntry.Row.Lock()
-					host.MDNSName = ipv4Hosts[0].NameEntry
-					fastlog.NewLine(module, "updated mdns name").Struct(host.Addr).Struct(host.MDNSName).Write()
-					host.MACEntry.MDNSName, _ = host.MACEntry.MDNSName.Merge(host.MDNSName)
-					host.MACEntry.Row.Unlock()
-				}
-			}
-
-			for _, v := range ipv6Hosts {
-				fastlog.NewLine(module, "mdns ipv6 ignoring host").Struct(v).Write()
-			}
-		}
-
-	case udpSrcPort == 5355 || udpDstPort == 5355:
-		// Link Local Multicast Name Resolution (LLMNR)
-		fastlog.NewLine(module, "ether").Struct(ether).Module(module, "received llmnr packet").Struct(host).Write()
-		if host != nil {
-			ipv4Hosts, ipv6Hosts, err := h.DNSHandler.ProcessMDNS(host, ether, udp.Payload())
-			if err != nil {
-				fmt.Printf("packet: error processing mdns: %s\n", err)
-				break
-			}
-			if len(ipv4Hosts) > 0 {
-				ipv4Hosts[0].NameEntry, notify = host.LLMNRName.Merge(ipv4Hosts[0].NameEntry)
-				if notify {
-					host.MACEntry.Row.Lock()
-					host.LLMNRName = ipv4Hosts[0].NameEntry
-					fastlog.NewLine(module, "updated llmnr name").Struct(host.Addr).Struct(host.LLMNRName).Write()
-					host.MACEntry.LLMNRName, _ = host.MACEntry.LLMNRName.Merge(host.LLMNRName)
-					host.MACEntry.Row.Unlock()
-				}
-			}
-			for _, v := range ipv6Hosts {
-				fastlog.NewLine(module, "mdns ipv6 ignoring host").Struct(v).Write()
-			}
-		}
-
-	case udpSrcPort == 123:
-		// Network time synchonization protocol
-		// do nothing
-		fastlog.NewLine(module, "NTP frame").Struct(ether).Write()
-
-	case udpDstPort == 1900:
-		// Microsoft Simple Service Discovery Protocol
-		if host != nil {
-			nameEntry, location, err := h.DNSHandler.ProcessSSDP(host, ether, udp.Payload())
-			if err != nil {
-				fastlog.NewLine(module, "error processing ssdp").Error(err).ByteArray("payload", udp.Payload()).Write()
-				break
-			}
-
-			// Update SSDPName if modified
-			nameEntry, notify = host.SSDPName.Merge(nameEntry)
-			if notify {
-				host.MACEntry.Row.Lock()
-				host.SSDPName = nameEntry
-				fastlog.NewLine(module, "updated ssdp name").Struct(host.Addr).Struct(host.SSDPName).Write()
-				host.MACEntry.SSDPName, _ = host.MACEntry.SSDPName.Merge(host.SSDPName)
-				host.MACEntry.Row.Unlock()
-			}
-
-			// Retrieve service details if valid location
-			// Location is the end point for the UPNP service discovery
-			// Retrieve in a goroutine
-			if location != "" {
-				go func(host *packet.Host) {
-					host.MACEntry.Row.RLock()
-					if host.SSDPName.Expire.After(time.Now()) { // ignore if cache is valid
-						host.MACEntry.Row.RUnlock()
-						return
-					}
-					host.MACEntry.Row.RUnlock()
-					nameEntry, err := h.DNSHandler.UPNPServiceDiscovery(host.Addr, location)
-					if err != nil {
-						fastlog.NewLine("engine", "error retrieving UPNP service discovery").String("location", location).Error(err).Write()
-						return
-					}
-					var notify bool
-					host.MACEntry.Row.Lock()
-					host.SSDPName, notify = host.SSDPName.Merge(nameEntry)
-					if notify {
-						fastlog.NewLine(module, "updated ssdp name").Struct(host.Addr).Struct(host.SSDPName).Write()
-						host.MACEntry.SSDPName, _ = host.MACEntry.SSDPName.Merge(host.SSDPName)
-					}
-					host.MACEntry.Row.Unlock()
-					if notify {
-						h.sendNotification(toNotification(host))
-					}
-				}(host)
-				break
-			}
-		}
-
-	case udpDstPort == 3702:
-		// Web Services Discovery Protocol (WSD)
-		if packet.Debug {
-			fastlog.NewLine(module, "ether").Struct(ether).Struct(udp).Struct(host).Write()
-		}
-		fastlog.NewLine(module, "wsd frame").String("payload", string(udp.Payload())).Write()
-
-	case udpDstPort == 137 || udpDstPort == 138:
-		// Netbions NBNS
-		entry, err := h.DNSHandler.ProcessNBNS(host, ether, udp.Payload())
-		if err != nil {
-			// don't log as error if dns parsing cannot handle nbns reserved keyword.
-			// error: "skipping Question Name: segment prefix is reserved"
-			// TODO: fix nbns parsing
-			if strings.Contains(err.Error(), "prefix is reserved") {
-				fastlog.NewLine(module, "nbns prefix is reserved - fixme").ByteArray("frame", ether).Write()
-				break
-			}
-			fastlog.NewLine(module, "error processing nbns").Error(err).Write()
-			break
-		}
-		if entry.Name != "" {
-			host.MACEntry.Row.Lock()
-			host.NBNSName, notify = host.NBNSName.Merge(entry)
-			if notify {
-				fastlog.NewLine(module, "updated nbns name").Struct(host.Addr).Struct(host.NBNSName).Write()
-				host.MACEntry.NBNSName, notify = host.MACEntry.NBNSName.Merge(host.NBNSName)
-			}
-			host.MACEntry.Row.Unlock()
-		}
-
-	case udpDstPort == 32412 || udpDstPort == 32414:
-		// Plex application multicast on these ports to find players.
-		// G'Day Mate (GDM) multicast packets
-		// https://github.com/NineWorlds/serenity-android/wiki/Good-Day-Mate
-		fastlog.NewLine(module, "plex frame").Struct(ether).IP("srcip", ether.SrcIP()).IP("dstip", ether.DstIP()).ByteArray("payload", udp.Payload()).Write()
-
-	case udpSrcPort == 10001 || udpDstPort == 10001:
-		// Ubiquiti device discovery protocol
-		// https://help.ui.com/hc/en-us/articles/204976244-EdgeRouter-Ubiquiti-Device-Discovery
-		fastlog.NewLine("proto", "ubiquiti device discovery").Struct(ether).IP("srcip", ether.SrcIP()).IP("dstip", ether.DstIP()).ByteArray("udp", udp).Write()
-
-	default:
-		// don't log if getting too many packets
-		if now := time.Now(); invalidUDPNextLog.Before(now) {
-			invalidUDPNextLog = now.Add(time.Minute * 5)
-			fastlog.NewLine("proto", "unexpected udp type").Struct(ether).Struct(udp).Struct(host).Write()
-		}
-	}
-
-	return host, notify, nil
-}
-
-var invalidUDPNextLog time.Time // hack to print udp logs every few minutes only
-var count0x880a int
-
-func (h *Handler) processPacket(ether packet.Ether) (err error) {
-	var d1, d2, d3 time.Duration
-
-	startTime := time.Now()
-
-	// In order to allow Ethernet II and IEEE 802.3 framing to be used on the same Ethernet segment,
-	// a unifying standard, IEEE 802.3x-1997, was introduced that required that EtherType values be greater than or equal to 1536.
-	// Thus, values of 1500 and below for this field indicate that the field is used as the size of the payload of the Ethernet frame
-	// while values of 1536 and above indicate that the field is used to represent an EtherType.
-	if ether.EtherType() < 1536 {
-		h.process8023Frame(ether)
-		return nil
-	}
-
-	notify := false
-	var ip4Frame packet.IP4
-	var ip6Frame packet.IP6
-	var l4Proto int
-	var l4Payload []byte
-	var host *packet.Host
-	var result packet.Result
-
-	// Everything from here is encapsulated in an Ethernet II frame format
-	// First, lets process layer 3 - IP4, IP6, ARP and some weird protocols
-	//
-	// This will set the variable host if the sender is a local IP and not multicast.
-	switch ether.EtherType() {
-	case syscall.ETH_P_IP: // 0x0800
-		ip4Frame = packet.IP4(ether.Payload())
-		if !ip4Frame.IsValid() {
-			fmt.Println("packet: error invalid ip4 frame type=", ether.EtherType())
-			return nil
-		}
-		if packet.DebugIP4 {
-			fastlog.NewLine("ether", "").Struct(ether).LF().Module("ip4", "").Struct(ip4Frame).Write()
-		}
-
-		// Create host only if on same subnet
-		// Note: DHCP request for previous discover have zero src IP; therefore wont't create host entry here.
-		ip := ip4Frame.Src() // avoid []byte allocation when used twice below
-		if h.session.NICInfo.HostIP4.Contains(ip) {
-			host, _ = h.session.FindOrCreateHost(packet.Addr{MAC: ether.Src(), IP: ip}) // will lock/unlock
-		}
-		l4Proto = ip4Frame.Protocol()
-		l4Payload = ip4Frame.Payload()
-
-	case syscall.ETH_P_IPV6: // 0x86dd
-		ip6Frame = packet.IP6(ether.Payload())
-		if !ip6Frame.IsValid() {
-			fmt.Println("packet: error invalid ip6 frame type=", ether.EtherType())
-			return nil
-		}
-		if packet.DebugIP6 {
-			fastlog.NewLine("ether", "").Struct(ether).LF().Module("ip6", "").Struct(ip6Frame).Write()
-		}
-
-		l4Proto = ip6Frame.NextHeader()
-		l4Payload = ip6Frame.Payload()
-
-		// create host only if src IP is:
-		//     - unicast local link address (i.e. fe80::)
-		//     - global IP6 sent by a local host not the router
-		//
-		// We ignore IP6 packets forwarded by the router to a local host using a Global Unique Addresses.
-		// For example, an IP6 google search will be forwared by the router as:
-		//    ip6 src=google.com dst=GUA localhost and srcMAC=routerMAC dstMAC=localHostMAC
-		// TODO: is it better to check if IP is in the prefix?
-		if ip6Frame.Src().IsLinkLocalUnicast() ||
-			(ip6Frame.Src().IsGlobalUnicast() && !bytes.Equal(ether.Src(), h.session.NICInfo.RouterMAC)) {
-			host, _ = h.session.FindOrCreateHost(packet.Addr{MAC: ether.Src(), IP: ip6Frame.Src()}) // will lock/unlock
-		}
-
-		// IPv6 Hop by Hop extension - always the first header if present
-		if l4Proto == syscall.IPPROTO_HOPOPTS {
-			header := packet.HopByHopExtensionHeader(l4Payload)
-			if !header.IsValid() {
-				fmt.Printf("packet: error invalid next header payload=%d ext=%d\n", len(l4Payload), len(ether))
-				return nil
-			}
-			if n, err := h.session.ProcessIP6HopByHopExtension(host, ether, l4Payload); err != nil || n <= 0 {
-				fmt.Printf("packet: error processing hop by hop extension : %s\n", err)
-			}
-			if len(l4Payload) <= header.Len()+1 {
-				fmt.Printf("packet: error invalid next header payload=%d ext=%d\n", len(l4Payload), header.Len()+2)
-				return nil
-			}
-			l4Proto = header.NextHeader()
-			l4Payload = l4Payload[header.Len():]
-		}
-
-	case syscall.ETH_P_ARP: // 0x806
-		l4Proto = 0 // skip layer 4 processing below
-		if result, err = h.ARPHandler.ProcessPacket(host, ether, ether.Payload()); err != nil {
-			fmt.Printf("packet: error processing arp: %s\n", err)
-		}
-		if result.Update {
-			host, _ = h.session.FindOrCreateHost(result.FrameAddr)
-		}
-
-	case 0x8808: // Ethernet flow control - Pause frame
-		// An overwhelmed network node can send a pause frame, which halts the transmission of the sender for a specified period of time.
-		// EtherType 0x8808 is used to carry the pause command, with the Control opcode set to 0x0001 (hexadecimal).
-		// When a station wishes to pause the other end of a link, it sends a pause frame to either the unique
-		// 48-bit destination address of this link or to the 48-bit reserved multicast address of 01-80-C2-00-00-01.
-		// A likely scenario is network congestion within a switch.
-		p := packet.EthernetPause(ether.Payload())
-		if err := p.IsValid(); err != nil {
-			fastlog.NewLine(module, "invalid Ethernet pause frame").Error(err).ByteArray("frame", ether).Write()
-			return nil
-		}
-		fastlog.NewLine(module, "ethernet flow control frame").Struct(ether).Struct(p).Write()
-		return nil
-
-	case 0x8899: // Realtek Remote Control Protocol (RRCP)
-		// proprietary protocol with scarce information available.
-		// A common packet is the loop detection packet (proprietary protocol 0x23).
-		p := packet.RRCP(ether.Payload())
-		if err := p.IsValid(); err != nil {
-			fastlog.NewLine(module, "invalid RRCP frame").Error(err).ByteArray("frame", ether).Write()
-			return nil
-		}
-		fastlog.NewLine(module, "RRCP frame").Struct(ether).ByteArray("payload", ether.Payload()).Write()
-		return nil
-
-	case 0x88cc: // Link Layer Discovery Protocol (LLDP)
-		p := packet.LLDP(ether.Payload())
-		if err := p.IsValid(); err != nil {
-			fastlog.NewLine(module, "invalid LLDP frame").Error(err).ByteArray("frame", ether).Write()
-			return nil
-		}
-		fastlog.NewLine(module, "LLDP frame").Struct(ether).Struct(p).Write()
-		return nil
-
-	case 0x890d: // Fast Roaming Remote Request (802.11r)
-		// Fast roaming, also known as IEEE 802.11r or Fast BSS Transition (FT),
-		// allows a client device to roam quickly in environments implementing WPA2 Enterprise security,
-		// by ensuring that the client device does not need to re-authenticate to the RADIUS server
-		// every time it roams from one access point to another.
-		// fmt.Printf("packet: 802.11r Fast Roaming frame %s payload=[% x]\n", ether, ether[:])
-		fastlog.NewLine(module, "802.11r Fast Roaming frame").Struct(ether).ByteArray("payload", ether.Payload()).Write()
-		return nil
-
-	case 0x893a: // IEEE 1905.1 - network enabler for home networking
-		// Enables topology discovery, link metrics, forwarding rules, AP auto configuration
-		// TODO: investigate how to use IEEE 1905.1
-		// See:
-		// https://grouper.ieee.org/groups/802/1/files/public/docs2012/802-1-phkl-P1095-Tech-Presentation-1207-v01.pdf
-		p := packet.IEEE1905(ether.Payload())
-		if err := p.IsValid(); err != nil {
-			fastlog.NewLine(module, "invalid IEEE 1905 frame").Error(err).ByteArray("frame", ether).Write()
-			return nil
-		}
-		fastlog.NewLine(module, "IEEE 1905.1 frame").Struct(ether).Struct(p).Write()
-		return nil
-
-	case 0x6970: // Sonos Data Routing Optimisation
-		// References to type EthType 0x6970 appear in a Sonos patent
-		// https://portal.unifiedpatents.com/patents/patent/US-20160006778-A1
-		fastlog.NewLine(module, "Sonos data routing fram").Struct(ether).ByteArray("payload", ether.Payload()).Write()
-		return nil
-
-	case 0x880a: // Unknown protocol - but commonly seen in logs
-		if (count0x880a % 32) == 0 {
-			fastlog.NewLine(module, "unknown 0x880a frame").Int("count", count0x880a).ByteArray("payload", ether.Payload()).Write()
-		}
-		count0x880a++
-		return nil
-
-	default:
-		// fmt.Printf("packet: error invalid ethernet type %s\n", ether)
-		fastlog.NewLine(module, "unexpected ethernet type").Struct(ether).ByteArray("payload", ether.Payload()).Write()
-		return nil
-	}
-	d1 = time.Since(startTime)
-
-	// Process level 4 and 5 protocols: ICMP4, ICMP6, IGMP, TCP, UDP, DHCP4, DNS
-	//
-	switch l4Proto {
-	case 0:
-		// Do nothing; likely ARP
-
-	case syscall.IPPROTO_TCP:
-		if ip4Frame != nil {
-			tcp := packet.TCP(ip4Frame.Payload())
-
-			// During connection establishement (SYN), test if we have the host name
-			// in case the client is using an ip we don't know about
-			// perform a PTR lookup to attempt to discover the name
-			if tcp.SYN() && !h.session.NICInfo.HomeLAN4.Contains(ip4Frame.Dst()) {
-				if !h.DNSHandler.DNSExist(ip4Frame.NetaddrDst()) {
-					fmt.Printf("packet: dns entry does not exist for ip=%s\n", ip4Frame.Dst())
-					go h.DNSHandler.DNSLookupPTR(ip4Frame.NetaddrDst())
-				}
-			}
-		}
-
-	case syscall.IPPROTO_UDP: // 0x11
-		udp := packet.UDP(l4Payload)
-		if !udp.IsValid() {
-			fmt.Println("packet: error invalid udp frame ", ip4Frame)
-			return nil
-		}
-		if packet.DebugUDP {
-			if ip4Frame != nil {
-				fastlog.NewLine("ether", "").Struct(ether).LF().Module("ip4", "").Struct(ip4Frame).Module("udp", "").Struct(udp).Write()
-			} else {
-				fastlog.NewLine("ether", "").Struct(ether).LF().Module("ip6", "").Struct(ip6Frame).Module("udp", "").Struct(udp).Write()
-			}
-		}
-		if host, notify, err = h.processUDP(host, ether, udp); err != nil {
-			fastlog.NewLine("packet", "error processing udp").Error(err).Write()
-			return err
-		}
-
-	case syscall.IPPROTO_ICMP:
-		if result, err = h.ICMP4Handler.ProcessPacket(host, ether, l4Payload); err != nil {
-			fastlog.NewLine("packet", "error processing icmp4").Error(err).Write()
-			return err
-		}
-
-	case syscall.IPPROTO_ICMPV6: // 0x03a
-		if result, err = h.ICMP6Handler.ProcessPacket(host, ether, l4Payload); err != nil {
-			fastlog.NewLine("packet", "error processing icmp6").Error(err).Write()
-			return err
-		}
-		if result.Update {
-			if result.FrameAddr.IP != nil {
-				host, _ = h.session.FindOrCreateHost(result.FrameAddr)
-			}
-			if host != nil {
-				host.MACEntry.IsRouter = result.IsRouter
-				notify = true
-			}
-		}
-
-	case syscall.IPPROTO_IGMP:
-		// Internet Group Management Protocol - Ipv4 multicast groups
-		// do nothing
-		fastlog.NewLine("packet", "ipv4 igmp packet").Struct(ether).Write()
-
-	default:
-		fmt.Println("packet: unsupported level 4 header", l4Proto, ether)
-	}
-	d2 = time.Since(startTime)
-
-	if host != nil {
-		h.lockAndSetOnline(host, notify)
-	}
-
-	d3 = time.Since(startTime)
-	if d3 > time.Microsecond*600 {
-		fastlog.NewLine("packet", "warning > 600 microseconds").String("l3", d1.String()).String("l4", d2.String()).String("total", d3.String()).
-			Int("l4proto", l4Proto).Uint16Hex("ethertype", ether.EtherType()).Write()
-	}
-	return nil
-}
 
 // ListenAndServe listen for raw packets and invoke hooks as required
 func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {

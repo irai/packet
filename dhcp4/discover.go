@@ -107,7 +107,7 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (result packet.Result
 
 	// set the IP4 to be later checked in ARP ACD
 	result.Update = true
-	result.FrameAddr = packet.Addr{MAC: lease.Addr.MAC, IP: lease.IPOffer}
+	result.SrcAddr = packet.Addr{MAC: lease.Addr.MAC, IP: lease.IPOffer}
 	fastlog.NewLine(module, "offer OK").ByteArray("xid", p.XId()).ByteArray("clientid", clientID).IP("ip", lease.IPOffer).Write()
 	return result, ret
 }

@@ -8,8 +8,8 @@ require (
 	github.com/pkg/profile v1.6.0
 	github.com/vishvananda/netlink v1.1.0
 	gitlab.com/golang-commonmark/puny v0.0.0-20191124015043-9f83538fa04f
-	golang.org/x/net v0.0.0-20210716203947-853a461950ff
-	golang.org/x/sys v0.0.0-20210423082822-04245dca01da
+	golang.org/x/net v0.0.0-20210805182204-aaa1db679c0d
+	golang.org/x/sys v0.0.0-20211101204403-39c9dd37992c
 	gopkg.in/yaml.v2 v2.4.0
 	inet.af/netaddr v0.0.0-20210903134321-85fa6c94624e
 )

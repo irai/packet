@@ -20,7 +20,15 @@ func setupTestHandler() *Handler {
 	h.ICMP6Handler = icmp.ICMP6NOOP{}
 	h.DHCP4Handler = packet.PacketNOOP{}
 	// h.session = &packet.Session{HostTable: packet.NewHostTable(), MACTable: packet.NewMACTable()}
-	h.session = packet.NewEmptySession()
+	h.session = packet.NewSession()
+	h.LayerTable = append(h.LayerTable, LayerProcessor{EtherType: 0x8808, Function: ProcessEthernetPause})
+	h.LayerTable = append(h.LayerTable, LayerProcessor{EtherType: 0x8899, Function: ProcessRRCP})
+	h.LayerTable = append(h.LayerTable, LayerProcessor{EtherType: 0x88cc, Function: ProcessLLDP})
+	h.LayerTable = append(h.LayerTable, LayerProcessor{EtherType: 0x890d, Function: Process802_11r})
+	h.LayerTable = append(h.LayerTable, LayerProcessor{EtherType: 0x893a, Function: ProcessIEEE1905})
+	h.LayerTable = append(h.LayerTable, LayerProcessor{EtherType: 0x6970, Function: ProcessSonos})
+	h.LayerTable = append(h.LayerTable, LayerProcessor{EtherType: 0x880a, Function: Process880a})
+
 	return h
 }
 
@@ -32,14 +40,14 @@ func TestHandler_findOrCreateHostDupIP(t *testing.T) {
 	// First create host with two IPs - IP3 and IP2 and set online
 	addr := packet.Addr{MAC: mac1, IP: ip3}
 	host1, _ := engine.session.FindOrCreateHost(addr)
-	engine.lockAndSetOnline(host1, true)
+	engine.session.SetOnline(host1)
 	addr.IP = ip2
 	host1, _ = engine.session.FindOrCreateHost(addr)
 	host1.DHCP4Name.Name = "mac1" // test that name will clear - this was a previous bug
-	engine.lockAndSetOnline(host1, true)
+	engine.session.SetOnline(host1)
 
 	// set host offline
-	engine.lockAndSetOnline(host1, false)
+	engine.session.SetOffline(host1)
 	if err := engine.Capture(mac1); err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +95,7 @@ func TestHandler_anotherHostDHCP(t *testing.T) {
 	// First create host with two IPs - IP3 and IP2 and set online
 	addr := packet.Addr{MAC: mac1, IP: ip3}
 	host1, _ := engine.session.FindOrCreateHost(addr)
-	engine.lockAndSetOnline(host1, true)
+	engine.session.SetOnline(host1)
 	if err := engine.Capture(mac1); err != nil {
 		t.Fatal(err)
 	}
@@ -103,8 +111,8 @@ func TestHandler_anotherHostDHCP(t *testing.T) {
 	// simulate DHCP same host result
 	result := packet.Result{}
 	result.Update = true
-	result.IsRouter = true  // hack to mark result as a new host
-	result.FrameAddr = addr // same addr IP
+	result.IsRouter = true // hack to mark result as a new host
+	result.SrcAddr = addr  // same addr IP
 	result.NameEntry.Name = "New name"
 	result.HuntStage = packet.StageNoChange
 	engine.lockAndProcessDHCP4Update(host1, result)
@@ -130,17 +138,17 @@ func TestHandler_Offline(t *testing.T) {
 
 	// First create host with two IPs - IP3 and IP2 and set online
 	host1, _ := engine.session.FindOrCreateHost(packet.Addr{MAC: mac1, IP: ip3})
-	engine.lockAndSetOnline(host1, true)
+	engine.session.SetOnline(host1)
 	host2, _ := engine.session.FindOrCreateHost(packet.Addr{MAC: mac1, IP: ip2})
-	engine.lockAndSetOnline(host2, true)
+	engine.session.SetOnline(host2)
 	host3, _ := engine.session.FindOrCreateHost(packet.Addr{MAC: mac1, IP: ip6LLA1})
-	engine.lockAndSetOnline(host3, true)
+	engine.session.SetOnline(host3)
 	host4, _ := engine.session.FindOrCreateHost(packet.Addr{MAC: mac1, IP: ip6GUA1})
-	engine.lockAndSetOnline(host4, true)
+	engine.session.SetOnline(host4)
 	host5, _ := engine.session.FindOrCreateHost(packet.Addr{MAC: mac1, IP: ip6GUA2})
-	engine.lockAndSetOnline(host5, true)
+	engine.session.SetOnline(host5)
 	host6, _ := engine.session.FindOrCreateHost(packet.Addr{MAC: mac1, IP: ip6GUA3})
-	engine.lockAndSetOnline(host6, true)
+	engine.session.SetOnline(host6)
 
 	if n := len(engine.session.HostTable.Table); n != 6 {
 		engine.PrintTable()
@@ -154,12 +162,12 @@ func TestHandler_Offline(t *testing.T) {
 	time.Sleep(time.Millisecond * 3)
 
 	// set hosts offline
-	engine.lockAndSetOffline(host1)
-	engine.lockAndSetOffline(host2)
-	engine.lockAndSetOffline(host3)
-	engine.lockAndSetOffline(host4)
-	engine.lockAndSetOffline(host5)
-	engine.lockAndSetOffline(host6)
+	engine.session.SetOffline(host1)
+	engine.session.SetOffline(host2)
+	engine.session.SetOffline(host3)
+	engine.session.SetOffline(host4)
+	engine.session.SetOffline(host5)
+	engine.session.SetOffline(host6)
 
 	if n := len(engine.session.HostTable.Table); n != 6 {
 		engine.PrintTable()

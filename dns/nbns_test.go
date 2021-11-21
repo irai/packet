@@ -82,7 +82,7 @@ var nbnsFrame = []byte{
 }
 
 func Test_NBNS(t *testing.T) {
-	session := packet.NewEmptySession()
+	session := packet.NewSession()
 	dnsHandler, _ := New(session)
 	Debug = true
 
@@ -142,7 +142,7 @@ current nbns frame sent by us
 		***/
 
 func TestDNSHandler_SendNBNSNodeStatus(t *testing.T) {
-	session := packet.NewEmptySession()
+	session := packet.NewSession()
 	dnsHandler, _ := New(session)
 
 	if err := dnsHandler.SendNBNSNodeStatus(); err != nil {

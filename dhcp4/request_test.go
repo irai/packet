@@ -124,7 +124,7 @@ func Test_requestAnotherHost(t *testing.T) {
 	case <-time.After(time.Millisecond * 10):
 	}
 	if !result.IsRouter || !result.Update ||
-		result.FrameAddr.IP == nil || result.FrameAddr.MAC == nil ||
+		result.SrcAddr.IP == nil || result.SrcAddr.MAC == nil ||
 		result.HuntStage != packet.StageNoChange ||
 		result.NameEntry.Name != "host name" {
 		t.Fatalf("Test_requestAnotherHost() invalid update=%v isrouter=%v result=%+v ", result.Update, result.IsRouter, result)

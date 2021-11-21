@@ -38,8 +38,8 @@ func TestIP6MarshalBinary(t *testing.T) {
 
 	// validate with our ipv6
 	frame := IP6(ip6)
-	if !frame.IsValid() {
-		t.Fatalf("invalid frame %+v", frame)
+	if err := frame.IsValid(); err != nil {
+		t.Fatalf("invalid frame %+v error %v", frame, err)
 	}
 	if frame.Version() != 0x06 {
 		t.Fatalf("invalid version %v %+v", frame.Version(), frame)

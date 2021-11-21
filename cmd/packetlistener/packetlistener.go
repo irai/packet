@@ -68,7 +68,7 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	info, err := engine.GetNICInfo(*nic)
+	info, err := packet.GetNICInfo(*nic)
 	if err != nil {
 		fmt.Println("failed to get nic info ", err)
 		return
@@ -87,7 +87,7 @@ func main() {
 	if !handlers.netfilterIP.IP.Equal(info.HostIP4.IP) {
 		fmt.Printf("Changing host IP to %s - disable with -nodhcpip \n", handlers.netfilterIP)
 
-		if err := engine.LinuxConfigureInterface(*nic, &net.IPNet{IP: handlers.netfilterIP.IP, Mask: info.RouterIP4.Mask}, nil); err != nil {
+		if err := packet.LinuxConfigureInterface(*nic, &net.IPNet{IP: handlers.netfilterIP.IP, Mask: info.RouterIP4.Mask}, nil); err != nil {
 			fmt.Println("failed to change host IP ", err)
 		}
 	}
@@ -149,7 +149,7 @@ func main() {
 	go func() {
 		for {
 			select {
-			case notification, ok := <-handlers.engine.GetNotificationChannel():
+			case notification, ok := <-handlers.engine.Session().GetNotificationChannel():
 				if !ok {
 					return
 				}

@@ -136,10 +136,6 @@ const (
 
 // ProcessPacket handles an incoming ARP packet
 //
-// Virtual MACs
-// A virtual MAC is a fake mac address used when claiming an existing IP during spoofing.
-// ListenAndServe will send ARP reply on behalf of virtual MACs
-//
 // ARP: packet types
 //      note that RFC 3927 specifies 00:00:00:00:00:00 for Request TargetMAC
 // +============+===+===========+===========+============+============+===================+===========+
@@ -156,8 +152,8 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (pac
 
 	ether := packet.Ether(b)
 	frame := ARP(header)
-	if !frame.IsValid() {
-		return packet.Result{}, packet.ErrParseFrame
+	if err := frame.IsValid(); err != nil {
+		return packet.Result{}, err
 	}
 
 	// skip link local packets
@@ -239,7 +235,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (pac
 			if h.session.NICInfo.HomeLAN4.Contains(frame.DstIP()) {
 				fastlog.NewLine(module, "probe reject for").IP("ip", frame.DstIP()).MAC("fromMAC", frame.SrcMAC()).Struct(macEntry).Write()
 				// fmt.Printf("arp   : probe reject for ip=%s from mac=%s macentry=%s\n", frame.DstIP(), frame.SrcMAC(), macEntry)
-				h.reply(frame.SrcMAC(), packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: frame.DstIP()}, packet.Addr{MAC: frame.SrcMAC(), IP: net.IP(EthernetBroadcast)})
+				h.reply(frame.SrcMAC(), packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: frame.DstIP()}, packet.Addr{MAC: frame.SrcMAC(), IP: net.IP(packet.IP4Broadcast)})
 			}
 		}
 		return packet.Result{}, nil
@@ -271,7 +267,7 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (pac
 	}
 
 	if host == nil && h.session.NICInfo.HostIP4.Contains(frame.SrcIP()) {
-		return packet.Result{Update: true, FrameAddr: packet.Addr{MAC: frame.SrcMAC(), IP: frame.SrcIP()}}, nil
+		return packet.Result{Update: true, SrcAddr: packet.Addr{MAC: frame.SrcMAC(), IP: frame.SrcIP()}}, nil
 	}
 	return packet.Result{}, nil
 }

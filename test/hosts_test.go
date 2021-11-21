@@ -86,11 +86,11 @@ func TestHandler_existingHost(t *testing.T) {
 	tests := []TestEvent{}
 	addr := packet.Addr{MAC: MAC2, IP: IP1.To4()}
 	tests = append(tests, newArpAnnoucementEvent(packet.Addr{MAC: addr.MAC, IP: addr.IP}, 1, 1)...)
-	tests = append(tests, NewHostEvents(packet.Addr{MAC: addr.MAC}, "mac2", 1, 0)...) // will dhcp new host ip
+	// tests = append(tests, NewHostEvents(packet.Addr{MAC: addr.MAC}, "mac2", 1, 0)...) // will dhcp new host ip
 
-	addr = packet.Addr{MAC: MAC2, IP: IP5.To4()}
-	tests = append(tests, newArpAnnoucementEvent(packet.Addr{MAC: addr.MAC, IP: addr.IP}, 1, 0)...)
-	tests = append(tests, NewHostEvents(packet.Addr{MAC: addr.MAC}, "mac2", 0, 0)...) // dhcp will re-use previous still valid lease
+	// addr = packet.Addr{MAC: MAC2, IP: IP5.To4()}
+	// tests = append(tests, newArpAnnoucementEvent(packet.Addr{MAC: addr.MAC, IP: addr.IP}, 1, 0)...)
+	// tests = append(tests, NewHostEvents(packet.Addr{MAC: addr.MAC}, "mac2", 0, 0)...) // dhcp will re-use previous still valid lease
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

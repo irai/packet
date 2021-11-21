@@ -61,7 +61,7 @@ func setupTestHandler(t *testing.T) *testContext {
 
 	tc := testContext{}
 	tc.ctx, tc.cancel = context.WithCancel(context.Background())
-	tc.session = packet.NewEmptySession()
+	tc.session = packet.NewSession()
 
 	// fake conn
 	tc.inConn, tc.outConn = packet.TestNewBufferedConn()
@@ -125,7 +125,7 @@ func readResponse(ctx context.Context, tc *testContext) error {
 		}
 
 		arpFrame := ARP(ether.Payload())
-		if !arpFrame.IsValid() {
+		if arpFrame.IsValid() != nil {
 			panic("invalid arp packet")
 		}
 		tc.Lock()
@@ -191,7 +191,7 @@ func Test_Handler_BasicTest(t *testing.T) {
 				t.Errorf("Test_Requests:%s error = %v, wantErr %v", tt.name, err, tt.wantErr)
 			}
 			if result.Update {
-				tc.session.FindOrCreateHost(result.FrameAddr)
+				tc.session.FindOrCreateHost(result.SrcAddr)
 			}
 
 			if len(tc.arp.session.GetHosts()) != tt.wantLen {

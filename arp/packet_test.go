@@ -39,14 +39,15 @@ func TestMarshalUnmarshall(t *testing.T) {
 	}
 
 	// unmarschall
-	n := len(ether) + len(arpFrame)
+	ether.SetPayload(arpFrame)
+	n := len(ether)
 	ether = packet.Ether(ether[:n])
 	arpFrame = ARP(ether.Payload())
 	if err := ether.IsValid(); err != nil {
 		t.Errorf("invalid ether=%s", ether)
 	}
-	if !arpFrame.IsValid() {
-		t.Errorf("invalid arp=%s", arpFrame)
+	if err := arpFrame.IsValid(); err != nil {
+		t.Errorf("invalid arp=%s", err)
 	}
 
 }
@@ -77,8 +78,8 @@ func TestMarshalBinary(t *testing.T) {
 			}
 
 			p := ARP(buf)
-			if !p.IsValid() {
-				t.Errorf("%s: invalid arp frame=%s", tt.name, p)
+			if err := p.IsValid(); err != nil {
+				t.Errorf("%s: invalid arp err=%s", tt.name, err)
 			}
 			if p.Operation() != tt.operation {
 				t.Errorf("%s: invalid operation=%d want=%d", tt.name, p.Operation(), tt.operation)

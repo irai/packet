@@ -76,7 +76,7 @@ func Test_Handler_ARPRequests(t *testing.T) {
 				t.Errorf("Test_Requests:%s error = %v, wantErr %v", tt.name, err, tt.wantErr)
 			}
 			if result.Update {
-				tc.session.FindOrCreateHost(result.FrameAddr)
+				tc.session.FindOrCreateHost(result.SrcAddr)
 			}
 			time.Sleep(time.Millisecond * 3)
 
@@ -164,7 +164,7 @@ func Test_Handler_ServeReplies(t *testing.T) {
 				t.Errorf("Test_Requests:%s error = %v, wantErr %v", tt.name, err, tt.wantErr)
 			}
 			if result.Update {
-				tc.session.FindOrCreateHost(result.FrameAddr)
+				tc.session.FindOrCreateHost(result.SrcAddr)
 			}
 			time.Sleep(time.Millisecond * 3)
 

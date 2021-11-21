@@ -83,7 +83,7 @@ func (e *MACEntry) unlink(host *Host) {
 	}
 }
 
-func (e *MACEntry) UpdateIPNoLock(ip net.IP) {
+func (e *MACEntry) updateIPNoLock(ip net.IP) {
 	if ip.To4() != nil {
 		e.IP4 = ip
 	} else {

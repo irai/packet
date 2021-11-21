@@ -2,9 +2,7 @@ package packet
 
 import (
 	"bytes"
-	"fmt"
 	"net"
-	"strings"
 
 	"github.com/irai/packet/fastlog"
 )
@@ -21,17 +19,7 @@ var _ net.Addr = &Addr{}
 
 // String returns the address's hardware address.
 func (a Addr) String() string {
-	var b strings.Builder
-	b.Grow(64)
-	b.WriteString("mac=")
-	b.WriteString(a.MAC.String())
-	b.WriteString(" ip=")
-	b.WriteString(a.IP.String())
-	if a.Port != 0 {
-		b.WriteString(" port=")
-		fmt.Fprintf(&b, "%d", a.Port)
-	}
-	return b.String()
+	return fastlog.NewLine("", "").Struct(a).ToString()
 }
 
 func (a Addr) FastLog(l *fastlog.Line) *fastlog.Line {

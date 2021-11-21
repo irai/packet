@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"net"
 	"testing"
+	"time"
 )
 
 var (
 	// zeroMAC = net.HardwareAddr{0, 0, 0, 0, 0, 0}
 	ip1 = net.IPv4(192, 168, 0, 1)
-	// ip2     = net.IPv4(192, 168, 0, 2)
-	// ip3     = net.IPv4(192, 168, 0, 3)
+	ip2 = net.IPv4(192, 168, 0, 2)
+	// ip3 = net.IPv4(192, 168, 0, 3)
 	// ip4     = net.IPv4(192, 168, 0, 4)
 	// ip5     = net.IPv4(192, 168, 0, 5)
 
@@ -26,6 +27,9 @@ var (
 	// mac3 = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x03}
 	// mac4 = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x04}
 	// mac5 = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x05}
+
+	addr1 = Addr{MAC: mac1, IP: ip1}
+	addr2 = Addr{MAC: mac2, IP: ip2}
 
 	// ip6LLARouter = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}
 	ip6LLAHost = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x10, 0x10}
@@ -42,7 +46,7 @@ var (
 )
 
 func setupTestHandler() *Session {
-	h := NewEmptySession()
+	h := NewSession()
 	return h
 }
 
@@ -101,5 +105,85 @@ func Benchmark_findOrCreateHost(b *testing.B) {
 		if host.Addr.IP.Equal(net.IPv4zero) {
 			fmt.Println("invalid host")
 		}
+	}
+}
+
+func TestHost_UpdateMDNSName(t *testing.T) {
+	session := setupTestHandler()
+	host1, _ := session.findOrCreateHost(Addr{MAC: mac1, IP: ip1})
+	session.SetOnline(host1) // first notification
+	name := NameEntry{Type: "MDNS", Name: "abc", Model: "android"}
+	host1.UpdateMDNSName(name)
+	session.SetOnline(host1) // change of name notification
+	var notification Notification
+	for i := 0; i < 2; i++ { // must get have 2 notifications - online and change of name
+		select {
+		case notification = <-session.C:
+		case <-time.After(time.Second):
+			t.Fatal("did not receive notification number", i)
+		}
+	}
+	if notification.MDNSName.Name != name.Name || notification.MDNSName.Model != name.Model {
+		t.Error("unexpected name", notification.MDNSName)
+	}
+}
+
+func TestHost_UpdateLLMNRName(t *testing.T) {
+	session := setupTestHandler()
+	host1, _ := session.findOrCreateHost(Addr{MAC: mac1, IP: ip1})
+	session.SetOnline(host1) // first notification
+	name := NameEntry{Type: "LLMNR", Name: "abc", Model: "android"}
+	host1.UpdateLLMNRName(name)
+	session.SetOnline(host1) // change of name notification
+	var notification Notification
+	for i := 0; i < 2; i++ { // must get have 2 notifications - online and change of name
+		select {
+		case notification = <-session.C:
+		case <-time.After(time.Second):
+			t.Fatal("did not receive notification number", i)
+		}
+	}
+	if notification.LLMNRName.Name != name.Name || notification.LLMNRName.Model != name.Model {
+		t.Error("unexpected name", notification.LLMNRName)
+	}
+}
+
+func TestHost_UpdateSSDPName(t *testing.T) {
+	session := setupTestHandler()
+	host1, _ := session.findOrCreateHost(Addr{MAC: mac1, IP: ip1})
+	session.SetOnline(host1) // first notification
+	name := NameEntry{Type: "SSDP", Name: "abc", Model: "android"}
+	host1.UpdateSSDPName(name)
+	session.SetOnline(host1) // change of name notification
+	var notification Notification
+	for i := 0; i < 2; i++ { // must get have 2 notifications - online and change of name
+		select {
+		case notification = <-session.C:
+		case <-time.After(time.Second):
+			t.Fatal("did not receive notification number", i)
+		}
+	}
+	if notification.SSDPName.Name != name.Name || notification.SSDPName.Model != name.Model {
+		t.Error("unexpected name", notification.SSDPName)
+	}
+}
+
+func TestHost_UpdateNBNSName(t *testing.T) {
+	session := setupTestHandler()
+	host1, _ := session.findOrCreateHost(Addr{MAC: mac1, IP: ip1})
+	session.SetOnline(host1) // first notification
+	name := NameEntry{Type: "NBNS", Name: "abc", Model: "android"}
+	host1.UpdateNBNSName(name)
+	session.SetOnline(host1) // change of name notification
+	var notification Notification
+	for i := 0; i < 2; i++ { // must get have 2 notifications - online and change of name
+		select {
+		case notification = <-session.C:
+		case <-time.After(time.Second):
+			t.Fatal("did not receive notification number", i)
+		}
+	}
+	if notification.NBNSName.Name != name.Name || notification.NBNSName.Model != name.Model {
+		t.Error("unexpected name", notification.NBNSName)
 	}
 }

@@ -63,7 +63,7 @@ func setupTestHandler() *testContext {
 
 	tc := testContext{}
 	tc.ctx, tc.cancel = context.WithCancel(context.Background())
-	tc.session = packet.NewEmptySession()
+	tc.session = packet.NewSession()
 
 	// fake conn
 	tc.inConn, tc.outConn = packet.TestNewBufferedConn()

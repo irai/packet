@@ -131,8 +131,8 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 
 			// almost always a new host IP
 			result.Update = true
-			result.IsRouter = true                                     // hack to mark result as a new host
-			result.FrameAddr = packet.Addr{MAC: p.CHAddr(), IP: reqIP} // ok to pass frame addr
+			result.IsRouter = true                                   // hack to mark result as a new host
+			result.SrcAddr = packet.Addr{MAC: p.CHAddr(), IP: reqIP} // ok to pass frame addr
 			result.NameEntry.Name = name
 			result.HuntStage = packet.StageNoChange
 
@@ -178,8 +178,8 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 
 		// almost always a new host IP
 		result.Update = true
-		result.IsRouter = true                                     // hack to mark result as a new host
-		result.FrameAddr = packet.Addr{MAC: p.CHAddr(), IP: reqIP} // ok to pass frame addr
+		result.IsRouter = true                                   // hack to mark result as a new host
+		result.SrcAddr = packet.Addr{MAC: p.CHAddr(), IP: reqIP} // ok to pass frame addr
 		result.NameEntry.Name = name
 		result.HuntStage = packet.StageNoChange
 
@@ -254,7 +254,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 
 	h.saveConfig(h.filename)
 
-	result.FrameAddr = lease.Addr
+	result.SrcAddr = lease.Addr
 	result.Update = true
 	result.IsRouter = true // hack to mark result as a new host
 	result.HuntStage = lease.subnet.Stage

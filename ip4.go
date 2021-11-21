@@ -3,6 +3,7 @@ package packet
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"net"
 
 	"github.com/irai/packet/fastlog"
@@ -62,6 +63,7 @@ var (
 	ErrInvalidLen    = errors.New("invalid len")
 	ErrPayloadTooBig = errors.New("payload too big")
 	ErrParseFrame    = errors.New("failed to parse frame")
+	ErrParseProtocol = errors.New("invalid protocol")
 	ErrFrameLen      = errors.New("invalid frame length")
 	ErrInvalidConn   = errors.New("invalid connection")
 	ErrInvalidIP     = errors.New("invalid ip")
@@ -78,31 +80,34 @@ var (
 // see: ipv4.ParseHeader in https://raw.githubusercontent.com/golang/net/master/ipv4/header.go
 type IP4 []byte
 
-func (p IP4) IHL() int               { return int(p[0]&0x0f) << 2 } // Internet header length
-func (p IP4) Version() int           { return int(p[0] >> 4) }
-func (p IP4) Protocol() int          { return int(p[9]) }
-func (p IP4) TOS() int               { return int(p[1]) }
-func (p IP4) ID() int                { return int(binary.BigEndian.Uint16(p[4:6])) }
-func (p IP4) TTL() int               { return int(p[8]) }
-func (p IP4) Checksum() int          { return int(binary.BigEndian.Uint16(p[10:12])) }
-func (p IP4) Src() net.IP            { return net.IPv4(p[12], p[13], p[14], p[15]) }
-func (p IP4) Dst() net.IP            { return net.IPv4(p[16], p[17], p[18], p[19]) }
-func (p IP4) NetaddrDst() netaddr.IP { return netaddr.IPv4(p[16], p[17], p[18], p[19]) }
-func (p IP4) TotalLen() int          { return int(binary.BigEndian.Uint16(p[2:4])) }
-func (p IP4) Payload() []byte        { return p[p.IHL():] }
+func (p IP4) IHL() int                { return int(p[0]&0x0f) << 2 } // IP header length
+func (p IP4) Version() int            { return int(p[0] >> 4) }
+func (p IP4) Protocol() uint8         { return p[9] }
+func (p IP4) TOS() int                { return int(p[1]) }
+func (p IP4) ID() int                 { return int(binary.BigEndian.Uint16(p[4:6])) }
+func (p IP4) Flags() uint8            { return uint8(p[6]) & 0b11100000 } // first 3 bits
+func (p IP4) FlagDontFragment() bool  { return (uint8(p[6]) & 0b01000000) != 0 }
+func (p IP4) FlagMoreFragments() bool { return (uint8(p[6]) & 0b00100000) != 0 }
+func (p IP4) Fragment() uint16        { return ((uint16(p[6]) & 0b00011111) << 8) & uint16(p[7]) }
+func (p IP4) TTL() int                { return int(p[8]) }
+func (p IP4) Checksum() int           { return int(binary.BigEndian.Uint16(p[10:12])) }
+func (p IP4) Src() net.IP             { return net.IPv4(p[12], p[13], p[14], p[15]) }
+func (p IP4) Dst() net.IP             { return net.IPv4(p[16], p[17], p[18], p[19]) }
+func (p IP4) NetaddrDst() netaddr.IP  { return netaddr.IPv4(p[16], p[17], p[18], p[19]) }
+func (p IP4) TotalLen() int           { return int(binary.BigEndian.Uint16(p[2:4])) } // total packet size including header and payload
+func (p IP4) Payload() []byte         { return p[p.IHL():p.TotalLen()] }
 func (p IP4) String() string {
 	return fastlog.NewLine("", "").Struct(p).ToString()
 }
 
-func (p IP4) IsValid() bool {
-	if len(p) < 20 {
-		return false
+func (p IP4) IsValid() error {
+	if n := len(p); n >= 20 && n >= p.IHL() && n >= p.TotalLen() {
+		return nil
 	}
-
-	if len(p) < p.IHL() {
-		return false
+	if n := len(p); n < 20 || n < p.IHL() {
+		return fmt.Errorf("ipv4 header too short len=%d: %w", n, ErrFrameLen)
 	}
-	return true
+	return fmt.Errorf("ipv4 len=%d not equal header totallen=%d: %w", len(p), p.TotalLen(), ErrFrameLen)
 }
 
 // FastLog implements fastlog interface
@@ -110,9 +115,14 @@ func (p IP4) FastLog(line *fastlog.Line) *fastlog.Line {
 	line.Int("version", p.Version())
 	line.IP("src", p.Src())
 	line.IP("dst", p.Dst())
-	line.Int("proto", p.Protocol())
+	line.Uint8("proto", p.Protocol())
 	line.Int("ttl", p.TTL())
 	line.Int("tos", p.TOS())
+	line.Uint8Hex("flags", p.Flags())
+	if tmp := p.Fragment(); tmp != 0 {
+		line.Int("fragment", int(tmp))
+	}
+	line.Int("totallen", p.TotalLen())
 	return line
 }
 
@@ -219,9 +229,13 @@ func (p UDP) DstPort() uint16  { return binary.BigEndian.Uint16(p[2:4]) }
 func (p UDP) Len() uint16      { return binary.BigEndian.Uint16(p[4:6]) }
 func (p UDP) Checksum() uint16 { return binary.BigEndian.Uint16(p[6:8]) }
 func (p UDP) Payload() []byte  { return p[8:] }
+func (p UDP) HeaderLen() int   { return 8 }
 
-func (p UDP) IsValid() bool {
-	return len(p) >= 8 // 8 bytes UDP header
+func (p UDP) IsValid() error {
+	if len(p) >= 8 { // 8 bytes UDP header
+		return nil
+	}
+	return fmt.Errorf("invalid udp len=%d: %w", len(p), ErrFrameLen)
 }
 
 func UDPMarshalBinary(p []byte, srcPort uint16, dstPort uint16) UDP {
@@ -255,8 +269,11 @@ func (p UDP) AppendPayload(b []byte) (UDP, error) {
 // TCP provides decoding of tcp frames
 type TCP []byte
 
-func (p TCP) IsValid() bool {
-	return len(p) >= 20
+func (p TCP) IsValid() error {
+	if len(p) >= 20 {
+		return nil
+	}
+	return fmt.Errorf("invalid tcp len=%d: %w", len(p), ErrFrameLen)
 }
 
 func (p TCP) SrcPort() uint16  { return binary.BigEndian.Uint16(p[0:2]) }

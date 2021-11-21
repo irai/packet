@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"time"
 
 	"github.com/irai/packet"
 	"github.com/irai/packet/fastlog"
@@ -202,6 +201,7 @@ func (h *Handler) lockAndStopHunt(host *packet.Host, stage packet.HuntStage) (er
 	return nil
 }
 
+/***
 // lockAndSetOnline set the host online and transition activities
 //
 // This funcion will generate the online event and mark the previous IP4 host as offline if required
@@ -324,6 +324,7 @@ func (h *Handler) lockAndSetOffline(host *packet.Host) {
 	h.lockAndStopHunt(host, packet.StageNormal)
 	h.sendNotification(notification)
 }
+***/
 
 // lockAndProcessDHCP4Update updates the DHCP4 fields and transition to/from hunt stage
 //
@@ -354,9 +355,9 @@ func (h *Handler) lockAndProcessDHCP4Update(host *packet.Host, result packet.Res
 
 	// First dhcp discovery has no host entry
 	// Ensure there is a mac entry with the IP offer
-	if result.FrameAddr.IP != nil && h.session.NICInfo.HostIP4.Contains(result.FrameAddr.IP) {
-		entry := h.session.MACTable.FindOrCreateNoLock(result.FrameAddr.MAC)
-		entry.IP4Offer = packet.CopyIP(result.FrameAddr.IP)
+	if result.SrcAddr.IP != nil && h.session.NICInfo.HostIP4.Contains(result.SrcAddr.IP) {
+		entry := h.session.MACTable.FindOrCreateNoLock(result.SrcAddr.MAC)
+		entry.IP4Offer = packet.CopyIP(result.SrcAddr.IP)
 	}
 	return false
 }

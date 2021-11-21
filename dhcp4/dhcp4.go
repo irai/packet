@@ -244,11 +244,11 @@ func (h *Handler) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
 func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (packet.Result, error) {
 	ether := packet.Ether(b)
 	ip4 := packet.IP4(ether.Payload())
-	if !ip4.IsValid() {
-		return packet.Result{}, packet.ErrInvalidIP
+	if err := ip4.IsValid(); err != nil {
+		return packet.Result{}, err
 	}
 	udp := packet.UDP(ip4.Payload())
-	if !udp.IsValid() || len(udp.Payload()) < 240 {
+	if udp.IsValid() != nil || len(udp.Payload()) < 240 {
 		return packet.Result{}, packet.ErrInvalidIP
 	}
 

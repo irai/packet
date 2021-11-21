@@ -16,7 +16,7 @@ type HostTable struct {
 }
 
 // Host holds a pointer to the host record. The pointer is always valid and will be garbage collected
-// when no longer in use. Host pointers are shared with all plugins.
+// when no longer in use.
 //
 // CAUTION:
 // Host has a RWMutex used to sync access to the record. This must be read locked to access fields or write locked for updating
@@ -33,6 +33,7 @@ type Host struct {
 	SSDPName     NameEntry
 	LLMNRName    NameEntry
 	NBNSName     NameEntry
+	dirty        bool
 }
 
 func (e *Host) String() string {
@@ -58,7 +59,7 @@ func (e Host) FastLog(l *fastlog.Line) *fastlog.Line {
 // HuntStage holds the host hunt stage
 type HuntStage byte
 
-// possible hunt stages
+// hunt stages
 const (
 	StageNoChange   HuntStage = 0 // no change to stage - used as no op
 	StageNormal     HuntStage = 1 // not captured
@@ -78,17 +79,8 @@ func (s HuntStage) String() string {
 	return "noop"
 }
 
-// Result keeps dhcp4 specific settings
-type Result struct {
-	Update    bool      // Set to true if update is required
-	HuntStage HuntStage // DHCP4 hunt stage
-	NameEntry NameEntry // Name
-	FrameAddr Addr      // reference to frame IP and MAC (i.e. not copied) - the engine will copy if required
-	IsRouter  bool      // Mark host as router
-}
-
 func (e Result) String() string {
-	return fmt.Sprintf("huntstage=%s name=%s %s", e.HuntStage, e.NameEntry, e.FrameAddr)
+	return fmt.Sprintf("huntstage=%s name=%s %s", e.HuntStage, e.NameEntry, e.SrcAddr)
 }
 
 // newHostTable returns a HostTable Session
@@ -252,4 +244,52 @@ func (h *Session) GetHosts() (list []*Host) {
 		list = append(list, v)
 	}
 	return list
+}
+
+func (host *Host) UpdateLLMNRName(name NameEntry) {
+	host.MACEntry.Row.Lock()
+	defer host.MACEntry.Row.Unlock()
+	var notify bool
+	host.LLMNRName, notify = host.LLMNRName.Merge(name)
+	if notify {
+		host.dirty = true
+		fastlog.NewLine(module, "updated llmnr name").Struct(host.Addr).Struct(host.LLMNRName).Write()
+		host.MACEntry.LLMNRName, _ = host.MACEntry.LLMNRName.Merge(host.LLMNRName)
+	}
+}
+
+func (host *Host) UpdateMDNSName(name NameEntry) {
+	host.MACEntry.Row.Lock()
+	defer host.MACEntry.Row.Unlock()
+	var notify bool
+	host.MDNSName, notify = host.MDNSName.Merge(name)
+	if notify {
+		host.dirty = true
+		fastlog.NewLine(module, "updated mdns name").Struct(host.Addr).Struct(host.MDNSName).Write()
+		host.MACEntry.MDNSName, _ = host.MACEntry.MDNSName.Merge(host.MDNSName)
+	}
+}
+
+func (host *Host) UpdateSSDPName(name NameEntry) {
+	host.MACEntry.Row.Lock()
+	defer host.MACEntry.Row.Unlock()
+	var notify bool
+	host.SSDPName, notify = host.SSDPName.Merge(name)
+	if notify {
+		host.dirty = true
+		fastlog.NewLine(module, "updated ssdp name").Struct(host.Addr).Struct(host.SSDPName).Write()
+		host.MACEntry.SSDPName, _ = host.MACEntry.SSDPName.Merge(host.SSDPName)
+	}
+}
+
+func (host *Host) UpdateNBNSName(name NameEntry) {
+	host.MACEntry.Row.Lock()
+	defer host.MACEntry.Row.Unlock()
+	var notify bool
+	host.NBNSName, notify = host.NBNSName.Merge(name)
+	if notify {
+		host.dirty = true
+		fastlog.NewLine(module, "updated nbns name").Struct(host.Addr).Struct(host.NBNSName).Write()
+		host.MACEntry.NBNSName, _ = host.MACEntry.NBNSName.Merge(host.NBNSName)
+	}
 }

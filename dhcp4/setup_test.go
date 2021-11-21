@@ -112,7 +112,7 @@ func setupTestHandler() *testContext {
 
 	tc := testContext{notifyReply: make(chan []byte, 32)}
 
-	tc.session = packet.NewEmptySession()
+	tc.session = packet.NewSession()
 
 	// DHCP server conn
 	tc.inConn, tc.outConn = packet.TestNewBufferedConn()
@@ -210,7 +210,7 @@ func newDHCPHost(t *testing.T, tc *testContext, mac net.HardwareAddr) []byte {
 		wantHuntStage = packet.StageRedirected
 	}
 	if !result.IsRouter || !result.Update ||
-		result.FrameAddr.IP == nil || result.FrameAddr.MAC == nil ||
+		result.SrcAddr.IP == nil || result.SrcAddr.MAC == nil ||
 		result.HuntStage != wantHuntStage ||
 		result.NameEntry.Name != srcAddr.MAC.String() {
 		t.Fatalf("newDHCPHost() invalid update=%v isrouter=%v result=%+v ", result.Update, result.IsRouter, result)

@@ -119,8 +119,8 @@ func readResponse(ctx context.Context, tc *TestContext) error {
 		notify := ""
 		if ether.EtherType() == syscall.ETH_P_IP { // IP4?
 			ip4 := packet.IP4(ether.Payload())
-			if !ip4.IsValid() {
-				fmt.Println("invalid ip4 packet ", len(ether.Payload()), ether.Payload())
+			if err := ip4.IsValid(); err != nil {
+				fmt.Println("invalid ip4 packet ", len(ether.Payload()), ether.Payload(), err)
 				continue
 			}
 			if ip4.Protocol() == syscall.IPPROTO_UDP { // UDP?

@@ -10,14 +10,15 @@ import (
 	"syscall"
 
 	"github.com/irai/packet/fastlog"
+	"inet.af/netaddr"
 )
 
 const (
 	EthType8021AD = 0x88a8 // VLAN 802.1ad
 
-	// Maximum ethernet II frame size is 1518 = 14 header + 1500 data + 4 CRC
+	// Maximum ethernet II frame size is 1518 = 14 header + 1500 data + 8 802.ad (2x802.1Q tags)
 	// see: https://en.wikipedia.org/wiki/Ethernet_frame#Ethernet_II
-	EthMaxSize = 1518
+	EthMaxSize = 14 + 1500 + 8
 )
 
 // EtherBufferPool implemts a simple buffer pool for Ethernet packets
@@ -49,7 +50,7 @@ func (p Ether) IsValid() error {
 	if len(p) >= 14 {
 		return nil
 	}
-	return ErrFrameLen
+	return fmt.Errorf("ethernet frame too short len=%d: %w", len(p), ErrFrameLen)
 }
 
 func (p Ether) Dst() net.HardwareAddr { return net.HardwareAddr(p[:6]) }
@@ -76,34 +77,38 @@ func (p Ether) DstIP() net.IP {
 	return nil
 }
 
-func (p Ether) Payload() []byte {
-	if p.EtherType() == syscall.ETH_P_IP || p.EtherType() == syscall.ETH_P_IPV6 || p.EtherType() == syscall.ETH_P_ARP {
-		if len(p) <= 14 { // change p in case the payload is empty
-			p = p[:cap(p)]
-		}
-		return p[14:]
+func (p Ether) NetaddrDstIP() netaddr.IP {
+	if ip, ok := netaddr.FromStdIP(p.DstIP()); ok {
+		return ip
 	}
-	// The IEEE 802.1Q tag, if present, then two EtherType contains the Tag Protocol Identifier (TPID) value of 0x8100
-	// and true EtherType/Length is located after the Q-tag.
-	// The TPID is followed by two octets containing the Tag Control Information (TCI) (the IEEE 802.1p priority (quality of service) and VLAN id).
-	// also handle 802.1ad - 0x88a8
-	if p.EtherType() == syscall.ETH_P_8021Q { // add 2 bytes to frame
-		if len(p) <= 16 { // change p in case the payload is empty
-			p = p[:cap(p)]
-		}
-		return p[16:]
-	}
+	return netaddr.IP{}
+}
 
-	if p.EtherType() == EthType8021AD { // add 6 bytes to frame
-		if len(p) <= 20 { // change p in case the payload is empty
-			p = p[:cap(p)]
-		}
-		return p[20:]
+func (p Ether) HeaderLen() int {
+	switch p.EtherType() {
+	case syscall.ETH_P_IP, syscall.ETH_P_IPV6, syscall.ETH_P_ARP:
+		return 14
+	case syscall.ETH_P_8021Q:
+		// The IEEE 802.1Q tag, if present, then two EtherType contains the Tag Protocol Identifier (TPID) value of 0x8100
+		// and true EtherType/Length is located after the Q-tag.
+		// The TPID is followed by two octets containing the Tag Control Information (TCI) (the IEEE 802.1p priority (quality of service) and VLAN id).
+		// also handle 802.1ad - 0x88a8
+		return 14 + 4 // add 4 bytes to frame
+	case EthType8021AD:
+		return 14 + 4 + 4 // add 8 bytes to frame (2x 802.1Q tags)
 	}
-	if len(p) <= 14 { // change p in case the payload is empty
-		p = p[:cap(p)]
+	return 14
+}
+
+func (p Ether) Payload() []byte {
+	n := p.HeaderLen()
+	if len(p) > n {
+		return p[n:]
 	}
-	return p[14:]
+	if len(p) == n { // empty payload?
+		return p[n:cap(p)] // return the full buffer - we are likely building a packet with marshall
+	}
+	return nil
 }
 
 func (p Ether) SetPayload(payload []byte) (Ether, error) {
@@ -112,7 +117,7 @@ func (p Ether) SetPayload(payload []byte) (Ether, error) {
 	// distance of 1500 meters so the whole cable is occupied and collisions can be avoided.
 	// pad smaller frames with zeros
 	// see: https://serverfault.com/questions/510657/is-the-64-byte-minimal-ethernet-packet-rule-respected-in-practice
-	tmp := p[:len(p)+len(payload)]
+	tmp := p[:p.HeaderLen()+len(payload)]
 	if n := len(tmp); n < 60 {
 		tmp = tmp[:60]
 		for n < 60 {

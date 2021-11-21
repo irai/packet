@@ -258,7 +258,7 @@ func (h *Handler6) ProcessPacket(host *packet.Host, p []byte, header []byte) (re
 				return packet.Result{}, packet.ErrInvalidMAC
 			}
 			result.Update = true
-			result.FrameAddr = packet.Addr{MAC: frame.TargetLLA(), IP: frame.TargetAddress()} // ok to pass frame addr
+			result.SrcAddr = packet.Addr{MAC: frame.TargetLLA(), IP: frame.TargetAddress()} // ok to pass frame addr
 		}
 		return result, nil
 
@@ -287,7 +287,7 @@ func (h *Handler6) ProcessPacket(host *packet.Host, p []byte, header []byte) (re
 				fmt.Printf("icmp6 : dad probe for target=%s srcip=%s srcmac=%s dstip=%s dstmac=%s\n", frame.TargetAddress(), ip6Frame.Src(), ether.Src(), ip6Frame.Dst(), ether.Dst())
 			}
 			result.Update = true
-			result.FrameAddr = packet.Addr{MAC: ether.Src(), IP: frame.TargetAddress()} // ok to pass frame addr
+			result.SrcAddr = packet.Addr{MAC: ether.Src(), IP: frame.TargetAddress()} // ok to pass frame addr
 			return result, nil
 		}
 

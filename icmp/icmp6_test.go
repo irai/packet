@@ -107,19 +107,19 @@ func TestHandler_ProcessPacket(t *testing.T) {
 		wantErr    bool
 	}{
 		{name: "na_override", frame: testicmp6NAOverride, wantErr: false,
-			wantResult: packet.Result{Update: true, FrameAddr: packet.Addr{MAC: mac, IP: net.ParseIP("fe80::ce32:e5ff:fe0e:67f4")}}},
+			wantResult: packet.Result{Update: true, SrcAddr: packet.Addr{MAC: mac, IP: net.ParseIP("fe80::ce32:e5ff:fe0e:67f4")}}},
 		{name: "na_solicited", frame: testicmp6NASolicited, wantErr: false,
-			wantResult: packet.Result{Update: false, FrameAddr: packet.Addr{}}},
+			wantResult: packet.Result{Update: false, SrcAddr: packet.Addr{}}},
 		{name: "rs_nopayload", frame: testicmp6RourterSolicitation, wantErr: false,
-			wantResult: packet.Result{Update: false, FrameAddr: packet.Addr{}}},
+			wantResult: packet.Result{Update: false, SrcAddr: packet.Addr{}}},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ether := packet.Ether(tt.frame)
 			ip6Frame := packet.IP6(ether.Payload())
-			if !ip6Frame.IsValid() {
-				t.Fatal("invalida ip6 frame")
+			if err := ip6Frame.IsValid(); err != nil {
+				t.Fatal("invalid ip6 frame", err)
 			}
 
 			gotResult, err := tc.h.ProcessPacket(nil, ether, ip6Frame.Payload())
@@ -130,9 +130,9 @@ func TestHandler_ProcessPacket(t *testing.T) {
 			if gotResult.Update != tt.wantResult.Update {
 				t.Errorf("Handler.ProcessPacket() invalid result update=%v, want=%v", gotResult.Update, tt.wantResult.Update)
 			}
-			if !gotResult.FrameAddr.IP.Equal(tt.wantResult.FrameAddr.IP) ||
-				!bytes.Equal(gotResult.FrameAddr.MAC, tt.wantResult.FrameAddr.MAC) {
-				t.Errorf("Handler.ProcessPacket() invalid addr=%v, want=%v", gotResult.FrameAddr, tt.wantResult.FrameAddr)
+			if !gotResult.SrcAddr.IP.Equal(tt.wantResult.SrcAddr.IP) ||
+				!bytes.Equal(gotResult.SrcAddr.MAC, tt.wantResult.SrcAddr.MAC) {
+				t.Errorf("Handler.ProcessPacket() invalid addr=%v, want=%v", gotResult.SrcAddr, tt.wantResult.SrcAddr)
 				return
 			}
 		})

@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
-	"strings"
 
 	"github.com/irai/packet/fastlog"
 	"github.com/mdlayher/netx/rfc4193"
@@ -17,41 +16,25 @@ const (
 // IP6 structure: see https://github.com/golang/net/blob/master/ipv6/header.go
 type IP6 []byte
 
-func (p IP6) IsValid() bool {
-	if len(p) >= IP6HeaderLen && p.PayloadLen()+IP6HeaderLen == len(p) {
-		return true
+func (p IP6) IsValid() error {
+	if len(p) >= IP6HeaderLen && int(p.PayloadLen()+IP6HeaderLen) == len(p) {
+		return nil
 	}
-	fmt.Println("warning payload differ ", len(p), p.PayloadLen()+IP6HeaderLen)
-	return false
+	return fmt.Errorf("invalid ipv6 len=%d: %w", len(p), ErrFrameLen)
 }
 
-func (p IP6) Version() int      { return int(p[0]) >> 4 }                                // protocol version
-func (p IP6) TrafficClass() int { return int(p[0]&0x0f)<<4 | int(p[1])>>4 }              // traffic class
-func (p IP6) FlowLabel() int    { return int(p[1]&0x0f)<<16 | int(p[2])<<8 | int(p[3]) } // flow label
-func (p IP6) PayloadLen() int   { return int(binary.BigEndian.Uint16(p[4:6])) }          // payload length
-func (p IP6) NextHeader() int   { return int(p[6]) }                                     // next header
-func (p IP6) HopLimit() int     { return int(p[7]) }                                     // hop limit
-func (p IP6) Src() net.IP       { return net.IP(p[8:24]) }                               // source address
-func (p IP6) Dst() net.IP       { return net.IP(p[24:40]) }                              // destination address
-func (p IP6) Payload() []byte   { return p[40:] }
+func (p IP6) Version() int       { return int(p[0]) >> 4 }                                // protocol version
+func (p IP6) TrafficClass() int  { return int(p[0]&0x0f)<<4 | int(p[1])>>4 }              // traffic class
+func (p IP6) FlowLabel() int     { return int(p[1]&0x0f)<<16 | int(p[2])<<8 | int(p[3]) } // flow label
+func (p IP6) PayloadLen() uint16 { return binary.BigEndian.Uint16(p[4:6]) }               // payload length
+func (p IP6) NextHeader() uint8  { return p[6] }                                          // next header
+func (p IP6) HopLimit() uint8    { return p[7] }                                          // hop limit
+func (p IP6) Src() net.IP        { return net.IP(p[8:24]) }                               // source address
+func (p IP6) Dst() net.IP        { return net.IP(p[24:40]) }                              // destination address
+func (p IP6) Payload() []byte    { return p[40:] }
+func (p IP6) HeaderLen() int     { return 40 }
 func (p IP6) String() string {
-	var b strings.Builder
-	b.Grow(140)
-	b.WriteString("version=")
-	fmt.Fprintf(&b, "%d", p.Version())
-	b.WriteString(" src=")
-	b.WriteString(p.Src().String())
-	b.WriteString(" dst=")
-	b.WriteString(p.Dst().String())
-	b.WriteString(" nextHeader=")
-	fmt.Fprintf(&b, "%d", p.NextHeader())
-	b.WriteString(" pLen=")
-	fmt.Fprintf(&b, "%d", p.PayloadLen())
-	b.WriteString(" hopLimit=")
-	fmt.Fprintf(&b, "%d", p.HopLimit())
-	b.WriteString(" class=")
-	fmt.Fprintf(&b, "%d", p.TrafficClass())
-	return b.String()
+	return fastlog.NewLine("", "").Struct(p).ToString()
 }
 
 // Print implements fastlog struct interface
@@ -59,9 +42,9 @@ func (p IP6) FastLog(line *fastlog.Line) *fastlog.Line {
 	line.Int("version", p.Version())
 	line.IP("src", p.Src())
 	line.IP("dst", p.Dst())
-	line.Int("nextHeader", p.NextHeader())
-	line.Int("len", p.PayloadLen())
-	line.Int("hopLimit", p.HopLimit())
+	line.Uint8("nextHeader", p.NextHeader())
+	line.Uint16("len", p.PayloadLen())
+	line.Uint8("hopLimit", p.HopLimit())
 	line.Int("class", p.TrafficClass())
 	return line
 }
@@ -117,27 +100,21 @@ func (p HopByHopExtensionHeader) IsValid() bool {
 	return true
 }
 
-func (p HopByHopExtensionHeader) NextHeader() int { return int(p[0]) }
-func (p HopByHopExtensionHeader) Len() int        { return int(p[1])*8 + 8 } // whole packet len - min 8 bytes (i.e p[1] does not include first 8 octets)
-func (p HopByHopExtensionHeader) Data() []byte    { return p[2:p.Len()] }    //
+func (p HopByHopExtensionHeader) NextHeader() uint8 { return p[0] }
+func (p HopByHopExtensionHeader) Len() int          { return int(p[1])*8 + 8 } // whole packet len - min 8 bytes (i.e p[1] does not include first 8 octets)
+func (p HopByHopExtensionHeader) Data() []byte      { return p[2:p.Len()] }    //
 
-// ProcessPacket handles icmp6 packets
-func (h *Session) ProcessIP6HopByHopExtension(host *Host, b []byte, header []byte) (n int, err error) {
+// ParseHopByHopExtensions returns a map of icmp6 hop by hop extensions
+// TODO: finish parse ipv6 options
+func (p HopByHopExtensionHeader) ParseHopByHopExtensions() (ext map[int][]byte, err error) {
 
-	// ether := Ether(b)
-	// ip6Frame := IP6(ether.Payload())
-	ip6HopExtensionHeader := HopByHopExtensionHeader(header)
-	if !ip6HopExtensionHeader.IsValid() {
-		return 0, ErrParseFrame
-	}
-
-	data := ip6HopExtensionHeader.Data()
+	data := p.Data()
 	pos := 0
 	for i := 0; ; i++ {
 		buffer := data[pos:]
 		if len(buffer) < 1 {
-			fmt.Printf("ip6   : error in extension index=%d pos=%d len=%d data=\"% x\"\n", i, pos, len(buffer), ip6HopExtensionHeader.Data())
-			return 0, ErrParseFrame
+			fmt.Printf("ip6   : error in extension index=%d pos=%d len=%d data=\"% x\"\n", i, pos, len(buffer), p.Data())
+			return nil, ErrParseFrame
 		}
 
 		// for IANA option types: see https://www.iana.org/assignments/ipv6-parameters/ipv6-parameters.xhtml
@@ -148,7 +125,7 @@ func (h *Session) ProcessIP6HopByHopExtension(host *Host, b []byte, header []byt
 		case 1: // pad N
 			if len(buffer) < 2 {
 				fmt.Printf("ip6   : error in extension pad N len=%d\n", len(buffer))
-				return 0, ErrParseFrame
+				return nil, ErrParseFrame
 			}
 
 			// for n bytes of padding, len contains n - 2 (i.e. it discounts type and len bytes)
@@ -156,8 +133,8 @@ func (h *Session) ProcessIP6HopByHopExtension(host *Host, b []byte, header []byt
 		case 5: // router alert
 			// See https://tools.ietf.org/html/rfc2711
 			if len(buffer) < 4 {
-				fmt.Printf("ip6   : error in router alert option len=%d\n", n)
-				return 0, ErrParseFrame
+				fmt.Printf("ip6   : error in router alert option len=%d\n", len(buffer))
+				return nil, ErrParseFrame
 			}
 			value := binary.BigEndian.Uint16(buffer[2 : 2+2])
 			pos = pos + 4 // fixed len 4
@@ -173,10 +150,10 @@ func (h *Session) ProcessIP6HopByHopExtension(host *Host, b []byte, header []byt
 		case 194: // jumbo payload
 			pos = pos + 4
 		default:
-			fmt.Printf("ip6   : unexpected hop by hop option type=%d data=\"% x\"\n", t, ip6HopExtensionHeader.Data())
+			fmt.Printf("ip6   : unexpected hop by hop option type=%d data=\"% x\"\n", t, p.Data())
 			if len(buffer) < 2 {
 				fmt.Printf("ip6   : error in unexpected extension len=%d", len(buffer))
-				return 0, ErrParseFrame
+				return nil, ErrParseFrame
 			}
 			pos = pos + int(buffer[1]) + 2
 		}
@@ -185,8 +162,7 @@ func (h *Session) ProcessIP6HopByHopExtension(host *Host, b []byte, header []byt
 			break
 		}
 	}
-
-	return pos, nil
+	return nil, nil
 }
 
 func IsIP6(ip net.IP) bool {

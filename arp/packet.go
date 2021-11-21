@@ -22,67 +22,36 @@ type ARP []byte
 // in theory MAC and IP len can vary
 const arpLen = 8 + 2*6 + 2*4
 
-func (b ARP) IsValid() bool {
+func (b ARP) IsValid() error {
 	if len(b) < arpLen {
-		return false
+		return packet.ErrFrameLen
 	}
 	if b.HType() != 1 {
-		return false
+		return packet.ErrParseFrame
 	}
 	if b.Proto() != syscall.ETH_P_IP {
-		return false
+		return packet.ErrParseProtocol
 	}
 	if b.HLen() != 6 {
-		return false
+		return packet.ErrInvalidLen
 	}
 	if b.PLen() != 4 {
-		return false
+		return packet.ErrInvalidLen
 	}
 
-	return true
+	return nil
 }
 
-func (b ARP) HType() uint16 {
-	return binary.BigEndian.Uint16(b[0:2])
-}
-
-func (b ARP) Proto() uint16 {
-	return binary.BigEndian.Uint16(b[2:4])
-}
-
-func (b ARP) HLen() uint8 {
-	return b[4]
-}
-
-func (b ARP) PLen() uint8 {
-	return b[5]
-}
-
-func (b ARP) Operation() uint16 {
-	return binary.BigEndian.Uint16(b[6:8])
-}
-
-func (b ARP) SrcMAC() net.HardwareAddr {
-	return net.HardwareAddr(b[8:14])
-}
-
-func (b ARP) SrcIP() net.IP {
-	return net.IP(b[14:18])
-}
-
-func (b ARP) DstMAC() net.HardwareAddr {
-	return net.HardwareAddr(b[18:24])
-}
-
-func (b ARP) DstIP() net.IP {
-	return net.IP(b[24:28])
-}
-
-func (b ARP) String() string {
-	l := fastlog.NewLine("", "")
-	b.FastLog(l)
-	return l.ToString()
-}
+func (b ARP) HType() uint16            { return binary.BigEndian.Uint16(b[0:2]) }
+func (b ARP) Proto() uint16            { return binary.BigEndian.Uint16(b[2:4]) }
+func (b ARP) HLen() uint8              { return b[4] }
+func (b ARP) PLen() uint8              { return b[5] }
+func (b ARP) Operation() uint16        { return binary.BigEndian.Uint16(b[6:8]) }
+func (b ARP) SrcMAC() net.HardwareAddr { return net.HardwareAddr(b[8:14]) }
+func (b ARP) SrcIP() net.IP            { return net.IP(b[14:18]) }
+func (b ARP) DstMAC() net.HardwareAddr { return net.HardwareAddr(b[18:24]) }
+func (b ARP) DstIP() net.IP            { return net.IP(b[24:28]) }
+func (b ARP) String() string           { return fastlog.NewLine("", "").Struct(b).ToString() }
 
 func (b ARP) FastLog(line *fastlog.Line) *fastlog.Line {
 	line.Uint16("operation", b.Operation())
@@ -113,8 +82,8 @@ func MarshalBinary(b []byte, operation uint16, srcAddr packet.Addr, dstAddr pack
 	b[5] = 4                                             // ipv4 len - fixed
 	binary.BigEndian.PutUint16(b[6:8], operation)        // operation
 	copy(b[8:8+6], srcAddr.MAC[:6])
-	copy(b[14:14+4], srcAddr.IP[:4])
+	copy(b[14:14+4], srcAddr.IP.To4()[:4])
 	copy(b[18:18+6], dstAddr.MAC[:6])
-	copy(b[24:24+4], dstAddr.IP[:4])
+	copy(b[24:24+4], dstAddr.IP.To4()[:4])
 	return b, nil
 }

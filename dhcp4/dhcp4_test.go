@@ -212,11 +212,11 @@ func TestHandler_handleRequest(t *testing.T) {
 		wantReplyType MessageType
 	}{
 		{name: "req1", wantErr: false, wantReplyType: NAK, p: android_req1},
-		{name: "req1", wantErr: false, wantReplyType: NAK, p: android_req1},
-		{name: "req1", wantErr: false, wantReplyType: NAK, p: android_req1},
-		{name: "req2", wantErr: false, wantReplyType: NAK, p: android_req2},
+		{name: "req2", wantErr: false, wantReplyType: NAK, p: android_req1},
+		{name: "req3", wantErr: false, wantReplyType: NAK, p: android_req1},
+		{name: "req4", wantErr: false, wantReplyType: NAK, p: android_req2},
 		{name: "discover", wantErr: false, wantReplyType: Offer, p: android_discover},
-		{name: "req3", wantErr: false, wantReplyType: ACK, updateReqIP: true, p: android_req3},
+		{name: "req5", wantErr: false, wantReplyType: ACK, updateReqIP: true, p: android_req3},
 	}
 
 	Debug = false
@@ -229,8 +229,8 @@ func TestHandler_handleRequest(t *testing.T) {
 	buffer := make([]byte, 1500)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			copy(buffer, mustHex(tt.p)) // make sure the buffer is large enough for an ethernet paccket
-			ether := packet.Ether(buffer)
+			n := copy(buffer, mustHex(tt.p)) // make sure the buffer is large enough for an ethernet paccket
+			ether := packet.Ether(buffer[:n])
 			ip := packet.IP4(ether.Payload())
 			udp := packet.UDP(ip.Payload())
 			dhcp := DHCP4(udp.Payload())
