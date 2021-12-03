@@ -28,7 +28,7 @@ func (h *Handler) RequestTo(dst net.HardwareAddr, targetIP net.IP) error {
 	return h.request(dst, h.session.NICInfo.HostAddr4, packet.Addr{MAC: EthernetBroadcast, IP: targetIP})
 }
 
-// Request send ARP request from src to dst
+// Request send ARP request from host to targetIP
 func (h *Handler) Request(targetIP net.IP) error {
 	targetIP = targetIP.To4()
 	if targetIP == nil {
