@@ -2,12 +2,30 @@ package engine
 
 import (
 	"fmt"
+	"net"
 	"testing"
 	"time"
 
 	"github.com/irai/packet"
 	"github.com/irai/packet/icmp"
 )
+
+func newSession() *packet.Session {
+	// fake nicinfo
+	nicInfo := &packet.NICInfo{
+		HostMAC:   hostMAC,
+		HostIP4:   net.IPNet{IP: hostIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
+		RouterIP4: net.IPNet{IP: routerIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
+		HomeLAN4:  homeLAN,
+		HostAddr4: packet.Addr{MAC: hostMAC, IP: hostIP4},
+	}
+
+	// TODO: fix this to discard writes like ioutil.Discard
+	conn, _ := net.ListenPacket("udp4", "127.0.0.1:0")
+
+	session, _ := packet.Config{Conn: conn, NICInfo: nicInfo}.NewSession()
+	return session
+}
 
 func setupTestHandler() *Handler {
 	h := &Handler{}
@@ -20,7 +38,7 @@ func setupTestHandler() *Handler {
 	h.ICMP6Handler = icmp.ICMP6NOOP{}
 	h.DHCP4Handler = packet.PacketNOOP{}
 	// h.session = &packet.Session{HostTable: packet.NewHostTable(), MACTable: packet.NewMACTable()}
-	h.session = packet.NewSession()
+	h.session = newSession()
 	h.LayerTable = append(h.LayerTable, LayerProcessor{EtherType: 0x8808, Function: ProcessEthernetPause})
 	h.LayerTable = append(h.LayerTable, LayerProcessor{EtherType: 0x8899, Function: ProcessRRCP})
 	h.LayerTable = append(h.LayerTable, LayerProcessor{EtherType: 0x88cc, Function: ProcessLLDP})

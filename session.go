@@ -3,64 +3,104 @@ package packet
 import (
 	"fmt"
 	"net"
+	"os"
 	"sync"
+	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/irai/packet/fastlog"
 )
 
 type Session struct {
-	Conn         net.PacketConn
-	NICInfo      *NICInfo
-	HostTable    HostTable         // store IP list - one for each host
-	MACTable     MACTable          // store mac list
-	mutex        sync.RWMutex      // global session mutex
-	Statisticsts []ProtoStats      // keep per protocol statistics
-	C            chan Notification // channel for online & offline notifications
+	Conn            net.PacketConn
+	NICInfo         *NICInfo
+	OfflineDeadline time.Duration     // mark Host offline if no traffic for this long
+	PurgeDeadline   time.Duration     // delete Host if no traffic for this long
+	HostTable       HostTable         // store IP list - one for each host
+	ipHeartBeat     uint32            // ipHeartBeat is set to 1 when we receive an IP packet
+	MACTable        MACTable          // store mac list
+	mutex           sync.RWMutex      // global session mutex
+	Statisticsts    []ProtoStats      // keep per protocol statistics
+	C               chan Notification // channel for online & offline notifications
+	closeChan       chan bool         // channel to end all go routines
 }
 
-func NewSession() *Session {
+// Config contains configurable parameters that overide package defaults
+type Config struct {
+	// Conn enables the client to override the connection with a another packet conn
+	// useful for testing
+	Conn            net.PacketConn // override connection
+	NICInfo         *NICInfo       // override nic information - set to non nil to create a test Handler
+	OfflineDeadline time.Duration  // override offline deadline
+	PurgeDeadline   time.Duration  // override purge deadline
+}
+
+// Default dealines
+const (
+	DefaultOfflineDeadline = time.Minute * 5
+	DefaultPurgeDeadline   = time.Hour
+)
+
+// monitorNICFrequency defines how often to check for nick heart beat
+var monitorNICFrequency = time.Minute * 3
+
+func NewSession(nic string) (*Session, error) {
+	nicinfo, err := GetNICInfo(nic)
+	if err != nil {
+		fmt.Printf("interface not found nic=%s: %s\n", nic, err)
+		return nil, err
+	}
+	conn, err := NewServerConn(nicinfo.IFI, syscall.ETH_P_ALL, SocketConfig{Filter: nil, Promiscuous: true})
+	if err != nil {
+		fmt.Printf("conn error: %s", err)
+		return nil, err
+	}
+	return Config{Conn: conn, NICInfo: nicinfo, OfflineDeadline: DefaultOfflineDeadline, PurgeDeadline: DefaultPurgeDeadline}.NewSession()
+}
+
+func (config Config) NewSession() (*Session, error) {
 	session := new(Session)
 	session.MACTable = newMACTable()
 	session.HostTable = newHostTable()
 	session.Statisticsts = make([]ProtoStats, 32)
 	session.NICInfo = &NICInfo{HostAddr4: Addr{MAC: EthBroadcast, IP: IP4Broadcast}}
 	session.C = make(chan Notification, 128) // plenty of capacity to prevent blocking
+	session.Conn = config.Conn
+	session.NICInfo = config.NICInfo
+	if session.OfflineDeadline = config.OfflineDeadline; session.OfflineDeadline < 0 || session.OfflineDeadline > time.Hour*24 {
+		session.OfflineDeadline = DefaultOfflineDeadline
+	}
+	if session.PurgeDeadline = config.PurgeDeadline; session.PurgeDeadline < 0 || session.PurgeDeadline > time.Hour*24 {
+		session.PurgeDeadline = DefaultPurgeDeadline
+	}
 
 	// TODO: fix this to discard writes like ioutil.Discard
-	session.Conn, _ = net.ListenPacket("udp4", "127.0.0.1:0")
+	// session.Conn, _ = net.ListenPacket("udp4", "127.0.0.1:0")
 
-	return session
+	// Setup a nic monitoring goroutine to ensure we always receive IP packets.
+	// If the switch port is disabled or the the nic stops receiving packets for any reason,
+	// our best option is to stop the engine and likely restart.
+	//
+	go func() {
+		ticker := time.NewTicker(monitorNICFrequency)
+		for {
+			select {
+			case <-ticker.C:
+				if atomic.LoadUint32(&session.ipHeartBeat) == 0 {
+					fmt.Printf("fatal: failed to receive ip packets in duration=%s - sending sigterm time=%v\n", monitorNICFrequency, time.Now())
+					// Send sigterm to terminate process
+					syscall.Kill(os.Getpid(), syscall.SIGTERM)
+				}
+				atomic.StoreUint32(&session.ipHeartBeat, 0)
+			case <-session.closeChan:
+				return
+			}
+		}
+	}()
+
+	return session, nil
 }
-
-// PacketProcessor defines the interface for packet processing modules
-type PacketProcessor interface {
-	Start() error
-	Stop() error
-	ProcessPacket(host *Host, p []byte, header []byte) (Result, error)
-	StartHunt(Addr) (HuntStage, error)
-	StopHunt(Addr) (HuntStage, error)
-	CheckAddr(Addr) (HuntStage, error)
-	MinuteTicker(time.Time) error
-}
-
-// PacketNOOP is a no op packet processor
-type PacketNOOP struct{}
-
-var _ PacketProcessor = PacketNOOP{}
-
-func (p PacketNOOP) Start() error { return nil }
-func (p PacketNOOP) Stop() error  { return nil }
-func (p PacketNOOP) ProcessPacket(*Host, []byte, []byte) (Result, error) {
-	return Result{}, nil
-}
-func (p PacketNOOP) StartHunt(addr Addr) (HuntStage, error) { return StageNoChange, nil }
-func (p PacketNOOP) StopHunt(addr Addr) (HuntStage, error)  { return StageNoChange, nil }
-func (p PacketNOOP) CheckAddr(addr Addr) (HuntStage, error) { return StageNoChange, nil }
-func (p PacketNOOP) Close() error                           { return nil }
-
-// func (p PacketNOOP) HuntStage(addr Addr) HuntStage              { return StageNormal }
-func (p PacketNOOP) MinuteTicker(now time.Time) error { return nil }
 
 // PrintTable logs the table to standard out
 func (h *Session) PrintTable() {
@@ -82,13 +122,27 @@ func (h *Session) GlobalUnlock() {
 
 // NewPacketConn creates a net.PacketConn which can be used to send and receive
 // data at the device driver level.
+/*
 func (h *Session) NewPacketConn(ifi *net.Interface, proto uint16, cfg SocketConfig) (err error) {
 	h.Conn, err = NewServerConn(ifi, proto, cfg)
+
 	return err
 }
+*/
 
 func (h *Session) ReadFrom(b []byte) (int, net.Addr, error) {
-	return h.Conn.ReadFrom(b)
+	for {
+		n, addr, err := h.Conn.ReadFrom(b)
+		if err == nil {
+			return n, addr, err
+		}
+
+		if err, ok := err.(net.Error); ok && err.Temporary() {
+			fmt.Println("tmp conn read error", err)
+			continue
+		}
+		return n, addr, err
+	}
 }
 
 // SetOnline set the host online and transition activities
@@ -192,4 +246,62 @@ func (h *Session) SetOffline(host *Host) {
 
 	// h.lockAndStopHunt(host, packet.StageNormal)
 	h.sendNotification(notification)
+}
+
+func (h *Session) minuteLoop() {
+	ticker := time.NewTicker(time.Minute)
+	counter := 60
+	for {
+		select {
+		case <-ticker.C:
+			now := time.Now()
+			counter--
+			go h.purge(now)
+
+		case <-h.closeChan:
+			fmt.Println("engine: minute loop goroutine ended")
+			return
+		}
+	}
+}
+
+// purge set entries offline and subsequently delete them if no more traffic received.
+// The funcion is called each minute by the minute goroutine.
+func (h *Session) purge(now time.Time) error {
+	offlineCutoff := now.Add(h.OfflineDeadline * -1) // Mark offline entries last updated before this time
+	deleteCutoff := now.Add(h.PurgeDeadline * -1)    // Delete entries that have not responded in last hour
+
+	purge := make([]net.IP, 0, 16)
+	offline := make([]*Host, 0, 16)
+
+	// h.session.GlobalRLock()
+	table := h.GetHosts()
+	for _, e := range table {
+		e.MACEntry.Row.RLock()
+
+		// Delete from table if the device is offline and was not seen for the last hour
+		if !e.Online && e.LastSeen.Before(deleteCutoff) {
+			purge = append(purge, e.Addr.IP)
+			e.MACEntry.Row.RUnlock()
+			continue
+		}
+
+		// Set offline if no updates since the offline deadline
+		if e.Online && e.LastSeen.Before(offlineCutoff) {
+			offline = append(offline, e)
+		}
+		e.MACEntry.Row.RUnlock()
+	}
+
+	for _, host := range offline {
+		h.SetOffline(host) // will lock/unlock row
+	}
+
+	// delete after loop because this will change the table
+	if len(purge) > 0 {
+		for _, v := range purge {
+			h.DeleteHost(v)
+		}
+	}
+	return nil
 }

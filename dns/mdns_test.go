@@ -23,7 +23,7 @@ var ptrMessage = []byte{
 }
 
 func TestMDNSHandler_PTR(t *testing.T) {
-	session := packet.NewSession()
+	session := testSession()
 	dnsHandler, _ := New(session)
 	Debug = true
 
@@ -128,7 +128,7 @@ var sonosResponse3 = []byte{
 }
 
 func TestMDNSHandler_Sonos(t *testing.T) {
-	session := packet.NewSession()
+	session := testSession()
 	dnsHandler, _ := New(session)
 	Debug = true
 
@@ -283,7 +283,7 @@ var frameWindows10AnnouncementiIP4 = []byte{
 }
 
 func TestMDNSHandler_Apple(t *testing.T) {
-	session := packet.NewSession()
+	session := testSession()
 	dnsHandler, _ := New(session)
 	Debug = true
 

@@ -133,7 +133,7 @@ var frameMSearchResponse = []byte{
 }
 
 func TestDNSHandler_ProcessSSDPFrame(t *testing.T) {
-	session := packet.NewSession()
+	session := testSession()
 	dnsHandler, _ := New(session)
 	Debug = true
 

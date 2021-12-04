@@ -15,7 +15,7 @@ import (
 var (
 	zeroMAC = net.HardwareAddr{0, 0, 0, 0, 0, 0}
 
-	hostMAC   = net.HardwareAddr{0x00, 0xff, 0x03, 0x04, 0x05, 0x01} // key first byte zero for unicast mac
+	hostMAC   = net.HardwareAddr{0x00, 0xff, 0x03, 0x04, 0x05, 0x01} // keep first byte zero for unicast mac
 	hostIP    = net.ParseIP("192.168.0.129").To4()
 	homeLAN   = net.IPNet{IP: net.IPv4(192, 168, 0, 0), Mask: net.IPv4Mask(255, 255, 255, 0)}
 	routerMAC = net.HardwareAddr{0x00, 0xff, 0x03, 0x04, 0x05, 0x11} // key first byte zero for unicast mac
@@ -61,21 +61,21 @@ func setupTestHandler(t *testing.T) *testContext {
 
 	tc := testContext{}
 	tc.ctx, tc.cancel = context.WithCancel(context.Background())
-	tc.session = packet.NewSession()
 
 	// fake conn
 	tc.inConn, tc.outConn = packet.TestNewBufferedConn()
 	go readResponse(tc.ctx, &tc) // MUST read the out conn to avoid blocking the sender
-	tc.session.Conn = tc.inConn
 
 	// fake nicinfo
-	tc.session.NICInfo = &packet.NICInfo{
+	nicInfo := &packet.NICInfo{
 		HostMAC:   hostMAC,
 		HostIP4:   net.IPNet{IP: hostIP, Mask: net.IPv4Mask(255, 255, 255, 0)},
 		RouterIP4: net.IPNet{IP: routerIP, Mask: net.IPv4Mask(255, 255, 255, 0)},
 		HomeLAN4:  homeLAN,
 		HostAddr4: packet.Addr{MAC: hostMAC, IP: hostIP},
 	}
+
+	tc.session, err = packet.Config{Conn: tc.inConn, NICInfo: nicInfo}.NewSession()
 
 	if tc.arp, err = New(tc.session); err != nil {
 		t.Fatal(err)

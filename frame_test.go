@@ -3,6 +3,7 @@ package packet
 import (
 	"bytes"
 	"encoding/hex"
+	"net"
 	"testing"
 )
 
@@ -13,6 +14,27 @@ func mustHex(b []byte) []byte {
 		panic(err)
 	}
 	return b[:n]
+}
+
+func testSession() *Session {
+	// fake nicinfo
+	hostMAC := net.HardwareAddr{0x00, 0xff, 0x03, 0x04, 0x05, 0x01} // keep first byte zero for unicast mac
+	hostIP := net.ParseIP("192.168.0.129").To4()
+	homeLAN := net.IPNet{IP: net.IPv4(192, 168, 0, 0), Mask: net.IPv4Mask(255, 255, 255, 0)}
+	routerIP := net.ParseIP("192.168.0.11").To4()
+	nicInfo := &NICInfo{
+		HostMAC:   hostMAC,
+		HostIP4:   net.IPNet{IP: hostIP, Mask: net.IPv4Mask(255, 255, 255, 0)},
+		RouterIP4: net.IPNet{IP: routerIP, Mask: net.IPv4Mask(255, 255, 255, 0)},
+		HomeLAN4:  homeLAN,
+		HostAddr4: Addr{MAC: hostMAC, IP: hostIP},
+	}
+
+	// TODO: fix this to discard writes like ioutil.Discard
+	conn, _ := net.ListenPacket("udp4", "127.0.0.1:0")
+
+	session, _ := Config{Conn: conn, NICInfo: nicInfo}.NewSession()
+	return session
 }
 
 func TestSession_Parse(t *testing.T) {
@@ -42,7 +64,7 @@ func TestSession_Parse(t *testing.T) {
 		{name: "ICMPv4", p: mustHex(testICMPv4), wantErr: false, wantPayloadID: PayloadICMP4, wantHosts: 2},
 		{name: "IGMP", p: mustHex(testIGMP), wantErr: false, wantPayloadID: PayloadIGMP, wantHosts: 2},
 	}
-	h := NewSession()
+	h := testSession()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gotFrame, err := h.Parse(tt.p)

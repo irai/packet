@@ -46,7 +46,7 @@ var (
 )
 
 func setupTestHandler() *Session {
-	h := NewSession()
+	h := testSession()
 	return h
 }
 

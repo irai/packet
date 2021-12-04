@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"net"
-	"syscall"
 
 	"github.com/irai/packet"
 )
@@ -90,14 +89,8 @@ func main() {
 		}
 	}
 
-	fmt.Println("setting up nic...")
-	s := packet.NewSession()
-	s.NICInfo, err = packet.GetNICInfo(*nic)
-	if err != nil {
-		fmt.Printf("interface not found nic=%s: %s\n", *nic, err)
-		return
-	}
-	s.Conn, err = packet.NewServerConn(s.NICInfo.IFI, syscall.ETH_P_ALL, packet.SocketConfig{Filter: nil, Promiscuous: true})
+	fmt.Println("setting up nic:", *nic)
+	s, err := packet.NewSession(*nic)
 	if err != nil {
 		fmt.Printf("conn error: %s", err)
 		return
@@ -106,9 +99,6 @@ func main() {
 	for {
 		n, _, err := s.Conn.ReadFrom(buffer)
 		if err != nil {
-			if err, ok := err.(net.Error); ok && err.Temporary() {
-				continue
-			}
 			fmt.Println("error reading packet", err)
 			return
 		}

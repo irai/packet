@@ -81,18 +81,7 @@ func (config Config) NewEngine(nic string) (*Handler, error) {
 	var err error
 
 	h := &Handler{closeChan: make(chan bool)}
-
-	// session holds shared data for all plugins
-	h.session = packet.NewSession()
 	h.dnsChannel = make(chan dns.DNSEntry, 128) // plenty of capacity to prevent blocking
-
-	h.session.NICInfo = config.NICInfo
-	if h.session.NICInfo == nil {
-		h.session.NICInfo, err = packet.GetNICInfo(nic)
-		if err != nil {
-			return nil, fmt.Errorf("interface not found nic=%s: %w", nic, err)
-		}
-	}
 
 	// Ethernet layers
 	h.LayerTable = append(h.LayerTable, LayerProcessor{EtherType: 0x8808, Function: ProcessEthernetPause})
@@ -121,12 +110,13 @@ func (config Config) NewEngine(nic string) (*Handler, error) {
 	}
 
 	// Skip if conn is overriden
-	h.session.Conn = config.Conn
-	if h.session.Conn == nil {
-		h.session.Conn, err = h.setupConn()
-		if err != nil {
-			return nil, err
-		}
+	if config.Conn == nil {
+		h.session, err = packet.NewSession(nic)
+	} else {
+		h.session, err = packet.Config{Conn: config.Conn, NICInfo: config.NICInfo}.NewSession()
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	// no plugins to start

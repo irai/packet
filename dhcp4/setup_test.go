@@ -112,23 +112,23 @@ func setupTestHandler() *testContext {
 
 	tc := testContext{notifyReply: make(chan []byte, 32)}
 
-	tc.session = packet.NewSession()
-
 	// DHCP server conn
 	tc.inConn, tc.outConn = packet.TestNewBufferedConn()
 	go readResponse(&tc) // MUST read the out conn to avoid blocking the sender
-	tc.session.Conn = tc.inConn
 
 	// DHCP client conn
 	tc.clientInConn, tc.clientOutConn = packet.TestNewBufferedConn()
 	go packet.TestReadAndDiscardLoop(tc.clientOutConn) // must read to avoid blocking
 
-	tc.session.NICInfo = &packet.NICInfo{
+	// fake nicinfo
+	nicInfo := &packet.NICInfo{
 		HostMAC:   hostMAC,
 		HostIP4:   net.IPNet{IP: hostIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
 		RouterIP4: net.IPNet{IP: routerIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
 		HomeLAN4:  homeLAN,
 	}
+
+	tc.session, err = packet.Config{Conn: tc.inConn, NICInfo: nicInfo}.NewSession()
 
 	if Debug {
 		fmt.Println("nicinfo: ", tc.session.NICInfo)

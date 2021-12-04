@@ -3,6 +3,7 @@ package packet
 import (
 	"bytes"
 	"net"
+	"sync/atomic"
 	"syscall"
 	"time"
 )
@@ -139,6 +140,7 @@ func (h *Session) Parse(p []byte) (frame Frame, err error) {
 		if err := ip4.IsValid(); err != nil {
 			return frame, err
 		}
+		atomic.StoreUint32(&h.ipHeartBeat, 1)
 		h.Statisticsts[PayloadIP4].Count++
 		frame.offsetIP4 = frame.offsetPayload
 		frame.offsetPayload = frame.offsetPayload + ip4.IHL()
@@ -155,6 +157,7 @@ func (h *Session) Parse(p []byte) (frame Frame, err error) {
 		if err := ip6.IsValid(); err != nil {
 			return frame, err
 		}
+		atomic.StoreUint32(&h.ipHeartBeat, 1)
 		h.Statisticsts[PayloadIP6].Count++
 		proto = ip6.NextHeader()
 		frame.SrcAddr.IP = ip6.Src()

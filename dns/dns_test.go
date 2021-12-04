@@ -2,11 +2,33 @@ package dns
 
 import (
 	"fmt"
+	"net"
 	"testing"
 
 	"github.com/irai/packet"
 	"inet.af/netaddr"
 )
+
+func testSession() *packet.Session {
+	// fake nicinfo
+	hostMAC := net.HardwareAddr{0x00, 0xff, 0x03, 0x04, 0x05, 0x01} // keep first byte zero for unicast mac
+	hostIP := net.ParseIP("192.168.0.129").To4()
+	homeLAN := net.IPNet{IP: net.IPv4(192, 168, 0, 0), Mask: net.IPv4Mask(255, 255, 255, 0)}
+	routerIP := net.ParseIP("192.168.0.11").To4()
+	nicInfo := &packet.NICInfo{
+		HostMAC:   hostMAC,
+		HostIP4:   net.IPNet{IP: hostIP, Mask: net.IPv4Mask(255, 255, 255, 0)},
+		RouterIP4: net.IPNet{IP: routerIP, Mask: net.IPv4Mask(255, 255, 255, 0)},
+		HomeLAN4:  homeLAN,
+		HostAddr4: packet.Addr{MAC: hostMAC, IP: hostIP},
+	}
+
+	// TODO: fix this to discard writes like ioutil.Discard
+	conn, _ := net.ListenPacket("udp4", "127.0.0.1:0")
+
+	session, _ := packet.Config{Conn: conn, NICInfo: nicInfo}.NewSession()
+	return session
+}
 
 /**
 ; dig facebook.com - sudo tcpdump -X -t port 53
@@ -248,7 +270,7 @@ func TestDNS_DecodePTR(t *testing.T) {
 }
 
 func TestDNS_ProcessDNS(t *testing.T) {
-	session := packet.NewSession()
+	session := testSession()
 	dnsHandler, _ := New(session)
 	Debug = true
 
@@ -269,7 +291,7 @@ func TestDNS_ProcessDNS(t *testing.T) {
 }
 
 func TestDNS_reverseDNS(t *testing.T) {
-	session := packet.NewSession()
+	session := testSession()
 	dnsHandler, _ := New(session)
 	Debug = true
 
@@ -301,7 +323,7 @@ func TestDNS_reverseDNS(t *testing.T) {
 // Benchmark_DNSConcurrentAccess test concurrent access performance
 // Benchmark_DNSConcurrentAccess-8   	  114400	     10260 ns/op	    6267 B/op	      52 allocs/op
 func Benchmark_DNSConcurrentAccess(b *testing.B) {
-	session := packet.NewSession()
+	session := testSession()
 	dnsHandler, _ := New(session)
 
 	b.RunParallel(func(pb *testing.PB) {

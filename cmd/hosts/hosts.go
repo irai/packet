@@ -3,8 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"net"
-	"syscall"
 
 	"github.com/irai/packet"
 )
@@ -18,14 +16,9 @@ func main() {
 	var err error
 	flag.Parse()
 
-	fmt.Println("setting up nic...")
-	s := packet.NewSession()
-	s.NICInfo, err = packet.GetNICInfo(*nic)
+	fmt.Println("setting up nic: ", *nic)
+	s, err := packet.NewSession(*nic)
 	if err != nil {
-		fmt.Printf("interface not found nic=%s: %s\n", *nic, err)
-		return
-	}
-	if err = s.NewPacketConn(s.NICInfo.IFI, syscall.ETH_P_ALL, packet.SocketConfig{Filter: nil, Promiscuous: true}); err != nil {
 		fmt.Printf("conn error: %s", err)
 		return
 	}
@@ -46,10 +39,6 @@ func main() {
 	for {
 		n, _, err := s.ReadFrom(buffer)
 		if err != nil {
-			if err, ok := err.(net.Error); ok && err.Temporary() {
-				fmt.Println("tmp error", err)
-				continue
-			}
 			fmt.Println("error reading packet", err)
 			return
 		}
