@@ -75,9 +75,6 @@ func (config Config) NewSession() (*Session, error) {
 		session.PurgeDeadline = DefaultPurgeDeadline
 	}
 
-	// TODO: fix this to discard writes like ioutil.Discard
-	// session.Conn, _ = net.ListenPacket("udp4", "127.0.0.1:0")
-
 	// Setup a nic monitoring goroutine to ensure we always receive IP packets.
 	// If the switch port is disabled or the the nic stops receiving packets for any reason,
 	// our best option is to stop the engine and likely restart.
@@ -94,10 +91,27 @@ func (config Config) NewSession() (*Session, error) {
 				}
 				atomic.StoreUint32(&session.ipHeartBeat, 0)
 			case <-session.closeChan:
+				fmt.Println("session: nic monitoring ended")
 				return
 			}
 		}
 	}()
+
+	// minute loop goroutine to check for offline transition
+	go func(h *Session) {
+		ticker := time.NewTicker(time.Minute)
+		for {
+			select {
+			case <-ticker.C:
+				now := time.Now()
+				go h.purge(now)
+
+			case <-h.closeChan:
+				fmt.Println("session: minute loop goroutine ended")
+				return
+			}
+		}
+	}(session)
 
 	return session, nil
 }
@@ -246,23 +260,6 @@ func (h *Session) SetOffline(host *Host) {
 
 	// h.lockAndStopHunt(host, packet.StageNormal)
 	h.sendNotification(notification)
-}
-
-func (h *Session) minuteLoop() {
-	ticker := time.NewTicker(time.Minute)
-	counter := 60
-	for {
-		select {
-		case <-ticker.C:
-			now := time.Now()
-			counter--
-			go h.purge(now)
-
-		case <-h.closeChan:
-			fmt.Println("engine: minute loop goroutine ended")
-			return
-		}
-	}
 }
 
 // purge set entries offline and subsequently delete them if no more traffic received.
