@@ -53,18 +53,19 @@ func TestSession_Parse(t *testing.T) {
 		{name: "ipv4 invalid", p: testIPv4Frame, wantErr: true, wantPayloadID: PayloadIP4, wantHosts: 0},
 		{name: "icmp6 RA", p: testicmp6RourterSolicitation, wantErr: false, wantPayloadID: PayloadICMP6, wantHosts: 1},
 		{name: "dhcp", p: mustHex(testDhcpDiscover), wantErr: false, wantPayloadID: PayloadDHCP4, wantHosts: 1}, // discover does not create host
-		{name: "arp request", p: mustHex(testARPRequest), wantErr: false, wantPayloadID: PayloadARP, wantHosts: 1},
-		{name: "arp reply", p: mustHex(testARPReply), wantErr: false, wantPayloadID: PayloadARP, wantHosts: 1},
-		{name: "ssdp", p: mustHex(testSSDP), wantErr: false, wantPayloadID: PayloadSSDP, wantHosts: 1},
-		{name: "mdns", p: mustHex(testMDNS), wantErr: false, wantPayloadID: PayloadMDNS, wantHosts: 1},
-		{name: "dhcpv6", p: mustHex(testDHCPv6), wantErr: false, wantPayloadID: PayloadDHCP6, wantHosts: 2},
-		{name: "dns", p: mustHex(testDNS), wantErr: false, wantPayloadID: PayloadDNS, wantHosts: 2},
-		{name: "ntp", p: mustHex(testNTP), wantErr: false, wantPayloadID: PayloadNTP, wantHosts: 2},
-		{name: "TCP", p: mustHex(testTCP), wantErr: false, wantPayloadID: PayloadTCP, wantHosts: 2},
-		{name: "ICMPv4", p: mustHex(testICMPv4), wantErr: false, wantPayloadID: PayloadICMP4, wantHosts: 2},
-		{name: "IGMP", p: mustHex(testIGMP), wantErr: false, wantPayloadID: PayloadIGMP, wantHosts: 2},
+		{name: "arp request", p: mustHex(testARPRequest), wantErr: false, wantPayloadID: PayloadARP, wantHosts: 2},
+		{name: "arp reply", p: mustHex(testARPReply), wantErr: false, wantPayloadID: PayloadARP, wantHosts: 2},
+		{name: "ssdp", p: mustHex(testSSDP), wantErr: false, wantPayloadID: PayloadSSDP, wantHosts: 2},
+		{name: "mdns", p: mustHex(testMDNS), wantErr: false, wantPayloadID: PayloadMDNS, wantHosts: 2},
+		{name: "dhcpv6", p: mustHex(testDHCPv6), wantErr: false, wantPayloadID: PayloadDHCP6, wantHosts: 3},
+		{name: "dns", p: mustHex(testDNS), wantErr: false, wantPayloadID: PayloadDNS, wantHosts: 3},
+		{name: "ntp", p: mustHex(testNTP), wantErr: false, wantPayloadID: PayloadNTP, wantHosts: 3},
+		{name: "TCP", p: mustHex(testTCP), wantErr: false, wantPayloadID: PayloadTCP, wantHosts: 3},
+		{name: "ICMPv4", p: mustHex(testICMPv4), wantErr: false, wantPayloadID: PayloadICMP4, wantHosts: 3},
+		{name: "IGMP", p: mustHex(testIGMP), wantErr: false, wantPayloadID: PayloadIGMP, wantHosts: 3},
 	}
 	h := testSession()
+	Debug = true
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gotFrame, err := h.Parse(tt.p)
@@ -95,6 +96,7 @@ func TestSession_Parse(t *testing.T) {
 			}
 			if n := len(h.HostTable.Table); n != tt.wantHosts {
 				t.Errorf("Session.Parse() %s hosts= %v, want %v", tt.name, n, tt.wantHosts)
+				h.PrintTable()
 			}
 		})
 	}
