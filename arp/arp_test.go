@@ -43,6 +43,20 @@ var (
 	hostAddr   = packet.Addr{MAC: hostMAC, IP: hostIP}
 )
 
+func newEtherPacket(hType uint16, srcMAC net.HardwareAddr, dstMAC net.HardwareAddr) packet.Ether {
+	buf := make([]byte, packet.EthMaxSize) // allocate in the stack
+	p := packet.EtherMarshalBinary(buf, hType, srcMAC, dstMAC)
+	return p
+}
+
+func newARPPacket(op uint16, srcAddr packet.Addr, dstAddr packet.Addr) packet.ARP {
+	p, err := packet.MarshalBinary(nil, op, srcAddr, dstAddr)
+	if err != nil {
+		panic(err)
+	}
+	return p
+}
+
 type testContext struct {
 	inConn        net.PacketConn
 	outConn       net.PacketConn
@@ -124,7 +138,7 @@ func readResponse(ctx context.Context, tc *testContext) error {
 			panic("invalid ether type")
 		}
 
-		arpFrame := ARP(ether.Payload())
+		arpFrame := packet.ARP(ether.Payload())
 		if arpFrame.IsValid() != nil {
 			panic("invalid arp packet")
 		}
@@ -153,26 +167,26 @@ func Test_Handler_BasicTest(t *testing.T) {
 	tests := []struct {
 		name       string
 		ether      packet.Ether
-		arp        ARP
+		arp        packet.ARP
 		wantErr    error
 		wantLen    int
 		wantResult bool
 	}{
 		{name: "replymac2",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac2, routerMAC),
-			arp:     newPacket(OperationReply, addr2, routerAddr),
+			arp:     newARPPacket(packet.OperationReply, addr2, routerAddr),
 			wantErr: nil, wantLen: 1, wantResult: true},
 		{name: "replymac3",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac3, routerMAC),
-			arp:     newPacket(OperationReply, addr3, routerAddr),
+			arp:     newARPPacket(packet.OperationReply, addr3, routerAddr),
 			wantErr: nil, wantLen: 2, wantResult: true},
 		{name: "replymac4",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac4, routerMAC),
-			arp:     newPacket(OperationReply, addr4, routerAddr),
+			arp:     newARPPacket(packet.OperationReply, addr4, routerAddr),
 			wantErr: nil, wantLen: 3, wantResult: true},
 		{name: "request",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac4, routerMAC),
-			arp:     newPacket(OperationRequest, addr4, routerAddr),
+			arp:     newARPPacket(packet.OperationRequest, addr4, routerAddr),
 			wantErr: nil, wantLen: 3, wantResult: true},
 	}
 
@@ -186,12 +200,10 @@ func Test_Handler_BasicTest(t *testing.T) {
 				t.Errorf("Test_Requests:%s len = %v", tt.name, len(ether))
 			}
 
-			result, err := tc.arp.ProcessPacket(nil, ether, ether.Payload())
+			frame, _ := tc.session.Parse(ether)
+			err = tc.arp.Spoof(frame)
 			if err != tt.wantErr {
 				t.Errorf("Test_Requests:%s error = %v, wantErr %v", tt.name, err, tt.wantErr)
-			}
-			if result.Update {
-				tc.session.FindOrCreateHost(result.SrcAddr)
 			}
 
 			if len(tc.arp.session.GetHosts()) != tt.wantLen {

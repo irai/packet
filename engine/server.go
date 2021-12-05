@@ -67,14 +67,6 @@ func NewEngine(nic string) (*Handler, error) {
 	return Config{}.NewEngine(nic)
 }
 
-func quickArpHandler(h *Handler) func(frame packet.Frame, pos int) (packet.Result, error) {
-	return func(frame packet.Frame, pos int) (packet.Result, error) {
-		// case syscall.ETH_P_ARP: // 0x806
-		_, err := h.ARPHandler.ProcessPacket(nil, frame.Ether, frame.Payload())
-		return packet.Result{}, err
-	}
-}
-
 // NewEngine creates an packet handler with config values
 func (config Config) NewEngine(nic string) (*Handler, error) {
 
@@ -120,10 +112,9 @@ func (config Config) NewEngine(nic string) (*Handler, error) {
 	}
 
 	// no plugins to start
-	h.ARPHandler = packet.PacketNOOP{}
+	h.ARPHandler = arp.ARPNOOP{}
 	h.HandlerIP4 = packet.PacketNOOP{}
 	h.HandlerIP6 = packet.PacketNOOP{}
-	h.ARPHandler = packet.PacketNOOP{}
 	h.ICMP4Handler = icmp.ICMP4NOOP{}
 	h.ICMP6Handler = icmp.ICMP6NOOP{}
 	h.DHCP4Handler = packet.PacketNOOP{}
@@ -176,7 +167,7 @@ func (h *Handler) DetachARP() error {
 	if err := h.ARPHandler.Stop(); err != nil {
 		return err
 	}
-	h.ARPHandler = packet.PacketNOOP{}
+	h.ARPHandler = arp.ARPNOOP{}
 	return nil
 }
 

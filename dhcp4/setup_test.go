@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/irai/packet"
-	"github.com/irai/packet/arp"
 )
 
 var (
@@ -155,7 +154,7 @@ func newDHCPHost(t *testing.T, tc *testContext, mac net.HardwareAddr) []byte {
 	tc.xid++
 	xid := []byte(fmt.Sprintf("%d", tc.xid))
 	srcAddr := packet.Addr{MAC: mac, IP: net.IPv4zero, Port: DHCP4ClientPort}
-	dstAddr := packet.Addr{MAC: arp.EthernetBroadcast, IP: net.IPv4zero, Port: DHCP4ServerPort}
+	dstAddr := packet.Addr{MAC: packet.EthernetBroadcast, IP: net.IPv4zero, Port: DHCP4ServerPort}
 
 	tc.Lock()
 	tc.IPOffer = nil

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/irai/packet"
-	"github.com/irai/packet/arp"
 )
 
 func Test_declineSimple(t *testing.T) {
@@ -45,7 +44,7 @@ func Test_DeclineFromAnotherServer(t *testing.T) {
 	xid := []byte(fmt.Sprintf("%d", tc.xid))
 	mac5 = net.HardwareAddr{0x00, 0xff, 0xaa, 0xbb, 0x05, 0x05} // new mac
 	srcAddr := packet.Addr{MAC: mac5, IP: net.IPv4zero, Port: DHCP4ClientPort}
-	dstAddr := packet.Addr{MAC: arp.EthernetBroadcast, IP: net.IPv4zero, Port: DHCP4ServerPort}
+	dstAddr := packet.Addr{MAC: packet.EthernetBroadcast, IP: net.IPv4zero, Port: DHCP4ServerPort}
 
 	// discover packet
 	ether := newDHCP4DiscoverFrame(srcAddr, dstAddr, "name1", xid)

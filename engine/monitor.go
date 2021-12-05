@@ -62,9 +62,10 @@ func (h *Handler) minuteChecker(now time.Time) {
 	}
 
 	// ARP Handler - will global lock session
-	if err := h.ARPHandler.MinuteTicker(now); err != nil {
-		fmt.Printf("packet: error in arp minute checker err=\"%s\"\n", err)
-	}
+	fmt.Println("ARP MINUTE TICKER COMMENTED OUT")
+	// if err := h.ARPHandler.MinuteTicker(now); err != nil {
+	// fmt.Printf("packet: error in arp minute checker err=\"%s\"\n", err)
+	// }
 
 	// ICMP4 Handler - no lock
 	h.ICMP4Handler.MinuteTicker(now)
@@ -176,7 +177,8 @@ func (h *Handler) purge(now time.Time, probeDur time.Duration, offlineDur time.D
 		go func() {
 			for _, addr := range probe {
 				if ip := addr.IP.To4(); ip != nil {
-					h.ARPHandler.CheckAddr(addr)
+					fmt.Println("ARP CHECK COMMENTED OUT")
+					// h.ARPHandler.CheckAddr(addr)
 				} else {
 					h.ICMP6Handler.CheckAddr(addr)
 				}

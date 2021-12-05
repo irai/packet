@@ -32,6 +32,7 @@ func main() {
 			default:
 				fmt.Printf("is offline: %s\n", notification)
 			}
+			s.PrintTable()
 		}
 	}()
 

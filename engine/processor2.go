@@ -53,7 +53,7 @@ func (h *Handler) processPacket(ether packet.Ether) (err error) {
 		_, err = f(frame, 0)
 
 	case packet.PayloadARP:
-		if result, err = h.ARPHandler.ProcessPacket(frame.Host, frame.Ether, frame.Payload()); err != nil {
+		if err = h.ARPHandler.Spoof(frame); err != nil {
 			return err
 		}
 

@@ -10,12 +10,42 @@ import (
 	"github.com/irai/packet/fastlog"
 )
 
+const (
+	request = iota
+	reply
+	announcement
+	gratuitous
+	probe
+)
+
 type ARPHandler interface {
-	packet.PacketProcessor
+	Start() error
+	Stop() error
+	Spoof(frame packet.Frame) error
+	StartHunt(packet.Addr) (packet.HuntStage, error)
+	StopHunt(packet.Addr) (packet.HuntStage, error)
+	// CheckAddr(packet.Addr) (packet.HuntStage, error)
+	// MinuteTicker(time.Time) error
 }
 
 // must implement interface
 var _ ARPHandler = &Handler{}
+var _ ARPHandler = &ARPNOOP{}
+
+type ARPNOOP struct {
+}
+
+func (p ARPNOOP) Start() error { return nil }
+func (p ARPNOOP) Stop() error  { return nil }
+func (p ARPNOOP) Spoof(frame packet.Frame) error {
+	return nil
+}
+func (p ARPNOOP) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
+	return packet.StageNoChange, nil
+}
+func (p ARPNOOP) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
+	return packet.StageNoChange, nil
+}
 
 // Handler stores instance variables
 type Handler struct {
@@ -38,7 +68,7 @@ var (
 
 const module = "arp"
 
-// New creates the ARP handler and attach to the engine
+// New creates the ARP handler
 func New(session *packet.Session) (h *Handler, err error) {
 	return Config{ProbeInterval: time.Minute * 5}.New(session)
 }
@@ -57,16 +87,15 @@ func (config Config) New(session *packet.Session) (h *Handler, err error) {
 	return h, nil
 }
 
-// Detach removes the plugin from the engine
-func (h *Handler) Close() error {
-	h.closed = true
-	close(h.closeChan) // this will exit all background goroutines
-	return nil
+// Start background processes
+func (h *Handler) Start() error {
+	return h.ScanNetwork(context.Background(), h.session.NICInfo.HostIP4)
 }
 
-// Stop implements PacketProcessor interface
+// Stop the handler and terminate all internal goroutines
 func (h *Handler) Stop() error {
-	h.Close()
+	h.closed = true
+	close(h.closeChan) // this will exit all background goroutines
 	return nil
 }
 
@@ -76,65 +105,10 @@ func (h *Handler) PrintTable() {
 	defer h.arpMutex.Unlock()
 	for _, v := range h.huntList {
 		fastlog.NewLine(module, "hunting").Struct(v).Write()
-		// fmt.Printf("arp   : hunting %s", v)
 	}
 }
 
-// End will terminate the ListenAndServer goroutine as well as all other pending goroutines.
-func (h *Handler) End() {
-	// Don't close the socket - it is shared with packet
-}
-
-// Start background processes
-func (h *Handler) Start() error {
-	return h.ScanNetwork(context.Background(), h.session.NICInfo.HostIP4)
-}
-
-// MinuteTicker implements packet processor interface
-//
-// ARP handler will send who is packet if IP has not been seen
-func (h *Handler) MinuteTicker(now time.Time) error {
-	arpAddrs := []packet.Addr{}
-	now.Add(h.probeInterval * -1) //
-
-	for _, host := range h.session.GetHosts() {
-		host.MACEntry.Row.RLock()
-		if host.Online && host.LastSeen.Before(now) && host.Addr.IP.To4() != nil {
-			arpAddrs = append(arpAddrs, host.Addr)
-		}
-		host.MACEntry.Row.RUnlock()
-	}
-
-	for _, addr := range arpAddrs {
-		if err := h.RequestTo(addr.MAC, addr.IP); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// CheckAddr implements the PacketProcessor interface
-//
-// The ARP handler sends a ARP Request packet
-func (h *Handler) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
-	err := h.Request(addr.IP)
-	h.arpMutex.Lock()
-	defer h.arpMutex.Unlock()
-	if _, found := h.huntList[string(addr.MAC)]; found {
-		return packet.StageHunt, err
-	}
-	return packet.StageNormal, err
-}
-
-const (
-	request = iota
-	reply
-	announcement
-	gratuitous
-	probe
-)
-
-// ProcessPacket handles an incoming ARP packet
+// Spoof send spoofed packets to target when the target host is requesting the gateway address.
 //
 // ARP: packet types
 //      note that RFC 3927 specifies 00:00:00:00:00:00 for Request TargetMAC
@@ -148,39 +122,39 @@ const (
 // | ACD probe  | 1 | broadcast | clientMAC | clientMAC  | 0x00       | 00:00:00:00:00:00 |  targetIP |
 // | ACD announ | 1 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  clientIP |
 // +============+===+===========+===========+============+============+===================+===========+
-func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (packet.Result, error) {
-
-	ether := packet.Ether(b)
-	frame := ARP(header)
-	if err := frame.IsValid(); err != nil {
-		return packet.Result{}, err
+func (h *Handler) Spoof(frame packet.Frame) error {
+	arpFrame := frame.ARP()
+	if arpFrame == nil {
+		return nil
+	}
+	if err := arpFrame.IsValid(); err != nil {
+		return err
 	}
 
 	// skip link local packets
-	if frame.SrcIP().IsLinkLocalUnicast() || frame.DstIP().IsLinkLocalUnicast() {
+	if arpFrame.SrcIP().IsLinkLocalUnicast() || arpFrame.DstIP().IsLinkLocalUnicast() {
 		if Debug {
-			fastlog.NewLine(module, "skipping link local packet").Struct(frame).Write()
+			fastlog.NewLine(module, "skipping link local packet").Struct(arpFrame).Write()
 		}
-		return packet.Result{}, nil
+		return nil
 	}
 
 	var operation int
 	switch {
-	case frame.Operation() == OperationReply:
+	case arpFrame.Operation() == packet.OperationReply:
 		operation = reply
-	case frame.Operation() == OperationRequest:
+	case arpFrame.Operation() == packet.OperationRequest:
 		switch {
-		case frame.SrcIP().Equal(frame.DstIP()):
+		case arpFrame.SrcIP().Equal(arpFrame.DstIP()):
 			operation = announcement
-		case frame.SrcIP().Equal(net.IPv4zero):
+		case arpFrame.SrcIP().Equal(net.IPv4zero):
 			operation = probe
 		default:
 			operation = request
 		}
 	default:
-		fastlog.NewLine(module, "invalid operation").Struct(frame).Write()
-		// fmt.Printf("arp   : invalid operation: %s\n", frame)
-		return packet.Result{}, nil
+		fastlog.NewLine(module, "invalid operation").Struct(arpFrame).Write()
+		return nil
 	}
 
 	switch operation {
@@ -191,83 +165,68 @@ func (h *Handler) ProcessPacket(host *packet.Host, b []byte, header []byte) (pac
 		// | request    | 1 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  targetIP |
 		// +============+===+===========+===========+============+============+===================+===========+
 		if Debug {
-			fastlog.NewLine(module, "ether").Struct(ether).Module(module, "request received").IP("ip", frame.DstIP()).Struct(frame).Write()
+			fastlog.NewLine(module, "ether").Struct(frame.Ether).Module(module, "request received").IP("ip", arpFrame.DstIP()).Struct(arpFrame).Write()
 		}
 		// if we are spoofing the src host and the src host is trying to discover the router IP,
 		// reply on behalf of the router
 		h.arpMutex.Lock()
-		_, hunting := h.huntList[string(frame.SrcMAC())]
+		_, hunting := h.huntList[string(arpFrame.SrcMAC())]
 		h.arpMutex.Unlock()
-		if hunting && frame.DstIP().Equal(h.session.NICInfo.RouterIP4.IP) {
+		if hunting && arpFrame.DstIP().Equal(h.session.NICInfo.RouterIP4.IP) {
 			if Debug {
-				fastlog.NewLine(module, "router spoofing - send reply I am").IP("ip", frame.DstIP()).MAC("dstmac", frame.SrcMAC()).Write()
+				fastlog.NewLine(module, "router spoofing - send reply I am").IP("ip", arpFrame.DstIP()).MAC("dstmac", arpFrame.SrcMAC()).Write()
 			}
-			if err := h.reply(frame.SrcMAC(), packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: frame.DstIP()}, packet.Addr{MAC: frame.SrcMAC(), IP: frame.SrcIP()}); err != nil {
-				fastlog.NewLine(module, "failed to send spoofing reply").MAC("mac", frame.SrcMAC()).Error(err).Write()
+			if err := h.session.Reply(arpFrame.SrcMAC(), packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: arpFrame.DstIP()}, packet.Addr{MAC: arpFrame.SrcMAC(), IP: arpFrame.SrcIP()}); err != nil {
+				fastlog.NewLine(module, "failed to send spoofing reply").MAC("mac", arpFrame.SrcMAC()).Error(err).Write()
 			}
-			return packet.Result{}, nil
+			return nil
 		}
 
 	case probe:
 		// We are interested in probe ACD (Address Conflict Detection) packets for IPs that we have an open DHCP offer
 		// if this is a probe, the sender IP will be zeros; send ARP reply to stop sender from acquiring the IP
-		// but don't create host entry - the host has not claimed the IP yet
 		//
 		// +============+===+===========+===========+============+============+===================+===========+
-		// | Type       | op| dstMAC    | srcMAC    | SenderMAC  | SenderIP   | TargetMAC         |  TargetIP |
+		// | Type       | op| EthDstMAC | EthSrcMAC | SenderMAC  | SenderIP   | TargetMAC         |  TargetIP |
 		// +============+===+===========+===========+============+============+===================+===========+
 		// | ACD probe  | 1 | broadcast | clientMAC | clientMAC  | 0x00       | 0x00              |  targetIP |
 		// +============+===+===========+===========+============+============+===================+===========+
 		if Debug {
-			fastlog.NewLine(module, "ether").Struct(ether).Module(module, "probe recvd").Struct(frame).Write()
+			fastlog.NewLine(module, "ether").Struct(frame.Ether).Module(module, "probe recvd").Struct(arpFrame).Write()
 		}
 
-		// reject any other ip
-		// TODO: need to lock MACEntry?
-		macEntry := h.session.FindMACEntry(frame.SrcMAC())
-		if macEntry == nil || !macEntry.IP4Offer.Equal(frame.DstIP()) {
-			// fmt.Printf("DEBUG arp  : probe reject for ip=%s from mac=%s\n", frame.DstIP(), frame.SrcMAC())
-
-			// If probing for lan IP, then unicast reply to srcMAC
-			//
+		// if dhcpv4 spoofing then reject any other ip that is not the spoofed IP on offer
+		if offer := h.session.DHCPv4IPOffer(arpFrame.SrcMAC()); offer != nil && !offer.Equal(arpFrame.DstIP()) {
 			// Note: detected one situation where android probed external DNS IP. Not sure if this occur in other clients.
 			//     arp  : probe reject for ip=8.8.8.8 from mac=84:11:9e:03:89:c0 (android phone) - 10 March 2021
-			if h.session.NICInfo.HomeLAN4.Contains(frame.DstIP()) {
-				fastlog.NewLine(module, "probe reject for").IP("ip", frame.DstIP()).MAC("fromMAC", frame.SrcMAC()).Struct(macEntry).Write()
-				// fmt.Printf("arp   : probe reject for ip=%s from mac=%s macentry=%s\n", frame.DstIP(), frame.SrcMAC(), macEntry)
-				h.reply(frame.SrcMAC(), packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: frame.DstIP()}, packet.Addr{MAC: frame.SrcMAC(), IP: net.IP(packet.IP4Broadcast)})
+			if h.session.NICInfo.HomeLAN4.Contains(arpFrame.DstIP()) {
+				fastlog.NewLine(module, "probe reject for").IP("ip", arpFrame.DstIP()).MAC("fromMAC", arpFrame.SrcMAC()).IP("offer", offer).Write()
+				// unicast reply to srcMAC
+				h.session.Reply(arpFrame.SrcMAC(), packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: arpFrame.DstIP()}, packet.Addr{MAC: arpFrame.SrcMAC(), IP: net.IP(packet.IP4Broadcast)})
 			}
 		}
-		return packet.Result{}, nil
+		return nil
 
 	case announcement:
 		// +============+===+===========+===========+============+============+===================+===========+
-		// | Type       | op| dstMAC    | srcMAC    | SenderMAC  | SenderIP   | TargetMAC         |  TargetIP |
+		// | Type       | op| EthDstMAC | EthSrcMAC | SenderMAC  | SenderIP   | TargetMAC         |  TargetIP |
 		// +============+===+===========+===========+============+============+===================+===========+
 		// | ACD announ | 1 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  clientIP |
 		// +============+===+===========+===========+============+============+===================+===========+
 		if Debug {
-			fastlog.NewLine(module, "ether").Struct(ether).Module(module, "announcement recvd").Struct(frame).Write()
-			// fmt.Println("ether :", ether)
-			// fmt.Printf("arp   : announcement recvd: %s\n", frame)
+			fastlog.NewLine(module, "ether").Struct(frame.Ether).Module(module, "announcement recvd").Struct(arpFrame).Write()
 		}
 
 	default:
 		// +============+===+===========+===========+============+============+===================+===========+
-		// | Type       | op| EthDstMAC | EthSRCMAC | SenderMAC  | SenderIP   | TargetMAC         |  TargetIP |
+		// | Type       | op| EthDstMAC | EthSrcMAC | SenderMAC  | SenderIP   | TargetMAC         |  TargetIP |
 		// +============+===+===========+===========+============+============+===================+===========+
 		// | reply      | 2 | clientMAC | targetMAC | targetMAC  | targetIP   | clientMAC         |  clientIP |
 		// | gratuitous | 2 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  clientIP |
 		// +============+===+===========+===========+============+============+===================+===========+
 		if Debug {
-			fastlog.NewLine(module, "ether").Struct(ether).Module(module, "reply recvd").Struct(frame).Write()
-			// fmt.Println("ether :", ether)
-			// fmt.Printf("arp   : reply recvd: %s\n", frame)
+			fastlog.NewLine(module, "ether").Struct(frame.Ether).Module(module, "reply recvd").Struct(arpFrame).Write()
 		}
 	}
-
-	if host == nil && h.session.NICInfo.HostIP4.Contains(frame.SrcIP()) {
-		return packet.Result{Update: true, SrcAddr: packet.Addr{MAC: frame.SrcMAC(), IP: frame.SrcIP()}}, nil
-	}
-	return packet.Result{}, nil
+	return nil
 }

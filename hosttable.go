@@ -149,6 +149,7 @@ func (h *Session) findOrCreateHost(addr Addr) (host *Host, found bool) {
 			macEntry.link(host)          // link macEntry to host
 			host.Addr.MAC = macEntry.MAC // new mac
 			host.MACEntry = macEntry     // link host to macEntry
+			host.dirty = true            // notify this change
 			host.Manufacturer = FindManufacturer(host.Addr.MAC)
 			if host.Manufacturer != "" && host.Manufacturer != host.MACEntry.Manufacturer {
 				host.MACEntry.Manufacturer = host.Manufacturer
@@ -161,7 +162,7 @@ func (h *Session) findOrCreateHost(addr Addr) (host *Host, found bool) {
 		return host, true
 	}
 	macEntry := h.MACTable.FindOrCreateNoLock(CopyMAC(addr.MAC))
-	host = &Host{Addr: Addr{IP: CopyIP(addr.IP), MAC: macEntry.MAC}, MACEntry: macEntry, Online: false} // set Online to false to trigger Online transition
+	host = &Host{Addr: Addr{IP: CopyIP(addr.IP), MAC: macEntry.MAC}, MACEntry: macEntry, dirty: true, Online: false} // set Online to false to trigger Online transition
 	host.Manufacturer = FindManufacturer(macEntry.MAC)
 	if host.Manufacturer != "" && host.Manufacturer != host.MACEntry.Manufacturer {
 		host.MACEntry.Manufacturer = host.Manufacturer

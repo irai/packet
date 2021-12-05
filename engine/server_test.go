@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/arp"
 	"github.com/irai/packet/icmp"
 )
 
@@ -30,10 +31,9 @@ func newSession() *packet.Session {
 func setupTestHandler() *Handler {
 	h := &Handler{}
 	// no plugins to start
-	h.ARPHandler = packet.PacketNOOP{}
+	h.ARPHandler = arp.ARPNOOP{}
 	h.HandlerIP4 = packet.PacketNOOP{}
 	h.HandlerIP6 = packet.PacketNOOP{}
-	h.ARPHandler = packet.PacketNOOP{}
 	h.ICMP4Handler = icmp.ICMP4NOOP{}
 	h.ICMP6Handler = icmp.ICMP6NOOP{}
 	h.DHCP4Handler = packet.PacketNOOP{}

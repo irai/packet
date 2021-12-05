@@ -146,6 +146,18 @@ func (h *Session) FindMACEntry(mac net.HardwareAddr) *MACEntry {
 	return entry
 }
 
+// IP4Offer returns the dhcp v4 ip offer if one is available.
+// This is used in the arp spoof module to reject
+// any announcements that conflic with our spoofed dhcp ip.
+func (h *Session) DHCPv4IPOffer(mac net.HardwareAddr) net.IP {
+	h.mutex.RLock()
+	defer h.mutex.RUnlock()
+	if entry, _ := h.MACTable.FindMACNoLock(mac); entry != nil {
+		return entry.IP4Offer
+	}
+	return nil
+}
+
 func (s *MACTable) FindMACNoLock(mac net.HardwareAddr) (*MACEntry, int) {
 	for pos, v := range s.Table {
 		if bytes.Equal(v.MAC, mac) {

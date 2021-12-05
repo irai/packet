@@ -8,6 +8,33 @@ import (
 	"time"
 )
 
+type PayloadID int
+
+const (
+	PayloadEther    PayloadID = 1
+	Payload8023     PayloadID = 2
+	PayloadARP      PayloadID = 3
+	PayloadIP4      PayloadID = 4
+	PayloadIP6      PayloadID = 5
+	PayloadICMP4    PayloadID = 6
+	PayloadICMP6    PayloadID = 7
+	PayloadUDP      PayloadID = 8
+	PayloadTCP      PayloadID = 9
+	PayloadDHCP4    PayloadID = 10
+	PayloadDHCP6    PayloadID = 11
+	PayloadDNS      PayloadID = 12
+	PayloadMDNS     PayloadID = 13
+	PayloadSSL      PayloadID = 14
+	PayloadNTP      PayloadID = 15
+	PayloadSSDP     PayloadID = 16
+	PayloadWSDP     PayloadID = 17
+	PayloadNBNS     PayloadID = 18
+	PayloadPlex     PayloadID = 19
+	PayloadUbiquiti PayloadID = 20
+	PayloadLLMNR    PayloadID = 21
+	PayloadIGMP     PayloadID = 22
+)
+
 type Result struct {
 	Update    bool      // Set to true if update is required
 	HuntStage HuntStage // DHCP4 hunt stage
@@ -30,6 +57,14 @@ type Frame struct {
 	DstAddr       Addr      // reference to destination IP, MAC and Port number (if available)
 	Session       *Session  // session where frame was capture
 	Host          *Host     // pointer to Host entry for this IP address
+}
+
+// ARP returns a reference to the ARP packet or nil if this is not a ARP packet.
+func (f Frame) ARP() ARP {
+	if f.PayloadID == PayloadARP {
+		return ARP(f.Ether[f.offsetPayload:])
+	}
+	return nil
 }
 
 // IP4 returns a reference to the IP4 packet or nil if this is not an IPv4 packet.
@@ -74,33 +109,6 @@ func (f Frame) Payload() []byte {
 	}
 	return nil
 }
-
-type PayloadID int
-
-const (
-	PayloadEther    PayloadID = 1
-	Payload8023     PayloadID = 2
-	PayloadARP      PayloadID = 3
-	PayloadIP4      PayloadID = 4
-	PayloadIP6      PayloadID = 5
-	PayloadICMP4    PayloadID = 6
-	PayloadICMP6    PayloadID = 7
-	PayloadUDP      PayloadID = 8
-	PayloadTCP      PayloadID = 9
-	PayloadDHCP4    PayloadID = 10
-	PayloadDHCP6    PayloadID = 11
-	PayloadDNS      PayloadID = 12
-	PayloadMDNS     PayloadID = 13
-	PayloadSSL      PayloadID = 14
-	PayloadNTP      PayloadID = 15
-	PayloadSSDP     PayloadID = 16
-	PayloadWSDP     PayloadID = 17
-	PayloadNBNS     PayloadID = 18
-	PayloadPlex     PayloadID = 19
-	PayloadUbiquiti PayloadID = 20
-	PayloadLLMNR    PayloadID = 21
-	PayloadIGMP     PayloadID = 22
-)
 
 type ProtoStats struct {
 	Proto    PayloadID

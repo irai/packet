@@ -74,6 +74,7 @@ var (
 	ErrNotRedirected = errors.New("not redirected")
 	ErrIsRouter      = errors.New("host is router")
 	ErrNoReader      = errors.New("no reader")
+	ErrInvalidParam  = errors.New("invalid parameter")
 )
 
 // IP4 provide access to IP fields without copying data.

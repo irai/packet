@@ -15,6 +15,7 @@ import (
 type Session struct {
 	Conn            net.PacketConn
 	NICInfo         *NICInfo
+	ProbeDeadline   time.Duration     // send probe if no traffic received for this long
 	OfflineDeadline time.Duration     // mark Host offline if no traffic for this long
 	PurgeDeadline   time.Duration     // delete Host if no traffic for this long
 	HostTable       HostTable         // store IP list - one for each host
@@ -32,14 +33,16 @@ type Config struct {
 	// useful for testing
 	Conn            net.PacketConn // override connection
 	NICInfo         *NICInfo       // override nic information - set to non nil to create a test Handler
+	ProbeDeadline   time.Duration  // override probe deadline
 	OfflineDeadline time.Duration  // override offline deadline
 	PurgeDeadline   time.Duration  // override purge deadline
 }
 
 // Default dealines
 const (
+	DefaultProbeDeadline   = time.Minute * 2
 	DefaultOfflineDeadline = time.Minute * 5
-	DefaultPurgeDeadline   = time.Hour
+	DefaultPurgeDeadline   = time.Minute * 61
 )
 
 // monitorNICFrequency defines how often to check for nick heart beat
@@ -56,7 +59,7 @@ func NewSession(nic string) (*Session, error) {
 		fmt.Printf("conn error: %s", err)
 		return nil, err
 	}
-	return Config{Conn: conn, NICInfo: nicinfo, OfflineDeadline: DefaultOfflineDeadline, PurgeDeadline: DefaultPurgeDeadline}.NewSession()
+	return Config{Conn: conn, NICInfo: nicinfo, ProbeDeadline: DefaultProbeDeadline, OfflineDeadline: DefaultOfflineDeadline, PurgeDeadline: DefaultPurgeDeadline}.NewSession()
 }
 
 func (config Config) NewSession() (*Session, error) {
@@ -68,11 +71,15 @@ func (config Config) NewSession() (*Session, error) {
 	session.C = make(chan Notification, 128) // plenty of capacity to prevent blocking
 	session.Conn = config.Conn
 	session.NICInfo = config.NICInfo
-	if session.OfflineDeadline = config.OfflineDeadline; session.OfflineDeadline < 0 || session.OfflineDeadline > time.Hour*24 {
-		session.OfflineDeadline = DefaultOfflineDeadline
+
+	if session.ProbeDeadline = config.ProbeDeadline; session.ProbeDeadline < 0 || session.ProbeDeadline > time.Minute*30 {
+		return nil, fmt.Errorf("invalid ProbeDeadline=%v: %w", session.ProbeDeadline, ErrInvalidParam)
+	}
+	if session.OfflineDeadline = config.OfflineDeadline; session.OfflineDeadline < 0 || session.OfflineDeadline > time.Minute*60 || session.OfflineDeadline < session.ProbeDeadline {
+		return nil, fmt.Errorf("invalid OfflineDeadline=%v: %w", session.OfflineDeadline, ErrInvalidParam)
 	}
 	if session.PurgeDeadline = config.PurgeDeadline; session.PurgeDeadline < 0 || session.PurgeDeadline > time.Hour*24 {
-		session.PurgeDeadline = DefaultPurgeDeadline
+		return nil, fmt.Errorf("invalid PurgeDeadline=%v: %w", session.PurgeDeadline, ErrInvalidParam)
 	}
 
 	// Setup a nic monitoring goroutine to ensure we always receive IP packets.
@@ -134,16 +141,6 @@ func (h *Session) GlobalUnlock() {
 	h.mutex.Unlock()
 }
 
-// NewPacketConn creates a net.PacketConn which can be used to send and receive
-// data at the device driver level.
-/*
-func (h *Session) NewPacketConn(ifi *net.Interface, proto uint16, cfg SocketConfig) (err error) {
-	h.Conn, err = NewServerConn(ifi, proto, cfg)
-
-	return err
-}
-*/
-
 func (h *Session) ReadFrom(b []byte) (int, net.Addr, error) {
 	for {
 		n, addr, err := h.Conn.ReadFrom(b)
@@ -167,8 +164,8 @@ func (h *Session) SetOnline(host *Host) {
 		return
 	}
 	now := time.Now()
-	host.MACEntry.Row.RLock()
 
+	host.MACEntry.Row.RLock()
 	if host.Online && !host.dirty { // just another IP packet - nothing to do
 		if now.Sub(host.LastSeen) < time.Second*1 { // update LastSeen every 1 seconds to minimise locking
 			host.MACEntry.Row.RUnlock()
@@ -265,10 +262,12 @@ func (h *Session) SetOffline(host *Host) {
 // purge set entries offline and subsequently delete them if no more traffic received.
 // The funcion is called each minute by the minute goroutine.
 func (h *Session) purge(now time.Time) error {
+	probeCutoff := now.Add(h.ProbeDeadline * -1)     // Check entries last updated before this time
 	offlineCutoff := now.Add(h.OfflineDeadline * -1) // Mark offline entries last updated before this time
 	deleteCutoff := now.Add(h.PurgeDeadline * -1)    // Delete entries that have not responded in last hour
 
 	purge := make([]net.IP, 0, 16)
+	probe := make([]Addr, 0, 16)
 	offline := make([]*Host, 0, 16)
 
 	// h.session.GlobalRLock()
@@ -283,11 +282,32 @@ func (h *Session) purge(now time.Time) error {
 			continue
 		}
 
+		// Probe if device not seen recently
+		if e.Online && e.LastSeen.Before(probeCutoff) {
+			probe = append(probe, e.Addr)
+		}
+
 		// Set offline if no updates since the offline deadline
 		if e.Online && e.LastSeen.Before(offlineCutoff) {
 			offline = append(offline, e)
 		}
 		e.MACEntry.Row.RUnlock()
+	}
+
+	// run probe addr in goroutine as it may take time to return
+	if len(probe) > 0 {
+		go func() {
+			for _, addr := range probe {
+				if ip := addr.IP.To4(); ip != nil {
+					if err := h.Request(addr.IP); err != nil {
+						fastlog.NewLine(module, "failed to probe ipv4").Error(err).Write()
+					}
+				} else {
+					fastlog.NewLine(module, "failed to probe ipv6 not implemented").Write()
+					// h.ICMP6Handler.CheckAddr(addr)
+				}
+			}
+		}()
 	}
 
 	for _, host := range offline {

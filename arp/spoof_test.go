@@ -18,7 +18,7 @@ func Test_Probe_Reject(t *testing.T) {
 	tests := []struct {
 		name              string
 		ether             packet.Ether
-		arp               ARP
+		arp               packet.ARP
 		hunt              bool
 		wantErr           error
 		wantLen           int
@@ -27,19 +27,19 @@ func Test_Probe_Reject(t *testing.T) {
 	}{
 		{name: "replyMAC2",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac2, routerMAC),
-			arp:     newPacket(OperationReply, addr2, routerAddr),
+			arp:     newARPPacket(packet.OperationReply, addr2, routerAddr),
 			wantErr: nil, wantLen: 1, wantIPs: 1, wantCountResponse: 0, hunt: true},
 		{name: "replyMAC3",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac3, hostMAC),
-			arp:     newPacket(OperationReply, addr3, hostAddr),
+			arp:     newARPPacket(packet.OperationReply, addr3, hostAddr),
 			wantErr: nil, wantLen: 2, wantIPs: 2, wantCountResponse: 1, hunt: true}, // MAC2 will start hunt and send single response
 		{name: "probeMAC2", // probe does not add host but will send a probe reject if IP is not our DHCP IP
-			ether:   newEtherPacket(syscall.ETH_P_ARP, mac2, EthernetBroadcast),
-			arp:     newPacket(OperationRequest, packet.Addr{MAC: mac2, IP: net.IPv4zero.To4()}, packet.Addr{MAC: zeroMAC, IP: ip2}),
+			ether:   newEtherPacket(syscall.ETH_P_ARP, mac2, packet.EthernetBroadcast),
+			arp:     newARPPacket(packet.OperationRequest, packet.Addr{MAC: mac2, IP: net.IPv4zero.To4()}, packet.Addr{MAC: zeroMAC, IP: ip2}),
 			wantErr: nil, wantLen: 2, wantIPs: 2, wantCountResponse: 3, hunt: false},
 		{name: "probeMAC3", // probe does not add host but will send a probe reject if IP is not our DHCP IP
-			ether:   newEtherPacket(syscall.ETH_P_ARP, mac3, EthernetBroadcast),
-			arp:     newPacket(OperationRequest, packet.Addr{MAC: mac3, IP: net.IPv4zero.To4()}, packet.Addr{MAC: zeroMAC, IP: ip3}),
+			ether:   newEtherPacket(syscall.ETH_P_ARP, mac3, packet.EthernetBroadcast),
+			arp:     newARPPacket(packet.OperationRequest, packet.Addr{MAC: mac3, IP: net.IPv4zero.To4()}, packet.Addr{MAC: zeroMAC, IP: ip3}),
 			wantErr: nil, wantLen: 2, wantIPs: 2, wantCountResponse: 4, hunt: false},
 	}
 	for _, tt := range tests {
@@ -48,13 +48,9 @@ func Test_Probe_Reject(t *testing.T) {
 			if err != nil {
 				panic(err)
 			}
-			result, err := tc.arp.ProcessPacket(nil, ether, ether.Payload())
-			if err != tt.wantErr {
+			frame, _ := tc.session.Parse(ether)
+			if err := tc.arp.Spoof(frame); err != tt.wantErr {
 				t.Errorf("Test_Requests:%s error = %v, wantErr %v", tt.name, err, tt.wantErr)
-			}
-			var host *packet.Host
-			if result.Update {
-				host, _ = tc.session.FindOrCreateHost(result.SrcAddr)
 			}
 			time.Sleep(time.Millisecond * 50) // there is a delay of 10 msec for each packet in arp hunt - need 30msec to get all three
 
@@ -74,7 +70,7 @@ func Test_Probe_Reject(t *testing.T) {
 			}
 			tc.Unlock()
 			if tt.hunt { // Hunt will send 1 packets for each mac
-				tc.arp.StartHunt(packet.Addr{MAC: host.MACEntry.MAC, IP: host.MACEntry.IP4})
+				tc.arp.StartHunt(packet.Addr{MAC: frame.Host.MACEntry.MAC, IP: frame.Host.MACEntry.IP4})
 			}
 		})
 	}

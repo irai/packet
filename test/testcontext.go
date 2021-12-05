@@ -304,7 +304,7 @@ func newARPFrame(src packet.Addr, dst packet.Addr, operation uint16) packet.Ethe
 	var err error
 	ether := packet.Ether(make([]byte, packet.EthMaxSize))
 	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_ARP, src.MAC, dst.MAC)
-	arpFrame, _ := arp.MarshalBinary(ether.Payload(), operation, src, dst)
+	arpFrame, _ := packet.MarshalBinary(ether.Payload(), operation, src, dst)
 	if ether, err = ether.SetPayload(arpFrame); err != nil {
 		panic(err.Error())
 	}
@@ -399,7 +399,7 @@ func runAction(t *testing.T, tc *TestContext, tt TestEvent) {
 		if tc.IPOffer == nil {
 			panic("invalid IPOffer")
 		}
-		tt.ether = newARPFrame(tt.srcAddr, packet.Addr{MAC: arp.EthernetBroadcast, IP: tc.IPOffer}, arp.OperationRequest)
+		tt.ether = newARPFrame(tt.srcAddr, packet.Addr{MAC: packet.EthernetBroadcast, IP: tc.IPOffer}, packet.OperationRequest)
 
 	case "arpAnnouncement":
 		t.Log("send arpAnnouncement ")
@@ -409,7 +409,7 @@ func runAction(t *testing.T, tc *TestContext, tt TestEvent) {
 			}
 			tt.srcAddr.IP = tc.IPOffer
 		}
-		tt.ether = newARPFrame(tt.srcAddr, packet.Addr{MAC: arp.EthernetBroadcast, IP: tt.srcAddr.IP.To4()}, arp.OperationRequest)
+		tt.ether = newARPFrame(tt.srcAddr, packet.Addr{MAC: packet.EthernetBroadcast, IP: tt.srcAddr.IP.To4()}, packet.OperationRequest)
 
 	default:
 		fmt.Println("invalid action")
