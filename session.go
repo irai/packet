@@ -110,11 +110,14 @@ func (config Config) NewSession() (*Session, error) {
 		for {
 			select {
 			case <-ticker.C:
+				if Debug {
+					fastlog.NewLine(module, "minute check").Write()
+				}
 				now := time.Now()
 				go h.purge(now)
 
 			case <-h.closeChan:
-				fmt.Println("session: minute loop goroutine ended")
+				fastlog.NewLine(module, "session minute loop goroutine ended").Write()
 				return
 			}
 		}

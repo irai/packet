@@ -63,13 +63,12 @@ func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
 //
 // It will continuously send a number of ARP packets to client:
 //   1. spoof the client arp table to send router packets to us
-//   2. optionally, claim the ownership of the IP to force client to change IP or go offline
 //
 func (h *Handler) spoofLoop(addr packet.Addr) {
 
 	// The client ARP table is refreshed often and only last for a short while (few minutes)
-	// 4 second re-arp seem to be adequate;
 	// To make sure the cache stays poisoned, replay every few seconds with a loop.
+	// 6 second re-arp seem to be adequate;
 	// Experimented with 300ms but no noticeable improvement other the chatty net.
 	ticker := time.NewTicker(time.Second * 6).C
 	startTime := time.Now()
@@ -81,12 +80,10 @@ func (h *Handler) spoofLoop(addr packet.Addr) {
 
 		if !hunting || h.closed {
 			fastlog.NewLine(module, "hunt loop stop").Struct(addr).Int("repeat", nTimes).String("duration", time.Since(startTime).String()).Write()
-			// fmt.Printf("arp   : hunt loop stop %s repeat=%v duration=%v\n", addr, nTimes, time.Since(startTime))
 			// clear the arp table with announcement to real router mac
 			// request will fix the ether src mac to host to prevent ethernet port disabling
 			if err := h.session.RequestRaw(addr.MAC, h.session.NICInfo.RouterAddr4, h.session.NICInfo.RouterAddr4); err != nil {
 				fastlog.NewLine(module, "error send request packet").Struct(addr).Error(err).Write()
-				// fmt.Printf("arp error send announcement packet %s: %s\n", addr, err)
 			}
 			return
 		}

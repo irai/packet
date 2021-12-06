@@ -11,20 +11,15 @@ import (
 
 // Simple utility to demonstrate use of ARP spoofing
 var (
-	nic    = flag.String("i", "eth0", "nic interface")
-	macstr = flag.String("mac", "", "mac address as in xx:xx:xx:xx:xx:xx")
-	debug  = flag.Bool("d", false, "set to true to show debug messages")
+	nic   = flag.String("i", "eth0", "nic interface")
+	ipstr = flag.String("ip", "", "target ip address as in 192.168.0.30")
+	debug = flag.Bool("d", false, "set to true to show debug messages")
 )
 
 func main() {
 	var err error
-	var mac net.HardwareAddr
+	var ip net.IP
 	flag.Parse()
-
-	if mac, err = net.ParseMAC(*macstr); err != nil {
-		fmt.Println("missing or invalid target mac address...listening only", err)
-		flag.PrintDefaults()
-	}
 
 	fmt.Println("setting up nic: ", *nic)
 	s, err := packet.NewSession(*nic)
@@ -54,10 +49,21 @@ func main() {
 		return
 	}
 	arpspoofer.Start()
-	if mac != nil {
-		arpspoofer.StartHunt(packet.Addr{MAC: mac, IP: nil})
-	}
 	defer arpspoofer.Stop()
+
+	// start hunt for target IP
+	if ip = net.ParseIP(*ipstr); ip == nil {
+		fmt.Println("missing or invalid target ip address...listening only", err)
+	} else {
+		if addr, err := s.WhoIs(ip); err != nil {
+			fmt.Printf("ip=%s not found on LAN - listening only\n", ip)
+		} else {
+			if _, err := arpspoofer.StartHunt(addr); err != nil {
+				fmt.Println("error in start hunt", err)
+				return
+			}
+		}
+	}
 
 	buffer := make([]byte, packet.EthMaxSize)
 	for {
