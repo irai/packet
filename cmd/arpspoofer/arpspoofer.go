@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/irai/packet"
 	"github.com/irai/packet/arp"
@@ -51,12 +52,14 @@ func main() {
 	arpspoofer.Start()
 	defer arpspoofer.Stop()
 
+	time.Sleep(time.Millisecond * 300) // time to populate table after arp start
+
 	// start hunt for target IP
 	if ip = net.ParseIP(*ipstr); ip == nil {
 		fmt.Println("missing or invalid target ip address...listening only", err)
 	} else {
 		if addr, err := s.WhoIs(ip); err != nil {
-			fmt.Printf("ip=%s not found on LAN - listening only\n", ip)
+			fmt.Printf("ip=%s not found on LAN - listening only: %v\n", ip, err)
 		} else {
 			if _, err := arpspoofer.StartHunt(addr); err != nil {
 				fmt.Println("error in start hunt", err)
