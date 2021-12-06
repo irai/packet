@@ -49,10 +49,35 @@ func main() {
 		fmt.Println("error creating arp spoofer", err)
 		return
 	}
+
+	// Start packet processing goroutine
+	go func() {
+		buffer := make([]byte, packet.EthMaxSize)
+		for {
+			n, _, err := s.ReadFrom(buffer)
+			if err != nil {
+				fmt.Println("error reading packet", err)
+				return
+			}
+
+			frame, err := s.Parse(buffer[:n])
+			if err != nil {
+				fmt.Println("parse error", err)
+				continue
+			}
+
+			// Process ARP packets only - ignore all other
+			if arp := frame.ARP(); arp != nil {
+				arpspoofer.Spoof(frame)
+			}
+
+			s.SetOnline(frame.Host)
+		}
+	}()
+
+	// Start arp spoofer module
 	arpspoofer.Start()
 	defer arpspoofer.Stop()
-
-	time.Sleep(time.Millisecond * 300) // time to populate table after arp start
 
 	// start hunt for target IP
 	if ip = net.ParseIP(*ipstr); ip == nil {
@@ -68,25 +93,5 @@ func main() {
 		}
 	}
 
-	buffer := make([]byte, packet.EthMaxSize)
-	for {
-		n, _, err := s.ReadFrom(buffer)
-		if err != nil {
-			fmt.Println("error reading packet", err)
-			return
-		}
-
-		frame, err := s.Parse(buffer[:n])
-		if err != nil {
-			fmt.Println("parse error", err)
-			continue
-		}
-
-		// Process ARP packets only - ignore all other
-		if arp := frame.ARP(); arp != nil {
-			arpspoofer.Spoof(frame)
-		}
-
-		s.SetOnline(frame.Host)
-	}
+	time.Sleep(time.Hour * 24) // wait forever!!!
 }
