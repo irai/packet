@@ -22,9 +22,8 @@ func main() {
 	flag.Parse()
 
 	if mac, err = net.ParseMAC(*macstr); err != nil {
-		fmt.Println("invalid mac address", err)
+		fmt.Println("missing or invalid target mac address...listening only", err)
 		flag.PrintDefaults()
-		return
 	}
 
 	fmt.Println("setting up nic: ", *nic)
@@ -48,13 +47,16 @@ func main() {
 	}()
 
 	arp.Debug = *debug
+	packet.Debug = *debug
 	arpspoofer, err := arp.New(s)
 	if err != nil {
 		fmt.Println("error creating arp spoofer", err)
 		return
 	}
 	arpspoofer.Start()
-	arpspoofer.StartHunt(packet.Addr{MAC: mac, IP: nil})
+	if mac != nil {
+		arpspoofer.StartHunt(packet.Addr{MAC: mac, IP: nil})
+	}
 	defer arpspoofer.Stop()
 
 	buffer := make([]byte, packet.EthMaxSize)
@@ -71,7 +73,7 @@ func main() {
 			continue
 		}
 
-		// Process ARP packets only - ignore all other packets
+		// Process ARP packets only - ignore all other
 		if arp := frame.ARP(); arp != nil {
 			arpspoofer.Spoof(frame)
 		}
