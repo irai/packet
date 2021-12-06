@@ -242,7 +242,7 @@ func (h *Session) WhoIs(ip net.IP) (Addr, error) {
 		if err := h.Request(ip); err != nil {
 			return Addr{}, err
 		}
-		time.Sleep(time.Millisecond * 50)
+		time.Sleep(time.Millisecond * 50 * time.Duration(i+1))
 	}
 
 	if Debug {
