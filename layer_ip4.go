@@ -75,6 +75,7 @@ var (
 	ErrIsRouter      = errors.New("host is router")
 	ErrNoReader      = errors.New("no reader")
 	ErrInvalidParam  = errors.New("invalid parameter")
+	ErrMulticastMAC  = errors.New("mac is multicast")
 )
 
 // IP4 provide access to IP fields without copying data.
