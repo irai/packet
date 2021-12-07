@@ -2,80 +2,12 @@ package packet
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"net"
 
 	"github.com/irai/packet/fastlog"
 	"golang.org/x/net/ipv4"
 	"inet.af/netaddr"
-)
-
-const module = "packet"
-
-// Global variables
-var (
-	Debug    bool
-	DebugIP6 bool
-	DebugIP4 bool
-	DebugUDP bool
-
-	// An IP host group address is mapped to an Ethernet multicast address
-	// by placing the low-order 23-bits of the IP address into the low-order
-	// 23 bits of the Ethernet multicast address 01-00-5E-00-00-00 (hex).
-	EthBroadcast     = net.HardwareAddr{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
-	IP4Broadcast     = net.IPv4(255, 255, 255, 255)
-	IP4BroadcastAddr = Addr{MAC: EthBroadcast, IP: IP4Broadcast}
-
-	Eth4AllNodesMulticast = net.HardwareAddr{0x01, 0x00, 0x5e, 0, 0, 0x01}
-	IP4AllNodesMulticast  = net.IPv4(224, 0, 0, 1)
-	IP4AllNodesAddr       = Addr{MAC: Eth4AllNodesMulticast, IP: IP4AllNodesMulticast}
-
-	Eth4RoutersMulticast   = net.HardwareAddr{0x01, 0x00, 0x5e, 0, 0, 0x02}
-	IP4AllRoutersMulticast = net.IPv4(224, 0, 0, 2)
-
-	Eth6AllNodesMulticast = net.HardwareAddr{0x33, 0x33, 0, 0, 0, 0x01}
-	IP6AllNodesMulticast  = net.IP{0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}
-	IP6AllNodesAddr       = Addr{MAC: Eth6AllNodesMulticast, IP: IP6AllNodesMulticast}
-
-	Eth6AllRoutersMulticast = net.HardwareAddr{0x33, 0x33, 0, 0, 0, 0x02}
-	IP6AllRoutersMulticast  = net.IP{0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}
-	IP6AllRoutersAddr       = Addr{MAC: Eth6AllRoutersMulticast, IP: IP6AllRoutersMulticast}
-
-	IP6DefaultRouter = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}
-)
-
-// CLoudFlare family
-// https://developers.cloudflare.com/1.1.1.1/1.1.1.1-for-families
-var (
-	CloudFlareDNS1       = net.IPv4(1, 1, 1, 2) // malware
-	CloudFlareDNS2       = net.IPv4(1, 0, 0, 2) // malware
-	CloudFlareFamilyDNS1 = net.IPv4(1, 1, 1, 3) // malware and adult sites
-	CloudFlareFamilyDNS2 = net.IPv4(1, 0, 0, 3) // malware and adult sites
-
-	// OpenDNS
-	OpenDNS1 = net.IPv4(208, 67, 222, 123)
-	OpenDNS2 = net.IPv4(208, 67, 220, 123)
-)
-
-// Sentinel errors
-var (
-	ErrInvalidLen    = errors.New("invalid len")
-	ErrPayloadTooBig = errors.New("payload too big")
-	ErrParseFrame    = errors.New("failed to parse frame")
-	ErrParseProtocol = errors.New("invalid protocol")
-	ErrFrameLen      = errors.New("invalid frame length")
-	ErrInvalidConn   = errors.New("invalid connection")
-	ErrInvalidIP     = errors.New("invalid ip")
-	ErrInvalidMAC    = errors.New("invalid mac")
-	ErrInvalidIP6LLA = errors.New("invalid ip6 lla")
-	ErrNotFound      = errors.New("not found")
-	ErrTimeout       = errors.New("timeout")
-	ErrNotRedirected = errors.New("not redirected")
-	ErrIsRouter      = errors.New("host is router")
-	ErrNoReader      = errors.New("no reader")
-	ErrInvalidParam  = errors.New("invalid parameter")
-	ErrMulticastMAC  = errors.New("mac is multicast")
 )
 
 // IP4 provide access to IP fields without copying data.
