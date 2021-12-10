@@ -176,7 +176,7 @@ func (h *Handler) Spoof(frame packet.Frame) error {
 			if Debug {
 				fastlog.NewLine(module, "router spoofing - send reply I am").IP("ip", arpFrame.DstIP()).MAC("dstmac", arpFrame.SrcMAC()).Write()
 			}
-			if err := h.session.Reply(arpFrame.SrcMAC(), packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: arpFrame.DstIP()}, packet.Addr{MAC: arpFrame.SrcMAC(), IP: arpFrame.SrcIP()}); err != nil {
+			if err := h.session.ARPReply(arpFrame.SrcMAC(), packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: arpFrame.DstIP()}, packet.Addr{MAC: arpFrame.SrcMAC(), IP: arpFrame.SrcIP()}); err != nil {
 				fastlog.NewLine(module, "failed to send spoofing reply").MAC("mac", arpFrame.SrcMAC()).Error(err).Write()
 			}
 			return nil
@@ -202,7 +202,7 @@ func (h *Handler) Spoof(frame packet.Frame) error {
 			if h.session.NICInfo.HomeLAN4.Contains(arpFrame.DstIP()) {
 				fastlog.NewLine(module, "probe reject for").IP("ip", arpFrame.DstIP()).MAC("fromMAC", arpFrame.SrcMAC()).IP("offer", offer).Write()
 				// unicast reply to srcMAC
-				h.session.Reply(arpFrame.SrcMAC(), packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: arpFrame.DstIP()}, packet.Addr{MAC: arpFrame.SrcMAC(), IP: net.IP(packet.IP4Broadcast)})
+				h.session.ARPReply(arpFrame.SrcMAC(), packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: arpFrame.DstIP()}, packet.Addr{MAC: arpFrame.SrcMAC(), IP: net.IP(packet.IP4Broadcast)})
 			}
 		}
 		return nil

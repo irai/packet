@@ -83,7 +83,7 @@ func main() {
 	if ip = net.ParseIP(*ipstr); ip == nil {
 		fmt.Println("missing or invalid target ip address...listening only", err)
 	} else {
-		if addr, err := s.WhoIs(ip); err != nil {
+		if addr, err := s.ARPWhoIs(ip); err != nil {
 			fmt.Printf("ip=%s not found on LAN - listening only: %v\n", ip, err)
 		} else {
 			if _, err := arpspoofer.StartHunt(addr); err != nil {

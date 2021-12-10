@@ -304,7 +304,7 @@ func newARPFrame(src packet.Addr, dst packet.Addr, operation uint16) packet.Ethe
 	var err error
 	ether := packet.Ether(make([]byte, packet.EthMaxSize))
 	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_ARP, src.MAC, dst.MAC)
-	arpFrame, _ := packet.MarshalBinary(ether.Payload(), operation, src, dst)
+	arpFrame, _ := packet.ARPMarshalBinary(ether.Payload(), operation, src, dst)
 	if ether, err = ether.SetPayload(arpFrame); err != nil {
 		panic(err.Error())
 	}

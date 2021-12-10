@@ -30,7 +30,7 @@ func (h *Handler) ScanNetwork(ctx context.Context, lan net.IPNet) error {
 			continue
 		}
 
-		err := h.session.Request(ip)
+		err := h.session.ARPRequest(ip)
 		if ctx.Err() == context.Canceled {
 			return nil
 		}

@@ -370,7 +370,7 @@ func (h *Session) purge(now time.Time) error {
 		go func() {
 			for _, addr := range probe {
 				if ip := addr.IP.To4(); ip != nil {
-					if err := h.Request(addr.IP); err != nil {
+					if err := h.ARPRequest(addr.IP); err != nil {
 						fastlog.NewLine(module, "failed to probe ipv4").Error(err).Write()
 					}
 				} else {

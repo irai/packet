@@ -82,7 +82,7 @@ func (h *Handler) spoofLoop(addr packet.Addr) {
 			fastlog.NewLine(module, "hunt loop stop").Struct(addr).Int("repeat", nTimes).String("duration", time.Since(startTime).String()).Write()
 			// clear the arp table with announcement to real router mac
 			// request will fix the ether src mac to host to prevent ethernet port disabling
-			if err := h.session.RequestRaw(addr.MAC, h.session.NICInfo.RouterAddr4, h.session.NICInfo.RouterAddr4); err != nil {
+			if err := h.session.ARPRequestRaw(addr.MAC, h.session.NICInfo.RouterAddr4, h.session.NICInfo.RouterAddr4); err != nil {
 				fastlog.NewLine(module, "error send request packet").Struct(addr).Error(err).Write()
 			}
 			return
@@ -92,7 +92,7 @@ func (h *Handler) spoofLoop(addr packet.Addr) {
 		//
 		// Announce to target that we own the router IP; This will update the target arp table with our mac
 		// i.e. tell target I am 192.168.0.1
-		err := h.session.AnnounceTo(targetAddr.MAC, h.session.NICInfo.RouterIP4.IP)
+		err := h.session.ARPAnnounceTo(targetAddr.MAC, h.session.NICInfo.RouterIP4.IP)
 		if err != nil {
 			fastlog.NewLine(module, "error send announcement packet").Struct(targetAddr).Error(err).Write()
 			// fmt.Printf("arp   : error send announcement packet %s: %s\n", targetAddr, err)

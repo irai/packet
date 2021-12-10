@@ -50,7 +50,7 @@ func newEtherPacket(hType uint16, srcMAC net.HardwareAddr, dstMAC net.HardwareAd
 }
 
 func newARPPacket(op uint16, srcAddr packet.Addr, dstAddr packet.Addr) packet.ARP {
-	p, err := packet.MarshalBinary(nil, op, srcAddr, dstAddr)
+	p, err := packet.ARPMarshalBinary(nil, op, srcAddr, dstAddr)
 	if err != nil {
 		panic(err)
 	}
