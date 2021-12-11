@@ -1,12 +1,14 @@
-package icmp
+package packet
 
 import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"syscall"
 
-	"github.com/irai/packet"
 	"github.com/irai/packet/fastlog"
+	"golang.org/x/net/icmp"
+	"golang.org/x/net/ipv4"
 	"golang.org/x/net/ipv6"
 )
 
@@ -15,9 +17,13 @@ type ICMP []byte
 
 // IsValid validates the packet
 // TODO: verify checksum?
-func (p ICMP) IsValid() bool {
-	return len(p) >= 8
+func (p ICMP) IsValid() error {
+	if len(p) >= 8 {
+		return nil
+	}
+	return fmt.Errorf("icmp header too short len=%d: %w", len(p), ErrFrameLen)
 }
+
 func (p ICMP) Type() uint8      { return uint8(p[0]) }
 func (p ICMP) Code() uint8      { return p[1] }
 func (p ICMP) Checksum() uint16 { return binary.BigEndian.Uint16(p[2:4]) }
@@ -36,7 +42,7 @@ func (p ICMP) String() string {
 	return fastlog.NewLine("", "").Struct(p).ToString()
 }
 
-// Print implements fastlog interface
+// FastLog implements fastlog interface
 func (p ICMP) FastLog(line *fastlog.Line) *fastlog.Line {
 	line.Uint8("type", p.Type())
 	line.Uint8("code", p.Code())
@@ -47,7 +53,12 @@ func (p ICMP) FastLog(line *fastlog.Line) *fastlog.Line {
 
 type ICMPEcho []byte
 
-func (p ICMPEcho) IsValid() bool    { return len(p) >= 8 }
+func (p ICMPEcho) IsValid() error {
+	if len(p) >= 8 {
+		return nil
+	}
+	return fmt.Errorf("icmp echo header too short len=%d: %w", len(p), ErrFrameLen)
+}
 func (p ICMPEcho) Type() uint8      { return uint8(p[0]) }
 func (p ICMPEcho) Code() uint8      { return uint8(p[1]) }
 func (p ICMPEcho) Checksum() uint16 { return binary.BigEndian.Uint16(p[2:4]) }
@@ -98,13 +109,13 @@ type ICMP4Redirect []byte
 
 func (p ICMP4Redirect) IsValid() error {
 	if len(p) < 8 || len(p) < 8+int(p.NumAddrs())*int(p.AddrSize())*4 {
-		return packet.ErrFrameLen
+		return fmt.Errorf("icmp redirect header too short len=%d: %w", len(p), ErrFrameLen)
 	}
 	if p[0] != byte(ipv6.ICMPTypeRedirect) {
-		return packet.ErrParseFrame
+		return fmt.Errorf("icmp header invalid type=%v: %w", p[0], ErrParseFrame)
 	}
 	if p.AddrSize() != 4 && p.AddrSize() != 10 {
-		return packet.ErrParseFrame
+		return fmt.Errorf("icmp header invalid addr size=%v: %w", p.AddrSize(), ErrParseFrame)
 	}
 	return nil
 }
@@ -148,10 +159,10 @@ type ICMP6RouterSolicitation []byte
 
 func (p ICMP6RouterSolicitation) IsValid() error {
 	if len(p) < 8 {
-		return packet.ErrFrameLen
+		return fmt.Errorf("icmp redirect header too short len=%d: %w", len(p), ErrFrameLen)
 	}
 	if p[0] != byte(ipv6.ICMPTypeRouterSolicitation) {
-		return packet.ErrParseFrame
+		return fmt.Errorf("icmp redirect header invalid type=%v: %w", p[0], ErrParseFrame)
 	}
 	return nil
 }
@@ -172,6 +183,14 @@ func (p ICMP6RouterSolicitation) Options() (NewOptions, error) {
 	if len(p) <= 24 {
 		return NewOptions{}, nil
 	}
+	/**
+	// SourceLinkAddress is the only valid option for Router Solicitation - RFC4861
+	for _, v := range options {
+		if slla, ok := v.(*LinkLayerAddress); ok {
+			rs.SourceLLA = slla.Addr
+		}
+	}
+	**/
 	return newParseOptions(p[24:])
 }
 
@@ -188,7 +207,12 @@ func (p ICMP6RouterSolicitation) FastLog(line *fastlog.Line) *fastlog.Line {
 
 type ICMP6RouterAdvertisement []byte
 
-func (p ICMP6RouterAdvertisement) IsValid() bool              { return len(p) >= 16 }
+func (p ICMP6RouterAdvertisement) IsValid() error {
+	if len(p) >= 16 {
+		return nil
+	}
+	return fmt.Errorf("icmp RA header too short len=%d: %w", len(p), ErrFrameLen)
+}
 func (p ICMP6RouterAdvertisement) Type() uint8                { return uint8(p[0]) }
 func (p ICMP6RouterAdvertisement) Code() byte                 { return p[1] }
 func (p ICMP6RouterAdvertisement) Checksum() int              { return int(binary.BigEndian.Uint16(p[2:4])) }
@@ -213,8 +237,6 @@ func (p ICMP6RouterAdvertisement) Options() (NewOptions, error) {
 	return newParseOptions(p[16:])
 }
 func (p ICMP6RouterAdvertisement) String() string {
-	// return fmt.Sprintf("type=ra code=%v hopLim=%d flags=0x%x managed=%t other=%t preference=%d lifetimeSec=%d reacheableMSec=%d retransmitMSec=%d",
-	// p.Code(), p.CurrentHopLimit(), p.Flags(), p.ManagedConfiguration(), p.OtherConfiguration(), p.Preference(), p.Lifetime(), p.ReachableTime(), p.RetransmitTimer())
 	return fastlog.NewLine("", "").Struct(p).ToString()
 }
 func (p ICMP6RouterAdvertisement) FastLog(l *fastlog.Line) *fastlog.Line {
@@ -233,7 +255,12 @@ func (p ICMP6RouterAdvertisement) FastLog(l *fastlog.Line) *fastlog.Line {
 
 type ICMP6NeighborAdvertisement []byte
 
-func (p ICMP6NeighborAdvertisement) IsValid() bool         { return len(p) >= 24 }
+func (p ICMP6NeighborAdvertisement) IsValid() error {
+	if len(p) >= 24 {
+		return nil
+	}
+	return fmt.Errorf("icmp NA header too short len=%d: %w", len(p), ErrFrameLen)
+}
 func (p ICMP6NeighborAdvertisement) Type() uint8           { return uint8(p[0]) }
 func (p ICMP6NeighborAdvertisement) Code() byte            { return p[1] }
 func (p ICMP6NeighborAdvertisement) Checksum() int         { return int(binary.BigEndian.Uint16(p[2:4])) }
@@ -265,7 +292,7 @@ func (p ICMP6NeighborAdvertisement) FastLog(line *fastlog.Line) *fastlog.Line {
 	return line
 }
 
-func ICMP6NeighborAdvertisementMarshal(router bool, solicited bool, override bool, targetAddr packet.Addr) []byte {
+func ICMP6NeighborAdvertisementMarshal(router bool, solicited bool, override bool, targetAddr Addr) []byte {
 	b := make([]byte, 32)
 	b[0] = byte(ipv6.ICMPTypeNeighborAdvertisement)
 	if router {
@@ -286,7 +313,12 @@ func ICMP6NeighborAdvertisementMarshal(router bool, solicited bool, override boo
 
 type ICMP6NeighborSolicitation []byte
 
-func (p ICMP6NeighborSolicitation) IsValid() bool         { return len(p) >= 24 }
+func (p ICMP6NeighborSolicitation) IsValid() error {
+	if len(p) >= 24 {
+		return nil
+	}
+	return fmt.Errorf("icmp NS header too short len=%d: %w", len(p), ErrFrameLen)
+}
 func (p ICMP6NeighborSolicitation) Type() uint8           { return uint8(p[0]) }
 func (p ICMP6NeighborSolicitation) Code() byte            { return p[1] }
 func (p ICMP6NeighborSolicitation) Checksum() int         { return int(binary.BigEndian.Uint16(p[2:4])) }
@@ -327,7 +359,12 @@ func ICMP6NeighborSolicitationMarshal(targetAddr net.IP, sourceLLA net.HardwareA
 
 type ICMP6Redirect []byte
 
-func (p ICMP6Redirect) IsValid() bool         { return len(p) >= 40 }
+func (p ICMP6Redirect) IsValid() error {
+	if len(p) >= 40 {
+		return nil
+	}
+	return fmt.Errorf("icmp redirect header too short len=%d: %w", len(p), ErrFrameLen)
+}
 func (p ICMP6Redirect) Type() uint8           { return uint8(p[0]) }
 func (p ICMP6Redirect) Code() byte            { return p[1] }
 func (p ICMP6Redirect) Checksum() int         { return int(binary.BigEndian.Uint16(p[2:4])) }
@@ -342,4 +379,117 @@ func (p ICMP6Redirect) TargetLinkLayerAddr() net.HardwareAddr {
 }
 func (p ICMP6Redirect) String() string {
 	return fmt.Sprintf("type=na code=%d targetIP=%s targetMAC=%s dstIP=%s", p.Code(), p.TargetAddress(), p.TargetLinkLayerAddr(), p.DstAddress())
+}
+
+// ICMP4SendEchoRequest transmit an icmp echo request
+// Do not wait for response
+func (h *Session) ICMP4SendEchoRequest(srcAddr Addr, dstAddr Addr, id uint16, seq uint16) error {
+	if srcAddr.IP.To4() == nil || dstAddr.IP.To4() == nil {
+		return ErrInvalidIP
+	}
+	icmpMessage := icmp.Message{
+		Type: ipv4.ICMPTypeEcho,
+		Code: 0,
+		Body: &icmp.Echo{
+			ID:   int(id),
+			Seq:  int(seq),
+			Data: []byte("HELLO-R-U-THERE"),
+		},
+	}
+
+	p, err := icmpMessage.Marshal(nil)
+	if err != nil {
+		return err
+	}
+
+	if Debug {
+		fastlog.NewLine(module, "send echo4 request").IP("srcIP", srcAddr.IP).IP("dstIP", dstAddr.IP).Struct(ICMPEcho(p)).Write()
+	}
+	return h.icmp4SendPacket(srcAddr, dstAddr, p)
+}
+
+func (h *Session) icmp4SendPacket(srcAddr Addr, dstAddr Addr, p ICMP) (err error) {
+	buf := EtherBufferPool.Get().(*[EthMaxSize]byte)
+	defer EtherBufferPool.Put(buf)
+	ether := Ether(buf[:])
+	ether = EtherMarshalBinary(ether, syscall.ETH_P_IP, h.NICInfo.HostMAC, dstAddr.MAC)
+	ip4 := IP4MarshalBinary(ether.Payload(), 50, srcAddr.IP, dstAddr.IP)
+	if ip4, err = ip4.AppendPayload(p, syscall.IPPROTO_ICMP); err != nil {
+		return err
+	}
+	if ether, err = ether.SetPayload(ip4); err != nil {
+		return err
+	}
+	if _, err := h.Conn.WriteTo(ether, &dstAddr); err != nil {
+		fmt.Println("icmp4 : error sending packet ", dstAddr, err)
+		return err
+	}
+	return nil
+}
+
+// ICMP6SendEchoRequest transmit an icmp6 echo request and do not wait for response
+func (h *Session) ICMP6SendEchoRequest(srcAddr Addr, dstAddr Addr, id uint16, seq uint16) error {
+	if !IsIP6(srcAddr.IP) || !IsIP6(dstAddr.IP) {
+		return ErrInvalidIP
+	}
+	icmpMessage := icmp.Message{
+		Type: ipv6.ICMPTypeEchoRequest,
+		Code: 0,
+		Body: &icmp.Echo{
+			ID:   int(id),
+			Seq:  int(seq),
+			Data: []byte("HELLO-R-U-THERE"),
+		},
+	}
+
+	p, err := icmpMessage.Marshal(nil)
+	if err != nil {
+		return err
+	}
+
+	if Debug {
+		fastlog.NewLine(module, "send echo6 request").IP("srcIP", srcAddr.IP).IP("dstIP", dstAddr.IP).Struct(ICMPEcho(p)).Write()
+	}
+	return h.icmp6SendPacket(srcAddr, dstAddr, p)
+}
+
+func (h *Session) icmp6SendPacket(srcAddr Addr, dstAddr Addr, b []byte) error {
+	buf := EtherBufferPool.Get().(*[EthMaxSize]byte)
+	defer EtherBufferPool.Put(buf)
+	ether := Ether(buf[:])
+
+	// All Neighbor Discovery packets must use link-local addresses (FE80::/64)
+	// and a hop limit of 255. Linux discards ND messages with hop limits different than 255.
+	hopLimit := uint8(64)
+	if dstAddr.IP.IsLinkLocalUnicast() || dstAddr.IP.IsLinkLocalMulticast() {
+		hopLimit = 255
+	}
+
+	ether = EtherMarshalBinary(ether, syscall.ETH_P_IPV6, h.NICInfo.HostMAC, dstAddr.MAC)
+	ip6 := IP6MarshalBinary(ether.Payload(), hopLimit, srcAddr.IP, dstAddr.IP)
+	ip6, _ = ip6.AppendPayload(b, syscall.IPPROTO_ICMPV6)
+	ether, _ = ether.SetPayload(ip6)
+
+	// Calculate checksum of the pseudo header
+	// The ICMPv6 checksum takes into account a pseudoheader of 40 bytes, which is a derivative of the real IPv6 header
+	// which is composed as follows (in order):
+	//   - 16 bytes for the source address
+	//   - 16 bytes for the destination address
+	//   - 4 bytes high endian payload length (the same value as in the IPv6 header)
+	//   - 3 bytes zero
+	//   - 1 byte nextheader (so, 58 decimal)
+	psh := make([]byte, 40+len(b))
+	copy(psh[0:16], ip6.Src())
+	copy(psh[16:32], ip6.Dst())
+	binary.BigEndian.PutUint32(psh[32:36], uint32(len(b)))
+	psh[39] = 58
+	copy(psh[40:], b)
+	ICMP(ip6.Payload()).SetChecksum(Checksum(psh))
+
+	if _, err := h.Conn.WriteTo(ether, &dstAddr); err != nil {
+		fmt.Println("icmp6 : failed to write ", err)
+		return err
+	}
+
+	return nil
 }

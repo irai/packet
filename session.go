@@ -371,11 +371,25 @@ func (h *Session) purge(now time.Time) error {
 			for _, addr := range probe {
 				if ip := addr.IP.To4(); ip != nil {
 					if err := h.ARPRequest(addr.IP); err != nil {
-						fastlog.NewLine(module, "failed to probe ipv4").Error(err).Write()
+						fastlog.NewLine(module, "failed to probe ipv4").IP("ip", addr.IP).Error(err).Write()
 					}
 				} else {
-					fastlog.NewLine(module, "failed to probe ipv6 not implemented").Write()
-					// h.ICMP6Handler.CheckAddr(addr)
+					if h.NICInfo.HostLLA.IP != nil { // in case host does not have IPv6 - this should never happen
+						fastlog.NewLine(module, "failed to probe ipv6 missing host ipv6").IP("ip", h.NICInfo.HostLLA.IP).Write()
+						continue
+					}
+					srcAddr := Addr{MAC: h.NICInfo.HostMAC, IP: h.NICInfo.HostLLA.IP}
+					if addr.IP.IsLinkLocalUnicast() {
+						// Use Neigbour solicitation if link local address as NS almost always result in a response from host if online unless
+						// host is on battery saving mode.
+						if err := h.ICMP6SendNeighbourSolicitation(srcAddr, IPv6SolicitedNode(addr.IP), addr.IP); err != nil {
+							fastlog.NewLine(module, "failed to probe ipv6 LLA").IP("ip", addr.IP).Error(err).Write()
+						}
+						return
+					}
+					if err := h.ICMP6SendEchoRequest(srcAddr, addr, uint16(now.Nanosecond()), 0); err != nil {
+						fastlog.NewLine(module, "failed to probe ipv6").IP("ip", addr.IP).Error(err).Write()
+					}
 				}
 			}
 		}()

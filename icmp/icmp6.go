@@ -1,11 +1,9 @@
 package icmp
 
 import (
-	"encoding/binary"
 	"fmt"
 	"net"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/irai/packet"
@@ -122,7 +120,7 @@ func (h *Handler6) Close() error {
 
 // Start prepares to accept packets
 func (h *Handler6) Start() error {
-	if err := h.SendRouterSolicitation(); err != nil {
+	if err := h.session.ICMP6SendRouterSolicitation(); err != nil {
 		return err
 	}
 	if err := ExecPing(packet.IP6AllNodesMulticast.String() + "%" + h.session.NICInfo.IFI.Name); err != nil { // ping with external cmd tool
@@ -142,13 +140,13 @@ func (h *Handler6) PingAll() error {
 		return packet.ErrInvalidIP6LLA
 	}
 	fmt.Println("icmp6 : ping all")
-	return h.SendEchoRequest(packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostLLA.IP}, packet.IP6AllNodesAddr, 99, 1)
+	return h.session.ICMP6SendEchoRequest(packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostLLA.IP}, packet.IP6AllNodesAddr, 99, 1)
 }
 
 // MinuteTicker implements packet processor interface
 // Send echo request to all nodes
 func (h *Handler6) MinuteTicker(now time.Time) error {
-	return h.SendEchoRequest(packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostLLA.IP}, packet.IP6AllNodesAddr, 199, 1)
+	return h.session.ICMP6SendEchoRequest(packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostLLA.IP}, packet.IP6AllNodesAddr, 199, 1)
 }
 
 // HuntStage implements PacketProcessor interface
@@ -161,7 +159,7 @@ func (h *Handler6) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
 	// Neigbour solicitation almost always result in a response from host if online unless
 	// host is on battery saving mode
 	if addr.IP.IsLinkLocalUnicast() {
-		if err := h.SendNeighbourSolicitation(srcAddr, packet.IPv6SolicitedNode(addr.IP), addr.IP); err != nil {
+		if err := h.session.ICMP6SendNeighbourSolicitation(srcAddr, packet.IPv6SolicitedNode(addr.IP), addr.IP); err != nil {
 			fmt.Printf("icmp6 : error checking address %s error=\"%s\"", addr, err)
 		}
 		return packet.StageNoChange, nil
@@ -175,47 +173,6 @@ func (h *Handler6) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
 	return packet.StageNormal, nil
 }
 
-func (h *Handler6) sendPacket(srcAddr packet.Addr, dstAddr packet.Addr, b []byte) error {
-	buf := packet.EtherBufferPool.Get().(*[packet.EthMaxSize]byte)
-	defer packet.EtherBufferPool.Put(buf)
-	ether := packet.Ether(buf[:])
-
-	// All Neighbor Discovery packets must use link-local addresses (FE80::/64)
-	// and a hop limit of 255. Linux discards ND messages with hop limits different than 255.
-	hopLimit := uint8(64)
-	if dstAddr.IP.IsLinkLocalUnicast() || dstAddr.IP.IsLinkLocalMulticast() {
-		hopLimit = 255
-	}
-
-	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IPV6, h.session.NICInfo.HostMAC, dstAddr.MAC)
-	ip6 := packet.IP6MarshalBinary(ether.Payload(), hopLimit, srcAddr.IP, dstAddr.IP)
-	ip6, _ = ip6.AppendPayload(b, syscall.IPPROTO_ICMPV6)
-	ether, _ = ether.SetPayload(ip6)
-
-	// Calculate checksum of the pseudo header
-	// The ICMPv6 checksum takes into account a pseudoheader of 40 bytes, which is a derivative of the real IPv6 header
-	// which is composed as follows (in order):
-	//   - 16 bytes for the source address
-	//   - 16 bytes for the destination address
-	//   - 4 bytes high endian payload length (the same value as in the IPv6 header)
-	//   - 3 bytes zero
-	//   - 1 byte nextheader (so, 58 decimal)
-	psh := make([]byte, 40+len(b))
-	copy(psh[0:16], ip6.Src())
-	copy(psh[16:32], ip6.Dst())
-	binary.BigEndian.PutUint32(psh[32:36], uint32(len(b)))
-	psh[39] = 58
-	copy(psh[40:], b)
-	ICMP(ip6.Payload()).SetChecksum(packet.Checksum(psh))
-
-	if _, err := h.session.Conn.WriteTo(ether, &dstAddr); err != nil {
-		fmt.Println("icmp6 : failed to write ", err)
-		return err
-	}
-
-	return nil
-}
-
 var repeat int = -1
 
 // ProcessPacket handles icmp6 packets
@@ -223,11 +180,11 @@ func (h *Handler6) ProcessPacket(host *packet.Host, p []byte, header []byte) (re
 
 	ether := packet.Ether(p)
 	ip6Frame := packet.IP6(ether.Payload())
-	icmp6Frame := ICMP(header)
+	icmp6Frame := packet.ICMP(header)
 
-	if !icmp6Frame.IsValid() {
-		fastlog.NewLine(module6, "error invalid icmp frame").Struct(ether).Int("len", len(header)).ByteArray("frame", header).Write()
-		return packet.Result{}, errParseMessage
+	if err := icmp6Frame.IsValid(); err != nil {
+		fastlog.NewLine(module6, "error invalid icmp frame").ByteArray("frame", header).Error(err).Write()
+		return packet.Result{}, err
 	}
 
 	t := ipv6.ICMPType(icmp6Frame.Type())
@@ -237,10 +194,10 @@ func (h *Handler6) ProcessPacket(host *packet.Host, p []byte, header []byte) (re
 
 	switch t {
 	case ipv6.ICMPTypeNeighborAdvertisement: // 0x88
-		frame := ICMP6NeighborAdvertisement(icmp6Frame)
-		if !frame.IsValid() {
-			fmt.Println("icmp6 : invalid NS msg")
-			return packet.Result{}, packet.ErrParseFrame
+		frame := packet.ICMP6NeighborAdvertisement(icmp6Frame)
+		if err := frame.IsValid(); err != nil {
+			fmt.Println("icmp6 : invalid NS msg", err)
+			return packet.Result{}, err
 		}
 		if Debug {
 			fastlog.NewLine("icmp6", "neighbor advertisement").IP("ip", ip6Frame.Src()).Struct(frame).Write()
@@ -263,10 +220,9 @@ func (h *Handler6) ProcessPacket(host *packet.Host, p []byte, header []byte) (re
 		return result, nil
 
 	case ipv6.ICMPTypeNeighborSolicitation: // 0x87
-		frame := ICMP6NeighborSolicitation(icmp6Frame)
-		if !frame.IsValid() {
-			fmt.Println("icmp6 : invalid NS msg")
-			return packet.Result{}, packet.ErrParseFrame
+		frame := packet.ICMP6NeighborSolicitation(icmp6Frame)
+		if err := frame.IsValid(); err != nil {
+			return packet.Result{}, err
 		}
 		if Debug {
 			fastlog.NewLine("icmp6", "neighbor solicitation").IP("ip", ip6Frame.Src()).Struct(frame).Write()
@@ -296,15 +252,14 @@ func (h *Handler6) ProcessPacket(host *packet.Host, p []byte, header []byte) (re
 		if frame.TargetAddress().IsGlobalUnicast() {
 			srcAddr := packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostLLA.IP}
 			dstAddr := packet.Addr{MAC: ether.Dst(), IP: ip6Frame.Dst()}
-			h.SendNeighbourSolicitation(srcAddr, dstAddr, frame.TargetAddress())
+			h.session.ICMP6SendNeighbourSolicitation(srcAddr, dstAddr, frame.TargetAddress())
 		}
 		return packet.Result{}, nil
 
 	case ipv6.ICMPTypeRouterAdvertisement: // 0x86
-		frame := ICMP6RouterAdvertisement(icmp6Frame)
-		if !frame.IsValid() {
-			fmt.Println("icmp6 : invalid icmp6 ra msg")
-			return packet.Result{}, packet.ErrParseFrame
+		frame := packet.ICMP6RouterAdvertisement(icmp6Frame)
+		if err := frame.IsValid(); err != nil {
+			return packet.Result{}, err
 		}
 
 		// wakeup all pending spoof goroutines
@@ -332,7 +287,7 @@ func (h *Handler6) ProcessPacket(host *packet.Host, p []byte, header []byte) (re
 		}
 
 		mac := options.SourceLLA.MAC
-		if mac == nil || len(mac) != ethAddrLen {
+		if mac == nil || len(mac) != packet.EthAddrLen {
 			mac = ether.Src()
 			fmt.Printf("icmp6 : options missing sourceLLA options=%v\n", options)
 		}
@@ -365,7 +320,7 @@ func (h *Handler6) ProcessPacket(host *packet.Host, p []byte, header []byte) (re
 		return result, nil
 
 	case ipv6.ICMPTypeRouterSolicitation:
-		frame := ICMP6RouterSolicitation(icmp6Frame)
+		frame := packet.ICMP6RouterSolicitation(icmp6Frame)
 		if err := frame.IsValid(); err != nil {
 			return packet.Result{}, err
 		}
@@ -380,9 +335,9 @@ func (h *Handler6) ProcessPacket(host *packet.Host, p []byte, header []byte) (re
 		//    - the all-routers multicast address (FF02::2) with the link-local scope.
 		return packet.Result{}, nil
 	case ipv6.ICMPTypeEchoReply: // 0x81
-		echo := ICMPEcho(icmp6Frame)
-		if !echo.IsValid() {
-			return packet.Result{}, fmt.Errorf("invalid icmp echo msg len=%d", len(icmp6Frame))
+		echo := packet.ICMPEcho(icmp6Frame)
+		if err := echo.IsValid(); err != nil {
+			return packet.Result{}, err
 		}
 		if Debug {
 			fmt.Printf("icmp6 : echo reply from ip=%s %s\n", ip6Frame.Src(), echo)
@@ -391,7 +346,7 @@ func (h *Handler6) ProcessPacket(host *packet.Host, p []byte, header []byte) (re
 		return packet.Result{}, nil
 
 	case ipv6.ICMPTypeEchoRequest: // 0x80
-		echo := ICMPEcho(icmp6Frame)
+		echo := packet.ICMPEcho(icmp6Frame)
 		if Debug {
 			// fmt.Printf("icmp6 : echo request from ip=%s %s\n", ip6Frame.Src(), echo)
 			fastlog.NewLine(module6, "echo recvd").IP("srcIP", ip6Frame.Src()).IP("dstIP", ip6Frame.Dst()).Struct(echo).Write()
@@ -411,9 +366,9 @@ func (h *Handler6) ProcessPacket(host *packet.Host, p []byte, header []byte) (re
 		return packet.Result{}, nil
 
 	case ipv6.ICMPTypeRedirect:
-		redirect := ICMP6Redirect(icmp6Frame)
-		if !redirect.IsValid() {
-			return packet.Result{}, fmt.Errorf("invalid icmp redirect msg len=%d", len(redirect))
+		redirect := packet.ICMP6Redirect(icmp6Frame)
+		if err := redirect.IsValid(); err != nil {
+			return packet.Result{}, err
 		}
 		// fmt.Printf("icmp6 : redirect from ip=%s %s \n", ip6Frame.Src(), redirect)
 		fastlog.NewLine(module6, "redirect recv").IP("fromIP", ip6Frame.Src()).Stringer(redirect).Write()
@@ -428,7 +383,7 @@ func (h *Handler6) ProcessPacket(host *packet.Host, p []byte, header []byte) (re
 
 	default:
 		fmt.Printf("icmp6 : type not implemented from ip=%s type=%v\n", ip6Frame.Src(), t)
-		return packet.Result{}, fmt.Errorf("unrecognized icmp6 type=%d: %w", t, errParseMessage)
+		return packet.Result{}, fmt.Errorf("unrecognized icmp6 type=%d: %w", t, packet.ErrParseFrame)
 	}
 
 	return packet.Result{}, nil

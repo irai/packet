@@ -19,6 +19,9 @@ const (
 	// Maximum ethernet II frame size is 1518 = 14 header + 1500 data + 8 802.ad (2x802.1Q tags)
 	// see: https://en.wikipedia.org/wiki/Ethernet_frame#Ethernet_II
 	EthMaxSize = 14 + 1500 + 8
+
+	// Length of a link-layer address for Ethernet networks.
+	EthAddrLen = 6
 )
 
 // EtherBufferPool implemts a simple buffer pool for Ethernet packets

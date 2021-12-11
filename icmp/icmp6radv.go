@@ -13,7 +13,7 @@ import (
 var (
 	DNS6Cloudflare1 = net.IP{0x26, 0x06, 0x47, 0x00, 0x47, 0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0x11, 0x11}
 	DNS6Cloudflare2 = net.IP{0x26, 0x06, 0x47, 0x00, 0x47, 0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0x10, 0x01}
-	RDNSSCLoudflare = &RecursiveDNSServer{
+	RDNSSCLoudflare = &packet.RecursiveDNSServer{
 		Lifetime: time.Minute * 10,
 		Servers:  []net.IP{DNS6Cloudflare1, DNS6Cloudflare2},
 	}
@@ -25,7 +25,7 @@ var (
 	// home: 2001:4479:1901:a001
 	prefix = net.IP{0x20, 0x01, 0x44, 0x79, 0x19, 0x01, 0xa0, 0x01, 0, 0, 0, 0, 0, 0, 0, 0}
 
-	MyHomePrefix = []PrefixInformation{
+	MyHomePrefix = []packet.PrefixInformation{
 		{
 			PrefixLength:                   64,
 			Prefix:                         prefix,
@@ -48,9 +48,9 @@ type Router struct {
 	RetransTimer    int //
 	CurHopLimit     uint8
 	DefaultLifetime time.Duration // A value of zero means the router is not to be used as a default router
-	Prefixes        []PrefixInformation
-	RDNSS           *RecursiveDNSServer // Pointer to facilitate comparison
-	Options         NewOptions
+	Prefixes        []packet.PrefixInformation
+	RDNSS           *packet.RecursiveDNSServer // Pointer to facilitate comparison
+	Options         packet.NewOptions
 }
 
 func (r *Router) String() string {
@@ -91,11 +91,11 @@ type RADVS struct {
 	stopChannel chan bool
 }
 
-func (h *Handler6) StartRADVS(managed bool, other bool, prefixes []PrefixInformation, rdnss *RecursiveDNSServer) (*RADVS, error) {
+func (h *Handler6) StartRADVS(managed bool, other bool, prefixes []packet.PrefixInformation, rdnss *packet.RecursiveDNSServer) (*RADVS, error) {
 	return h.startRADVS(managed, other, prefixes, rdnss)
 }
 
-func (h *Handler6) startRADVS(managed bool, other bool, prefixes []PrefixInformation, rdnss *RecursiveDNSServer) (radvs *RADVS, err error) {
+func (h *Handler6) startRADVS(managed bool, other bool, prefixes []packet.PrefixInformation, rdnss *packet.RecursiveDNSServer) (radvs *RADVS, err error) {
 	radvs = &RADVS{stopChannel: make(chan bool, 1)}
 	radvs.Router, _ = h.findOrCreateRouter(h.session.NICInfo.HostMAC, h.session.NICInfo.HostLLA.IP)
 	radvs.Router.enableRADVS = true
@@ -120,11 +120,11 @@ func (r *RADVS) Stop() {
 }
 
 func (r *RADVS) SendRA() error {
-	return r.h.SendRouterAdvertisement(*r.Router, packet.IP6AllNodesAddr)
+	return r.h.session.ICMP6SendRouterAdvertisement(r.Router.Prefixes, r.Router.RDNSS, packet.IP6AllNodesAddr)
 }
 
 func (r *RADVS) sendAdvertistementLoop() {
-	r.h.SendRouterAdvertisement(*r.Router, packet.IP6AllNodesAddr)
+	r.h.session.ICMP6SendRouterAdvertisement(r.Router.Prefixes, r.Router.RDNSS, packet.IP6AllNodesAddr)
 	ticker := time.NewTicker(time.Duration(int64(time.Millisecond) * int64(r.Router.RetransTimer))).C
 	for {
 		select {
@@ -132,7 +132,7 @@ func (r *RADVS) sendAdvertistementLoop() {
 			return
 
 		case <-ticker:
-			if err := r.h.SendRouterAdvertisement(*r.Router, packet.IP6AllNodesAddr); err != nil {
+			if err := r.h.session.ICMP6SendRouterAdvertisement(r.Router.Prefixes, r.Router.RDNSS, packet.IP6AllNodesAddr); err != nil {
 				fmt.Printf("icmp6 : error in send ra: %s", err)
 			}
 		}

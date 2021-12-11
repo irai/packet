@@ -5,9 +5,6 @@ import (
 	"time"
 
 	"github.com/irai/packet"
-	"github.com/irai/packet/fastlog"
-	"golang.org/x/net/icmp"
-	"golang.org/x/net/ipv6"
 )
 
 type icmpEntry struct {
@@ -23,32 +20,6 @@ var icmpTable = struct {
 }{
 	table: make(map[uint16]*icmpEntry),
 	id:    1,
-}
-
-// SendEchoRequest transmit an icmp6 echo request and do not wait for response
-func (h *Handler6) SendEchoRequest(srcAddr packet.Addr, dstAddr packet.Addr, id uint16, seq uint16) error {
-	if !packet.IsIP6(srcAddr.IP) || !packet.IsIP6(dstAddr.IP) {
-		return packet.ErrInvalidIP
-	}
-	icmpMessage := icmp.Message{
-		Type: ipv6.ICMPTypeEchoRequest,
-		Code: 0,
-		Body: &icmp.Echo{
-			ID:   int(id),
-			Seq:  int(seq),
-			Data: []byte("HELLO-R-U-THERE"),
-		},
-	}
-
-	p, err := icmpMessage.Marshal(nil)
-	if err != nil {
-		return err
-	}
-
-	if Debug {
-		fastlog.NewLine(module6, "send echo6 request").IP("srcIP", srcAddr.IP).IP("dstIP", dstAddr.IP).Struct(ICMPEcho(p)).Write()
-	}
-	return h.sendPacket(srcAddr, dstAddr, p)
 }
 
 func echoNotify(id uint16) {
@@ -80,7 +51,7 @@ func (h *Handler6) Ping(srcAddr packet.Addr, dstAddr packet.Addr, timeout time.D
 	icmpTable.table[id] = &msg
 	icmpTable.Unlock()
 
-	if err = h.SendEchoRequest(srcAddr, dstAddr, id, seq); err != nil {
+	if err = h.session.ICMP6SendEchoRequest(srcAddr, dstAddr, id, seq); err != nil {
 		return err
 	}
 

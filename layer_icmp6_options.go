@@ -1,4 +1,4 @@
-package icmp
+package packet
 
 // File originally copied from http://github.com/mdlayher/ndp/option.go
 
@@ -13,7 +13,6 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/irai/packet"
 	"github.com/irai/packet/fastlog"
 	"gitlab.com/golang-commonmark/puny"
 )
@@ -23,8 +22,6 @@ import (
 const Infinity = time.Duration(0xffffffff) * time.Second
 
 const (
-	// Length of a link-layer address for Ethernet networks.
-	ethAddrLen = 6
 
 	// The assumed NDP option length (in units of 8 bytes) for fixed length options.
 	llaOptLen = 1
@@ -82,7 +79,7 @@ func (lla *LinkLayerAddress) marshal() ([]byte, error) {
 		return nil, fmt.Errorf("ndp: invalid link-layer address direction: %d", d)
 	}
 
-	if len(lla.MAC) != ethAddrLen {
+	if len(lla.MAC) != EthAddrLen {
 		return nil, fmt.Errorf("ndp: invalid link-layer address: %q", lla.MAC.String())
 	}
 
@@ -107,7 +104,7 @@ func (lla *LinkLayerAddress) unmarshal(b []byte) error {
 	}
 
 	lla.Direction = d
-	lla.MAC = packet.CopyMAC(b[2:])
+	lla.MAC = CopyMAC(b[2:])
 
 	return nil
 }
@@ -219,7 +216,7 @@ func (pi *PrefixInformation) unmarshal(b []byte) error {
 	pi.ValidLifetime = time.Duration(binary.BigEndian.Uint32(value[2:6])) * time.Second
 	pi.PreferredLifetime = time.Duration(binary.BigEndian.Uint32(value[6:10])) * time.Second
 	// Skip reserved area.
-	addr := packet.CopyIP(net.IP(value[14:30]))
+	addr := CopyIP(net.IP(value[14:30]))
 	if err := checkIPv6(addr); err != nil {
 		return err
 	}
@@ -345,7 +342,7 @@ func (ri *RouteInformation) unmarshal(b []byte) error {
 	if err := checkPreference(ri.Preference); err != nil {
 		return err
 	}
-	ri.Prefix = packet.CopyBytes(b[8 : 8+(pl/8)]) // copy bytes up to prefix len bits
+	ri.Prefix = CopyBytes(b[8 : 8+(pl/8)]) // copy bytes up to prefix len bits
 
 	return nil
 }
@@ -438,7 +435,7 @@ func (r *RecursiveDNSServer) unmarshal(b []byte) error {
 
 		// The RawOption already made a copy of this data, so convert it
 		// directly to an IPv6 address with no further copying needed.
-		r.Servers = append(r.Servers, packet.CopyIP(value[start:end]))
+		r.Servers = append(r.Servers, CopyIP(value[start:end]))
 	}
 
 	return nil
@@ -708,7 +705,7 @@ func newParseOptions(b []byte) (NewOptions, error) {
 			}
 		case optMTU:
 			if err := options.MTU.unmarshal(b[i : i+l]); err != nil {
-				fastlog.NewLine(module6, "ignore invalid MTU option").Error(err).ByteArray("options", b).Write()
+				fastlog.NewLine(module, "ignore invalid MTU option").Error(err).ByteArray("options", b).Write()
 			}
 		case optPrefixInformation:
 			p := PrefixInformation{}
@@ -722,15 +719,15 @@ func newParseOptions(b []byte) (NewOptions, error) {
 			}
 		case optRouteInformation:
 			if err := options.RouteInformation.unmarshal(b[i : i+l]); err != nil {
-				fastlog.NewLine(module6, "ignore invalid route information option").Error(err).ByteArray("options", b).Write()
+				fastlog.NewLine(module, "ignore invalid route information option").Error(err).ByteArray("options", b).Write()
 			}
 		case optRDNSS:
 			if err := options.RDNSS.unmarshal(b[i : i+l]); err != nil {
-				fastlog.NewLine(module6, "ignore invalid RDNSS option").Error(err).ByteArray("options", b).Write()
+				fastlog.NewLine(module, "ignore invalid RDNSS option").Error(err).ByteArray("options", b).Write()
 			}
 		case optDNSSL:
 			if err := options.DNSSearchList.unmarshal(b[i : i+l]); err != nil {
-				fastlog.NewLine(module6, "ignore invalid DNSSearchList option").Error(err).ByteArray("options", b).Write()
+				fastlog.NewLine(module, "ignore invalid DNSSearchList option").Error(err).ByteArray("options", b).Write()
 			}
 		default:
 			fmt.Println("icmp6 : invalid option - ignoring ", t)

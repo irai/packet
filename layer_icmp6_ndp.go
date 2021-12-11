@@ -1,4 +1,4 @@
-package icmp
+package packet
 
 import (
 	"encoding/binary"
@@ -7,7 +7,6 @@ import (
 	"net"
 	"time"
 
-	"github.com/irai/packet"
 	"github.com/irai/packet/fastlog"
 	"golang.org/x/net/ipv6"
 )
@@ -207,15 +206,6 @@ func (rs *RouterSolicitation) unmarshal(b []byte) error {
 }
 ***/
 
-// checkIPv6 verifies that ip is an IPv6 address.
-func checkIPv6(ip net.IP) error {
-	if ip.To16() == nil || ip.To4() != nil {
-		return fmt.Errorf("ndp: invalid IPv6 address: %q", ip.String())
-	}
-
-	return nil
-}
-
 // checkPreference checks the validity of a Preference value.
 func checkPreference(prf Preference) error {
 	switch prf {
@@ -228,22 +218,21 @@ func checkPreference(prf Preference) error {
 	}
 }
 
-func (h *Handler6) SendRouterAdvertisement(router Router, dstAddr packet.Addr) error {
-	if len(router.Prefixes) == 0 {
+func (h *Session) ICMP6SendRouterAdvertisement(prefixes []PrefixInformation, rdnss *RecursiveDNSServer, dstAddr Addr) error {
+	if len(prefixes) == 0 {
 		return nil
 	}
-	fastlog.NewLine(module6, "send router advertisement").Struct(router.Addr).Struct(dstAddr).Write()
+	fastlog.NewLine(module, "send router advertisement").Struct(dstAddr).Write()
 
 	var options []Option
-
-	if router.RDNSS != nil {
+	if rdnss != nil {
 		options = append(options, &RecursiveDNSServer{
-			Lifetime: router.RDNSS.Lifetime, // 30 * time.Minute,
-			Servers:  router.RDNSS.Servers,
+			Lifetime: rdnss.Lifetime, // 30 * time.Minute,
+			Servers:  rdnss.Servers,
 		})
 	}
 
-	for _, prefix := range router.Prefixes {
+	for _, prefix := range prefixes {
 		options = append(options, &PrefixInformation{
 			PrefixLength:                   uint8(prefix.PrefixLength),
 			OnLink:                         true,
@@ -261,10 +250,10 @@ func (h *Handler6) SendRouterAdvertisement(router Router, dstAddr packet.Addr) e
 			// TODO: single source of truth for search domain name
 			DomainNames: []string{"lan"},
 		},
-		NewMTU(uint32(h.session.NICInfo.IFI.MTU)),
+		NewMTU(uint32(h.NICInfo.IFI.MTU)),
 		&LinkLayerAddress{
 			Direction: Source,
-			MAC:       h.session.NICInfo.HostMAC,
+			MAC:       h.NICInfo.HostMAC,
 		},
 	)
 
@@ -279,15 +268,15 @@ func (h *Handler6) SendRouterAdvertisement(router Router, dstAddr packet.Addr) e
 		return err
 	}
 
-	return h.sendPacket(packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostLLA.IP}, dstAddr, mb)
+	return h.icmp6SendPacket(Addr{MAC: h.NICInfo.HostMAC, IP: h.NICInfo.HostLLA.IP}, dstAddr, mb)
 }
 
-func (h *Handler6) SendRouterSolicitation() error {
+func (h *Session) ICMP6SendRouterSolicitation() error {
 	m := &RouterSolicitation{
 		Options: []Option{
 			&LinkLayerAddress{
 				Direction: Source,
-				MAC:       h.session.NICInfo.HostMAC,
+				MAC:       h.NICInfo.HostMAC,
 			},
 		},
 	}
@@ -296,19 +285,19 @@ func (h *Handler6) SendRouterSolicitation() error {
 		return err
 	}
 
-	return h.sendPacket(packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostLLA.IP}, packet.IP6AllRoutersAddr, mb)
+	return h.icmp6SendPacket(Addr{MAC: h.NICInfo.HostMAC, IP: h.NICInfo.HostLLA.IP}, IP6AllRoutersAddr, mb)
 }
 
-func (h *Handler6) SendNeighborAdvertisement(srcAddr packet.Addr, dstAddr packet.Addr, targetAddr packet.Addr) error {
+func (h *Session) ICMP6SendNeighborAdvertisement(srcAddr Addr, dstAddr Addr, targetAddr Addr) error {
 	p := ICMP6NeighborAdvertisementMarshal(false, false, true, targetAddr)
 
-	return h.sendPacket(srcAddr, dstAddr, p)
+	return h.icmp6SendPacket(srcAddr, dstAddr, p)
 }
 
-// SendNeighbourSolicitation send an ICMP6 NS packet.
-func (h *Handler6) SendNeighbourSolicitation(srcAddr packet.Addr, dstAddr packet.Addr, targetIP net.IP) error {
-	p, _ := ICMP6NeighborSolicitationMarshal(targetIP, h.session.NICInfo.HostMAC)
+// SendNeighbourSolicitation send an ICMP6 NS
+func (h *Session) ICMP6SendNeighbourSolicitation(srcAddr Addr, dstAddr Addr, targetIP net.IP) error {
+	p, _ := ICMP6NeighborSolicitationMarshal(targetIP, h.NICInfo.HostMAC)
 
-	fastlog.NewLine(module6, "sending NS src").Struct(srcAddr).Label("dst").Struct(dstAddr).IP("targetip", targetIP).Write()
-	return h.sendPacket(srcAddr, dstAddr, p)
+	fastlog.NewLine(module, "sending NS src").Struct(srcAddr).Label("dst").Struct(dstAddr).IP("targetip", targetIP).Write()
+	return h.icmp6SendPacket(srcAddr, dstAddr, p)
 }

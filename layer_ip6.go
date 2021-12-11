@@ -23,6 +23,15 @@ func (p IP6) IsValid() error {
 	return fmt.Errorf("invalid ipv6 len=%d: %w", len(p), ErrFrameLen)
 }
 
+// checkIPv6 verifies that ip is an IPv6 address.
+func checkIPv6(ip net.IP) error {
+	if ip.To16() == nil || ip.To4() != nil {
+		return fmt.Errorf("ndp: invalid IPv6 address: %q", ip.String())
+	}
+
+	return nil
+}
+
 func (p IP6) Version() int       { return int(p[0]) >> 4 }                                // protocol version
 func (p IP6) TrafficClass() int  { return int(p[0]&0x0f)<<4 | int(p[1])>>4 }              // traffic class
 func (p IP6) FlowLabel() int     { return int(p[1]&0x0f)<<16 | int(p[2])<<8 | int(p[3]) } // flow label

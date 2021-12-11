@@ -8,36 +8,7 @@ import (
 
 	"github.com/irai/packet"
 	"github.com/irai/packet/fastlog"
-	"golang.org/x/net/icmp"
-	"golang.org/x/net/ipv4"
 )
-
-// SendEchoRequest transmit an icmp echo request
-// Do not wait for response
-func (h *Handler4) SendEchoRequest(srcAddr packet.Addr, dstAddr packet.Addr, id uint16, seq uint16) error {
-	if srcAddr.IP.To4() == nil || dstAddr.IP.To4() == nil {
-		return packet.ErrInvalidIP
-	}
-	icmpMessage := icmp.Message{
-		Type: ipv4.ICMPTypeEcho,
-		Code: 0,
-		Body: &icmp.Echo{
-			ID:   int(id),
-			Seq:  int(seq),
-			Data: []byte("HELLO-R-U-THERE"),
-		},
-	}
-
-	p, err := icmpMessage.Marshal(nil)
-	if err != nil {
-		return err
-	}
-
-	if Debug {
-		fastlog.NewLine(module4, "send echo4 request").IP("srcIP", srcAddr.IP).IP("dstIP", dstAddr.IP).Struct(ICMPEcho(p)).Write()
-	}
-	return h.sendPacket(srcAddr, dstAddr, p)
-}
 
 // Ping send a ping request and wait for a reply
 func (h *Handler4) Ping(dstAddr packet.Addr, timeout time.Duration) (err error) {
@@ -57,7 +28,7 @@ func (h *Handler4) ping(srcAddr packet.Addr, dstAddr packet.Addr, timeout time.D
 	icmpTable.table[id] = &msg
 	icmpTable.Unlock()
 
-	if err = h.SendEchoRequest(srcAddr, dstAddr, id, seq); err != nil {
+	if err = h.session.ICMP4SendEchoRequest(srcAddr, dstAddr, id, seq); err != nil {
 		return err
 	}
 

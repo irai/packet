@@ -89,16 +89,15 @@ func (h *Handler4) ProcessPacket(host *packet.Host, p []byte, header []byte) (pa
 
 	ether := packet.Ether(p)
 	ip4Frame := packet.IP4(ether.Payload())
-	icmpFrame := ICMP(header)
+	icmpFrame := packet.ICMP(header)
 
 	switch icmpFrame.Type() {
 	case uint8(ipv4.ICMPTypeEchoReply):
 
 		// ICMPEcho start from icmp frame
-		echo := ICMPEcho(icmpFrame)
-		if !echo.IsValid() {
-			fmt.Println("icmp4: invalid echo reply", icmpFrame, len(icmpFrame))
-			return packet.Result{}, fmt.Errorf("icmp invalid icmp4 packet")
+		echo := packet.ICMPEcho(icmpFrame)
+		if err := echo.IsValid(); err != nil {
+			return packet.Result{}, err
 		}
 		if Debug {
 			fastlog.NewLine(module4, "echo reply recvd").IP("srcIP", ip4Frame.Src()).Struct(echo).Write()
@@ -106,7 +105,7 @@ func (h *Handler4) ProcessPacket(host *packet.Host, p []byte, header []byte) (pa
 		echoNotify(echo.EchoID()) // unblock ping if waiting
 
 	case uint8(ipv4.ICMPTypeEcho):
-		echo := ICMPEcho(icmpFrame)
+		echo := packet.ICMPEcho(icmpFrame)
 		if Debug {
 			fastlog.NewLine(module4, "echo request recvd").IP("srcIP", ip4Frame.Src()).Struct(echo).Write()
 		}
