@@ -290,7 +290,7 @@ func doARP(h *handlers, tokens []string) {
 			fmt.Println("error arp is detached")
 			return
 		}
-		if err := h.arp.ScanNetwork(context.Background(), h.engine.Session().NICInfo.HostIP4); err != nil {
+		if err := h.engine.Session().ARPScan(); err != nil {
 			fmt.Println("failed scan: ", err)
 		}
 	default:

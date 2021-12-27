@@ -164,7 +164,7 @@ func (h *Handler) AttachARP(p arp.ARPHandler) {
 }
 
 func (h *Handler) DetachARP() error {
-	if err := h.ARPHandler.Stop(); err != nil {
+	if err := h.ARPHandler.Close(); err != nil {
 		return err
 	}
 	h.ARPHandler = arp.ARPNOOP{}
@@ -186,7 +186,7 @@ func (h *Handler) AttachICMP6(p icmp.ICMP6Handler) {
 	h.ICMP6Handler = p
 }
 func (h *Handler) DetachICMP6() error {
-	if err := h.ICMP6Handler.Stop(); err != nil {
+	if err := h.ICMP6Handler.Close(); err != nil {
 		return err
 	}
 	h.ICMP6Handler = icmp.ICMP6NOOP{}
@@ -235,8 +235,8 @@ func (h *Handler) startPlugins() error {
 	if err := h.ICMP6Handler.Start(); err != nil {
 		fmt.Println("error: in ICMP6 start:", err)
 	}
-	if err := h.ARPHandler.Start(); err != nil {
-		fmt.Println("error: in ARP start:", err)
+	if err := h.session.ARPScan(); err != nil {
+		fmt.Println("error: in ARP scan:", err)
 	}
 	if err := h.DHCP4Handler.Start(); err != nil {
 		fmt.Println("error: in DHCP4 start:", err)
@@ -257,10 +257,10 @@ func (h *Handler) stopPlugins() error {
 	if err := h.ICMP4Handler.Stop(); err != nil {
 		fmt.Println("error: in ICMP4 stop:", err)
 	}
-	if err := h.ICMP6Handler.Stop(); err != nil {
+	if err := h.ICMP6Handler.Close(); err != nil {
 		fmt.Println("error: in ICMP6 stop:", err)
 	}
-	if err := h.ARPHandler.Stop(); err != nil {
+	if err := h.ARPHandler.Close(); err != nil {
 		fmt.Println("error: in ARP stop:", err)
 	}
 	if err := h.DHCP4Handler.Stop(); err != nil {

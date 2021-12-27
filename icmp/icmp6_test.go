@@ -34,13 +34,14 @@ func Test_ICMP6Redirect(t *testing.T) {
 	tc := setupTestHandler()
 	defer tc.Close()
 
-	ether := packet.Ether(icmp6Redirect)
-	fmt.Println("ether", ether)
-	ip6Frame := packet.IP6(ether.Payload())
-	fmt.Println("ip6", ip6Frame)
-	icmp6Frame := packet.ICMP(ip6Frame.Payload())
-	fmt.Println("icmp6", icmp6Frame)
-	redirect := packet.ICMP6Redirect(icmp6Frame)
+	// ether := packet.Ether(icmp6Redirect)
+	// fmt.Println("ether", ether)
+	frame, err := tc.h.session.Parse(icmp6Redirect)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	redirect := packet.ICMP6Redirect(frame.Payload())
 	if err := redirect.IsValid(); err != nil {
 		t.Fatal(err)
 	}
@@ -55,11 +56,10 @@ func Test_ICMP6Redirect(t *testing.T) {
 		t.Fatal("invalid fields ", redirect)
 	}
 
-	_, err := tc.h.ProcessPacket(nil, ether, ip6Frame.Payload())
+	err = tc.h.Spoof(frame)
 	if err != nil {
 		t.Fatal(err)
 	}
-
 }
 
 // sudo tcpdump -en -vv -XX -t icmp6
@@ -94,7 +94,7 @@ var testicmp6RourterSolicitation = []byte{
 	0x85, 0x00, 0xb6, 0x46, 0x00, 0x00, 0x00, 0x00, // empty payload
 }
 
-func TestHandler_ProcessPacket(t *testing.T) {
+func TestHandler_Spoof(t *testing.T) {
 	tc := setupTestHandler()
 	defer tc.Close()
 
@@ -116,23 +116,30 @@ func TestHandler_ProcessPacket(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ether := packet.Ether(tt.frame)
-			ip6Frame := packet.IP6(ether.Payload())
-			if err := ip6Frame.IsValid(); err != nil {
-				t.Fatal("invalid ip6 frame", err)
+			/*
+				ether := packet.Ether(tt.frame)
+				ip6Frame := packet.IP6(ether.Payload())
+				if err := ip6Frame.IsValid(); err != nil {
+					t.Fatal("invalid ip6 frame", err)
+				}
+			*/
+			frame, err := tc.h.session.Parse(tt.frame)
+			if err != nil {
+				t.Errorf("Handler.ProcessPacket() error = %v", err)
+				return
 			}
 
-			gotResult, err := tc.h.ProcessPacket(nil, ether, ip6Frame.Payload())
+			err = tc.h.Spoof(frame)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Handler.ProcessPacket() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if gotResult.Update != tt.wantResult.Update {
-				t.Errorf("Handler.ProcessPacket() invalid result update=%v, want=%v", gotResult.Update, tt.wantResult.Update)
-			}
-			if !gotResult.SrcAddr.IP.Equal(tt.wantResult.SrcAddr.IP) ||
-				!bytes.Equal(gotResult.SrcAddr.MAC, tt.wantResult.SrcAddr.MAC) {
-				t.Errorf("Handler.ProcessPacket() invalid addr=%v, want=%v", gotResult.SrcAddr, tt.wantResult.SrcAddr)
+			// if gotResult.Update != tt.wantResult.Update {
+			// t.Errorf("Handler.ProcessPacket() invalid result update=%v, want=%v", gotResult.Update, tt.wantResult.Update)
+			// }
+			if !frame.SrcAddr.IP.Equal(tt.wantResult.SrcAddr.IP) ||
+				!bytes.Equal(frame.SrcAddr.MAC, tt.wantResult.SrcAddr.MAC) {
+				t.Errorf("Handler.ProcessPacket() invalid addr=%v, want=%v", frame.SrcAddr, tt.wantResult.SrcAddr)
 				return
 			}
 		})

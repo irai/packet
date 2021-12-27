@@ -28,15 +28,20 @@ type Event struct {
 type ICMP6Handler interface {
 	FindRouter(net.IP) Router
 	PingAll() error
-	packet.PacketProcessor
+	Start() error
+	Close() error
+	Spoof(frame packet.Frame) error
+	StartHunt(packet.Addr) (packet.HuntStage, error)
+	StopHunt(packet.Addr) (packet.HuntStage, error)
+	CheckAddr(packet.Addr) (packet.HuntStage, error)
+	MinuteTicker(time.Time) error
 }
 type ICMP6NOOP struct{}
 
 func (p ICMP6NOOP) Start() error   { return nil }
-func (p ICMP6NOOP) Stop() error    { return nil }
 func (p ICMP6NOOP) PingAll() error { return nil }
-func (p ICMP6NOOP) ProcessPacket(*packet.Host, []byte, []byte) (packet.Result, error) {
-	return packet.Result{}, nil
+func (p ICMP6NOOP) Spoof(packet.Frame) error {
+	return nil
 }
 func (p ICMP6NOOP) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
 	return packet.StageNoChange, nil
@@ -129,12 +134,6 @@ func (h *Handler6) Start() error {
 	return nil
 }
 
-// Stop implements PacketProcessor interface
-func (h *Handler6) Stop() error {
-	h.Close()
-	return nil
-}
-
 func (h *Handler6) PingAll() error {
 	if h.session.NICInfo.HostLLA.IP == nil {
 		return packet.ErrInvalidIP6LLA
@@ -176,20 +175,20 @@ func (h *Handler6) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
 var repeat int = -1
 
 // ProcessPacket handles icmp6 packets
-func (h *Handler6) ProcessPacket(host *packet.Host, p []byte, header []byte) (result packet.Result, err error) {
+func (h *Handler6) Spoof(pkt packet.Frame) (err error) {
 
-	ether := packet.Ether(p)
-	ip6Frame := packet.IP6(ether.Payload())
-	icmp6Frame := packet.ICMP(header)
+	// ether := packet.Ether(p)
+	ip6Frame := pkt.IP6()
+	icmp6Frame := packet.ICMP(pkt.Payload())
 
 	if err := icmp6Frame.IsValid(); err != nil {
-		fastlog.NewLine(module6, "error invalid icmp frame").ByteArray("frame", header).Error(err).Write()
-		return packet.Result{}, err
+		fastlog.NewLine(module6, "error invalid icmp frame").ByteArray("frame", pkt.Payload()).Error(err).Write()
+		return err
 	}
 
 	t := ipv6.ICMPType(icmp6Frame.Type())
 	if Debug && t != ipv6.ICMPTypeRouterAdvertisement {
-		fastlog.NewLine("icmp6", "ether").Struct(ether).Module("icmp6", "ip6").Struct(ip6Frame).Module("icmp6", "icmp").Struct(icmp6Frame).Write()
+		fastlog.NewLine("icmp6", "ether").Struct(pkt.Ether).Module("icmp6", "ip6").Struct(ip6Frame).Module("icmp6", "icmp").Struct(icmp6Frame).Write()
 	}
 
 	switch t {
@@ -197,7 +196,7 @@ func (h *Handler6) ProcessPacket(host *packet.Host, p []byte, header []byte) (re
 		frame := packet.ICMP6NeighborAdvertisement(icmp6Frame)
 		if err := frame.IsValid(); err != nil {
 			fmt.Println("icmp6 : invalid NS msg", err)
-			return packet.Result{}, err
+			return err
 		}
 		if Debug {
 			fastlog.NewLine("icmp6", "neighbor advertisement").IP("ip", ip6Frame.Src()).Struct(frame).Write()
@@ -212,17 +211,16 @@ func (h *Handler6) ProcessPacket(host *packet.Host, p []byte, header []byte) (re
 			fastlog.NewLine(module6, "neighbor advertisement overrid IP").Struct(ip6Frame).Module(module6, "neighbour advertisement").Struct(frame).Write()
 			if frame.TargetLLA() == nil {
 				fastlog.NewLine(module6, "error na override with nil targetLLA").Error(packet.ErrInvalidMAC).Write()
-				return packet.Result{}, packet.ErrInvalidMAC
+				return packet.ErrInvalidMAC
 			}
-			result.Update = true
-			result.SrcAddr = packet.Addr{MAC: frame.TargetLLA(), IP: frame.TargetAddress()} // ok to pass frame addr
+			// result.Update = true
+			// result.SrcAddr = packet.Addr{MAC: frame.TargetLLA(), IP: frame.TargetAddress()
 		}
-		return result, nil
 
 	case ipv6.ICMPTypeNeighborSolicitation: // 0x87
 		frame := packet.ICMP6NeighborSolicitation(icmp6Frame)
 		if err := frame.IsValid(); err != nil {
-			return packet.Result{}, err
+			return err
 		}
 		if Debug {
 			fastlog.NewLine("icmp6", "neighbor solicitation").IP("ip", ip6Frame.Src()).Struct(frame).Write()
@@ -240,26 +238,26 @@ func (h *Handler6) ProcessPacket(host *packet.Host, p []byte, header []byte) (re
 		//
 		if ip6Frame.Src().IsUnspecified() {
 			if Debug {
-				fmt.Printf("icmp6 : dad probe for target=%s srcip=%s srcmac=%s dstip=%s dstmac=%s\n", frame.TargetAddress(), ip6Frame.Src(), ether.Src(), ip6Frame.Dst(), ether.Dst())
+				fmt.Printf("icmp6 : dad probe for target=%s srcip=%s srcmac=%s dstip=%s dstmac=%s\n", frame.TargetAddress(), ip6Frame.Src(), pkt.Ether.Src(), ip6Frame.Dst(), pkt.Ether.Dst())
 			}
-			result.Update = true
-			result.SrcAddr = packet.Addr{MAC: ether.Src(), IP: frame.TargetAddress()} // ok to pass frame addr
-			return result, nil
+			// result.Update = true
+			// result.SrcAddr = packet.Addr{MAC: ether.Src(), IP: frame.TargetAddress()} // ok to pass frame addr
+			return nil
 		}
 
 		// If a host is looking up for a GUA on the lan, it is likely a valid IP6 GUA for a local host.
 		// So, send our own neighbour solicitation to discover the IP
 		if frame.TargetAddress().IsGlobalUnicast() {
 			srcAddr := packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostLLA.IP}
-			dstAddr := packet.Addr{MAC: ether.Dst(), IP: ip6Frame.Dst()}
+			dstAddr := packet.Addr{MAC: pkt.Ether.Dst(), IP: ip6Frame.Dst()}
 			h.session.ICMP6SendNeighbourSolicitation(srcAddr, dstAddr, frame.TargetAddress())
 		}
-		return packet.Result{}, nil
+		return nil
 
 	case ipv6.ICMPTypeRouterAdvertisement: // 0x86
 		frame := packet.ICMP6RouterAdvertisement(icmp6Frame)
 		if err := frame.IsValid(); err != nil {
-			return packet.Result{}, err
+			return err
 		}
 
 		// wakeup all pending spoof goroutines
@@ -277,23 +275,23 @@ func (h *Handler6) ProcessPacket(host *packet.Host, p []byte, header []byte) (re
 
 		// Protect agains nil host
 		// NS source IP is sometimes ff02::1 (multicast), which means that host is not in the table (nil)
-		if host == nil {
-			return packet.Result{}, fmt.Errorf("ra host cannot be nil")
+		if pkt.Host == nil {
+			return fmt.Errorf("ra host cannot be nil")
 		}
 		options, err := frame.Options()
 		if err != nil {
 			fmt.Printf("icmp6 : invalid options %s\n", err)
-			return packet.Result{}, err
+			return err
 		}
 
 		mac := options.SourceLLA.MAC
 		if mac == nil || len(mac) != packet.EthAddrLen {
-			mac = ether.Src()
+			mac = pkt.Ether.Src()
 			fmt.Printf("icmp6 : options missing sourceLLA options=%v\n", options)
 		}
 
 		h.Lock()
-		router, found := h.findOrCreateRouter(mac, ip6Frame.Src())
+		router, _ := h.findOrCreateRouter(mac, ip6Frame.Src())
 		router.ManagedFlag = frame.ManagedConfiguration()
 		router.OtherCondigFlag = frame.OtherConfiguration()
 		router.Preference = frame.Preference()
@@ -301,28 +299,28 @@ func (h *Handler6) ProcessPacket(host *packet.Host, p []byte, header []byte) (re
 		router.DefaultLifetime = time.Duration(time.Duration(frame.Lifetime()) * time.Second)
 		router.ReacheableTime = int(frame.ReachableTime())
 		router.RetransTimer = int(frame.RetransmitTimer())
-		curPrefix := router.Options.FirstPrefix // keep current prefix
+		// curPrefix := router.Options.FirstPrefix // keep current prefix
 		router.Options = options
 		router.Prefixes = options.Prefixes
 		h.Unlock()
 
 		if Debug {
-			l := fastlog.NewLine("icmp6", "ether").Struct(ether).Module("icmp6", "ip6").Struct(ip6Frame)
+			l := fastlog.NewLine("icmp6", "ether").Struct(pkt.Ether).Module("icmp6", "ip6").Struct(ip6Frame)
 			l.Module("icmp6", "router advertisement").Struct(icmp6Frame).Sprintf("options", router.Options)
 			l.Write()
 		}
 
-		result := packet.Result{}
+		// result := packet.Result{}
 		//notify if first time or if prefix changed
-		if !found || !curPrefix.Equal(router.Options.FirstPrefix) {
-			result = packet.Result{Update: true, IsRouter: true}
-		}
-		return result, nil
+		// if !found || !curPrefix.Equal(router.Options.FirstPrefix) {
+		// result = packet.Result{Update: true, IsRouter: true}
+		// }
+		return nil
 
 	case ipv6.ICMPTypeRouterSolicitation:
 		frame := packet.ICMP6RouterSolicitation(icmp6Frame)
 		if err := frame.IsValid(); err != nil {
-			return packet.Result{}, err
+			return err
 		}
 		if Debug {
 			fastlog.NewLine("icmp6", "router solicitation").IP("ip", ip6Frame.Src()).Struct(frame).Write()
@@ -333,17 +331,17 @@ func (h *Handler6) ProcessPacket(host *packet.Host, p []byte, header []byte) (re
 		//      configured unicast address of the interface.
 		// Destination address:
 		//    - the all-routers multicast address (FF02::2) with the link-local scope.
-		return packet.Result{}, nil
+		return nil
 	case ipv6.ICMPTypeEchoReply: // 0x81
 		echo := packet.ICMPEcho(icmp6Frame)
 		if err := echo.IsValid(); err != nil {
-			return packet.Result{}, err
+			return err
 		}
 		if Debug {
 			fmt.Printf("icmp6 : echo reply from ip=%s %s\n", ip6Frame.Src(), echo)
 		}
 		echoNotify(echo.EchoID()) // unblock ping if waiting
-		return packet.Result{}, nil
+		return nil
 
 	case ipv6.ICMPTypeEchoRequest: // 0x80
 		echo := packet.ICMPEcho(icmp6Frame)
@@ -351,40 +349,40 @@ func (h *Handler6) ProcessPacket(host *packet.Host, p []byte, header []byte) (re
 			// fmt.Printf("icmp6 : echo request from ip=%s %s\n", ip6Frame.Src(), echo)
 			fastlog.NewLine(module6, "echo recvd").IP("srcIP", ip6Frame.Src()).IP("dstIP", ip6Frame.Dst()).Struct(echo).Write()
 		}
-		return packet.Result{}, nil
+		return nil
 
 	case ipv6.ICMPTypeMulticastListenerReport:
 		fastlog.NewLine(module6, "multicast listener report recv").IP("ip", ip6Frame.Src()).Write()
-		return packet.Result{}, nil
+		return nil
 
 	case ipv6.ICMPTypeVersion2MulticastListenerReport:
 		fastlog.NewLine(module6, "multicast listener report V2 recv").IP("ip", ip6Frame.Src()).Write()
-		return packet.Result{}, nil
+		return nil
 
 	case ipv6.ICMPTypeMulticastListenerQuery:
 		fastlog.NewLine(module6, "multicast listener query recv").IP("ip", ip6Frame.Src()).Write()
-		return packet.Result{}, nil
+		return nil
 
 	case ipv6.ICMPTypeRedirect:
 		redirect := packet.ICMP6Redirect(icmp6Frame)
 		if err := redirect.IsValid(); err != nil {
-			return packet.Result{}, err
+			return err
 		}
 		// fmt.Printf("icmp6 : redirect from ip=%s %s \n", ip6Frame.Src(), redirect)
 		fastlog.NewLine(module6, "redirect recv").IP("fromIP", ip6Frame.Src()).Stringer(redirect).Write()
 
-		return packet.Result{}, nil
+		return nil
 
 	case ipv6.ICMPTypeDestinationUnreachable:
 		if Debug {
 			fastlog.NewLine(module6, "destination unreachable").Struct(ip6Frame).Struct(icmp6Frame).Write()
 		}
-		return packet.Result{}, nil
+		return nil
 
 	default:
 		fmt.Printf("icmp6 : type not implemented from ip=%s type=%v\n", ip6Frame.Src(), t)
-		return packet.Result{}, fmt.Errorf("unrecognized icmp6 type=%d: %w", t, packet.ErrParseFrame)
+		return fmt.Errorf("unrecognized icmp6 type=%d: %w", t, packet.ErrParseFrame)
 	}
 
-	return packet.Result{}, nil
+	return nil
 }

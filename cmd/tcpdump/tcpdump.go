@@ -95,6 +95,8 @@ func main() {
 		fmt.Printf("conn error: %s", err)
 		return
 	}
+	defer s.Close()
+
 	buffer := make([]byte, packet.EthMaxSize)
 	for {
 		n, _, err := s.Conn.ReadFrom(buffer)

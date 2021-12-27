@@ -1,7 +1,6 @@
 package arp
 
 import (
-	"context"
 	"net"
 	"sync"
 	"time"
@@ -19,8 +18,7 @@ const (
 )
 
 type ARPHandler interface {
-	Start() error
-	Stop() error
+	Close() error
 	Spoof(frame packet.Frame) error
 	StartHunt(packet.Addr) (packet.HuntStage, error)
 	StopHunt(packet.Addr) (packet.HuntStage, error)
@@ -36,7 +34,7 @@ type ARPNOOP struct {
 }
 
 func (p ARPNOOP) Start() error { return nil }
-func (p ARPNOOP) Stop() error  { return nil }
+func (p ARPNOOP) Close() error { return nil }
 func (p ARPNOOP) Spoof(frame packet.Frame) error {
 	return nil
 }
@@ -87,13 +85,8 @@ func (config Config) New(session *packet.Session) (h *Handler, err error) {
 	return h, nil
 }
 
-// Start background processes
-func (h *Handler) Start() error {
-	return h.ScanNetwork(context.Background(), h.session.NICInfo.HostIP4)
-}
-
-// Stop the handler and terminate all internal goroutines
-func (h *Handler) Stop() error {
+// Close the handler and terminate all internal goroutines
+func (h *Handler) Close() error {
 	h.closed = true
 	close(h.closeChan) // this will exit all background goroutines
 	return nil

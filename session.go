@@ -93,6 +93,7 @@ type Session struct {
 	Statisticsts    []ProtoStats      // keep per protocol statistics
 	C               chan Notification // channel for online & offline notifications
 	closeChan       chan bool         // channel to end all go routines
+	closed          bool              // indicate the session is closed
 }
 
 // Config contains configurable parameters that overide package defaults
@@ -192,6 +193,14 @@ func (config Config) NewSession() (*Session, error) {
 	}(session)
 
 	return session, nil
+}
+
+func (h *Session) Close() {
+	if h.closed {
+		return
+	}
+	h.closed = true
+	close(h.closeChan)
 }
 
 // PrintTable logs the table to standard out

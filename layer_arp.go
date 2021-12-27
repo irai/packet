@@ -251,3 +251,44 @@ func (h *Session) ARPWhoIs(ip net.IP) (Addr, error) {
 	}
 	return Addr{}, ErrNotFound
 }
+
+// ScanNetwork sends 256 arp requests to identify IPs on the lan
+func (h *Session) ARPScan() error {
+
+	// Copy underneath array so we can modify value.
+	ip := CopyIP(h.NICInfo.HomeLAN4.IP)
+	ip = ip.To4()
+	if ip == nil {
+		return ErrInvalidIP
+	}
+
+	for host := 1; host < 255; host++ {
+		ip[3] = byte(host)
+
+		// Don't scan router and host
+		if ip.Equal(h.NICInfo.RouterIP4.IP) || ip.Equal(h.NICInfo.HostIP4.IP) {
+			continue
+		}
+
+		if h.closed { // return if Close() is called when we are in the loop
+			return nil
+		}
+		err := h.ARPRequest(ip)
+		if err != nil {
+			if err1, ok := err.(net.Error); ok && err1.Temporary() {
+				if Debug {
+					fastlog.NewLine(module, "error in write socket is temporary - retry ").Error(err1).Write()
+				}
+				continue
+			}
+
+			if Debug {
+				fastlog.NewLine(module, "arp request error").Error(err).Write()
+			}
+			return err
+		}
+		time.Sleep(time.Millisecond * 8)
+	}
+
+	return nil
+}

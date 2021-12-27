@@ -75,14 +75,14 @@ func (h *Handler) processPacket(ether packet.Ether) (err error) {
 		}
 
 	case packet.PayloadICMP6:
-		if result, err = h.ICMP6Handler.ProcessPacket(frame.Host, frame.Ether, frame.Payload()); err != nil {
+		if err = h.ICMP6Handler.Spoof(frame); err != nil {
 			fastlog.NewLine("packet", "error processing icmp6").Error(err).Write()
 			return err
 		}
-		if result.Update && frame.Host != nil {
-			frame.Host.MACEntry.IsRouter = result.IsRouter
-			result.Update = true
-		}
+		// if result.Update && frame.Host != nil {
+		// frame.Host.MACEntry.IsRouter = result.IsRouter
+		// result.Update = true
+		// }
 
 	case packet.PayloadSSDP:
 		if result, err = h.ProcessSSDP(frame); err != nil {

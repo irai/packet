@@ -22,6 +22,7 @@ func main() {
 		fmt.Printf("conn error: %s", err)
 		return
 	}
+	defer s.Close()
 
 	go func() {
 		for {
