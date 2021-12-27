@@ -14,7 +14,7 @@ test:
 	go test -v ./...
  
 deploy:	build
-	scp *_arm netfilter@${TEST_SERVER}:/home/netfilter/bin
+	scp arpspoofer_arm netfilter@${TEST_SERVER}:/home/netfilter/bin/arpspoofer
  
 clean:
 	go clean
