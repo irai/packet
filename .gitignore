@@ -5,6 +5,8 @@
 *.so
 *.dylib
 
+*_arm
+
 .vscode
 
 # Test binary, built with `go test -c`

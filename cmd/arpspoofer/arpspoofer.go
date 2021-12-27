@@ -55,7 +55,7 @@ var (
 
 func main() {
 	var err error
-	var ip net.IP
+	var targetIP net.IP
 	flag.Parse()
 
 	fmt.Println("setting up nic: ", *nic)
@@ -86,7 +86,8 @@ func main() {
 	defer icmp6Spoofer.Close()
 
 	// start goroutinge to process notifications
-	go processNotification(s, ip)
+	targetIP = net.ParseIP(*ipstr)
+	go processNotification(s, targetIP)
 
 	// Start packet processing goroutine
 	go func() {
@@ -122,7 +123,7 @@ func main() {
 	}()
 
 	// if not ip given, just listen...
-	if ip = net.ParseIP(*ipstr); ip == nil {
+	if targetIP == nil {
 		fmt.Println("missing or invalid target ip address...listening only", err)
 		time.Sleep(time.Hour * 24) // wait forever!!!
 	}
