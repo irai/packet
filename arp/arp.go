@@ -87,6 +87,9 @@ func (config Config) New(session *packet.Session) (h *Handler, err error) {
 
 // Close the handler and terminate all internal goroutines
 func (h *Handler) Close() error {
+	if h.closed {
+		return nil
+	}
 	h.closed = true
 	close(h.closeChan) // this will exit all background goroutines
 	return nil

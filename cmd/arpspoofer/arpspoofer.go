@@ -4,6 +4,9 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/irai/packet"
@@ -20,7 +23,10 @@ var (
 
 func processNotification(s *packet.Session, targetIP net.IP) {
 	for {
-		notification := <-s.C
+		notification, ok := <-s.C
+		if !ok { // terminate when channel closed
+			return
+		}
 		switch notification.Online {
 		case true:
 			if !notification.Addr.IP.Equal(targetIP) {
@@ -56,6 +62,8 @@ var (
 func main() {
 	var err error
 	var targetIP net.IP
+	var exiting bool
+
 	flag.Parse()
 
 	fmt.Println("setting up nic: ", *nic)
@@ -67,6 +75,7 @@ func main() {
 	defer s.Close()
 
 	arp.Debug = *debug
+	icmp.Debug = *debug
 	packet.Debug = *debug
 
 	// instanciate the arp spoofer
@@ -85,17 +94,19 @@ func main() {
 	}
 	defer icmp6Spoofer.Close()
 
-	// start goroutinge to process notifications
+	// start goroutine to process notifications
 	targetIP = net.ParseIP(*ipstr)
 	go processNotification(s, targetIP)
 
-	// Start packet processing goroutine
+	// start packet processing goroutine
 	go func() {
 		buffer := make([]byte, packet.EthMaxSize)
 		for {
 			n, _, err := s.ReadFrom(buffer)
 			if err != nil {
-				fmt.Println("error reading packet", err)
+				if !exiting {
+					fmt.Println("error reading packet", err)
+				}
 				return
 			}
 
@@ -154,5 +165,18 @@ func main() {
 	}
 	***/
 
-	time.Sleep(time.Hour * 24) // wait forever!!!
+	// terminate cleanly when we get ctrl-C or sigterm
+	c := make(chan os.Signal)
+	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
+	for sig := range c {
+		switch sig {
+		case syscall.SIGINT, syscall.SIGTERM:
+			exiting = true
+			arpSpoofer.Close()
+			icmp6Spoofer.Close()
+			s.Close()
+			time.Sleep(time.Second)
+			return
+		}
+	}
 }

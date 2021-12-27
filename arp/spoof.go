@@ -80,10 +80,13 @@ func (h *Handler) spoofLoop(addr packet.Addr) {
 
 		if !hunting || h.closed {
 			fastlog.NewLine(module, "hunt loop stop").Struct(addr).Int("repeat", nTimes).String("duration", time.Since(startTime).String()).Write()
-			// clear the arp table with announcement to real router mac
-			// request will fix the ether src mac to host to prevent ethernet port disabling
-			if err := h.session.ARPRequestRaw(addr.MAC, h.session.NICInfo.RouterAddr4, h.session.NICInfo.RouterAddr4); err != nil {
-				fastlog.NewLine(module, "error send request packet").Struct(addr).Error(err).Write()
+
+			// When hunt terminate normally, clear the arp table with announcement to real router mac.
+			if !h.closed {
+				// request will fix the ether src mac to host to prevent ethernet port disabling
+				if err := h.session.ARPRequestRaw(addr.MAC, h.session.NICInfo.RouterAddr4, h.session.NICInfo.RouterAddr4); err != nil {
+					fastlog.NewLine(module, "error send request packet").Struct(addr).Error(err).Write()
+				}
 			}
 			return
 		}
@@ -107,7 +110,7 @@ func (h *Handler) spoofLoop(addr packet.Addr) {
 
 		select {
 		case <-h.closeChan:
-			return
+			// do nothing, we will detect the channel is closed at the start of the loop and terminate the goroutine
 		case <-ticker:
 		}
 	}

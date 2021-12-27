@@ -118,6 +118,9 @@ func New6(session *packet.Session) (*Handler6, error) {
 
 // Close removes the plugin from the engine
 func (h *Handler6) Close() error {
+	if h.closed {
+		return nil
+	}
 	h.closed = true
 	close(h.closeChan)
 	return nil

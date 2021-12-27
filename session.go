@@ -140,6 +140,7 @@ func (config Config) NewSession() (*Session, error) {
 	session.C = make(chan Notification, 128) // plenty of capacity to prevent blocking
 	session.Conn = config.Conn
 	session.NICInfo = config.NICInfo
+	session.closeChan = make(chan bool)
 
 	if session.ProbeDeadline = config.ProbeDeadline; session.ProbeDeadline < 0 || session.ProbeDeadline > time.Minute*30 {
 		return nil, fmt.Errorf("invalid ProbeDeadline=%v: %w", session.ProbeDeadline, ErrInvalidParam)
@@ -167,7 +168,9 @@ func (config Config) NewSession() (*Session, error) {
 				}
 				atomic.StoreUint32(&session.ipHeartBeat, 0)
 			case <-session.closeChan:
-				fmt.Println("session: nic monitoring ended")
+				if Debug {
+					fastlog.NewLine(module, "nic monitoring goroutine ended").Write()
+				}
 				return
 			}
 		}
@@ -201,6 +204,8 @@ func (h *Session) Close() {
 	}
 	h.closed = true
 	close(h.closeChan)
+	close(h.C)
+	h.Conn.Close()
 }
 
 // PrintTable logs the table to standard out
@@ -229,7 +234,9 @@ func (h *Session) ReadFrom(b []byte) (int, net.Addr, error) {
 		}
 
 		if err, ok := err.(net.Error); ok && err.Temporary() {
-			fmt.Println("tmp conn read error", err)
+			if Debug {
+				fastlog.NewLine(module, "temporary conn read error").Error(err).Write()
+			}
 			continue
 		}
 		return n, addr, err
