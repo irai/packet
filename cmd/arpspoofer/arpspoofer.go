@@ -145,38 +145,88 @@ func main() {
 	// Start icmpv6 spoofer module
 	icmp6Spoofer.Start()
 
-	/***
-	switch {
-	case ip.To4() != nil:
-		// send arp discovery packet
-		if _, err := s.ARPWhoIs(ip); err != nil {
-			fmt.Printf("ip=%s not found on LAN - listening only: %v\n", ip, err)
-			break
+	// start goroutine to read command line
+	inputChan := make(chan []string)
+	go func() {
+		for {
+			fmt.Println("\n----")
+			fmt.Print("Enter command: ")
+			inputChan <- readInput()
 		}
-	default:
-		if s.NICInfo.HostLLA.IP == nil {
-			fmt.Println("host does not have IPv6 local link address")
-			return
-		}
-		// send icmpv6 discovery packet
-		if err := s.ICMP6SendEchoRequest(packet.Addr{MAC: s.NICInfo.HostMAC, IP: s.NICInfo.HostLLA.IP}, packet.Addr{MAC: packet.EthBroadcast, IP: ip}, 100, 1); err != nil {
-			fmt.Println("failed to send icmp6 echo request", err)
-		}
-	}
-	***/
+	}()
 
 	// terminate cleanly when we get ctrl-C or sigterm
-	c := make(chan os.Signal)
+	c := make(chan os.Signal, 2)
 	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
-	for sig := range c {
-		switch sig {
-		case syscall.SIGINT, syscall.SIGTERM:
-			exiting = true
-			arpSpoofer.Close()
-			icmp6Spoofer.Close()
-			s.Close()
-			time.Sleep(time.Second)
-			return
+	for {
+
+		select {
+		case sig := <-c:
+			switch sig {
+			case syscall.SIGINT, syscall.SIGTERM:
+				exiting = true
+				arpSpoofer.Close()
+				icmp6Spoofer.Close()
+				s.Close()
+				time.Sleep(time.Second)
+				return
+			}
+
+		case tokens := <-inputChan:
+			switch tokens[0] {
+			case "l", "list":
+				fmt.Println("hosts table ---")
+				s.PrintTable()
+
+			case "log":
+				p := getString(tokens, 1)
+				switch p {
+				case "packet":
+					packet.Debug = !packet.Debug
+				case "arp":
+					arp.Debug = !arp.Debug
+				case "icmp":
+					icmp.Debug = !icmp.Debug
+				}
+
+			case "start":
+				ip := getIP(tokens, 1)
+				if ip == nil {
+					continue
+				}
+				if host := s.FindIP(ip); host != nil {
+					if host.Addr.IP.To4() != nil {
+						_, err = arpSpoofer.StartHunt(host.Addr)
+					} else {
+						_, err = icmp6Spoofer.StartHunt(host.Addr)
+					}
+				}
+
+			case "stop":
+				ip := getIP(tokens, 1)
+				if ip == nil {
+					continue
+				}
+				if host := s.FindIP(ip); host != nil {
+					if host.Addr.IP.To4() != nil {
+						_, err = arpSpoofer.StopHunt(host.Addr)
+					} else {
+						_, err = icmp6Spoofer.StopHunt(host.Addr)
+					}
+				}
+
+			case "q":
+				c <- syscall.SIGINT
+
+			default:
+				fmt.Println("")
+				fmt.Println("change log level:   log packet|arp|icmp")
+				fmt.Println("list hosts      :   l|list")
+				fmt.Println("quit            :   q")
+			}
+			if err != nil {
+				fmt.Printf("error in operation %s: %v\n", tokens[0], err)
+			}
 		}
 	}
 }

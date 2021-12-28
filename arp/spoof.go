@@ -8,6 +8,12 @@ import (
 	"github.com/irai/packet/fastlog"
 )
 
+// IsHunting returns true if the ip is activelly hunted via a goroutine
+func (h *Handler) IsHunting(ip net.IP) bool {
+	_, b := h.findHuntByIP(ip)
+	return b
+}
+
 func (h *Handler) findHuntByIP(ip net.IP) (packet.Addr, bool) {
 	for _, v := range h.huntList {
 		if v.IP.Equal(ip) {
