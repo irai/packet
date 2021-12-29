@@ -81,7 +81,7 @@ func (h *Handler) minuteChecker(now time.Time) {
 	// internal checks
 	h.lockAndMonitorRoute(now)
 
-	h.purge(now, h.ProbeInterval, h.OfflineDeadline, h.PurgeDeadline)
+	// h.purge(now, h.ProbeInterval, h.OfflineDeadline, h.PurgeDeadline)
 
 }
 
