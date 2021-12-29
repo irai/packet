@@ -136,7 +136,6 @@ func (config Config) NewSession() (*Session, error) {
 	session.MACTable = newMACTable()
 	session.HostTable = newHostTable()
 	session.Statisticsts = make([]ProtoStats, 32)
-	session.NICInfo = &NICInfo{HostAddr4: Addr{MAC: EthBroadcast, IP: IP4Broadcast}}
 	session.C = make(chan Notification, 128) // plenty of capacity to prevent blocking
 	session.Conn = config.Conn
 	session.NICInfo = config.NICInfo
@@ -152,21 +151,20 @@ func (config Config) NewSession() (*Session, error) {
 		return nil, fmt.Errorf("invalid PurgeDeadline=%v: %w", session.PurgeDeadline, ErrInvalidParam)
 	}
 
-	// Setup a nic monitoring goroutine to ensure we always receive IP packets.
-	// If the switch port is disabled or the the nic stops receiving packets for any reason,
-	// our best option is to stop the engine and likely restart.
-	//
-	go func() {
+	// Setup a goroutine to monitor the nic to ensure we receive IP packets frequently.
+	// If the nic stops receiving IP packets, it is likely the switch port is disabled
+	// and our best option is to stop and likely restart.
+	go func(h *Session) {
 		ticker := time.NewTicker(monitorNICFrequency)
 		for {
 			select {
 			case <-ticker.C:
-				if atomic.LoadUint32(&session.ipHeartBeat) == 0 {
-					fmt.Printf("fatal: failed to receive ip packets in duration=%s - sending sigterm time=%v\n", monitorNICFrequency, time.Now())
+				if atomic.LoadUint32(&h.ipHeartBeat) == 0 {
+					fastlog.NewLine(module, "fatal failure to receive ip packets").Duration("duration", monitorNICFrequency).Time("time", time.Now()).Write()
 					// Send sigterm to terminate process
 					syscall.Kill(os.Getpid(), syscall.SIGTERM)
 				}
-				atomic.StoreUint32(&session.ipHeartBeat, 0)
+				atomic.StoreUint32(&h.ipHeartBeat, 0)
 			case <-session.closeChan:
 				if Debug {
 					fastlog.NewLine(module, "nic monitoring goroutine ended").Write()
@@ -174,9 +172,9 @@ func (config Config) NewSession() (*Session, error) {
 				return
 			}
 		}
-	}()
+	}(session)
 
-	// minute loop goroutine to check for offline transition
+	// Start a minute loop goroutine to check for offline transition
 	go func(h *Session) {
 		ticker := time.NewTicker(time.Minute)
 		for {
