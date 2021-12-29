@@ -8,31 +8,39 @@ import (
 	"time"
 )
 
+//go:generate stringer -type=PayloadID
 type PayloadID int
 
 const (
-	PayloadEther    PayloadID = 1
-	Payload8023     PayloadID = 2
-	PayloadARP      PayloadID = 3
-	PayloadIP4      PayloadID = 4
-	PayloadIP6      PayloadID = 5
-	PayloadICMP4    PayloadID = 6
-	PayloadICMP6    PayloadID = 7
-	PayloadUDP      PayloadID = 8
-	PayloadTCP      PayloadID = 9
-	PayloadDHCP4    PayloadID = 10
-	PayloadDHCP6    PayloadID = 11
-	PayloadDNS      PayloadID = 12
-	PayloadMDNS     PayloadID = 13
-	PayloadSSL      PayloadID = 14
-	PayloadNTP      PayloadID = 15
-	PayloadSSDP     PayloadID = 16
-	PayloadWSDP     PayloadID = 17
-	PayloadNBNS     PayloadID = 18
-	PayloadPlex     PayloadID = 19
-	PayloadUbiquiti PayloadID = 20
-	PayloadLLMNR    PayloadID = 21
-	PayloadIGMP     PayloadID = 22
+	PayloadEther         PayloadID = 1
+	Payload8023          PayloadID = 2
+	PayloadARP           PayloadID = 3
+	PayloadIP4           PayloadID = 4
+	PayloadIP6           PayloadID = 5
+	PayloadICMP4         PayloadID = 6
+	PayloadICMP6         PayloadID = 7
+	PayloadUDP           PayloadID = 8
+	PayloadTCP           PayloadID = 9
+	PayloadDHCP4         PayloadID = 10
+	PayloadDHCP6         PayloadID = 11
+	PayloadDNS           PayloadID = 12
+	PayloadMDNS          PayloadID = 13
+	PayloadSSL           PayloadID = 14
+	PayloadNTP           PayloadID = 15
+	PayloadSSDP          PayloadID = 16
+	PayloadWSDP          PayloadID = 17
+	PayloadNBNS          PayloadID = 18
+	PayloadPlex          PayloadID = 19
+	PayloadUbiquiti      PayloadID = 20
+	PayloadLLMNR         PayloadID = 21
+	PayloadIGMP          PayloadID = 22
+	PayloadEthernetPause PayloadID = 23
+	PayloadRRCP          PayloadID = 24
+	PayloadLLDP          PayloadID = 25
+	Payload802_11r       PayloadID = 26
+	PayloadIEEE1905      PayloadID = 27
+	PayloadSonos         PayloadID = 28
+	Payload880a          PayloadID = 29
 )
 
 type Result struct {
@@ -65,6 +73,10 @@ func (f Frame) ARP() ARP {
 		return ARP(f.Ether[f.offsetPayload:])
 	}
 	return nil
+}
+
+func (f Frame) IsIP() bool {
+	return (f.offsetIP4 != 0 || f.offsetIP6 != 0)
 }
 
 // IP4 returns a reference to the IP4 packet or nil if this is not an IPv4 packet.
@@ -162,7 +174,7 @@ func (h *Session) Parse(p []byte) (frame Frame, err error) {
 			return frame, err
 		}
 		atomic.StoreUint32(&h.ipHeartBeat, 1)
-		h.Statisticsts[PayloadIP4].Count++
+		h.Statistics[PayloadIP4].Count++
 		frame.offsetIP4 = frame.offsetPayload
 		frame.offsetPayload = frame.offsetPayload + ip4.IHL()
 		proto = ip4.Protocol()
@@ -179,7 +191,7 @@ func (h *Session) Parse(p []byte) (frame Frame, err error) {
 			return frame, err
 		}
 		atomic.StoreUint32(&h.ipHeartBeat, 1)
-		h.Statisticsts[PayloadIP6].Count++
+		h.Statistics[PayloadIP6].Count++
 		proto = ip6.NextHeader()
 		frame.SrcAddr.IP = ip6.Src()
 		frame.DstAddr.IP = ip6.Dst()
@@ -199,7 +211,7 @@ func (h *Session) Parse(p []byte) (frame Frame, err error) {
 		}
 	case syscall.ETH_P_ARP:
 		frame.PayloadID = PayloadARP
-		h.Statisticsts[PayloadARP].Count++
+		h.Statistics[PayloadARP].Count++
 		// create host if new IP appers in arp packet
 		// Validates arp len and that hardware len is 6 for mac address
 		if arp := frame.Payload(); len(arp) >= 28 && arp[4] == 6 {
@@ -210,6 +222,48 @@ func (h *Session) Parse(p []byte) (frame Frame, err error) {
 			}
 		}
 		return frame, nil
+
+	case 0x8808: // Ethernet pause frame
+		frame.PayloadID = PayloadEthernetPause
+		h.Statistics[PayloadEthernetPause].Count++
+		frame.offsetPayload = frame.Ether.HeaderLen()
+		return frame, nil
+
+	case 0x8899: // Realtek remote control protocol (RRCP)
+		frame.PayloadID = PayloadRRCP
+		h.Statistics[PayloadRRCP].Count++
+		frame.offsetPayload = frame.Ether.HeaderLen()
+		return frame, nil
+
+	case 0x88cc: // Local link discovery protocol (LLDP)
+		frame.PayloadID = PayloadLLDP
+		h.Statistics[PayloadLLDP].Count++
+		frame.offsetPayload = frame.Ether.HeaderLen()
+		return frame, nil
+
+	case 0x890d: // 802.11r
+		frame.PayloadID = Payload802_11r
+		h.Statistics[Payload802_11r].Count++
+		frame.offsetPayload = frame.Ether.HeaderLen()
+		return frame, nil
+
+	case 0x893a: // IEEE 1905
+		frame.PayloadID = PayloadIEEE1905
+		h.Statistics[PayloadIEEE1905].Count++
+		frame.offsetPayload = frame.Ether.HeaderLen()
+		return frame, nil
+	case 0x6970: // Sonos proprietary protocol
+		frame.PayloadID = PayloadSonos
+		h.Statistics[PayloadSonos].Count++
+		frame.offsetPayload = frame.Ether.HeaderLen()
+		return frame, nil
+
+	case 0x880a: // not sure what this is but seen often on home LANs
+		frame.PayloadID = Payload880a
+		h.Statistics[Payload880a].Count++
+		frame.offsetPayload = frame.Ether.HeaderLen()
+		return frame, nil
+
 	default:
 		return frame, nil
 	}
@@ -221,47 +275,47 @@ func (h *Session) Parse(p []byte) (frame Frame, err error) {
 		if err := udp.IsValid(); err != nil {
 			return frame, err
 		}
-		h.Statisticsts[PayloadUDP].Count++
+		h.Statistics[PayloadUDP].Count++
 		frame.offsetUDP = frame.offsetPayload
 		frame.SrcAddr.Port = udp.SrcPort()
 		frame.DstAddr.Port = udp.DstPort()
 		switch {
 		case frame.SrcAddr.Port == 443 || frame.DstAddr.Port == 443: // SSL
 			frame.PayloadID = PayloadSSL
-			h.Statisticsts[PayloadSSL].Count++
+			h.Statistics[PayloadSSL].Count++
 		case frame.DstAddr.Port == 67 || frame.DstAddr.Port == 68: // DHCP4 packet
 			frame.PayloadID = PayloadDHCP4
-			h.Statisticsts[PayloadDHCP4].Count++
+			h.Statistics[PayloadDHCP4].Count++
 		case frame.DstAddr.Port == 546 || frame.DstAddr.Port == 547: // DHCP6
 			frame.PayloadID = PayloadDHCP6
-			h.Statisticsts[PayloadDHCP6].Count++
+			h.Statistics[PayloadDHCP6].Count++
 		case frame.SrcAddr.Port == 53 || frame.DstAddr.Port == 53: // DNS request
 			frame.PayloadID = PayloadDNS
-			h.Statisticsts[PayloadDNS].Count++
+			h.Statistics[PayloadDNS].Count++
 		case frame.SrcAddr.Port == 5353 || frame.DstAddr.Port == 5353: // Multicast DNS (MDNS)
 			frame.PayloadID = PayloadMDNS
-			h.Statisticsts[PayloadMDNS].Count++
+			h.Statistics[PayloadMDNS].Count++
 		case frame.SrcAddr.Port == 5355 || frame.DstAddr.Port == 5355: // Link Local Multicast Name Resolution (LLMNR)
 			frame.PayloadID = PayloadLLMNR
-			h.Statisticsts[PayloadLLMNR].Count++
+			h.Statistics[PayloadLLMNR].Count++
 		case frame.SrcAddr.Port == 123 || frame.DstAddr.Port == 123: // NTP
 			frame.PayloadID = PayloadNTP
-			h.Statisticsts[PayloadNTP].Count++
+			h.Statistics[PayloadNTP].Count++
 		case frame.SrcAddr.Port == 1900 || frame.DstAddr.Port == 1900: // Microsoft Simple Service Discovery Protocol (SSDP)
 			frame.PayloadID = PayloadSSDP
-			h.Statisticsts[PayloadSSDP].Count++
+			h.Statistics[PayloadSSDP].Count++
 		case frame.SrcAddr.Port == 3702 || frame.DstAddr.Port == 3702: // Web Services Discovery Protocol (WSD)
 			frame.PayloadID = PayloadWSDP
-			h.Statisticsts[PayloadWSDP].Count++
+			h.Statistics[PayloadWSDP].Count++
 		case frame.DstAddr.Port == 137 || frame.DstAddr.Port == 138: // Netbions NBNS
 			frame.PayloadID = PayloadNBNS
-			h.Statisticsts[PayloadNBNS].Count++
+			h.Statistics[PayloadNBNS].Count++
 		case frame.DstAddr.Port == 32412 || frame.DstAddr.Port == 32414: // Plex application protocol
 			frame.PayloadID = PayloadPlex
-			h.Statisticsts[PayloadPlex].Count++
+			h.Statistics[PayloadPlex].Count++
 		case frame.SrcAddr.Port == 10001 || frame.DstAddr.Port == 10001: // Ubiquiti device discovery protocol
 			frame.PayloadID = PayloadUbiquiti
-			h.Statisticsts[PayloadUbiquiti].Count++
+			h.Statistics[PayloadUbiquiti].Count++
 		default:
 			return frame, nil
 		}
@@ -274,7 +328,7 @@ func (h *Session) Parse(p []byte) (frame Frame, err error) {
 		if err := tcp.IsValid(); err != nil {
 			return frame, err
 		}
-		h.Statisticsts[PayloadTCP].Count++
+		h.Statistics[PayloadTCP].Count++
 		frame.offsetTCP = frame.offsetPayload
 		frame.SrcAddr.Port = tcp.SrcPort()
 		frame.DstAddr.Port = tcp.DstPort()
@@ -282,17 +336,17 @@ func (h *Session) Parse(p []byte) (frame Frame, err error) {
 
 	case syscall.IPPROTO_ICMP:
 		frame.PayloadID = PayloadICMP4
-		h.Statisticsts[PayloadICMP4].Count++
+		h.Statistics[PayloadICMP4].Count++
 		return frame, nil
 
 	case syscall.IPPROTO_ICMPV6:
 		frame.PayloadID = PayloadICMP6
-		h.Statisticsts[PayloadICMP6].Count++
+		h.Statistics[PayloadICMP6].Count++
 		return frame, nil
 
 	case syscall.IPPROTO_IGMP:
 		frame.PayloadID = PayloadIGMP
-		h.Statisticsts[PayloadIGMP].Count++
+		h.Statistics[PayloadIGMP].Count++
 		return frame, nil
 	}
 	return frame, nil

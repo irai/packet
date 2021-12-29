@@ -9,20 +9,6 @@ import (
 	"github.com/irai/packet/fastlog"
 )
 
-type LayerProcessor struct {
-	EtherType uint16
-	Function  func(packet.Frame, int) (packet.Result, error)
-}
-
-func (h *Handler) FindPlugin(etherType uint16) func(packet.Frame, int) (packet.Result, error) {
-	for i := range h.LayerTable {
-		if h.LayerTable[i].EtherType == etherType {
-			return h.LayerTable[i].Function
-		}
-	}
-	return processInvalid
-}
-
 func (h *Handler) processPacket(ether packet.Ether) (err error) {
 	var d1, d2, d3 time.Duration
 
@@ -47,10 +33,6 @@ func (h *Handler) processPacket(ether packet.Ether) (err error) {
 	case packet.Payload8023:
 		packet.Process8023Frame(frame, 14)
 		return nil
-
-	case packet.PayloadEther:
-		f := h.FindPlugin(frame.Ether.EtherType())
-		_, err = f(frame, 0)
 
 	case packet.PayloadARP:
 		if err = h.ARPHandler.ProcessPacket(frame); err != nil {
@@ -79,10 +61,6 @@ func (h *Handler) processPacket(ether packet.Ether) (err error) {
 			fastlog.NewLine("packet", "error processing icmp6").Error(err).Write()
 			return err
 		}
-		// if result.Update && frame.Host != nil {
-		// frame.Host.MACEntry.IsRouter = result.IsRouter
-		// result.Update = true
-		// }
 
 	case packet.PayloadSSDP:
 		if result, err = h.ProcessSSDP(frame); err != nil {
@@ -144,8 +122,32 @@ func (h *Handler) processPacket(ether packet.Ether) (err error) {
 		// do nothing
 		fastlog.NewLine("packet", "ipv4 igmp packet").Struct(frame.Ether).Write()
 
+	case packet.PayloadEthernetPause:
+		if err := ProcessEthernetPause(frame); err != nil {
+			return err
+		}
+	case packet.PayloadRRCP:
+		if err := ProcessRRCP(frame); err != nil {
+			return err
+		}
+	case packet.Payload802_11r:
+		if err := Process802_11r(frame); err != nil {
+			return err
+		}
+	case packet.PayloadIEEE1905:
+		if err := ProcessIEEE1905(frame); err != nil {
+			return err
+		}
+	case packet.PayloadSonos:
+		if err := ProcessSonos(frame); err != nil {
+			return err
+		}
+	case packet.Payload880a:
+		if err := Process880a(frame); err != nil {
+			return err
+		}
 	default:
-		fastlog.NewLine(module, "unexpected protocol").Int("proto", int(frame.PayloadID)).Write()
+		fastlog.NewLine(module, "protocol unknown").Struct(frame.Ether).Int("proto", int(frame.PayloadID)).Write()
 	}
 	d2 = time.Since(startTime)
 
@@ -272,7 +274,7 @@ func (h *Handler) ProcessNBNS(frame packet.Frame) (err error) {
 	return nil
 }
 
-func ProcessEthernetPause(frame packet.Frame, pos int) (packet.Result, error) {
+func ProcessEthernetPause(frame packet.Frame) error {
 	// 0x8808:  Ethernet flow control - Pause frame
 	// An overwhelmed network node can send a pause frame, which halts the transmission of the sender for a specified period of time.
 	// EtherType 0x8808 is used to carry the pause command, with the Control opcode set to 0x0001 (hexadecimal).
@@ -282,37 +284,37 @@ func ProcessEthernetPause(frame packet.Frame, pos int) (packet.Result, error) {
 	p := packet.EthernetPause(frame.Payload())
 	if err := p.IsValid(); err != nil {
 		fastlog.NewLine(module, "invalid Ethernet pause frame").Error(err).Write()
-		return packet.Result{}, err
+		return err
 	}
 	fastlog.NewLine(module, "ethernet flow control frame").Struct(p).Write()
-	return packet.Result{}, nil
+	return nil
 }
 
-func ProcessRRCP(frame packet.Frame, pos int) (packet.Result, error) {
+func ProcessRRCP(frame packet.Frame) error {
 	// case 0x8899: // Realtek Remote Control Protocol (RRCP)
 	// proprietary protocol with scarce information available.
 	// A common packet is the loop detection packet (proprietary protocol 0x23).
 	p := packet.RRCP(frame.Payload())
 	if err := p.IsValid(); err != nil {
 		fastlog.NewLine(module, "invalid RRCP frame").Error(err).ByteArray("frame", frame.Payload()).Write()
-		return packet.Result{}, err
+		return err
 	}
 	fastlog.NewLine(module, "RRCP frame").Struct(frame.Ether).ByteArray("payload", p).Write()
-	return packet.Result{}, nil
+	return nil
 }
 
-func ProcessLLDP(frame packet.Frame, pos int) (packet.Result, error) {
+func ProcessLLDP(frame packet.Frame) error {
 	// case 0x88cc: // Link Layer Discovery Protocol (LLDP)
 	p := packet.LLDP(frame.Payload())
 	if err := p.IsValid(); err != nil {
 		fastlog.NewLine(module, "invalid LLDP frame").Error(err).ByteArray("frame", p).Write()
-		return packet.Result{}, err
+		return err
 	}
 	fastlog.NewLine(module, "LLDP frame").Struct(frame.Ether).Struct(p).Write()
-	return packet.Result{}, nil
+	return nil
 }
 
-func Process802_11r(frame packet.Frame, pos int) (packet.Result, error) {
+func Process802_11r(frame packet.Frame) error {
 	// case 0x890d: // Fast Roaming Remote Request (802.11r)
 	// Fast roaming, also known as IEEE 802.11r or Fast BSS Transition (FT),
 	// allows a client device to roam quickly in environments implementing WPA2 Enterprise security,
@@ -320,10 +322,10 @@ func Process802_11r(frame packet.Frame, pos int) (packet.Result, error) {
 	// every time it roams from one access point to another.
 	// fmt.Printf("packet: 802.11r Fast Roaming frame %s payload=[% x]\n", ether, ether[:])
 	fastlog.NewLine(module, "802.11r Fast Roaming frame").Struct(frame.Ether).ByteArray("payload", frame.Payload()).Write()
-	return packet.Result{}, nil
+	return nil
 }
 
-func ProcessIEEE1905(frame packet.Frame, pos int) (packet.Result, error) {
+func ProcessIEEE1905(frame packet.Frame) error {
 	// case 0x893a: // IEEE 1905.1 - network enabler for home networking
 	// Enables topology discovery, link metrics, forwarding rules, AP auto configuration
 	// TODO: investigate how to use IEEE 1905.1
@@ -332,27 +334,25 @@ func ProcessIEEE1905(frame packet.Frame, pos int) (packet.Result, error) {
 	p := packet.IEEE1905(frame.Payload())
 	if err := p.IsValid(); err != nil {
 		fastlog.NewLine(module, "invalid IEEE 1905 frame").Error(err).ByteArray("frame", p).Write()
-		return packet.Result{}, err
+		return err
 	}
 	fastlog.NewLine(module, "IEEE 1905.1 frame").Struct(frame.Ether).Struct(p).Write()
-	return packet.Result{}, nil
+	return nil
 }
 
-func ProcessSonos(frame packet.Frame, pos int) (packet.Result, error) {
+func ProcessSonos(frame packet.Frame) error {
 	// case 0x6970: // Sonos Data Routing Optimisation
 	// References to type EthType 0x6970 appear in a Sonos patent
 	// https://portal.unifiedpatents.com/patents/patent/US-20160006778-A1
 	fastlog.NewLine(module, "Sonos data routing frame").Struct(frame.Ether).ByteArray("payload", frame.Payload()).Write()
-	return packet.Result{}, nil
+	return nil
 }
 
-var count0x880a int
-
-func Process880a(frame packet.Frame, pos int) (packet.Result, error) {
+func Process880a(frame packet.Frame) error {
 	// case 0x880a: // Unknown protocol - but commonly seen in logs
-	if (count0x880a % 32) == 0 {
-		fastlog.NewLine(module, "unknown 0x880a frame").Int("count", count0x880a).ByteArray("payload", frame.Payload()).Write()
+	count := frame.Session.Statistics[packet.Payload880a].Count - 1
+	if (count % 32) == 0 {
+		fastlog.NewLine(module, "unknown 0x880a frame").Int("count", count).ByteArray("payload", frame.Payload()).Write()
 	}
-	count0x880a++
-	return packet.Result{}, nil
+	return nil
 }

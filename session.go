@@ -90,7 +90,7 @@ type Session struct {
 	ipHeartBeat     uint32            // ipHeartBeat is set to 1 when we receive an IP packet
 	MACTable        MACTable          // store mac list
 	mutex           sync.RWMutex      // global session mutex
-	Statisticsts    []ProtoStats      // keep per protocol statistics
+	Statistics      []ProtoStats      // keep per protocol statistics
 	C               chan Notification // channel for online & offline notifications
 	closeChan       chan bool         // channel to end all go routines
 	closed          bool              // indicate the session is closed
@@ -114,7 +114,8 @@ const (
 	DefaultPurgeDeadline   = time.Minute * 61
 )
 
-// monitorNICFrequency defines how often to check for nick heart beat
+// monitorNICFrequency sets the frequency to check the network card is working properly.
+// It is a variable so we can test easily.
 var monitorNICFrequency = time.Minute * 3
 
 func NewSession(nic string) (*Session, error) {
@@ -135,7 +136,12 @@ func (config Config) NewSession() (*Session, error) {
 	session := new(Session)
 	session.MACTable = newMACTable()
 	session.HostTable = newHostTable()
-	session.Statisticsts = make([]ProtoStats, 32)
+
+	// create and populate stats table
+	session.Statistics = make([]ProtoStats, 32)
+	for i := 1; i < len(session.Statistics); i++ {
+		session.Statistics[i].Proto = PayloadID(i)
+	}
 	session.C = make(chan Notification, 128) // plenty of capacity to prevent blocking
 	session.Conn = config.Conn
 	session.NICInfo = config.NICInfo

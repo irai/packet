@@ -39,26 +39,13 @@ type Handler struct {
 	closed       bool      // set to true when handler is closed
 	closeChan    chan bool // close goroutines channel
 	dnsChannel   chan dns.DNSEntry
-	LayerTable   []LayerProcessor
 }
-
-// monitorNICFrequency set the frequency to validate NIC is working ok
-var monitorNICFrequency = time.Minute * 3
 
 // NewEngine creates an packet handler with config values
 func NewEngine(session *packet.Session) (h *Handler, err error) {
 	h = &Handler{closeChan: make(chan bool)}
 	h.dnsChannel = make(chan dns.DNSEntry, 128) // plenty of capacity to prevent blocking
 	h.session = session
-
-	// Ethernet layers
-	h.LayerTable = append(h.LayerTable, LayerProcessor{EtherType: 0x8808, Function: ProcessEthernetPause})
-	h.LayerTable = append(h.LayerTable, LayerProcessor{EtherType: 0x8899, Function: ProcessRRCP})
-	h.LayerTable = append(h.LayerTable, LayerProcessor{EtherType: 0x88cc, Function: ProcessLLDP})
-	h.LayerTable = append(h.LayerTable, LayerProcessor{EtherType: 0x890d, Function: Process802_11r})
-	h.LayerTable = append(h.LayerTable, LayerProcessor{EtherType: 0x893a, Function: ProcessIEEE1905})
-	h.LayerTable = append(h.LayerTable, LayerProcessor{EtherType: 0x6970, Function: ProcessSonos})
-	h.LayerTable = append(h.LayerTable, LayerProcessor{EtherType: 0x880a, Function: Process880a})
 
 	// no plugins to start
 	h.ARPHandler = arp.ARPNOOP{}

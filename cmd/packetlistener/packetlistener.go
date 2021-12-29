@@ -187,6 +187,11 @@ func main() {
 func doEngine(h *handlers, tokens []string) {
 	var err error
 	switch getString(tokens, 1) {
+	case "stats":
+		for _, e := range h.engine.Session().Statistics {
+			fmt.Printf("%12s called %v times\n", e.Proto, e.Count)
+		}
+
 	case "attach":
 		switch getString(tokens, 2) {
 		case "arp":
