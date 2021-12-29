@@ -308,23 +308,23 @@ func (h *DNSHandler) putMDNSCache(mac net.HardwareAddr, id uint16, ipv4 []packet
 
 // ProcesMDNS will process a multicast DNS packet.
 // Note: host cannot be nil.
-func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload []byte) (ipv4 []packet.IPNameEntry, ipv6 []packet.IPNameEntry, err error) {
+func (h *DNSHandler) ProcessMDNS(frame packet.Frame) (ipv4 []packet.IPNameEntry, ipv6 []packet.IPNameEntry, err error) {
 	var p dnsmessage.Parser
-	dnsHeader, err := p.Start(payload)
+	dnsHeader, err := p.Start(frame.Payload())
 	if err != nil {
 		return ipv4, ipv6, err
 	}
 
 	var addr packet.Addr
-	if host != nil {
-		addr = host.Addr
+	if frame.Host != nil {
+		addr = frame.Host.Addr
 	}
 
 	// if query, we can infer some information.
 	if !dnsHeader.Response {
 		var line *fastlog.Line
 		if Debug {
-			line = fastlog.NewLine(moduleMDNS, "query rcvd").Struct(addr).Struct(DNS(payload))
+			line = fastlog.NewLine(moduleMDNS, "query rcvd").Struct(addr).Struct(DNS(frame.Payload()))
 		}
 		if questions, err := p.AllQuestions(); err == nil {
 			entry := packet.IPNameEntry{}
@@ -357,10 +357,10 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 	}
 
 	if Debug {
-		fastlog.NewLine(moduleMDNS, "response rcvd").Struct(addr).Struct(DNS(payload)).Write()
+		fastlog.NewLine(moduleMDNS, "response rcvd").Struct(addr).Struct(DNS(frame.Payload())).Write()
 	}
 
-	if _, found := h.getMDNSCache(ether.Src(), dnsHeader.ID); found {
+	if _, found := h.getMDNSCache(frame.SrcAddr.MAC, dnsHeader.ID); found {
 		return nil, nil, nil
 	}
 
@@ -407,7 +407,7 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 				}
 
 				// this is the last section; cache entry and return
-				h.putMDNSCache(ether.Src(), dnsHeader.ID, ipv4, ipv6)
+				h.putMDNSCache(frame.SrcAddr.MAC, dnsHeader.ID, ipv4, ipv6)
 				return ipv4, ipv6, nil
 			}
 		}
@@ -424,7 +424,7 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 			entry := packet.IPNameEntry{}
 			entry.NameEntry.Type = moduleMDNS
 			entry.NameEntry.Name = strings.TrimSuffix(hdr.Name.String(), ".local.")
-			entry.Addr.MAC = packet.CopyMAC(ether.Src())
+			entry.Addr.MAC = packet.CopyMAC(frame.SrcAddr.MAC)
 			entry.Addr.IP = packet.CopyIP(r.A[:])
 			if Debug {
 				fastlog.NewLine(moduleMDNS, "A resource").String("name", entry.NameEntry.Name).Struct(entry.Addr).Write()
@@ -439,7 +439,7 @@ func (h *DNSHandler) ProcessMDNS(host *packet.Host, ether packet.Ether, payload 
 			entry := packet.IPNameEntry{}
 			entry.NameEntry.Type = moduleMDNS
 			entry.NameEntry.Name = strings.TrimSuffix(hdr.Name.String(), ".local.")
-			entry.Addr.MAC = packet.CopyMAC(ether.Src())
+			entry.Addr.MAC = packet.CopyMAC(frame.SrcAddr.MAC)
 			entry.Addr.IP = packet.CopyIP(r.AAAA[:])
 			if Debug {
 				fastlog.NewLine(moduleMDNS, "AAAA resource").String("name", entry.NameEntry.Name).Struct(entry.Addr).Write()

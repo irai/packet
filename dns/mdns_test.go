@@ -12,6 +12,7 @@ import (
 var ptrMessage = []byte{
 	// sudo tcpdump -v -XX -t
 	// IP 192.168.0.3.mdns > 224.0.0.251.mdns: 0 [2q] [1au] PTR (QU)? _companion-link._tcp.local. PTR (QU)? _sleep-proxy._udp.local. (97)
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x55, 0x55, 0x55, 0x55, 0x55, 0x08, 0x00, //ether packet
 	0x45, 0x00, 0x00, 0x7d, 0x3f, 0x57, 0x00, 0x00, 0xff, 0x11, 0xda, 0x71, 0xc0, 0xa8, 0x00, 0x03, // E..}?W.....q....
 	0xe0, 0x00, 0x00, 0xfb, 0x14, 0xe9, 0x14, 0xe9, 0x00, 0x69, 0xac, 0x4e, 0x00, 0x00, 0x00, 0x00, // .........i.N....
 	0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x0f, 0x5f, 0x63, 0x6f, 0x6d, 0x70, 0x61, 0x6e, // ........._compan
@@ -37,7 +38,12 @@ func TestMDNSHandler_PTR(t *testing.T) {
 	}
 	fmt.Println("dns", p)
 
-	ipv4Host, ipv6Host, err := dnsHandler.ProcessMDNS(nil, nil, udp.Payload())
+	frame, err := session.Parse(ptrMessage)
+	if err != nil {
+		t.Fatal("invalid dns packet", err)
+	}
+
+	ipv4Host, ipv6Host, err := dnsHandler.ProcessMDNS(frame)
 	if err != nil {
 		t.Error("unexpected error", err)
 	}
@@ -163,7 +169,12 @@ func TestMDNSHandler_Sonos(t *testing.T) {
 			}
 			fmt.Println("dns", p)
 
-			ipv4Host, _, err := dnsHandler.ProcessMDNS(nil, ether, udp.Payload())
+			frame, err := session.Parse(tt.frame)
+			if err != nil {
+				t.Fatal("invalid dns packet", err)
+			}
+
+			ipv4Host, _, err := dnsHandler.ProcessMDNS(frame)
 			if (err != nil) != tt.wantErr {
 				t.Error("unexpected error", err)
 			}
@@ -331,7 +342,12 @@ func TestMDNSHandler_Apple(t *testing.T) {
 			}
 			fmt.Println("dns", p)
 
-			ipv4Host, _, err := dnsHandler.ProcessMDNS(nil, ether, udp.Payload())
+			frame, err := session.Parse(tt.frame)
+			if err != nil {
+				t.Fatal("invalid dns packet", err)
+			}
+
+			ipv4Host, _, err := dnsHandler.ProcessMDNS(frame)
 			if (err != nil) != tt.wantErr {
 				t.Error("unexpected error", err)
 			}
