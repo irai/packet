@@ -7,7 +7,6 @@ import (
 	"net"
 	"os"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -21,18 +20,6 @@ import (
 
 const module = "engine"
 
-// Config has a list of configurable parameters that overide package defaults
-type Config struct {
-	// Conn enables the client to override the connection with a another packet conn
-	// useful for testing
-	Conn                    net.PacketConn  // listen connectinon
-	NICInfo                 *packet.NICInfo // override nic information - set to non nil to create a test Handler
-	FullNetworkScanInterval time.Duration   // Set it to -1 if no scan required
-	ProbeInterval           time.Duration   // how often to probe if IP is online
-	OfflineDeadline         time.Duration   // mark offline if more than OfflineInte
-	PurgeDeadline           time.Duration
-}
-
 // buffer holds a raw Ethernet network packet
 type buffer struct {
 	b [packet.EthMaxSize]byte // buffer
@@ -41,39 +28,28 @@ type buffer struct {
 
 // Handler implements network handler
 type Handler struct {
-	session                 *packet.Session // store shared session values
-	HandlerIP4              packet.PacketProcessor
-	HandlerIP6              packet.PacketProcessor
-	ICMP4Handler            icmp.ICMP4Handler
-	ICMP6Handler            icmp.ICMP6Handler
-	DHCP4Handler            dhcp4.DHCP4Handler
-	ARPHandler              arp.ARPHandler
-	DNSHandler              *dns.DNSHandler
-	FullNetworkScanInterval time.Duration // Set it to -1 if no scan required
-	ProbeInterval           time.Duration // how often to probe if IP is online
-	OfflineDeadline         time.Duration // mark offline if no updates
-	PurgeDeadline           time.Duration // purge entry if no updates
-	closed                  bool          // set to true when handler is closed
-	closeChan               chan bool     // close goroutines channel
-	dnsChannel              chan dns.DNSEntry
-	LayerTable              []LayerProcessor
+	session      *packet.Session // store shared session values
+	HandlerIP4   packet.PacketProcessor
+	HandlerIP6   packet.PacketProcessor
+	ICMP4Handler icmp.ICMP4Handler
+	ICMP6Handler icmp.ICMP6Handler
+	DHCP4Handler dhcp4.DHCP4Handler
+	ARPHandler   arp.ARPHandler
+	DNSHandler   *dns.DNSHandler
+	closed       bool      // set to true when handler is closed
+	closeChan    chan bool // close goroutines channel
+	dnsChannel   chan dns.DNSEntry
+	LayerTable   []LayerProcessor
 }
 
 // monitorNICFrequency set the frequency to validate NIC is working ok
 var monitorNICFrequency = time.Minute * 3
 
-// New creates an ICMPv6 handler with default values
-func NewEngine(nic string) (*Handler, error) {
-	return Config{}.NewEngine(nic)
-}
-
 // NewEngine creates an packet handler with config values
-func (config Config) NewEngine(nic string) (*Handler, error) {
-
-	var err error
-
-	h := &Handler{closeChan: make(chan bool)}
+func NewEngine(session *packet.Session) (h *Handler, err error) {
+	h = &Handler{closeChan: make(chan bool)}
 	h.dnsChannel = make(chan dns.DNSEntry, 128) // plenty of capacity to prevent blocking
+	h.session = session
 
 	// Ethernet layers
 	h.LayerTable = append(h.LayerTable, LayerProcessor{EtherType: 0x8808, Function: ProcessEthernetPause})
@@ -83,33 +59,6 @@ func (config Config) NewEngine(nic string) (*Handler, error) {
 	h.LayerTable = append(h.LayerTable, LayerProcessor{EtherType: 0x893a, Function: ProcessIEEE1905})
 	h.LayerTable = append(h.LayerTable, LayerProcessor{EtherType: 0x6970, Function: ProcessSonos})
 	h.LayerTable = append(h.LayerTable, LayerProcessor{EtherType: 0x880a, Function: Process880a})
-
-	h.FullNetworkScanInterval = config.FullNetworkScanInterval
-	if h.FullNetworkScanInterval != -1 && (h.FullNetworkScanInterval <= 0 || h.FullNetworkScanInterval > time.Hour*12) {
-		h.FullNetworkScanInterval = time.Minute * 60
-	}
-	h.ProbeInterval = config.ProbeInterval
-	if h.ProbeInterval <= 0 || h.ProbeInterval > time.Minute*10 {
-		h.ProbeInterval = time.Minute * 2
-	}
-	h.OfflineDeadline = config.OfflineDeadline
-	if h.OfflineDeadline <= h.ProbeInterval {
-		h.OfflineDeadline = h.ProbeInterval * 2
-	}
-	h.PurgeDeadline = config.PurgeDeadline
-	if h.PurgeDeadline <= h.OfflineDeadline {
-		h.PurgeDeadline = time.Minute * 61
-	}
-
-	// Skip if conn is overriden
-	if config.Conn == nil {
-		h.session, err = packet.NewSession(nic)
-	} else {
-		h.session, err = packet.Config{Conn: config.Conn, NICInfo: config.NICInfo}.NewSession()
-	}
-	if err != nil {
-		return nil, err
-	}
 
 	// no plugins to start
 	h.ARPHandler = arp.ARPNOOP{}
@@ -153,9 +102,6 @@ func (h *Handler) Close() error {
 
 	// close the internal channel to terminate internal goroutines
 	close(h.closeChan)
-	if h.session.Conn != nil {
-		h.session.Conn.Close()
-	}
 	return nil
 }
 
@@ -307,6 +253,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		}
 	}()
 
+	/**
 	// Setup a nic monitoring goroutine to ensure we always receive IP packets.
 	// If the switch port is disabled or the the nic stops receiving packets for any reason,
 	// our best option is to stop the engine and likely restart.
@@ -323,18 +270,21 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			atomic.StoreUint32(&ipHeartBeat, 0)
 		}
 	}()
+	**/
 
 	for {
 		buf := packetBuf.Get().(*buffer)
-		if err = h.session.Conn.SetReadDeadline(time.Now().Add(time.Second * 2)); err != nil {
-			if h.closed { // closed by call to h.Close()?
-				close(packetQueue)
-				return nil
+		/*
+			if err = h.session.Conn.SetReadDeadline(time.Now().Add(time.Second * 2)); err != nil {
+				if h.closed { // closed by call to h.Close()?
+					close(packetQueue)
+					return nil
+				}
+				return fmt.Errorf("setReadDeadline error: %w", err)
 			}
-			return fmt.Errorf("setReadDeadline error: %w", err)
-		}
+		*/
 
-		buf.n, _, err = h.session.Conn.ReadFrom(buf.b[:])
+		buf.n, _, err = h.session.ReadFrom(buf.b[:])
 		if err != nil {
 			if err, ok := err.(net.Error); ok && err.Temporary() {
 				continue
@@ -376,9 +326,11 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 			fastlog.NewLine(module, "packet queue").Int("len", len(packetQueue)).Write()
 		}
 
+		/**
 		if ether.EtherType() == syscall.ETH_P_IP || ether.EtherType() == syscall.ETH_P_IPV6 {
 			atomic.StoreUint32(&ipHeartBeat, 1)
 		}
+		**/
 
 		// wakeup worker
 		packetQueue <- buf

@@ -190,9 +190,14 @@ func NewTestContext() *TestContext {
 		HomeLAN4:    HomeLAN,
 	}
 
+	config := packet.Config{Conn: tc.inConn, NICInfo: &nicInfo, OfflineDeadline: time.Millisecond * 500, PurgeDeadline: time.Second * 2}
+	s, err := config.NewSession()
+	if err != nil {
+		panic(err)
+	}
+
 	// override handler with conn and nicInfo
-	config := engine.Config{Conn: tc.inConn, NICInfo: &nicInfo, ProbeInterval: time.Millisecond * 500, OfflineDeadline: time.Millisecond * 500, PurgeDeadline: time.Second * 2}
-	tc.Engine, err = config.NewEngine("eth0")
+	tc.Engine, err = engine.NewEngine(s)
 	if err != nil {
 		panic(err)
 	}

@@ -247,7 +247,7 @@ func (h *Session) Parse(p []byte) (frame Frame, err error) {
 		case frame.SrcAddr.Port == 123 || frame.DstAddr.Port == 123: // NTP
 			frame.PayloadID = PayloadNTP
 			h.Statisticsts[PayloadNTP].Count++
-		case frame.SrcAddr.Port == 1900 || frame.DstAddr.Port == 1900: // Microsoft Simple Service Discovery Protocol
+		case frame.SrcAddr.Port == 1900 || frame.DstAddr.Port == 1900: // Microsoft Simple Service Discovery Protocol (SSDP)
 			frame.PayloadID = PayloadSSDP
 			h.Statisticsts[PayloadSSDP].Count++
 		case frame.SrcAddr.Port == 3702 || frame.DstAddr.Port == 3702: // Web Services Discovery Protocol (WSD)

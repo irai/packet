@@ -53,7 +53,7 @@ func (h *Handler) processPacket(ether packet.Ether) (err error) {
 		_, err = f(frame, 0)
 
 	case packet.PayloadARP:
-		if err = h.ARPHandler.Spoof(frame); err != nil {
+		if err = h.ARPHandler.ProcessPacket(frame); err != nil {
 			return err
 		}
 
@@ -75,7 +75,7 @@ func (h *Handler) processPacket(ether packet.Ether) (err error) {
 		}
 
 	case packet.PayloadICMP6:
-		if err = h.ICMP6Handler.Spoof(frame); err != nil {
+		if err = h.ICMP6Handler.ProcessPacket(frame); err != nil {
 			fastlog.NewLine("packet", "error processing icmp6").Error(err).Write()
 			return err
 		}
@@ -90,12 +90,12 @@ func (h *Handler) processPacket(ether packet.Ether) (err error) {
 		}
 
 	case packet.PayloadMDNS:
-		if result, err = h.ProcessMDNS(frame); err != nil {
+		if err = h.ProcessMDNS(frame); err != nil {
 			return err
 		}
 
 	case packet.PayloadNBNS:
-		if result, err = h.ProcessNBNS(frame); err != nil {
+		if err = h.ProcessNBNS(frame); err != nil {
 			return err
 		}
 
@@ -166,30 +166,30 @@ func processInvalid(frame packet.Frame, pos int) (packet.Result, error) {
 	return packet.Result{}, nil
 }
 
-func (h *Handler) ProcessMDNS(frame packet.Frame) (result packet.Result, err error) {
+func (h *Handler) ProcessMDNS(frame packet.Frame) (err error) {
 	// case udpSrcPort == 5353 || udpDstPort == 5353: // Multicast DNS (MDNS)
-	ipv4Hosts, ipv6Hosts, err := h.DNSHandler.ProcessMDNS(nil, frame.Ether, frame.Payload())
+	ipv4Hosts, ipv6Hosts, err := h.DNSHandler.ProcessMDNS(frame)
 	if err != nil {
 		fmt.Printf("packet: error processing mdns: %s\n", err)
-		return result, err
+		return err
 	}
 	if len(ipv4Hosts) > 0 {
-		if host, _ := h.session.FindOrCreateHost(result.SrcAddr); host != nil {
-			host.UpdateMDNSName(ipv4Hosts[0].NameEntry)
+		if frame.Host != nil {
+			frame.Host.UpdateMDNSName(ipv4Hosts[0].NameEntry)
 		}
 	}
 
 	for _, v := range ipv6Hosts {
 		fastlog.NewLine(module, "mdns ipv6 ignoring host").Struct(v).Write()
 	}
-	return result, nil
+	return nil
 }
 
 func (h *Handler) ProcessLLMNR(frame packet.Frame) (result packet.Result, err error) {
 	// case udpSrcPort == 5355 || udpDstPort == 5355:
 	// Link Local Multicast Name Resolution (LLMNR)
 	fastlog.NewLine(module, "ether").Struct(frame.Ether).Module(module, "received llmnr packet").Write()
-	ipv4Hosts, ipv6Hosts, err := h.DNSHandler.ProcessMDNS(nil, frame.Ether, frame.Payload())
+	ipv4Hosts, ipv6Hosts, err := h.DNSHandler.ProcessMDNS(frame)
 	if err != nil {
 		fmt.Printf("packet: error processing llmnr: %s\n", err)
 		return result, err
@@ -251,7 +251,7 @@ func (h *Handler) ProcessSSDP(frame packet.Frame) (result packet.Result, err err
 	return result, nil
 }
 
-func (h *Handler) ProcessNBNS(frame packet.Frame) (result packet.Result, err error) {
+func (h *Handler) ProcessNBNS(frame packet.Frame) (err error) {
 	// case udpDstPort == 137 || udpDstPort == 138:
 	// Netbions NBNS
 	entry, err := h.DNSHandler.ProcessNBNS(frame.Host, frame.Ether, frame.Payload())
@@ -261,15 +261,15 @@ func (h *Handler) ProcessNBNS(frame packet.Frame) (result packet.Result, err err
 		// TODO: fix nbns parsing
 		if strings.Contains(err.Error(), "prefix is reserved") {
 			fastlog.NewLine(module, "nbns prefix is reserved - fixme").ByteArray("frame", frame.Ether).Write()
-			return result, err
+			return err
 		}
 		fastlog.NewLine(module, "error processing nbns").Error(err).Write()
-		return result, err
+		return err
 	}
 	if entry.Name != "" {
 		frame.Host.UpdateNBNSName(entry)
 	}
-	return result, nil
+	return nil
 }
 
 func ProcessEthernetPause(frame packet.Frame, pos int) (packet.Result, error) {

@@ -68,15 +68,15 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	info, err := packet.GetNICInfo(*nic)
+	s, err := packet.NewSession(*nic)
 	if err != nil {
-		fmt.Println("failed to get nic info ", err)
+		fmt.Printf("conn error: %s", err)
 		return
 	}
-	fmt.Printf("nicinfo: %+v\n", info)
+	fmt.Printf("nicinfo: %+v\n", s.NICInfo)
 
 	handlers := handlers{}
-	handlers.netfilterIP, err = engine.SegmentLAN(*nic, info.HostIP4, info.RouterIP4)
+	handlers.netfilterIP, err = engine.SegmentLAN(*nic, s.NICInfo.HostIP4, s.NICInfo.RouterIP4)
 	if err != nil {
 		fmt.Println("failed to segment lan ", err)
 		return
@@ -84,21 +84,16 @@ func main() {
 	fmt.Printf("netfilter: %+v\n", handlers.netfilterIP)
 
 	// change host IP
-	if !handlers.netfilterIP.IP.Equal(info.HostIP4.IP) {
+	if !handlers.netfilterIP.IP.Equal(s.NICInfo.HostIP4.IP) {
 		fmt.Printf("Changing host IP to %s - disable with -nodhcpip \n", handlers.netfilterIP)
 
-		if err := packet.LinuxConfigureInterface(*nic, &net.IPNet{IP: handlers.netfilterIP.IP, Mask: info.RouterIP4.Mask}, nil); err != nil {
+		if err := packet.LinuxConfigureInterface(*nic, &net.IPNet{IP: handlers.netfilterIP.IP, Mask: s.NICInfo.RouterIP4.Mask}, nil); err != nil {
 			fmt.Println("failed to change host IP ", err)
 		}
 	}
 
-	// setup packet handler
-	config := engine.Config{
-		ProbeInterval:           time.Minute * 1,
-		FullNetworkScanInterval: time.Minute * 20,
-		PurgeDeadline:           time.Minute * 10}
 	// setup packet listener
-	handlers.engine, err = config.NewEngine(*nic)
+	handlers.engine, err = engine.NewEngine(s)
 	if err != nil {
 		fmt.Printf("error opening nic=%s: %s\n", *nic, err)
 		iif, _ := net.Interfaces()
