@@ -201,7 +201,7 @@ func Test_Handler_BasicTest(t *testing.T) {
 			}
 
 			frame, _ := tc.session.Parse(ether)
-			err = tc.arp.Spoof(frame)
+			err = tc.arp.ProcessPacket(frame)
 			if err != tt.wantErr {
 				t.Errorf("Test_Requests:%s error = %v, wantErr %v", tt.name, err, tt.wantErr)
 			}

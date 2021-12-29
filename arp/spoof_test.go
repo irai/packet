@@ -49,7 +49,7 @@ func Test_Probe_Reject(t *testing.T) {
 				panic(err)
 			}
 			frame, _ := tc.session.Parse(ether)
-			if err := tc.arp.Spoof(frame); err != tt.wantErr {
+			if err := tc.arp.ProcessPacket(frame); err != tt.wantErr {
 				t.Errorf("Test_Requests:%s error = %v, wantErr %v", tt.name, err, tt.wantErr)
 			}
 			time.Sleep(time.Millisecond * 50) // there is a delay of 10 msec for each packet in arp hunt - need 30msec to get all three

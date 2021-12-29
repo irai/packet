@@ -19,7 +19,7 @@ const (
 
 type ARPHandler interface {
 	Close() error
-	Spoof(frame packet.Frame) error
+	ProcessPacket(frame packet.Frame) error
 	StartHunt(packet.Addr) (packet.HuntStage, error)
 	StopHunt(packet.Addr) (packet.HuntStage, error)
 	// CheckAddr(packet.Addr) (packet.HuntStage, error)
@@ -35,7 +35,7 @@ type ARPNOOP struct {
 
 func (p ARPNOOP) Start() error { return nil }
 func (p ARPNOOP) Close() error { return nil }
-func (p ARPNOOP) Spoof(frame packet.Frame) error {
+func (p ARPNOOP) ProcessPacket(frame packet.Frame) error {
 	return nil
 }
 func (p ARPNOOP) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
@@ -118,7 +118,7 @@ func (h *Handler) PrintTable() {
 // | ACD probe  | 1 | broadcast | clientMAC | clientMAC  | 0x00       | 00:00:00:00:00:00 |  targetIP |
 // | ACD announ | 1 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  clientIP |
 // +============+===+===========+===========+============+============+===================+===========+
-func (h *Handler) Spoof(frame packet.Frame) error {
+func (h *Handler) ProcessPacket(frame packet.Frame) error {
 	arpFrame := frame.ARP()
 	if arpFrame == nil {
 		return nil

@@ -119,12 +119,12 @@ func main() {
 			switch frame.PayloadID {
 			case packet.PayloadARP:
 				// Process arp packets
-				if err := arpSpoofer.Spoof(frame); err != nil {
+				if err := arpSpoofer.ProcessPacket(frame); err != nil {
 					fmt.Println("error processing arp packet", err)
 				}
 			case packet.PayloadICMP6:
 				// Process icmpv6 packets
-				if err := icmp6Spoofer.Spoof(frame); err != nil {
+				if err := icmp6Spoofer.ProcessPacket(frame); err != nil {
 					fmt.Println("error processing icmp6 packet", err)
 				}
 			}
