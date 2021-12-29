@@ -30,7 +30,7 @@ type ICMP6Handler interface {
 	PingAll() error
 	Start() error
 	Close() error
-	Spoof(frame packet.Frame) error
+	ProcessPacket(frame packet.Frame) error
 	StartHunt(packet.Addr) (packet.HuntStage, error)
 	StopHunt(packet.Addr) (packet.HuntStage, error)
 	CheckAddr(packet.Addr) (packet.HuntStage, error)
@@ -40,7 +40,7 @@ type ICMP6NOOP struct{}
 
 func (p ICMP6NOOP) Start() error   { return nil }
 func (p ICMP6NOOP) PingAll() error { return nil }
-func (p ICMP6NOOP) Spoof(packet.Frame) error {
+func (p ICMP6NOOP) ProcessPacket(packet.Frame) error {
 	return nil
 }
 func (p ICMP6NOOP) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
@@ -178,7 +178,7 @@ func (h *Handler6) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
 var repeat int = -1
 
 // ProcessPacket handles icmp6 packets
-func (h *Handler6) Spoof(pkt packet.Frame) (err error) {
+func (h *Handler6) ProcessPacket(pkt packet.Frame) (err error) {
 
 	// ether := packet.Ether(p)
 	ip6Frame := pkt.IP6()

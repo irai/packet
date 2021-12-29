@@ -56,7 +56,7 @@ func Test_ICMP6Redirect(t *testing.T) {
 		t.Fatal("invalid fields ", redirect)
 	}
 
-	err = tc.h.Spoof(frame)
+	err = tc.h.ProcessPacket(frame)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +129,7 @@ func TestHandler_Spoof(t *testing.T) {
 				return
 			}
 
-			err = tc.h.Spoof(frame)
+			err = tc.h.ProcessPacket(frame)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Handler.ProcessPacket() error = %v, wantErr %v", err, tt.wantErr)
 				return
