@@ -138,7 +138,7 @@ func (h *Handler) lockAndStartHunt(addr packet.Addr) (err error) {
 			if _, err := h.ICMP4Handler.StartHunt(addr); err != nil {
 				fmt.Printf("packet: failed to start icmp4 hunt: %s", err.Error())
 			}
-			if _, err := h.DHCP4Handler.StartHunt(addr); err != nil {
+			if err := h.DHCP4Handler.StartHunt(addr); err != nil {
 				fmt.Printf("packet: fai1led to start dhcp4 hunt: %s", err.Error())
 			}
 		}()
@@ -180,7 +180,7 @@ func (h *Handler) lockAndStopHunt(host *packet.Host, stage packet.HuntStage) (er
 	if addr.IP.To4() != nil {
 		go func() {
 			// DHCP4 will return not found if there is no lease entry; this is okay if the host has not acquired an IP yet
-			if _, err := h.DHCP4Handler.StopHunt(addr); err != nil && !errors.Is(err, packet.ErrNotFound) {
+			if err := h.DHCP4Handler.StopHunt(addr); err != nil && !errors.Is(err, packet.ErrNotFound) {
 				fmt.Printf("packet: failed to stop dhcp4 hunt: %s", err.Error())
 			}
 			if _, err := h.ICMP4Handler.StopHunt(addr); err != nil {

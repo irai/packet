@@ -23,7 +23,11 @@ func Test_declineSimple(t *testing.T) {
 	checkLeaseTable(t, tc, 1, 0, 0)
 
 	ether := newDHCP4DeclineFrame(srcAddr, dstAddr, tc.IPOffer, hostIP4, xid)
-	if _, err := tc.h.ProcessPacket(nil, ether, packet.UDP(packet.IP4(ether.Payload()).Payload()).Payload()); err != nil {
+	frame, err := tc.session.Parse(ether)
+	if err != nil {
+		panic(err)
+	}
+	if err := tc.h.ProcessPacket(frame); err != nil {
 		t.Fatalf("Test_Requests:%s error = %v", "newDHCPHOst", err)
 	}
 	select {
@@ -48,7 +52,11 @@ func Test_DeclineFromAnotherServer(t *testing.T) {
 
 	// discover packet
 	ether := newDHCP4DiscoverFrame(srcAddr, dstAddr, "name1", xid)
-	if _, err := tc.h.ProcessPacket(nil, ether, packet.UDP(packet.IP4(ether.Payload()).Payload()).Payload()); err != nil {
+	frame, err := tc.session.Parse(ether)
+	if err != nil {
+		panic(err)
+	}
+	if err := tc.h.ProcessPacket(frame); err != nil {
 		t.Fatalf("Test_Requests:%s error = %v", "newDHCPHOst", err)
 	}
 	select {
@@ -61,7 +69,11 @@ func Test_DeclineFromAnotherServer(t *testing.T) {
 	// decline for other host
 	dstAddr = packet.Addr{MAC: routerMAC, IP: routerIP4, Port: DHCP4ServerPort}
 	ether = newDHCP4DeclineFrame(srcAddr, dstAddr, ip5, routerIP4, xid)
-	if _, err := tc.h.ProcessPacket(nil, ether, packet.UDP(packet.IP4(ether.Payload()).Payload()).Payload()); err != nil {
+	frame, err = tc.session.Parse(ether)
+	if err != nil {
+		panic(err)
+	}
+	if err := tc.h.ProcessPacket(frame); err != nil {
 		t.Fatalf("Test_Requests:%s error = %v", "newDHCPHOst", err)
 	}
 	select {

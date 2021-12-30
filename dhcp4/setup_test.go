@@ -133,11 +133,17 @@ func setupTestHandler() *testContext {
 		fmt.Println("nicinfo: ", tc.session.NICInfo)
 	}
 
-	tc.h, err = Config{ClientConn: tc.clientInConn}.New(tc.session, net.IPNet{IP: hostIP4, Mask: net.IPv4Mask(255, 255, 255, 128)}, dnsIP4, testDHCPFilename)
+	config := Config{
+		NetfilterIP:   net.IPNet{IP: hostIP4, Mask: net.IPv4Mask(255, 255, 255, 128)},
+		DNSServer:     dnsIP4,
+		LeaseFilename: testDHCPFilename,
+		ClientConn:    tc.clientInConn}
+	tc.h, err = config.New(tc.session)
+	// tc.h, err = Config{ClientConn: tc.clientInConn}.New(tc.session, net.IPNet{IP: hostIP4, Mask: net.IPv4Mask(255, 255, 255, 128)}, dnsIP4, testDHCPFilename)
 	if err != nil {
 		panic("cannot create handler: " + err.Error())
 	}
-	tc.h.Start()
+	// tc.h.Start()
 	// time.Sleep(time.Millisecond * 10) // time for all goroutine to start
 	return &tc
 }
@@ -162,13 +168,22 @@ func newDHCPHost(t *testing.T, tc *testContext, mac net.HardwareAddr) []byte {
 	var ipOffer net.IP
 
 	ether := newDHCP4DiscoverFrame(srcAddr, dstAddr, srcAddr.MAC.String(), xid)
-	dhcp := packet.UDP(packet.IP4(ether.Payload()).Payload()).Payload()
-	if _, err := tc.h.ProcessPacket(nil, ether, dhcp); err != nil {
+	// dhcp := packet.UDP(packet.IP4(ether.Payload()).Payload()).Payload()
+	frame, err := tc.session.Parse(ether)
+	if err != nil {
+		panic(err)
+	}
+	if err := tc.h.ProcessPacket(frame); err != nil {
 		t.Fatalf("Test_Requests:%s error = %v", "newDHCPHOst", err)
 	}
 	select {
 	case p := <-tc.notifyReply:
-		dhcp := DHCP4(packet.UDP(packet.IP4(packet.Ether(p).Payload()).Payload()).Payload())
+		// dhcp := DHCP4(packet.UDP(packet.IP4(packet.Ether(p).Payload()).Payload()).Payload())
+		frame, err = tc.session.Parse(p)
+		if err != nil || frame.PayloadID != packet.PayloadDHCP4 {
+			t.Fatal("invalid err or payloadID", err, frame.PayloadID)
+		}
+		dhcp := DHCP4(frame.Payload())
 		ipOffer = dhcp.YIAddr()
 		options := dhcp.ParseOptions()
 		if options[OptionSubnetMask] == nil || options[OptionRouter] == nil || options[OptionDomainNameServer] == nil {
@@ -186,9 +201,11 @@ func newDHCPHost(t *testing.T, tc *testContext, mac net.HardwareAddr) []byte {
 	tc.Unlock()
 
 	ether = newDHCP4RequestFrame(srcAddr, dstAddr, srcAddr.MAC.String(), hostIP4, ipOffer, xid)
-	result := packet.Result{}
-	var err error
-	if result, err = tc.h.ProcessPacket(nil, ether, packet.UDP(packet.IP4(ether.Payload()).Payload()).Payload()); err != nil {
+	frame, err = tc.session.Parse(ether)
+	if err != nil {
+		panic(err)
+	}
+	if err = tc.h.ProcessPacket(frame); err != nil {
 		t.Fatalf("Test_Requests:%s error = %v", "newDHCPHOst", err)
 	}
 	select {
@@ -204,6 +221,8 @@ func newDHCPHost(t *testing.T, tc *testContext, mac net.HardwareAddr) []byte {
 	case <-time.After(time.Millisecond * 10):
 		t.Fatal("failed to receive reply")
 	}
+	/**
+	result := packet.Result{}
 	wantHuntStage := packet.StageNormal
 	if tc.h.session.IsCaptured(mac) {
 		wantHuntStage = packet.StageRedirected
@@ -215,6 +234,7 @@ func newDHCPHost(t *testing.T, tc *testContext, mac net.HardwareAddr) []byte {
 		t.Fatalf("newDHCPHost() invalid update=%v isrouter=%v result=%+v ", result.Update, result.IsRouter, result)
 	}
 	time.Sleep(time.Millisecond * 10)
+	**/
 
 	return xid
 }

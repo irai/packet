@@ -30,7 +30,7 @@ import (
 //    addresses; the address is selected based on the subnet from which
 //    the message was received (if 'giaddr' is 0) or on the address of
 //    the relay agent that forwarded the message ('giaddr' when not 0).
-func (h *Handler) handleDiscover(p DHCP4, options Options) (result packet.Result, d DHCP4) {
+func (h *Handler) handleDiscover(p DHCP4, options Options) (d DHCP4) {
 
 	clientID := getClientID(p, options)
 	reqIP := net.IP(options[OptionRequestedIPAddress]).To4()
@@ -75,7 +75,7 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (result packet.Result
 			// fmt.Printf("dhcp4 : error all ips allocated, failing silently: %s", err)
 			fastlog.NewLine(module, "all ips allocated, failing silently").Error(err).Write()
 			h.delete(lease)
-			return packet.Result{}, nil
+			return nil
 		}
 	}
 
@@ -105,9 +105,12 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (result packet.Result
 		}
 	}
 
-	// set the IP4 to be later checked in ARP ACD
-	result.Update = true
-	result.SrcAddr = packet.Addr{MAC: lease.Addr.MAC, IP: lease.IPOffer}
+	// TODO: fix this set the IP4 to be later checked in ARP ACD
+	/*
+		result.Update = true
+		result.SrcAddr = packet.Addr{MAC: lease.Addr.MAC, IP: lease.IPOffer}
+	*/
 	fastlog.NewLine(module, "offer OK").ByteArray("xid", p.XId()).ByteArray("clientid", clientID).IP("ip", lease.IPOffer).Write()
-	return result, ret
+	fastlog.NewLine(module, "WARNING not returning IP offer").Write()
+	return ret
 }

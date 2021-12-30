@@ -15,13 +15,12 @@ import (
 func TestAttach(t *testing.T) {
 	tc := setupTestHandler()
 
-	if err := tc.h.Stop(); err != nil {
+	if err := tc.h.Close(); err != nil {
 		panic(err)
 	}
-	if err := tc.h.Start(); err != nil {
-		panic(err)
-	}
-	if err := tc.h.Stop(); err != nil {
+
+	tc2 := setupTestHandler()
+	if err := tc2.h.Close(); err != nil {
 		panic(err)
 	}
 	tc.Close()
@@ -231,9 +230,13 @@ func TestHandler_handleRequest(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			n := copy(buffer, mustHex(tt.p)) // make sure the buffer is large enough for an ethernet paccket
 			ether := packet.Ether(buffer[:n])
-			ip := packet.IP4(ether.Payload())
-			udp := packet.UDP(ip.Payload())
-			dhcp := DHCP4(udp.Payload())
+			// ip := packet.IP4(ether.Payload())
+			// udp := packet.UDP(ip.Payload())
+			frame, err := tc.session.Parse(ether)
+			if err != nil {
+				panic(err)
+			}
+			dhcp := DHCP4(frame.Payload())
 			if err := dhcp.IsValid(); err != nil {
 				t.Fatalf("%s: Handler.handleRequest() unexpected error %s", tt.name, err)
 			}
@@ -250,13 +253,18 @@ func TestHandler_handleRequest(t *testing.T) {
 				fmt.Println("dhcp4 request updating IP", dhcp, dhcp.ParseOptions())
 			}
 
-			_, err := tc.h.ProcessPacket(nil, ether, dhcp)
+			err = tc.h.ProcessPacket(frame)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("%s: Handler.handleRequest() unexpected error %s", tt.name, err)
 			}
 			select {
 			case msg := <-tc.notifyReply:
-				dhcp := DHCP4(packet.UDP(packet.IP4(packet.Ether(msg).Payload()).Payload()).Payload())
+				frame, err = tc.session.Parse(msg)
+				if err != nil {
+					panic(err)
+				}
+				// dhcp := DHCP4(packet.UDP(packet.IP4(packet.Ether(msg).Payload()).Payload()).Payload())
+				dhcp := DHCP4(frame.Payload())
 				options := dhcp.ParseOptions()
 				tmp, ok := options[OptionDHCPMessageType]
 				if !ok || len(tmp) != 1 {

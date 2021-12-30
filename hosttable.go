@@ -247,6 +247,18 @@ func (h *Session) GetHosts() (list []*Host) {
 	return list
 }
 
+func (host *Host) UpdateDHCP4Name(name NameEntry) {
+	host.MACEntry.Row.Lock()
+	defer host.MACEntry.Row.Unlock()
+	var notify bool
+	host.DHCP4Name, notify = host.DHCP4Name.Merge(name)
+	if notify {
+		host.dirty = true
+		fastlog.NewLine(module, "updated dhcpv4 name").Struct(host.Addr).Struct(host.DHCP4Name).Write()
+		host.MACEntry.DHCP4Name, _ = host.MACEntry.DHCP4Name.Merge(host.DHCP4Name)
+	}
+}
+
 func (host *Host) UpdateLLMNRName(name NameEntry) {
 	host.MACEntry.Row.Lock()
 	defer host.MACEntry.Row.Unlock()

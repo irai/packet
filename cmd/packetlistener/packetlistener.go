@@ -87,7 +87,7 @@ func main() {
 	if !handlers.netfilterIP.IP.Equal(s.NICInfo.HostIP4.IP) {
 		fmt.Printf("Changing host IP to %s - disable with -nodhcpip \n", handlers.netfilterIP)
 
-		if err := packet.LinuxConfigureInterface(*nic, &net.IPNet{IP: handlers.netfilterIP.IP, Mask: s.NICInfo.RouterIP4.Mask}, nil); err != nil {
+		if err := packet.LinuxConfigureInterface(*nic, &s.NICInfo.HostIP4, &net.IPNet{IP: handlers.netfilterIP.IP, Mask: s.NICInfo.RouterIP4.Mask}, nil); err != nil {
 			fmt.Println("failed to change host IP ", err)
 		}
 	}
@@ -107,7 +107,6 @@ func main() {
 		}
 		return
 	}
-	fmt.Println("nic info  :", handlers.engine.Session().NICInfo)
 
 	// ARP
 	handlers.arp, err = arp.New(handlers.engine.Session())
@@ -134,7 +133,7 @@ func main() {
 	handlers.engine.AttachICMP6(handlers.icmp6)
 
 	// DHCP4
-	handlers.dhcp4, err = dhcp4.New(handlers.engine.Session(), handlers.netfilterIP, packet.CloudFlareDNS1, "./dhcpconfig.yaml")
+	handlers.dhcp4, err = dhcp4.Config{NetfilterIP: handlers.netfilterIP, DNSServer: packet.CloudFlareDNS1, LeaseFilename: "./dhcpconfig.yaml"}.New(s)
 	if err != nil {
 		fmt.Printf("Failed to create dhcp4 handler: netfilterIP=%s error=%s", handlers.netfilterIP, err)
 		os.Exit(-1)
@@ -217,7 +216,8 @@ func doEngine(h *handlers, tokens []string) {
 				fmt.Println("error icmp6 is already attached")
 				return
 			}
-			h.dhcp4, err = dhcp4.New(h.engine.Session(), h.netfilterIP, icmp.DNS6Cloudflare1, "")
+			h.dhcp4, err = dhcp4.Config{NetfilterIP: h.netfilterIP, DNSServer: packet.CloudFlareDNS1, LeaseFilename: "./dhcpconfig.yaml"}.New(h.engine.Session())
+			// h.dhcp4, err = dhcp4.New(h.engine.Session(), h.netfilterIP, icmp.DNS6Cloudflare1, "")
 		default:
 			fmt.Println("invalid engine name")
 			return

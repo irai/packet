@@ -45,10 +45,9 @@ import (
 //  indicating clearly that it presently owns that address. It then broadcasts the request on the local network.
 //
 
-func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, senderIP net.IP) (packet.Result, DHCP4) {
+func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, senderIP net.IP) DHCP4 {
 
 	reqIP, serverIP := net.IPv4zero, net.IPv4zero
-	result := packet.Result{}
 
 	clientID := getClientID(p, options)
 	if tmp, ok := options[OptionRequestedIPAddress]; ok {
@@ -60,8 +59,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 	name := string(options[OptionHostName])
 	if host != nil {
 		if name != "" {
-			result.Update = true
-			result.NameEntry.Name = name
+			host.UpdateDHCP4Name(packet.NameEntry{Type: module, Name: name})
 		}
 	}
 
@@ -106,7 +104,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 	// reqIP must always be filled in
 	if reqIP.Equal(net.IPv4zero) {
 		fastlog.NewLine(module, "invalid request IP").ByteArray("xid", p.XId()).String("optionIP", string(options[OptionRequestedIPAddress])).IP("ciaddr", p.CIAddr()).Write()
-		return result, nil
+		return nil
 	}
 
 	captured := h.session.IsCaptured(p.CHAddr())
@@ -129,22 +127,25 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 				lease.Addr.IP = nil
 			}
 
+			/****
 			// almost always a new host IP
 			result.Update = true
 			result.IsRouter = true                                   // hack to mark result as a new host
 			result.SrcAddr = packet.Addr{MAC: p.CHAddr(), IP: reqIP} // ok to pass frame addr
 			result.NameEntry.Name = name
 			result.HuntStage = packet.StageNoChange
+			***/
+			fastlog.NewLine(module, "WARNING in selecting not setting new host IP").MAC("mac", p.CHAddr()).IP("ip", reqIP).Write()
 
 			if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && captured) {
 				// The client is attempting to confirm an offer with another server
 				// Send a nack to client
 				fastlog.NewLine(module, "request NACK - select is for another server").ByteArray("xid", p.XId()).IP("serverIP", serverIP).Uint16("secs", p.Secs()).Write()
-				return result, nakPacket(p, subnet.DHCPServer, clientID)
+				return nakPacket(p, subnet.DHCPServer, clientID)
 			}
 
 			fastlog.NewLine(module, "ignore select for another server").ByteArray("xid", p.XId()).IP("serverIP", serverIP).Write()
-			return result, nil // request not for us - silently discard packet
+			return nil // request not for us - silently discard packet
 		}
 
 		if !bytes.Equal(lease.Addr.MAC, p.CHAddr()) || // invalid hardware
@@ -152,7 +153,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 			(lease.State == StateAllocated && !lease.Addr.IP.Equal(reqIP)) { // invalid request - iphone send duplicate select packets - let it pass
 			// fmt.Printf("dhcp4 : request NACK - select invalid parameters %s lxid=%v leaseIP=%s\n", fields, lease.XID, lease.Addr.IP)
 			fastlog.NewLine(module, "request NACK - select invalid parameters").ByteArray("xid", p.XId()).ByteArray("lxid", lease.XID).IP("leaseIP", lease.Addr.IP).Write()
-			return packet.Result{}, nakPacket(p, subnet.DHCPServer, clientID)
+			return nakPacket(p, subnet.DHCPServer, clientID)
 		}
 		fastlog.NewLine(module, "request ACK - select").ByteArray("xid", p.XId()).ByteArray("clientid", clientID).IP("ip", reqIP).Write()
 
@@ -165,7 +166,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 			// fmt.Printf("dhcp4 : request NACK - renew invalid or expired lease %s gw=%s\n", fields, subnet.DefaultGW)
 			fastlog.NewLine(module, "request NACK - renew invalid or expired lease").ByteArray("xid", p.XId()).IP("gw", subnet.DefaultGW).Write()
 
-			return packet.Result{}, nakPacket(p, subnet.DHCPServer, clientID)
+			return nakPacket(p, subnet.DHCPServer, clientID)
 		}
 
 		fastlog.NewLine(module, "request ACK - renewing").ByteArray("xid", p.XId()).IP("ip", reqIP).Write()
@@ -177,11 +178,14 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 		//  - client has not sent discover packet
 
 		// almost always a new host IP
-		result.Update = true
-		result.IsRouter = true                                   // hack to mark result as a new host
-		result.SrcAddr = packet.Addr{MAC: p.CHAddr(), IP: reqIP} // ok to pass frame addr
-		result.NameEntry.Name = name
-		result.HuntStage = packet.StageNoChange
+		/*
+			result.Update = true
+			result.IsRouter = true                                   // hack to mark result as a new host
+			result.SrcAddr = packet.Addr{MAC: p.CHAddr(), IP: reqIP} // ok to pass frame addr
+			result.NameEntry.Name = name
+			result.HuntStage = packet.StageNoChange
+		*/
+		fastlog.NewLine(module, "WARNING not setting name in rebooting IP").Write()
 
 		if lease.State == StateFree {
 			fastlog.NewLine(module, "client lease does not exist").ByteArray("xid", p.XId()).IP("ip", reqIP).Write()
@@ -195,7 +199,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 				// always NACK so next attempt may trigger discover
 				// also, it must return nack if moving form net2 to net1
 				// in the iPhone case, this causes the iPhone to retry discover
-				return result, nakPacket(p, h.net1.DefaultGW, clientID)
+				return nakPacket(p, h.net1.DefaultGW, clientID)
 			}
 		}
 
@@ -213,7 +217,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 
 			// We have the lease but the IP or MAC don't match
 			// Send NACK
-			return result, nakPacket(p, subnet.DHCPServer, clientID)
+			return nakPacket(p, subnet.DHCPServer, clientID)
 		}
 
 		if operation == rebooting {
@@ -224,7 +228,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 
 	default:
 		fastlog.NewLine(module, "error in request - ignore invalid operation").ByteArray("xid", p.XId()).Uint8("operation", operation).Write()
-		return packet.Result{}, nil
+		return nil
 	}
 
 	// successful request
@@ -254,11 +258,14 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 
 	h.saveConfig(h.filename)
 
+	/**
 	result.SrcAddr = lease.Addr
 	result.Update = true
 	result.IsRouter = true // hack to mark result as a new host
 	result.HuntStage = lease.subnet.Stage
 	result.NameEntry.Name = lease.Name
+	*/
+	fastlog.NewLine(module, "WARNING not setting name in request IP").Write()
 
-	return result, ret
+	return ret
 }

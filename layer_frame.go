@@ -148,14 +148,6 @@ func (h *Session) Parse(p []byte) (frame Frame, err error) {
 		return frame, nil
 	}
 
-	// Ignore packets sent via our interface
-	// If we don't have this, then we received all sent and forwarded packets with client IPs containing our host mac
-	//
-	// TODO: should this be in the bpf rules?
-	if bytes.Equal(frame.SrcAddr.MAC, h.NICInfo.HostMAC) {
-		return frame, nil
-	}
-
 	// In order to allow Ethernet II and IEEE 802.3 framing to be used on the same Ethernet segment,
 	// a unifying standard, IEEE 802.3x-1997, was introduced that required that EtherType values be greater than or equal to 1536.
 	// Thus, values of 1500 and below for this field indicate that the field is used as the size of the payload of the Ethernet frame
@@ -181,7 +173,9 @@ func (h *Session) Parse(p []byte) (frame Frame, err error) {
 		frame.SrcAddr.IP = ip4.Src()
 		frame.DstAddr.IP = ip4.Dst()
 		// create host if ip is local lan IP
-		if frame.Session.NICInfo.HostIP4.Contains(frame.SrcAddr.IP) {
+		// don't create host if packets sent via our interface.
+		// If we don't have this, then we received all sent and forwarded packets with client IPs containing our host mac
+		if !bytes.Equal(frame.SrcAddr.MAC, h.NICInfo.HostMAC) && frame.Session.NICInfo.HostIP4.Contains(frame.SrcAddr.IP) {
 			frame.Host, _ = frame.Session.FindOrCreateHost(frame.SrcAddr) // will lock/unlock
 		}
 	case syscall.ETH_P_IPV6:
@@ -205,18 +199,25 @@ func (h *Session) Parse(p []byte) (frame Frame, err error) {
 		// For example, an IP6 google search will be forwared by the router as:
 		//    ip6 src=google.com dst=GUA localhost and srcMAC=routerMAC dstMAC=localHostMAC
 		// TODO: is it better to check if IP is in the prefix?
-		if frame.SrcAddr.IP.IsLinkLocalUnicast() ||
-			(frame.SrcAddr.IP.IsGlobalUnicast() && !bytes.Equal(frame.SrcAddr.MAC, frame.Session.NICInfo.RouterMAC)) {
+		//
+		// don't create host if packets sent via our interface.
+		// If we don't have this, then we received all sent and forwarded packets with client IPs containing our host mac
+		if !bytes.Equal(frame.SrcAddr.MAC, h.NICInfo.HostMAC) &&
+			(frame.SrcAddr.IP.IsLinkLocalUnicast() ||
+				(frame.SrcAddr.IP.IsGlobalUnicast() && !bytes.Equal(frame.SrcAddr.MAC, frame.Session.NICInfo.RouterMAC))) {
 			frame.Host, _ = frame.Session.FindOrCreateHost(frame.SrcAddr) // will lock/unlock
 		}
 	case syscall.ETH_P_ARP:
 		frame.PayloadID = PayloadARP
 		h.Statistics[PayloadARP].Count++
 		// create host if new IP appers in arp packet
+		// don't create host if packets sent via our interface.
+		// If we don't have this, then we received all sent and forwarded packets with client IPs containing our host mac
 		// Validates arp len and that hardware len is 6 for mac address
 		if arp := frame.Payload(); len(arp) >= 28 && arp[4] == 6 {
 			srcIP := net.IP(arp[14:18])
-			if frame.Session.NICInfo.HostIP4.Contains(srcIP) {
+			if !bytes.Equal(frame.SrcAddr.MAC, h.NICInfo.HostMAC) &&
+				frame.Session.NICInfo.HostIP4.Contains(srcIP) {
 				addr := Addr{MAC: net.HardwareAddr(arp[8:14]), IP: srcIP} // src mac and src ip
 				frame.Host, _ = frame.Session.FindOrCreateHost(addr)      // will lock/unlock
 			}

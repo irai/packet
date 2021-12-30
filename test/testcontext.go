@@ -218,7 +218,14 @@ func NewTestContext() *TestContext {
 	if err != nil {
 		panic(err)
 	}
-	tc.DHCP4Handler, err = dhcp4.Config{ClientConn: tc.clientInConn}.New(tc.Engine.Session(), netfilterIP, DNSGoogleIP4, "")
+
+	dhcpConfig := dhcp4.Config{
+		NetfilterIP:   netfilterIP,
+		DNSServer:     DNSGoogleIP4,
+		LeaseFilename: "",
+		ClientConn:    tc.clientInConn}
+	tc.DHCP4Handler, err = dhcpConfig.New(s)
+	// tc.DHCP4Handler, err = dhcp4.Config{ClientConn: tc.clientInConn}.New(tc.Engine.Session(), netfilterIP, DNSGoogleIP4, "")
 	if err != nil {
 		panic("cannot create handler" + err.Error())
 	}

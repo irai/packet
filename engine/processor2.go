@@ -40,7 +40,7 @@ func (h *Handler) processPacket(ether packet.Ether) (err error) {
 		}
 
 	case packet.PayloadDHCP4:
-		if result, err = h.DHCP4Handler.ProcessPacket(frame.Host, frame.Ether, frame.Payload()); err != nil {
+		if err = h.DHCP4Handler.ProcessPacket(frame); err != nil {
 			fmt.Printf("packet: error processing dhcp4: %s\n", err)
 			return err
 		}

@@ -53,7 +53,7 @@ func NewEngine(session *packet.Session) (h *Handler, err error) {
 	h.HandlerIP6 = packet.PacketNOOP{}
 	h.ICMP4Handler = icmp.ICMP4NOOP{}
 	h.ICMP6Handler = icmp.ICMP6NOOP{}
-	h.DHCP4Handler = packet.PacketNOOP{}
+	h.DHCP4Handler = dhcp4.PacketNOOP{}
 
 	// default DNS handler
 	h.DNSHandler, _ = dns.New(h.session)
@@ -129,10 +129,10 @@ func (h *Handler) AttachDHCP4(p dhcp4.DHCP4Handler) {
 	h.DHCP4Handler = p
 }
 func (h *Handler) DetachDHCP4() error {
-	if err := h.DHCP4Handler.Stop(); err != nil {
+	if err := h.DHCP4Handler.Close(); err != nil {
 		return err
 	}
-	h.DHCP4Handler = packet.PacketNOOP{}
+	h.DHCP4Handler = dhcp4.PacketNOOP{}
 	return nil
 }
 
@@ -171,9 +171,11 @@ func (h *Handler) startPlugins() error {
 	if err := h.session.ARPScan(); err != nil {
 		fmt.Println("error: in ARP scan:", err)
 	}
+	/**
 	if err := h.DHCP4Handler.Start(); err != nil {
 		fmt.Println("error: in DHCP4 start:", err)
 	}
+	*/
 
 	h.DNSHandler.Start()
 
@@ -196,8 +198,8 @@ func (h *Handler) stopPlugins() error {
 	if err := h.ARPHandler.Close(); err != nil {
 		fmt.Println("error: in ARP stop:", err)
 	}
-	if err := h.DHCP4Handler.Stop(); err != nil {
-		fmt.Println("error: in DHCP4 stop:", err)
+	if err := h.DHCP4Handler.Close(); err != nil {
+		fmt.Println("error: in DHCP4 close:", err)
 	}
 	return nil
 }

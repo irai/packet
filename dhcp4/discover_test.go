@@ -68,7 +68,11 @@ func TestDHCPHandler_handleDiscover(t *testing.T) {
 				t.Fatal("error processing packet", err)
 				return
 			}
-			_, err = tc.h.ProcessPacket(nil, ether, udp.Payload())
+			frame, err := tc.session.Parse(ether)
+			if err != nil {
+				panic(err)
+			}
+			err = tc.h.ProcessPacket(frame)
 			if err != nil {
 				t.Errorf("DHCPHandler.handleDiscover() error sending packet error=%s", err)
 				return
@@ -141,7 +145,11 @@ func TestDHCPHandler_exhaust(t *testing.T) {
 					t.Fatal("error processing packet", err)
 					return
 				}
-				_, err = tc.h.ProcessPacket(nil, ether, udp.Payload())
+				frame, err := tc.session.Parse(ether)
+				if err != nil {
+					panic(err)
+				}
+				err = tc.h.ProcessPacket(frame)
 				if err != nil {
 					t.Errorf("DHCPHandler.handleDiscover() error sending packet error=%s", err)
 					return
