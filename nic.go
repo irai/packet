@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/irai/packet/fastlog"
 	"github.com/vishvananda/netlink"
 )
 
@@ -41,14 +42,14 @@ func GetNICInfo(nic string) (info *NICInfo, err error) {
 			continue
 		}
 
-		if ipNet.IP.To4() != nil && ipNet.IP.IsGlobalUnicast() {
+		if ip.To4() != nil && ip.IsGlobalUnicast() {
 			info.HostIP4 = net.IPNet{IP: ip.To4(), Mask: ipNet.Mask}
 		}
-		if ipNet.IP.To16() != nil && ipNet.IP.To4() == nil {
-			if ipNet.IP.IsLinkLocalUnicast() {
+		if ip.To16() != nil && ip.To4() == nil {
+			if ip.IsLinkLocalUnicast() {
 				info.HostLLA = net.IPNet{IP: ip, Mask: ipNet.Mask}
 			}
-			if ipNet.IP.IsGlobalUnicast() {
+			if ip.IsGlobalUnicast() {
 				info.HostGUA = net.IPNet{IP: ip, Mask: ipNet.Mask}
 			}
 		}
@@ -56,6 +57,20 @@ func GetNICInfo(nic string) (info *NICInfo, err error) {
 
 	if info.HostIP4.IP == nil || info.HostIP4.IP.IsUnspecified() {
 		return nil, fmt.Errorf("ipv4 not found on interface")
+	}
+
+	// Print warning if nic has more than one IPv4 and our chosen IP is not the default.
+	//
+	// The following "ip addrs" output is possible on linuxi if dhcpclient is running:
+	//
+	//   2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP group default qlen 1000
+	//   link/ether 02:42:15:e6:10:08 brd ff:ff:ff:ff:ff:ff
+	//   inet 192.168.0.107/24 brd 192.168.0.255 scope global dynamic eth0
+	//      valid_lft 86208sec preferred_lft 86208sec
+	//   inet 192.168.0.129/24 brd 192.168.0.255 scope global secondary eth0
+	//      valid_lft forever preferred_lft forever
+	if defaultIP := defaultOutboundIP(); !info.HostIP4.IP.Equal(defaultIP) {
+		fastlog.NewLine(module, "warning host IP is different than default outbound IP").IP("hostIP", info.HostIP4.IP).IP("defaultIP", defaultIP).Write()
 	}
 
 	defaultGW, err := GetIP4DefaultGatewayAddr(nic)
@@ -69,6 +84,19 @@ func GetNICInfo(nic string) (info *NICInfo, err error) {
 	info.RouterAddr4 = Addr{MAC: info.RouterMAC, IP: info.RouterIP4.IP}
 	info.HostAddr4 = Addr{MAC: info.HostMAC, IP: info.HostIP4.IP}
 	return info, nil
+}
+
+// defaultOutboundIP return the preferred outbound ip
+func defaultOutboundIP() net.IP {
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		return nil
+	}
+	defer conn.Close()
+
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+
+	return localAddr.IP
 }
 
 const (
@@ -212,7 +240,10 @@ func ExecPing(ip string) (err error) {
 	return err
 }
 
-func LinuxConfigureInterface(nic string, ip *net.IPNet, gw *net.IPNet) error {
+func LinuxConfigureInterface(nic string, hostIP *net.IPNet, newIP *net.IPNet, gw *net.IPNet) error {
+	if hostIP.IP.Equal(newIP.IP) {
+		return fmt.Errorf("host ip cannot be the same as new ip")
+	}
 
 	// Get a structure describing the network interface.
 	localInterface, err := netlink.LinkByName(nic)
@@ -220,12 +251,10 @@ func LinuxConfigureInterface(nic string, ip *net.IPNet, gw *net.IPNet) error {
 		return err
 	}
 
-	// Give the interface an address of 192.168.1.1, on a
-	// network with a 255.255.255.0 mask.
-	ipConfig := &netlink.Addr{IPNet: ip}
+	// set new IP and mask - this will automatically set lifetime to forever.
+	ipConfig := &netlink.Addr{IPNet: newIP}
 	if err = netlink.AddrAdd(localInterface, ipConfig); err != nil {
-		fmt.Printf("nic: error configuring netlink error=%s\n", err)
-		return err
+		return fmt.Errorf("netlink failed to set new host ip=%s: %w", newIP, err)
 	}
 
 	if gw != nil {
@@ -245,6 +274,13 @@ func LinuxConfigureInterface(nic string, ip *net.IPNet, gw *net.IPNet) error {
 	if err = netlink.LinkSetUp(localInterface); err != nil {
 		return err
 	}
+
+	// delete previous IP
+	ipConfig = &netlink.Addr{IPNet: hostIP}
+	if err = netlink.AddrDel(localInterface, ipConfig); err != nil {
+		return fmt.Errorf("netlink failed to delete host ip=%s: %w", hostIP, err)
+	}
+
 	return nil
 }
 
