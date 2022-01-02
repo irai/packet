@@ -175,7 +175,7 @@ func (h *Session) Parse(p []byte) (frame Frame, err error) {
 		// create host if ip is local lan IP
 		// don't create host if packets sent via our interface.
 		// If we don't have this, then we received all sent and forwarded packets with client IPs containing our host mac
-		if !bytes.Equal(frame.SrcAddr.MAC, h.NICInfo.HostAddr4.MAC) && frame.Session.NICInfo.HostIP4.Contains(frame.SrcAddr.IP) {
+		if !bytes.Equal(frame.SrcAddr.MAC, h.NICInfo.HostAddr4.MAC) && frame.Session.NICInfo.HomeLAN4.Contains(frame.SrcAddr.IP) {
 			frame.Host, _ = frame.Session.findOrCreateHostWithLock(frame.SrcAddr) // will lock/unlock
 		}
 	case syscall.ETH_P_IPV6:
@@ -204,7 +204,7 @@ func (h *Session) Parse(p []byte) (frame Frame, err error) {
 		// If we don't have this, then we received all sent and forwarded packets with client IPs containing our host mac
 		if !bytes.Equal(frame.SrcAddr.MAC, h.NICInfo.HostAddr4.MAC) &&
 			(frame.SrcAddr.IP.IsLinkLocalUnicast() ||
-				(frame.SrcAddr.IP.IsGlobalUnicast() && !bytes.Equal(frame.SrcAddr.MAC, frame.Session.NICInfo.RouterMAC))) {
+				(frame.SrcAddr.IP.IsGlobalUnicast() && !bytes.Equal(frame.SrcAddr.MAC, frame.Session.NICInfo.RouterAddr4.MAC))) {
 			frame.Host, _ = frame.Session.findOrCreateHostWithLock(frame.SrcAddr) // will lock/unlock
 		}
 	case syscall.ETH_P_ARP:
@@ -217,7 +217,7 @@ func (h *Session) Parse(p []byte) (frame Frame, err error) {
 		if arp := frame.Payload(); len(arp) >= 28 && arp[4] == 6 {
 			srcIP := net.IP(arp[14:18])
 			if !bytes.Equal(frame.SrcAddr.MAC, h.NICInfo.HostAddr4.MAC) &&
-				frame.Session.NICInfo.HostIP4.Contains(srcIP) {
+				frame.Session.NICInfo.HomeLAN4.Contains(srcIP) {
 				addr := Addr{MAC: net.HardwareAddr(arp[8:14]), IP: srcIP}    // src mac and src ip
 				frame.Host, _ = frame.Session.findOrCreateHostWithLock(addr) // will lock/unlock
 			}

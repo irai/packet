@@ -65,13 +65,13 @@ func (h *Handler4) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
 	}
 
 	// first attempt
-	err := h.ping(packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.RouterIP4.IP}, addr, time.Second*2)
+	err := h.ping(packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: h.session.NICInfo.RouterAddr4.IP}, addr, time.Second*2)
 	if err == nil {
 		return packet.StageRedirected, nil
 	}
 
 	// second attempt
-	err = h.ping(packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.RouterIP4.IP}, addr, time.Second*2)
+	err = h.ping(packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: h.session.NICInfo.RouterAddr4.IP}, addr, time.Second*2)
 	if err == nil {
 		return packet.StageRedirected, nil
 	}

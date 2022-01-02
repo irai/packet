@@ -97,7 +97,7 @@ func (h *Handler6) StartRADVS(managed bool, other bool, prefixes []packet.Prefix
 
 func (h *Handler6) startRADVS(managed bool, other bool, prefixes []packet.PrefixInformation, rdnss *packet.RecursiveDNSServer) (radvs *RADVS, err error) {
 	radvs = &RADVS{stopChannel: make(chan bool, 1)}
-	radvs.Router, _ = h.findOrCreateRouter(h.session.NICInfo.HostMAC, h.session.NICInfo.HostLLA.IP)
+	radvs.Router, _ = h.findOrCreateRouter(h.session.NICInfo.HostAddr4.MAC, h.session.NICInfo.HostLLA.IP)
 	radvs.Router.enableRADVS = true
 	radvs.Router.ManagedFlag = managed
 	radvs.Router.OtherCondigFlag = other

@@ -88,7 +88,7 @@ type Handler struct {
 
 // New returns a dhcp handler.
 func New(session *packet.Session) (handler *Handler, err error) {
-	config := Config{Mode: ModeSecondaryServer, DNSServer: session.NICInfo.RouterIP4.IP, LeaseFilename: LeaseFilename}
+	config := Config{Mode: ModeSecondaryServer, DNSServer: session.NICInfo.RouterAddr4.IP, LeaseFilename: LeaseFilename}
 	return config.New(session)
 }
 
@@ -101,7 +101,7 @@ func (config Config) New(session *packet.Session) (h *Handler, err error) {
 
 	// validate netfilter subnet
 	if config.NetfilterIP.IP == nil {
-		config.NetfilterIP = session.NICInfo.HostIP4 // using single subnet: same as home subnet
+		config.NetfilterIP = net.IPNet{IP: session.NICInfo.HostAddr4.IP, Mask: session.NICInfo.HomeLAN4.Mask} // using single subnet: same as home subnet
 	}
 	if !session.NICInfo.HomeLAN4.Contains(config.NetfilterIP.IP) {
 		return nil, fmt.Errorf("netfilter ip=%s does not exist in home net=%s: %w", config.NetfilterIP, session.NICInfo.HomeLAN4.IP, packet.ErrInvalidIP)
@@ -115,14 +115,14 @@ func (config Config) New(session *packet.Session) (h *Handler, err error) {
 
 	// validate dns server : default to router if not given
 	if config.DNSServer == nil {
-		config.DNSServer = session.NICInfo.RouterIP4.IP
+		config.DNSServer = session.NICInfo.RouterAddr4.IP
 	}
 
 	// Segment network - home subnet includes the whole home LAN
 	homeSubnet := SubnetConfig{
 		LAN:        session.NICInfo.HomeLAN4,
-		DefaultGW:  session.NICInfo.RouterIP4.IP.To4(),
-		DHCPServer: session.NICInfo.HostIP4.IP.To4(),
+		DefaultGW:  session.NICInfo.RouterAddr4.IP.To4(),
+		DHCPServer: session.NICInfo.HostAddr4.IP.To4(),
 		DNSServer:  config.DNSServer.To4(),
 		Stage:      packet.StageNormal,
 		// FirstIP:    net.ParseIP("192.168.0.10"),
@@ -132,7 +132,7 @@ func (config Config) New(session *packet.Session) (h *Handler, err error) {
 	netfilterSubnet := SubnetConfig{
 		LAN:        net.IPNet{IP: config.NetfilterIP.IP.Mask(config.NetfilterIP.Mask), Mask: config.NetfilterIP.Mask},
 		DefaultGW:  config.NetfilterIP.IP.To4(),
-		DHCPServer: session.NICInfo.HostIP4.IP,
+		DHCPServer: session.NICInfo.HostAddr4.IP,
 		DNSServer:  packet.CloudFlareFamilyDNS1,
 		Stage:      packet.StageRedirected,
 		// FirstIP:    net.ParseIP("192.168.0.10"),
@@ -341,7 +341,7 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 		if Debug {
 			fastlog.NewLine(module, "send reply to").Struct(dstAddr).Struct(response).Write()
 		}
-		srcAddr := packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostIP4.IP, Port: DHCP4ServerPort}
+		srcAddr := packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: h.session.NICInfo.HostAddr4.IP, Port: DHCP4ServerPort}
 		if err := sendDHCP4Packet(h.session.Conn, srcAddr, dstAddr, response); err != nil {
 			fmt.Printf("dhcp4: failed sending packet error=%s", err)
 			return err

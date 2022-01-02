@@ -28,12 +28,40 @@ type Host struct {
 	HuntStage    HuntStage // host huntStage
 	LastSeen     time.Time // last packet time
 	Manufacturer string    // Mac address manufacturer
+	flags        uint      // processing flags : dirty(0x01), online_transition (0x02), offline_transition (0x04)
 	DHCP4Name    NameEntry
 	MDNSName     NameEntry
 	SSDPName     NameEntry
 	LLMNRName    NameEntry
 	NBNSName     NameEntry
-	dirty        bool
+	// dirty        bool
+}
+
+func (e *Host) dirty() bool { return e.flags&0x01 == 0x01 }
+func (e *Host) setDirty(b bool) {
+	if b {
+		e.flags |= 0b001
+	} else {
+		e.flags &= 0b110
+	}
+}
+
+func (e *Host) onlineTransition() bool { return e.flags&0x02 == 0x02 }
+func (e *Host) setOnlineTransition(b bool) {
+	if b {
+		e.flags |= 0b010
+	} else {
+		e.flags &= 0b101
+	}
+}
+
+func (e *Host) offlineTransition() bool { return e.flags&0x04 == 0x04 }
+func (e *Host) setOfflineTransition(b bool) {
+	if b {
+		e.flags |= 0b100
+	} else {
+		e.flags &= 0b011
+	}
 }
 
 func (e *Host) String() string {
@@ -116,54 +144,31 @@ func (h *Session) findOrCreateHostWithLock(addr Addr) (host *Host, found bool) {
 	}
 	h.mutex.RUnlock()
 
-	// lock for writing
+	// lock session for writing
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 
-	/**
-		return h.findOrCreateHost(addr)
-	}
-
-	// findOrCreateHost find the host using the frame IP (avoid copy if not needed)
-	//
-	// Must have engine lock before calling
-	func (h *Session) findOrCreateHost(addr Addr) (host *Host, found bool) {
-		***/
-	// using netaddr IP
-	// ipNew, _ := netaddr.FromStdIP(addr.IP)
 	now := time.Now()
 	if host, ok := h.HostTable.Table[ipNew]; ok {
+		deleteHost := false
 		host.MACEntry.Row.Lock() // lock the row
 		if !bytes.Equal(host.MACEntry.MAC, addr.MAC) {
+			deleteHost = true
+		}
+		host.MACEntry.Row.Unlock() // lock the row
+
+		if deleteHost {
 			fastlog.NewLine(module, "error mac address differ - duplicated IP?").Struct(addr).Struct(host).String("iplookup", ipNew.String()).Write()
 			h.printHostTable()
+			h.deleteHost(addr.IP)
 			// TODO: previous host is offline then???
 			//       should we send notification?
-
-			// Remove IP from existing mac and link host to new macEntry
-			host.MACEntry.unlink(host)
-			host.MACEntry.Row.Unlock() // release lock on previous mac
-
-			// Link host to new MACEntry
-			macEntry := h.MACTable.findOrCreate(CopyMAC(addr.MAC))
-			macEntry.Row.Lock()          // acquire lock on new macEntry
-			macEntry.link(host)          // link macEntry to host
-			host.Addr.MAC = macEntry.MAC // new mac
-			host.MACEntry = macEntry     // link host to macEntry
-			host.dirty = true            // notify this change
-			host.Manufacturer = FindManufacturer(host.Addr.MAC)
-			if host.Manufacturer != "" && host.Manufacturer != host.MACEntry.Manufacturer {
-				host.MACEntry.Manufacturer = host.Manufacturer
-			}
-			host.HuntStage = StageNormal // reset stage
 		}
-		host.LastSeen = now
-		host.MACEntry.LastSeen = now
-		host.MACEntry.Row.Unlock()
-		return host, true
 	}
+
 	macEntry := h.MACTable.findOrCreate(CopyMAC(addr.MAC))
-	host = &Host{Addr: Addr{IP: CopyIP(addr.IP), MAC: macEntry.MAC}, MACEntry: macEntry, dirty: true, Online: false} // set Online to false to trigger Online transition
+	host = &Host{Addr: Addr{IP: CopyIP(addr.IP), MAC: macEntry.MAC}, MACEntry: macEntry, Online: false} // set Online to false to trigger Online transition
+	host.setDirty(true)
 	host.Manufacturer = FindManufacturer(macEntry.MAC)
 	if host.Manufacturer != "" && host.Manufacturer != host.MACEntry.Manufacturer {
 		host.MACEntry.Manufacturer = host.Manufacturer
@@ -178,10 +183,7 @@ func (h *Session) findOrCreateHostWithLock(addr Addr) (host *Host, found bool) {
 	return host, false
 }
 
-func (h *Session) DeleteHost(ip net.IP) {
-	h.mutex.Lock()
-	defer h.mutex.Unlock()
-
+func (h *Session) deleteHost(ip net.IP) {
 	if host := h.findIP(ip); host != nil {
 		if Debug {
 			fastlog.NewLine(module, "delete host").IP("ip", ip).Struct(host).Write()
@@ -244,7 +246,7 @@ func (host *Host) UpdateDHCP4Name(name NameEntry) {
 	var notify bool
 	host.DHCP4Name, notify = host.DHCP4Name.Merge(name)
 	if notify {
-		host.dirty = true
+		host.setDirty(true)
 		fastlog.NewLine(module, "updated dhcpv4 name").Struct(host.Addr).Struct(host.DHCP4Name).Write()
 		host.MACEntry.DHCP4Name, _ = host.MACEntry.DHCP4Name.Merge(host.DHCP4Name)
 	}
@@ -256,7 +258,7 @@ func (host *Host) UpdateLLMNRName(name NameEntry) {
 	var notify bool
 	host.LLMNRName, notify = host.LLMNRName.Merge(name)
 	if notify {
-		host.dirty = true
+		host.setDirty(true)
 		fastlog.NewLine(module, "updated llmnr name").Struct(host.Addr).Struct(host.LLMNRName).Write()
 		host.MACEntry.LLMNRName, _ = host.MACEntry.LLMNRName.Merge(host.LLMNRName)
 	}
@@ -268,7 +270,7 @@ func (host *Host) UpdateMDNSName(name NameEntry) {
 	var notify bool
 	host.MDNSName, notify = host.MDNSName.Merge(name)
 	if notify {
-		host.dirty = true
+		host.setDirty(true)
 		fastlog.NewLine(module, "updated mdns name").Struct(host.Addr).Struct(host.MDNSName).Write()
 		host.MACEntry.MDNSName, _ = host.MACEntry.MDNSName.Merge(host.MDNSName)
 	}
@@ -280,7 +282,7 @@ func (host *Host) UpdateSSDPName(name NameEntry) {
 	var notify bool
 	host.SSDPName, notify = host.SSDPName.Merge(name)
 	if notify {
-		host.dirty = true
+		host.setDirty(true)
 		fastlog.NewLine(module, "updated ssdp name").Struct(host.Addr).Struct(host.SSDPName).Write()
 		host.MACEntry.SSDPName, _ = host.MACEntry.SSDPName.Merge(host.SSDPName)
 	}
@@ -292,7 +294,7 @@ func (host *Host) UpdateNBNSName(name NameEntry) {
 	var notify bool
 	host.NBNSName, notify = host.NBNSName.Merge(name)
 	if notify {
-		host.dirty = true
+		host.setDirty(true)
 		fastlog.NewLine(module, "updated nbns name").Struct(host.Addr).Struct(host.NBNSName).Write()
 		host.MACEntry.NBNSName, _ = host.MACEntry.NBNSName.Merge(host.NBNSName)
 	}

@@ -7,26 +7,19 @@ import (
 
 // NICInfo stores the network interface info
 type NICInfo struct {
-	IFI *net.Interface
-
-	// TODO: remove individual fields and replace with addr fields
-	//       perhaps change to Addr to use new IP and mask
-	HostMAC      net.HardwareAddr // should delete this in favour of HostAddr4
-	HostIP4      net.IPNet        // should delete this in favour of HostAddr4
-	HomeLAN4     net.IPNet
-	HostLLA      net.IPNet
-	HostGUA      net.IPNet
-	RouterMAC    net.HardwareAddr // should delete this in favour of RouterAddr4
-	RouterIP4    net.IPNet        // should delete this in favour of HostAddr4
-	RouterLLA    net.IPNet        // should delete this in favour of RouterAddr4
-	RouterGUA    net.IPNet
-	RouterPrefix net.IP
-	HostAddr4    Addr
-	RouterAddr4  Addr
+	IFI          *net.Interface
+	HomeLAN4     net.IPNet // IPv4: home LAN netmask
+	HostAddr4    Addr      // IPv4: host MAC and IPv4
+	RouterAddr4  Addr      // IPv4: router MAC and IPv4
+	HostLLA      net.IPNet // IPv6: host LLA
+	HostGUA      net.IPNet // IPv6: host GUA
+	RouterLLA    net.IPNet // IPv6: router LLA
+	RouterGUA    net.IPNet // IPv6: router GUA
+	RouterPrefix net.IP    // IPv6: router prefix
 }
 
 func (e NICInfo) String() string {
-	return fmt.Sprintf("mac=%s hostip4=%s lla=%s gua=%s routerIP4=%s routerMAC=%s", e.HostMAC, e.HostIP4, e.HostLLA, e.HostGUA, e.RouterIP4, e.RouterMAC)
+	return fmt.Sprintf("mac=%s hostip4=%s lla=%s gua=%s routerIP4=%s routerMAC=%s", e.HostAddr4.MAC, e.HostAddr4.IP, e.HostLLA, e.HostGUA, e.RouterAddr4.IP, e.RouterAddr4.MAC)
 }
 
 // CopyIP simply copies the IP to a new buffer

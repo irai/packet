@@ -128,7 +128,7 @@ func (h *Session) ARPRequest(targetIP net.IP) error {
 // An ARP ARPProbe conveys both a question ("Is anyone using this address?") and an
 // implied statement ("This is the address I hope to use.").
 func (h *Session) ARPProbe(ip net.IP) error {
-	return h.ARPRequestRaw(EthernetBroadcast, Addr{MAC: h.NICInfo.HostMAC, IP: net.IPv4zero}, Addr{MAC: EthernetZero, IP: ip})
+	return h.ARPRequestRaw(EthernetBroadcast, Addr{MAC: h.NICInfo.HostAddr4.MAC, IP: net.IPv4zero}, Addr{MAC: EthernetZero, IP: ip})
 }
 
 // ARPAnnounceTo send an arp announcement on the local link.
@@ -154,7 +154,7 @@ func (h *Session) ARPAnnounceTo(dst net.HardwareAddr, targetIP net.IP) (err erro
 		}
 	}
 	err = h.ARPRequestRaw(dst,
-		Addr{MAC: h.NICInfo.HostMAC, IP: targetIP},
+		Addr{MAC: h.NICInfo.HostAddr4.MAC, IP: targetIP},
 		Addr{MAC: EthernetBroadcast, IP: targetIP})
 	return err
 }
@@ -183,7 +183,7 @@ func (h *Session) ARPRequestRaw(dst net.HardwareAddr, sender Addr, target Addr) 
 	ether := Ether(b[0:])
 
 	// Send packet with ether src set to host but arp packet set to target
-	ether = EtherMarshalBinary(ether, syscall.ETH_P_ARP, h.NICInfo.HostMAC, dst)
+	ether = EtherMarshalBinary(ether, syscall.ETH_P_ARP, h.NICInfo.HostAddr4.MAC, dst)
 	arp, err := ARPMarshalBinary(ether.Payload(), OperationRequest, sender, target)
 	if err != nil {
 		return err
@@ -218,7 +218,7 @@ func (h *Session) reply(dst net.HardwareAddr, sender Addr, target Addr) error {
 	ether := Ether(b[0:])
 
 	// Send packet with ether src set to host but arp packet set to target
-	ether = EtherMarshalBinary(ether, syscall.ETH_P_ARP, h.NICInfo.HostMAC, dst)
+	ether = EtherMarshalBinary(ether, syscall.ETH_P_ARP, h.NICInfo.HostAddr4.MAC, dst)
 	arp, err := ARPMarshalBinary(ether.Payload(), OperationReply, sender, target)
 	if err != nil {
 		return err
@@ -266,7 +266,7 @@ func (h *Session) ARPScan() error {
 		ip[3] = byte(host)
 
 		// Don't scan router and host
-		if ip.Equal(h.NICInfo.RouterIP4.IP) || ip.Equal(h.NICInfo.HostIP4.IP) {
+		if ip.Equal(h.NICInfo.RouterAddr4.IP) || ip.Equal(h.NICInfo.HostAddr4.IP) {
 			continue
 		}
 

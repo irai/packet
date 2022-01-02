@@ -44,7 +44,7 @@ var (
 )
 
 func newEtherPacket(hType uint16, srcMAC net.HardwareAddr, dstMAC net.HardwareAddr) packet.Ether {
-	buf := make([]byte, packet.EthMaxSize) // allocate in the stack
+	buf := make([]byte, packet.EthMaxSize)
 	p := packet.EtherMarshalBinary(buf, hType, srcMAC, dstMAC)
 	return p
 }
@@ -70,7 +70,6 @@ type testContext struct {
 }
 
 func setupTestHandler(t *testing.T) *testContext {
-
 	var err error
 
 	tc := testContext{}
@@ -82,11 +81,9 @@ func setupTestHandler(t *testing.T) *testContext {
 
 	// fake nicinfo
 	nicInfo := &packet.NICInfo{
-		HostMAC:   hostMAC,
-		HostIP4:   net.IPNet{IP: hostIP, Mask: net.IPv4Mask(255, 255, 255, 0)},
-		RouterIP4: net.IPNet{IP: routerIP, Mask: net.IPv4Mask(255, 255, 255, 0)},
-		HomeLAN4:  homeLAN,
-		HostAddr4: packet.Addr{MAC: hostMAC, IP: hostIP},
+		HomeLAN4:    homeLAN,
+		HostAddr4:   packet.Addr{MAC: hostMAC, IP: hostIP},
+		RouterAddr4: packet.Addr{MAC: routerMAC, IP: routerIP},
 	}
 
 	tc.session, err = packet.Config{Conn: tc.inConn, NICInfo: nicInfo}.NewSession()
@@ -175,19 +172,19 @@ func Test_Handler_BasicTest(t *testing.T) {
 		{name: "replymac2",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac2, routerMAC),
 			arp:     newARPPacket(packet.OperationReply, addr2, routerAddr),
-			wantErr: nil, wantLen: 1, wantResult: true},
+			wantErr: nil, wantLen: 3, wantResult: true},
 		{name: "replymac3",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac3, routerMAC),
 			arp:     newARPPacket(packet.OperationReply, addr3, routerAddr),
-			wantErr: nil, wantLen: 2, wantResult: true},
+			wantErr: nil, wantLen: 4, wantResult: true},
 		{name: "replymac4",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac4, routerMAC),
 			arp:     newARPPacket(packet.OperationReply, addr4, routerAddr),
-			wantErr: nil, wantLen: 3, wantResult: true},
+			wantErr: nil, wantLen: 5, wantResult: true},
 		{name: "request",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac4, routerMAC),
 			arp:     newARPPacket(packet.OperationRequest, addr4, routerAddr),
-			wantErr: nil, wantLen: 3, wantResult: true},
+			wantErr: nil, wantLen: 5, wantResult: true},
 	}
 
 	for _, tt := range tests {
@@ -212,5 +209,4 @@ func Test_Handler_BasicTest(t *testing.T) {
 			}
 		})
 	}
-
 }

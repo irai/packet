@@ -43,7 +43,8 @@ func GetNICInfo(nic string) (info *NICInfo, err error) {
 		}
 
 		if ip.To4() != nil && ip.IsGlobalUnicast() {
-			info.HostIP4 = net.IPNet{IP: ip.To4(), Mask: ipNet.Mask}
+			info.HostAddr4.IP = ip.To4()
+			info.HomeLAN4 = net.IPNet{IP: info.HostAddr4.IP.Mask(ipNet.Mask).To4(), Mask: ipNet.Mask}
 		}
 		if ip.To16() != nil && ip.To4() == nil {
 			if ip.IsLinkLocalUnicast() {
@@ -55,7 +56,7 @@ func GetNICInfo(nic string) (info *NICInfo, err error) {
 		}
 	}
 
-	if info.HostIP4.IP == nil || info.HostIP4.IP.IsUnspecified() {
+	if info.HostAddr4.IP == nil || info.HostAddr4.IP.IsUnspecified() {
 		return nil, fmt.Errorf("ipv4 not found on interface")
 	}
 
@@ -69,20 +70,16 @@ func GetNICInfo(nic string) (info *NICInfo, err error) {
 	//      valid_lft 86208sec preferred_lft 86208sec
 	//   inet 192.168.0.129/24 brd 192.168.0.255 scope global secondary eth0
 	//      valid_lft forever preferred_lft forever
-	if defaultIP := defaultOutboundIP(); !info.HostIP4.IP.Equal(defaultIP) {
-		fastlog.NewLine(module, "warning host IP is different than default outbound IP").IP("hostIP", info.HostIP4.IP).IP("defaultIP", defaultIP).Write()
+	if defaultIP := defaultOutboundIP(); !info.HostAddr4.IP.Equal(defaultIP) {
+		fastlog.NewLine(module, "warning host IP is different than default outbound IP").IP("hostIP", info.HostAddr4.IP).IP("defaultIP", defaultIP).Write()
 	}
 
 	defaultGW, err := GetIP4DefaultGatewayAddr(nic)
 	if err != nil {
 		return nil, err
 	}
-	info.RouterIP4 = net.IPNet{IP: defaultGW.IP.To4(), Mask: info.HostIP4.Mask}
-	info.RouterMAC = defaultGW.MAC
-	info.HomeLAN4 = net.IPNet{IP: info.HostIP4.IP.Mask(info.HostIP4.Mask).To4(), Mask: info.HostIP4.Mask}
-	info.HostMAC = info.IFI.HardwareAddr
-	info.RouterAddr4 = Addr{MAC: info.RouterMAC, IP: info.RouterIP4.IP}
-	info.HostAddr4 = Addr{MAC: info.HostMAC, IP: info.HostIP4.IP}
+	info.RouterAddr4 = Addr{MAC: defaultGW.MAC, IP: defaultGW.IP.To4()}
+	info.HostAddr4 = Addr{MAC: info.IFI.HardwareAddr, IP: info.HostAddr4.IP}
 	return info, nil
 }
 

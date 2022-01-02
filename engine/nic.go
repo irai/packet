@@ -10,7 +10,10 @@ import (
 
 // SegmentLAN will identify a free IP on the opposite half segment from the routerIP.
 // This function will also test if the chosen IP is available before returning.
-func SegmentLAN(nic string, hostIP net.IPNet, routerIP net.IPNet) (netfilterIP net.IPNet, err error) {
+func SegmentLAN(nic string, homeLAN net.IPNet, hostIP net.IP, routerIP net.IP) (netfilterIP net.IPNet, err error) {
+	if hostIP.To4() == nil || routerIP.To4() == nil {
+		return netfilterIP, packet.ErrInvalidIP
+	}
 
 	// Special IPv4 addresses
 	// 169.254.0.0/16 - Link local addresses - typically assigned when there is no DHCP server
@@ -23,36 +26,35 @@ func SegmentLAN(nic string, hostIP net.IPNet, routerIP net.IPNet) (netfilterIP n
 	_, net10, _ := net.ParseCIDR("10.0.0.0/8")
 
 	switch {
-	case net169.Contains(routerIP.IP):
-	case net172.Contains(routerIP.IP):
-	case net192.Contains(routerIP.IP):
-	case net10.Contains(routerIP.IP):
-
+	case net169.Contains(routerIP):
+	case net172.Contains(routerIP):
+	case net192.Contains(routerIP):
+	case net10.Contains(routerIP):
 	default:
 		fmt.Printf("packet: error unexpected IP network %+v\n", routerIP)
 	}
 
 	// Ignore large networks: we only need 128 hosts for our DHCP -
 	// 128 hosts should be enought for all homes
-	n, _ := routerIP.Mask.Size()
+	n, _ := homeLAN.Mask.Size()
 	if n < 24 {
 		n = 24
 	}
 
 	if n > 24 {
-		err = fmt.Errorf("network mask too small (less than 8 bits) router %+v", routerIP)
+		err = fmt.Errorf("network mask too small (less than 8 bits) router %+v", homeLAN)
 		return netfilterIP, err
 	}
 
 	// Set router address for netfilter
 	// Router segment will be at the opposite end of the Home segment
-	homeRouterIP := routerIP.IP.To4() // make sure we are dealing with 4 bytes
+	homeRouterIP := routerIP.To4() // make sure we are dealing with 4 bytes
 	if homeRouterIP[3] < 128 {
 		// 128 to 255 - but don't use network address 0 and broadcast 254
-		netfilterIP.IP, err = locateFreeIP(nic, hostIP.IP, homeRouterIP, 129, 254)
+		netfilterIP.IP, err = locateFreeIP(nic, hostIP, homeRouterIP, 129, 254)
 	} else {
 		// 0 to 127 - but don't use network address 0 and broadcast 127
-		netfilterIP.IP, err = locateFreeIP(nic, hostIP.IP, homeRouterIP, 1, 126)
+		netfilterIP.IP, err = locateFreeIP(nic, hostIP, homeRouterIP, 1, 126)
 	}
 
 	if err != nil {

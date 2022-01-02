@@ -269,7 +269,7 @@ func (h *Session) SetOnline(frame Frame) {
 func (h *Session) notify(host *Host) {
 	now := time.Now()
 	host.MACEntry.Row.RLock()
-	if host.Online && !host.dirty { // just another IP packet - nothing to do
+	if host.Online && !host.dirty() { // just another IP packet - nothing to do
 		if now.Sub(host.LastSeen) < time.Second*1 { // update LastSeen every 1 seconds to minimise locking
 			host.MACEntry.Row.RUnlock()
 			return
@@ -317,14 +317,14 @@ func (h *Session) notify(host *Host) {
 	host.MACEntry.updateIPNoLock(host.Addr.IP)
 
 	// return immediately if host already online and not notification
-	if host.Online && !host.dirty {
+	if host.Online && !host.dirty() {
 		return
 	}
 
 	host.MACEntry.Online = true
 	host.Online = true
 	notification := toNotification(host)
-	host.dirty = false
+	host.setDirty(false)
 	if Debug {
 		fastlog.NewLine(module, "IP is online").Struct(host).Write()
 	}
@@ -407,7 +407,7 @@ func (h *Session) purge(now time.Time) error {
 						fastlog.NewLine(module, "failed to probe ipv6 missing host ipv6").IP("ip", h.NICInfo.HostLLA.IP).Write()
 						continue
 					}
-					srcAddr := Addr{MAC: h.NICInfo.HostMAC, IP: h.NICInfo.HostLLA.IP}
+					srcAddr := Addr{MAC: h.NICInfo.HostAddr4.MAC, IP: h.NICInfo.HostLLA.IP}
 					if addr.IP.IsLinkLocalUnicast() {
 						// Use Neigbour solicitation if link local address as NS almost always result in a response from host if online unless
 						// host is on battery saving mode.
@@ -430,9 +430,11 @@ func (h *Session) purge(now time.Time) error {
 
 	// delete after loop because this will change the table
 	if len(purge) > 0 {
+		h.mutex.Lock()
 		for _, v := range purge {
-			h.DeleteHost(v)
+			h.deleteHost(v)
 		}
+		h.mutex.Unlock()
 	}
 	return nil
 }
@@ -456,7 +458,7 @@ func (h *Session) DHCPUpdate(mac net.HardwareAddr, ip net.IP, name NameEntry) er
 	if !host.Online {
 		host.MACEntry.Online = true
 		host.Online = true
-		host.dirty = true
+		host.setDirty(true)
 	}
 	return nil
 }

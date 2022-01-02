@@ -76,7 +76,7 @@ func main() {
 	fmt.Printf("nicinfo: %+v\n", s.NICInfo)
 
 	handlers := handlers{}
-	handlers.netfilterIP, err = engine.SegmentLAN(*nic, s.NICInfo.HostIP4, s.NICInfo.RouterIP4)
+	handlers.netfilterIP, err = engine.SegmentLAN(*nic, s.NICInfo.HomeLAN4, s.NICInfo.HostAddr4.IP, s.NICInfo.RouterAddr4.IP)
 	if err != nil {
 		fmt.Println("failed to segment lan ", err)
 		return
@@ -84,10 +84,12 @@ func main() {
 	fmt.Printf("netfilter: %+v\n", handlers.netfilterIP)
 
 	// change host IP
-	if !handlers.netfilterIP.IP.Equal(s.NICInfo.HostIP4.IP) {
+	if !handlers.netfilterIP.IP.Equal(s.NICInfo.HostAddr4.IP) {
 		fmt.Printf("Changing host IP to %s - disable with -nodhcpip \n", handlers.netfilterIP)
 
-		if err := packet.LinuxConfigureInterface(*nic, &s.NICInfo.HostIP4, &net.IPNet{IP: handlers.netfilterIP.IP, Mask: s.NICInfo.RouterIP4.Mask}, nil); err != nil {
+		if err := packet.LinuxConfigureInterface(*nic,
+			&net.IPNet{IP: s.NICInfo.HostAddr4.IP, Mask: s.NICInfo.HomeLAN4.Mask},
+			&net.IPNet{IP: handlers.netfilterIP.IP, Mask: s.NICInfo.HomeLAN4.Mask}, nil); err != nil {
 			fmt.Println("failed to change host IP ", err)
 		}
 	}
@@ -553,7 +555,7 @@ func cmd(h *handlers) {
 					continue
 				}
 				if err := h.icmp6.Ping(
-					packet.Addr{MAC: h.engine.Session().NICInfo.HostMAC, IP: h.engine.Session().NICInfo.HostLLA.IP},
+					packet.Addr{MAC: h.engine.Session().NICInfo.HostAddr4.MAC, IP: h.engine.Session().NICInfo.HostLLA.IP},
 					packet.Addr{MAC: packet.Eth6AllNodesMulticast, IP: ip}, time.Second*2); err != nil {
 					// if err := h6.Ping(h6.LLA().IP, ip, time.Second*2); err != nil {
 					fmt.Println("icmp6 echo error ", err)

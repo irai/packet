@@ -282,7 +282,7 @@ func (h *Handler) ListenAndServe(ctxt context.Context) (err error) {
 		// If we don't have this, then we received all forwarded packets with client IPs containing our host mac
 		//
 		// TODO: should this be in the bpf rules?
-		if bytes.Equal(ether.Src(), h.session.NICInfo.HostMAC) {
+		if bytes.Equal(ether.Src(), h.session.NICInfo.HostAddr4.MAC) {
 			continue
 		}
 

@@ -109,8 +109,8 @@ func (h *Handler) sendDeclineReleasePacket(msgType MessageType, clientID []byte,
 	xid = mustXID(xid)
 	p := Marshall(b[0:], BootRequest, msgType, chAddr, ciAddr, net.IPv4zero, xid, false, options, nil)
 
-	srcAddr := packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostIP4.IP, Port: DHCP4ClientPort}
-	dstAddr := packet.Addr{MAC: h.session.NICInfo.RouterMAC, IP: h.session.NICInfo.RouterIP4.IP, Port: DHCP4ServerPort}
+	srcAddr := packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: h.session.NICInfo.HostAddr4.IP, Port: DHCP4ClientPort}
+	dstAddr := packet.Addr{MAC: h.session.NICInfo.RouterAddr4.MAC, IP: h.session.NICInfo.RouterAddr4.IP, Port: DHCP4ServerPort}
 	err = sendDHCP4Packet(h.session.Conn, srcAddr, dstAddr, p)
 	return err
 }
@@ -131,8 +131,8 @@ func (h *Handler) SendDiscoverPacket(chAddr net.HardwareAddr, ciAddr net.IP, xid
 		byte(OptionDomainNameServer), byte(OptionDomainName),
 	}
 
-	srcAddr := packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostIP4.IP, Port: DHCP4ClientPort}
-	dstAddr := packet.Addr{MAC: h.session.NICInfo.RouterMAC, IP: h.session.NICInfo.RouterIP4.IP, Port: DHCP4ServerPort}
+	srcAddr := packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: h.session.NICInfo.HostAddr4.IP, Port: DHCP4ClientPort}
+	dstAddr := packet.Addr{MAC: h.session.NICInfo.RouterAddr4.MAC, IP: h.session.NICInfo.RouterAddr4.IP, Port: DHCP4ServerPort}
 
 	b := packet.EtherBufferPool.Get().(*[packet.EthMaxSize]byte)
 	defer packet.EtherBufferPool.Put(b)

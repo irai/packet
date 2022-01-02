@@ -39,7 +39,8 @@ func TestSegmentLAN(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			gotNetfilterIP, err := SegmentLAN("",
 				net.IPNet{IP: net.IPv4(192, 168, 1, 100), Mask: net.IPv4Mask(255, 255, 255, 0)},
-				tt.routerIP)
+				net.IPv4(192, 168, 1, 100),
+				tt.routerIP.IP)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("SegmentLAN() error = %v, wantErr %v", err, tt.wantErr)
 				return

@@ -12,15 +12,14 @@ import (
 func testSession() *packet.Session {
 	// fake nicinfo
 	hostMAC := net.HardwareAddr{0x00, 0xff, 0x03, 0x04, 0x05, 0x01} // keep first byte zero for unicast mac
+	routerMAC := net.HardwareAddr{0x00, 0x66, 0x66, 0x66, 0x66, 0x66}
 	hostIP := net.ParseIP("192.168.0.129").To4()
 	homeLAN := net.IPNet{IP: net.IPv4(192, 168, 0, 0), Mask: net.IPv4Mask(255, 255, 255, 0)}
 	routerIP := net.ParseIP("192.168.0.11").To4()
 	nicInfo := &packet.NICInfo{
-		HostMAC:   hostMAC,
-		HostIP4:   net.IPNet{IP: hostIP, Mask: net.IPv4Mask(255, 255, 255, 0)},
-		RouterIP4: net.IPNet{IP: routerIP, Mask: net.IPv4Mask(255, 255, 255, 0)},
-		HomeLAN4:  homeLAN,
-		HostAddr4: packet.Addr{MAC: hostMAC, IP: hostIP},
+		HomeLAN4:    homeLAN,
+		HostAddr4:   packet.Addr{MAC: hostMAC, IP: hostIP},
+		RouterAddr4: packet.Addr{MAC: routerMAC, IP: routerIP},
 	}
 
 	// TODO: fix this to discard writes like ioutil.Discard

@@ -3,7 +3,6 @@ package engine
 import (
 	"errors"
 	"fmt"
-	"net"
 	"time"
 
 	"github.com/irai/packet"
@@ -137,6 +136,7 @@ func (h *Handler) minuteLoop() {
 	}
 }
 
+/**
 // purge set entries offline and subsequently delete them if no more traffic received.
 // The funcion is called each minute by the minute goroutine.
 func (h *Handler) purge(now time.Time, probeDur time.Duration, offlineDur time.Duration, purgeDur time.Duration) error {
@@ -199,6 +199,7 @@ func (h *Handler) purge(now time.Time, probeDur time.Duration, offlineDur time.D
 
 	return nil
 }
+**/
 
 func (h *Handler) GetDNSNotificationChannel() <-chan dns.DNSEntry {
 	return h.dnsChannel

@@ -7,7 +7,7 @@ import (
 	"github.com/irai/packet/fastlog"
 )
 
-func TestPadding(t *testing.T) {
+func DONTestPadding(t *testing.T) {
 	buf := make([]byte, EthMaxSize) // allocate in the stack
 	ether := EtherMarshalBinary(buf, syscall.ETH_P_IP, routerMAC, mac2)
 	payload := []byte{0x04, 0x55, 0x33}

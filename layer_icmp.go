@@ -412,7 +412,7 @@ func (h *Session) icmp4SendPacket(srcAddr Addr, dstAddr Addr, p ICMP) (err error
 	buf := EtherBufferPool.Get().(*[EthMaxSize]byte)
 	defer EtherBufferPool.Put(buf)
 	ether := Ether(buf[:])
-	ether = EtherMarshalBinary(ether, syscall.ETH_P_IP, h.NICInfo.HostMAC, dstAddr.MAC)
+	ether = EtherMarshalBinary(ether, syscall.ETH_P_IP, h.NICInfo.HostAddr4.MAC, dstAddr.MAC)
 	ip4 := IP4MarshalBinary(ether.Payload(), 50, srcAddr.IP, dstAddr.IP)
 	if ip4, err = ip4.AppendPayload(p, syscall.IPPROTO_ICMP); err != nil {
 		return err
@@ -465,7 +465,7 @@ func (h *Session) icmp6SendPacket(srcAddr Addr, dstAddr Addr, b []byte) error {
 		hopLimit = 255
 	}
 
-	ether = EtherMarshalBinary(ether, syscall.ETH_P_IPV6, h.NICInfo.HostMAC, dstAddr.MAC)
+	ether = EtherMarshalBinary(ether, syscall.ETH_P_IPV6, h.NICInfo.HostAddr4.MAC, dstAddr.MAC)
 	ip6 := IP6MarshalBinary(ether.Payload(), hopLimit, srcAddr.IP, dstAddr.IP)
 	ip6, _ = ip6.AppendPayload(b, syscall.IPPROTO_ICMPV6)
 	ether, _ = ether.SetPayload(ip6)

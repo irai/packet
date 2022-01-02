@@ -175,8 +175,8 @@ func (h *DNSHandler) SendSSDPSearch() (err error) {
 	b := packet.EtherBufferPool.Get().(*[packet.EthMaxSize]byte)
 	defer packet.EtherBufferPool.Put(b)
 	ether := packet.Ether(b[0:])
-	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IP, h.session.NICInfo.HostMAC, ssdpIPv4Addr.MAC)
-	ip4 := packet.IP4MarshalBinary(ether.Payload(), 255, h.session.NICInfo.HostIP4.IP, ssdpIPv4Addr.IP)
+	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IP, h.session.NICInfo.HostAddr4.MAC, ssdpIPv4Addr.MAC)
+	ip4 := packet.IP4MarshalBinary(ether.Payload(), 255, h.session.NICInfo.HostAddr4.IP, ssdpIPv4Addr.IP)
 	udp := packet.UDPMarshalBinary(ip4.Payload(), 1900, 1900)
 	if udp, err = udp.AppendPayload(mSearchString); err != nil {
 		return err

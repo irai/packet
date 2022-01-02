@@ -181,10 +181,6 @@ func NewTestContext() *TestContext {
 	go packet.TestReadAndDiscardLoop(tc.clientOutConn) // must read to avoid blocking
 
 	nicInfo := packet.NICInfo{
-		HostMAC:     HostMAC,
-		HostIP4:     net.IPNet{IP: HostIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
-		RouterIP4:   net.IPNet{IP: RouterIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
-		RouterMAC:   RouterMAC,
 		RouterAddr4: packet.Addr{MAC: RouterMAC, IP: RouterIP4},
 		HostAddr4:   packet.Addr{MAC: HostMAC, IP: HostIP4},
 		HomeLAN4:    HomeLAN,
@@ -212,9 +208,7 @@ func NewTestContext() *TestContext {
 	tc.Engine.AttachARP(tc.Engine.ARPHandler)
 
 	// Default dhcp engine
-	netfilterIP, err := engine.SegmentLAN("eth0",
-		net.IPNet{IP: HostIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
-		net.IPNet{IP: RouterIP4, Mask: net.IPv4Mask(255, 255, 255, 0)})
+	netfilterIP, err := engine.SegmentLAN("eth0", nicInfo.HomeLAN4, nicInfo.HostAddr4.IP, nicInfo.RouterAddr4.IP)
 	if err != nil {
 		panic(err)
 	}

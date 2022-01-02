@@ -64,11 +64,9 @@ func testSession() *packet.Session {
 	homeLAN := net.IPNet{IP: net.IPv4(192, 168, 0, 0), Mask: net.IPv4Mask(255, 255, 255, 0)}
 	routerIP := net.ParseIP("192.168.0.11").To4()
 	nicInfo := &packet.NICInfo{
-		HostMAC:   hostMAC,
-		HostIP4:   net.IPNet{IP: hostIP, Mask: net.IPv4Mask(255, 255, 255, 0)},
-		RouterIP4: net.IPNet{IP: routerIP, Mask: net.IPv4Mask(255, 255, 255, 0)},
-		HomeLAN4:  homeLAN,
-		HostAddr4: packet.Addr{MAC: hostMAC, IP: hostIP},
+		HomeLAN4:    homeLAN,
+		HostAddr4:   packet.Addr{MAC: hostMAC, IP: hostIP},
+		RouterAddr4: packet.Addr{MAC: routerMAC, IP: routerIP},
 	}
 
 	// TODO: fix this to discard writes like ioutil.Discard
@@ -97,10 +95,9 @@ func setupTestHandler() *testContext {
 
 	// fake nicinfo
 	tc.session.NICInfo = &packet.NICInfo{
-		HostMAC:   hostMAC,
-		HostIP4:   net.IPNet{IP: hostIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
-		RouterIP4: net.IPNet{IP: routerIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
-		HomeLAN4:  homeLAN,
+		HomeLAN4:    homeLAN,
+		HostAddr4:   packet.Addr{MAC: hostMAC, IP: hostIP4},
+		RouterAddr4: packet.Addr{MAC: routerMAC, IP: routerIP4},
 	}
 
 	if tc.h, err = New6(tc.session); err != nil {

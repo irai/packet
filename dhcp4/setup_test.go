@@ -121,9 +121,6 @@ func setupTestHandler() *testContext {
 
 	// fake nicinfo
 	nicInfo := &packet.NICInfo{
-		HostMAC:     hostMAC,
-		HostIP4:     net.IPNet{IP: hostIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
-		RouterIP4:   net.IPNet{IP: routerIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
 		RouterAddr4: routerAddr,
 		HostAddr4:   hostAddr,
 		HomeLAN4:    homeLAN,

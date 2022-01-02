@@ -73,7 +73,7 @@ func New(session *packet.Session) (h *Handler, err error) {
 
 func (config Config) New(session *packet.Session) (h *Handler, err error) {
 	h = &Handler{session: session, huntList: make(map[string]packet.Addr, 6), closeChan: make(chan bool)}
-	if h.session.NICInfo.HostIP4.IP.To4() == nil {
+	if h.session.NICInfo.HostAddr4.IP.To4() == nil {
 		return nil, packet.ErrInvalidIP
 	}
 
@@ -168,11 +168,11 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 		h.arpMutex.Lock()
 		_, hunting := h.huntList[string(arpFrame.SrcMAC())]
 		h.arpMutex.Unlock()
-		if hunting && arpFrame.DstIP().Equal(h.session.NICInfo.RouterIP4.IP) {
+		if hunting && arpFrame.DstIP().Equal(h.session.NICInfo.RouterAddr4.IP) {
 			if Debug {
 				fastlog.NewLine(module, "router spoofing - send reply I am").IP("ip", arpFrame.DstIP()).MAC("dstmac", arpFrame.SrcMAC()).Write()
 			}
-			if err := h.session.ARPReply(arpFrame.SrcMAC(), packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: arpFrame.DstIP()}, packet.Addr{MAC: arpFrame.SrcMAC(), IP: arpFrame.SrcIP()}); err != nil {
+			if err := h.session.ARPReply(arpFrame.SrcMAC(), packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: arpFrame.DstIP()}, packet.Addr{MAC: arpFrame.SrcMAC(), IP: arpFrame.SrcIP()}); err != nil {
 				fastlog.NewLine(module, "failed to send spoofing reply").MAC("mac", arpFrame.SrcMAC()).Error(err).Write()
 			}
 			return nil
@@ -198,7 +198,7 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 			if h.session.NICInfo.HomeLAN4.Contains(arpFrame.DstIP()) {
 				fastlog.NewLine(module, "probe reject for").IP("ip", arpFrame.DstIP()).MAC("fromMAC", arpFrame.SrcMAC()).IP("offer", offer).Write()
 				// unicast reply to srcMAC
-				h.session.ARPReply(arpFrame.SrcMAC(), packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: arpFrame.DstIP()}, packet.Addr{MAC: arpFrame.SrcMAC(), IP: net.IP(packet.IP4Broadcast)})
+				h.session.ARPReply(arpFrame.SrcMAC(), packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: arpFrame.DstIP()}, packet.Addr{MAC: arpFrame.SrcMAC(), IP: net.IP(packet.IP4Broadcast)})
 			}
 		}
 		return nil

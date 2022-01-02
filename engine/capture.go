@@ -344,7 +344,7 @@ func (h *Handler) lockAndProcessDHCP4Update(host *packet.Host, result packet.Res
 	/**
 	// First dhcp discovery has no host entry
 	// Ensure there is a mac entry with the IP offer
-	if result.SrcAddr.IP != nil && h.session.NICInfo.HostIP4.Contains(result.SrcAddr.IP) {
+	if result.SrcAddr.IP != nil && h.session.NICInfo.HostAddr4.IP.Contains(result.SrcAddr.IP) {
 		h.session.DHCPUpdate(result.SrcAddr.MAC, result.SrcAddr.IP, result.NameEntry)
 		// entry := h.session.MACTable.FindOrCreateNoLock(result.SrcAddr.MAC)
 		// entry.IP4Offer = packet.CopyIP(result.SrcAddr.IP)

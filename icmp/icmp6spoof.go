@@ -81,8 +81,8 @@ func (h *Handler6) spoofLoop(dstAddr packet.Addr) {
 			h.Unlock()
 
 			for _, routerAddr := range list {
-				hostAddr := packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostLLA.IP}
-				targetAddr := packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: routerAddr.IP}
+				hostAddr := packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: h.session.NICInfo.HostLLA.IP}
+				targetAddr := packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: routerAddr.IP}
 				fakeRouter := packet.Addr{MAC: hostAddr.MAC, IP: routerAddr.IP}
 
 				if err := h.session.ICMP6SendNeighborAdvertisement(fakeRouter, dstAddr, targetAddr); err != nil {

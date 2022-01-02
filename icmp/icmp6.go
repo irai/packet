@@ -142,13 +142,13 @@ func (h *Handler6) PingAll() error {
 		return packet.ErrInvalidIP6LLA
 	}
 	fmt.Println("icmp6 : ping all")
-	return h.session.ICMP6SendEchoRequest(packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostLLA.IP}, packet.IP6AllNodesAddr, 99, 1)
+	return h.session.ICMP6SendEchoRequest(packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: h.session.NICInfo.HostLLA.IP}, packet.IP6AllNodesAddr, 99, 1)
 }
 
 // MinuteTicker implements packet processor interface
 // Send echo request to all nodes
 func (h *Handler6) MinuteTicker(now time.Time) error {
-	return h.session.ICMP6SendEchoRequest(packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostLLA.IP}, packet.IP6AllNodesAddr, 199, 1)
+	return h.session.ICMP6SendEchoRequest(packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: h.session.NICInfo.HostLLA.IP}, packet.IP6AllNodesAddr, 199, 1)
 }
 
 // HuntStage implements PacketProcessor interface
@@ -156,7 +156,7 @@ func (h *Handler6) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
 	if h.session.NICInfo.HostLLA.IP == nil { // in case host does not have IPv6
 		return packet.StageNoChange, nil
 	}
-	srcAddr := packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostLLA.IP}
+	srcAddr := packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: h.session.NICInfo.HostLLA.IP}
 
 	// Neigbour solicitation almost always result in a response from host if online unless
 	// host is on battery saving mode
@@ -251,7 +251,7 @@ func (h *Handler6) ProcessPacket(pkt packet.Frame) (err error) {
 		// If a host is looking up for a GUA on the lan, it is likely a valid IP6 GUA for a local host.
 		// So, send our own neighbour solicitation to discover the IP
 		if frame.TargetAddress().IsGlobalUnicast() {
-			srcAddr := packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostLLA.IP}
+			srcAddr := packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: h.session.NICInfo.HostLLA.IP}
 			dstAddr := packet.Addr{MAC: pkt.Ether.Dst(), IP: ip6Frame.Dst()}
 			h.session.ICMP6SendNeighbourSolicitation(srcAddr, dstAddr, frame.TargetAddress())
 		}
