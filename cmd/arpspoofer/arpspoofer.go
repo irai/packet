@@ -135,7 +135,7 @@ func main() {
 				}
 			}
 
-			s.SetOnline(frame)
+			s.Notify(frame)
 		}
 	}()
 

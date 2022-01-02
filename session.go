@@ -251,10 +251,10 @@ func (h *Session) ReadFrom(b []byte) (int, net.Addr, error) {
 	}
 }
 
-// SetOnline set the host online and transition activities
+// Notify set the host online and transition activities
 //
 // This funcion will generate the online event and mark the previous IP4 host as offline if required
-func (h *Session) SetOnline(frame Frame) {
+func (h *Session) Notify(frame Frame) {
 
 	if frame.Host == nil {
 		// Attempt to find a dhcp host entry
@@ -263,85 +263,54 @@ func (h *Session) SetOnline(frame Frame) {
 			return
 		}
 	}
-	h.notify(frame.Host)
+	h.notify(frame)
 }
 
-func (h *Session) notify(host *Host) {
+func (h *Session) notify(frame Frame) {
 	now := time.Now()
-	host.MACEntry.Row.RLock()
-	if host.Online && !host.dirty() { // just another IP packet - nothing to do
-		if now.Sub(host.LastSeen) < time.Second*1 { // update LastSeen every 1 seconds to minimise locking
-			host.MACEntry.Row.RUnlock()
+	frame.Host.MACEntry.Row.RLock()
+	if frame.Host.Online && !frame.Host.dirty { // just another IP packet - nothing to do
+		if now.Sub(frame.Host.LastSeen) < time.Second*1 { // update LastSeen every 1 seconds to minimise locking
+			frame.Host.MACEntry.Row.RUnlock()
 			return
 		}
 	}
 
-	// if transitioning to online, test if we need to make previous IP offline
+	// if transitioning to online, test if we need to notify previous IP is offline
 	offline := []*Host{}
-	if !host.Online {
-		if host.Addr.IP.To4() != nil {
-			if !host.Addr.IP.Equal(host.MACEntry.IP4) { // changed IP4
-				fastlog.NewLine(module, "host changed ip4").MAC("mac", host.MACEntry.MAC).IP("from", host.MACEntry.IP4).IP("to", host.Addr.IP).Write()
-			}
-			for _, v := range host.MACEntry.HostList {
-				if ip := v.Addr.IP.To4(); ip != nil && !ip.Equal(host.Addr.IP) {
+	if frame.onlineTransition() {
+		if frame.Host.Addr.IP.To4() != nil {
+			for _, v := range frame.Host.MACEntry.HostList {
+				if !v.Online && v.dirty {
 					offline = append(offline, v)
 				}
 			}
-		} else {
-			if host.Addr.IP.IsGlobalUnicast() && !host.Addr.IP.Equal(host.MACEntry.IP6GUA) { // changed IP6 global unique address
-				fastlog.NewLine(module, "host changed ip6").MAC("mac", host.MACEntry.MAC).IP("from", host.MACEntry.IP6GUA).IP("to", host.Addr.IP).Write()
-				// offlineIP = host.MACEntry.IP6GUA
-			}
-			if host.Addr.IP.IsLinkLocalUnicast() && !host.Addr.IP.Equal(host.MACEntry.IP6LLA) { // changed IP6 link local address
-				fastlog.NewLine(module, "host changed ip6LLA").MAC("mac", host.MACEntry.MAC).IP("from", host.MACEntry.IP6LLA).IP("to", host.Addr.IP).Write()
-				// don't set offline IP as we don't target LLA
-			}
 		}
 	}
+	frame.Host.MACEntry.Row.RUnlock()
 
-	host.MACEntry.Row.RUnlock()
-
-	// set any previous IP4 to offline
+	// notify previous IP4 is offline
 	for _, v := range offline {
-		h.SetOffline(v)
+		h.notifyOffline(v)
 	}
 
 	// lock row for update
-	host.MACEntry.Row.Lock()
-	defer host.MACEntry.Row.Unlock()
-
-	// update LastSeen and current mac IP
-	host.MACEntry.LastSeen = now
-	host.LastSeen = now
-	host.MACEntry.updateIPNoLock(host.Addr.IP)
+	frame.Host.MACEntry.Row.Lock()
+	defer frame.Host.MACEntry.Row.Unlock()
 
 	// return immediately if host already online and not notification
-	if host.Online && !host.dirty() {
+	if frame.Host.Online && !frame.Host.dirty {
 		return
 	}
 
-	host.MACEntry.Online = true
-	host.Online = true
-	notification := toNotification(host)
-	host.setDirty(false)
-	if Debug {
-		fastlog.NewLine(module, "IP is online").Struct(host).Write()
-	}
+	notification := toNotification(frame.Host)
+	frame.Host.dirty = false
 
 	h.sendNotification(notification)
 }
 
-func (h *Session) SetOffline(host *Host) {
+func (h *Session) notifyOffline(host *Host) {
 	host.MACEntry.Row.Lock()
-	if !host.Online {
-		host.MACEntry.Row.Unlock()
-		return
-	}
-	if Debug {
-		fastlog.NewLine(module, "IP is offline").Struct(host).Write()
-	}
-	host.Online = false
 	notification := toNotification(host)
 
 	// Update mac online status if all hosts are offline
@@ -355,7 +324,6 @@ func (h *Session) SetOffline(host *Host) {
 	host.MACEntry.Online = macOnline
 	host.MACEntry.Row.Unlock()
 
-	// h.lockAndStopHunt(host, packet.StageNormal)
 	h.sendNotification(notification)
 }
 
@@ -425,7 +393,7 @@ func (h *Session) purge(now time.Time) error {
 	}
 
 	for _, host := range offline {
-		h.SetOffline(host) // will lock/unlock row
+		h.notifyOffline(host) // will lock/unlock row
 	}
 
 	// delete after loop because this will change the table
@@ -456,9 +424,7 @@ func (h *Session) DHCPUpdate(mac net.HardwareAddr, ip net.IP, name NameEntry) er
 	defer host.MACEntry.Row.Unlock()
 
 	if !host.Online {
-		host.MACEntry.Online = true
-		host.Online = true
-		host.setDirty(true)
+		h.onlineTransition(host)
 	}
 	return nil
 }

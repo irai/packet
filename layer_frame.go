@@ -6,6 +6,8 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	"github.com/irai/packet/fastlog"
 )
 
 //go:generate stringer -type=PayloadID
@@ -65,7 +67,14 @@ type Frame struct {
 	DstAddr       Addr      // reference to destination IP, MAC and Port number (if available)
 	Session       *Session  // session where frame was capture
 	Host          *Host     // pointer to Host entry for this IP address
+	flags         uint      // processing flags : online_transition (0x01), offline_transition (0x02)
 }
+
+func (frame Frame) onlineTransition() bool    { return frame.flags&0x01 == 0x01 }
+func (frame Frame) setOnlineTransition() uint { return frame.flags | 0b01 }
+
+func (frame Frame) offlineTransition() bool    { return frame.flags&0x02 == 0x02 }
+func (frame Frame) setOfflineTransition() uint { return frame.flags | 0b10 }
 
 // ARP returns a reference to the ARP packet or nil if this is not a ARP packet.
 func (f Frame) ARP() ARP {
@@ -177,6 +186,10 @@ func (h *Session) Parse(p []byte) (frame Frame, err error) {
 		// If we don't have this, then we received all sent and forwarded packets with client IPs containing our host mac
 		if !bytes.Equal(frame.SrcAddr.MAC, h.NICInfo.HostAddr4.MAC) && frame.Session.NICInfo.HomeLAN4.Contains(frame.SrcAddr.IP) {
 			frame.Host, _ = frame.Session.findOrCreateHostWithLock(frame.SrcAddr) // will lock/unlock
+			if !frame.Host.Online {
+				frame.Session.onlineTransition(frame.Host)
+				frame.flags = frame.setOnlineTransition()
+			}
 		}
 	case syscall.ETH_P_IPV6:
 		frame.PayloadID = PayloadIP6
@@ -206,6 +219,10 @@ func (h *Session) Parse(p []byte) (frame Frame, err error) {
 			(frame.SrcAddr.IP.IsLinkLocalUnicast() ||
 				(frame.SrcAddr.IP.IsGlobalUnicast() && !bytes.Equal(frame.SrcAddr.MAC, frame.Session.NICInfo.RouterAddr4.MAC))) {
 			frame.Host, _ = frame.Session.findOrCreateHostWithLock(frame.SrcAddr) // will lock/unlock
+			if !frame.Host.Online {
+				frame.Session.onlineTransition(frame.Host)
+				frame.flags = frame.setOnlineTransition()
+			}
 		}
 	case syscall.ETH_P_ARP:
 		frame.PayloadID = PayloadARP
@@ -220,6 +237,10 @@ func (h *Session) Parse(p []byte) (frame Frame, err error) {
 				frame.Session.NICInfo.HomeLAN4.Contains(srcIP) {
 				addr := Addr{MAC: net.HardwareAddr(arp[8:14]), IP: srcIP}    // src mac and src ip
 				frame.Host, _ = frame.Session.findOrCreateHostWithLock(addr) // will lock/unlock
+				if !frame.Host.Online {
+					frame.Session.onlineTransition(frame.Host)
+					frame.flags = frame.setOnlineTransition()
+				}
 			}
 		}
 		return frame, nil
@@ -352,4 +373,52 @@ func (h *Session) Parse(p []byte) (frame Frame, err error) {
 		return frame, nil
 	}
 	return frame, nil
+}
+
+func (h *Session) onlineTransition(host *Host) {
+	now := time.Now()
+	host.MACEntry.LastSeen = now
+	host.LastSeen = now
+	if host.Online {
+		return
+	}
+
+	host.MACEntry.Online = true
+	host.Online = true
+	host.dirty = true
+
+	if host.Addr.IP.To4() != nil {
+		if !host.Addr.IP.Equal(host.MACEntry.IP4) { // changed IP4
+			if Debug {
+				fastlog.NewLine(module, "host changed ip4").MAC("mac", host.MACEntry.MAC).IP("from", host.MACEntry.IP4).IP("to", host.Addr.IP).Write()
+			}
+		}
+		host.MACEntry.IP4 = host.Addr.IP
+		for _, v := range host.MACEntry.HostList {
+			if ip := v.Addr.IP.To4(); ip != nil && !ip.Equal(host.Addr.IP) {
+				if v.Online {
+					if Debug {
+						fastlog.NewLine(module, "IP is offline").Struct(host).Write()
+					}
+					v.Online = false
+					v.dirty = true
+				}
+			}
+		}
+	} else {
+		if host.Addr.IP.IsGlobalUnicast() && !host.Addr.IP.Equal(host.MACEntry.IP6GUA) { // changed IP6 global unique address
+			if Debug {
+				fastlog.NewLine(module, "host changed ip6").MAC("mac", host.MACEntry.MAC).IP("from", host.MACEntry.IP6GUA).IP("to", host.Addr.IP).Write()
+			}
+			host.MACEntry.IP6GUA = host.Addr.IP
+		}
+		if host.Addr.IP.IsLinkLocalUnicast() && !host.Addr.IP.Equal(host.MACEntry.IP6LLA) { // changed IP6 link local address
+			if Debug {
+				fastlog.NewLine(module, "host changed ip6LLA").MAC("mac", host.MACEntry.MAC).IP("from", host.MACEntry.IP6LLA).IP("to", host.Addr.IP).Write()
+			}
+			host.MACEntry.IP6LLA = host.Addr.IP
+			// don't set offline IP as we don't target LLA
+		}
+	}
+	fastlog.NewLine(module, "IP is online").Struct(host.Addr).Write()
 }

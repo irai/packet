@@ -83,19 +83,6 @@ func (e *MACEntry) unlink(host *Host) {
 	}
 }
 
-func (e *MACEntry) updateIPNoLock(ip net.IP) {
-	if ip.To4() != nil {
-		e.IP4 = ip
-	} else {
-		if ip.IsGlobalUnicast() {
-			e.IP6GUA = ip
-		}
-		if ip.IsLinkLocalUnicast() {
-			e.IP6LLA = ip
-		}
-	}
-}
-
 // MACTable manages a goroutine safe set for adding and removing mac addresses
 type MACTable struct {
 	Table []*MACEntry

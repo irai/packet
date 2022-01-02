@@ -10,15 +10,15 @@ import (
 	"time"
 )
 
-func TestSession_SetOnline(t *testing.T) {
+func TestSession_Notify(t *testing.T) {
 	session := setupTestHandler()
 	// first host
-	host1, _ := session.findOrCreateHostWithLock(Addr{MAC: mac1, IP: ip1})
-	session.SetOnline(Frame{Host: host1})
+	frame1 := newTestHost(session, Addr{MAC: mac1, IP: ip1})
+	session.Notify(frame1)
 
 	// second host
-	host2, _ := session.findOrCreateHostWithLock(Addr{MAC: mac1, IP: ip2})
-	session.SetOnline(Frame{Host: host2})
+	frame2 := newTestHost(session, Addr{MAC: mac1, IP: ip2})
+	session.Notify(frame2)
 
 	// must get have 3 notifications - online, offline, online
 	for i := 0; i < 3; i++ {
@@ -72,19 +72,19 @@ func TestHandler_Offline(t *testing.T) {
 
 	// First create host with two IPs - IP3 and IP2 and set online
 	host1, _ := session.findOrCreateHostWithLock(Addr{MAC: mac1, IP: ip3})
-	session.SetOnline(Frame{Host: host1})
+	session.Notify(Frame{Host: host1})
 	host2, _ := session.findOrCreateHostWithLock(Addr{MAC: mac1, IP: ip2})
-	session.SetOnline(Frame{Host: host2})
+	session.Notify(Frame{Host: host2})
 
 	// create ipv6 hosts
 	host3, _ := session.findOrCreateHostWithLock(Addr{MAC: mac1, IP: ip6LLA1})
-	session.SetOnline(Frame{Host: host3})
+	session.Notify(Frame{Host: host3})
 	host4, _ := session.findOrCreateHostWithLock(Addr{MAC: mac1, IP: ip6GUA1})
-	session.SetOnline(Frame{Host: host4})
+	session.Notify(Frame{Host: host4})
 	host5, _ := session.findOrCreateHostWithLock(Addr{MAC: mac1, IP: ip6GUA2})
-	session.SetOnline(Frame{Host: host5})
+	session.Notify(Frame{Host: host5})
 	host6, _ := session.findOrCreateHostWithLock(Addr{MAC: mac1, IP: ip6GUA3})
-	session.SetOnline(Frame{Host: host6})
+	session.Notify(Frame{Host: host6})
 
 	if n := len(session.HostTable.Table); n != 8 {
 		session.PrintTable()
@@ -98,12 +98,12 @@ func TestHandler_Offline(t *testing.T) {
 	time.Sleep(time.Millisecond * 3)
 
 	// set hosts offline
-	session.SetOffline(host1)
-	session.SetOffline(host2)
-	session.SetOffline(host3)
-	session.SetOffline(host4)
-	session.SetOffline(host5)
-	session.SetOffline(host6)
+	session.notifyOffline(host1)
+	session.notifyOffline(host2)
+	session.notifyOffline(host3)
+	session.notifyOffline(host4)
+	session.notifyOffline(host5)
+	session.notifyOffline(host6)
 
 	if n := len(session.HostTable.Table); n != 8 {
 		session.PrintTable()
@@ -125,15 +125,15 @@ func TestHandler_findOrCreateHostDupIP(t *testing.T) {
 
 	// First create host with two IPs - IP3 and IP2 and set online
 	host1, _ := session.findOrCreateHostWithLock(Addr{MAC: mac1, IP: ip3})
-	session.SetOnline(Frame{Host: host1})
+	session.Notify(Frame{Host: host1})
 	host2, _ := session.findOrCreateHostWithLock(Addr{MAC: mac1, IP: ip2})
-	session.SetOnline(Frame{Host: host2})
+	session.Notify(Frame{Host: host2})
 
 	// test that name will clear - this was a previous bug
 	session.DHCPUpdate(host2.Addr.MAC, host2.Addr.IP, NameEntry{Type: "dhcp", Name: "mac1"})
 
 	// set host offline
-	session.SetOffline(host2)
+	session.notifyOffline(host2)
 	if err := session.Capture(mac1); err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +144,7 @@ func TestHandler_findOrCreateHostDupIP(t *testing.T) {
 
 	// new mac, same IP - Duplicated IP on network
 	host3, _ := session.findOrCreateHostWithLock(Addr{MAC: mac2, IP: ip2})
-	session.SetOnline(Frame{Host: host3})
+	session.Notify(Frame{Host: host3})
 	if host3.MACEntry.Captured { // mac should not be captured
 		session.PrintTable()
 		t.Fatal("host is captured incorrectly")
@@ -186,7 +186,7 @@ func TestSession_DHCPUpdate(t *testing.T) {
 
 	// First create host with two IPs - IP3 and IP2 and set online
 	host1, _ := session.findOrCreateHostWithLock(Addr{MAC: mac1, IP: ip1})
-	session.SetOnline(Frame{Host: host1})
+	session.Notify(Frame{Host: host1})
 
 	if err := session.Capture(mac3); err != nil { // will create another mac entry
 		t.Fatal(err)

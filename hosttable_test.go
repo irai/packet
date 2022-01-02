@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"net"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -53,6 +54,28 @@ var (
 func setupTestHandler() *Session {
 	h := testSession()
 	return h
+}
+
+func newTestHost(session *Session, srcAddr Addr) Frame {
+	// create an arp reply packet
+	p := make([]byte, EthMaxSize)
+	ether := EtherMarshalBinary(p, syscall.ETH_P_IP, srcAddr.MAC, EthBroadcast)
+	if ip := srcAddr.IP.To4(); ip != nil {
+		ip4 := IP4MarshalBinary(ether.Payload(), 255, srcAddr.IP, IP4Broadcast)
+		ether, _ = ether.SetPayload(ip4)
+	} else {
+		ether = EtherMarshalBinary(p, syscall.ETH_P_IPV6, srcAddr.MAC, EthBroadcast)
+		ip6 := IP6MarshalBinary(ether.Payload(), 255, srcAddr.IP, IP6AllNodesMulticast)
+		ether, _ = ether.SetPayload(ip6)
+	}
+	frame, err := session.Parse(ether)
+	if err != nil {
+		panic(err)
+	}
+	if frame.Host == nil {
+		panic("invalid nil test host")
+	}
+	return frame
 }
 
 func TestHandler_findOrCreateHostTestCopyIPMAC(t *testing.T) {
@@ -116,10 +139,10 @@ func Benchmark_findOrCreateHost(b *testing.B) {
 func TestHost_UpdateMDNSName(t *testing.T) {
 	session := setupTestHandler()
 	host1, _ := session.findOrCreateHostWithLock(Addr{MAC: mac1, IP: ip1})
-	session.notify(host1) // first notification
+	session.notify(Frame{Host: host1}) // first notification
 	name := NameEntry{Type: "MDNS", Name: "abc", Model: "android"}
 	host1.UpdateMDNSName(name)
-	session.notify(host1) // change of name notification
+	session.notify(Frame{Host: host1}) // change of name notification
 	var notification Notification
 	for i := 0; i < 2; i++ { // must get have 2 notifications - online and change of name
 		select {
@@ -136,10 +159,10 @@ func TestHost_UpdateMDNSName(t *testing.T) {
 func TestHost_UpdateLLMNRName(t *testing.T) {
 	session := setupTestHandler()
 	host1, _ := session.findOrCreateHostWithLock(Addr{MAC: mac1, IP: ip1})
-	session.notify(host1) // first notification
+	session.notify(Frame{Host: host1}) // first notification
 	name := NameEntry{Type: "LLMNR", Name: "abc", Model: "android"}
 	host1.UpdateLLMNRName(name)
-	session.notify(host1) // change of name notification
+	session.notify(Frame{Host: host1}) // change of name notification
 	var notification Notification
 	for i := 0; i < 2; i++ { // must get have 2 notifications - online and change of name
 		select {
@@ -156,10 +179,10 @@ func TestHost_UpdateLLMNRName(t *testing.T) {
 func TestHost_UpdateSSDPName(t *testing.T) {
 	session := setupTestHandler()
 	host1, _ := session.findOrCreateHostWithLock(Addr{MAC: mac1, IP: ip1})
-	session.notify(host1) // first notification
+	session.notify(Frame{Host: host1}) // first notification
 	name := NameEntry{Type: "SSDP", Name: "abc", Model: "android"}
 	host1.UpdateSSDPName(name)
-	session.notify(host1) // change of name notification
+	session.notify(Frame{Host: host1}) // change of name notification
 	var notification Notification
 	for i := 0; i < 2; i++ { // must get have 2 notifications - online and change of name
 		select {
@@ -176,10 +199,10 @@ func TestHost_UpdateSSDPName(t *testing.T) {
 func TestHost_UpdateNBNSName(t *testing.T) {
 	session := setupTestHandler()
 	host1, _ := session.findOrCreateHostWithLock(Addr{MAC: mac1, IP: ip1})
-	session.notify(host1) // first notification
+	session.notify(Frame{Host: host1}) // first notification
 	name := NameEntry{Type: "NBNS", Name: "abc", Model: "android"}
 	host1.UpdateNBNSName(name)
-	session.notify(host1) // change of name notification
+	session.notify(Frame{Host: host1}) // change of name notification
 	var notification Notification
 	for i := 0; i < 2; i++ { // must get have 2 notifications - online and change of name
 		select {

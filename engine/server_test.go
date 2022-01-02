@@ -51,7 +51,7 @@ func TestHandler_anotherHostDHCP(t *testing.T) {
 	// First create host with two IPs - IP3 and IP2 and set online
 	addr := packet.Addr{MAC: mac1, IP: ip3}
 	frame1 := newTestHost(engine.session, addr)
-	engine.session.SetOnline(frame1)
+	engine.session.Notify(frame1)
 	if err := engine.Capture(mac1); err != nil {
 		t.Fatal(err)
 	}
