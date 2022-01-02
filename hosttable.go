@@ -100,13 +100,12 @@ func (h *Session) printHostTable() {
 	if count != len(h.HostTable.Table) { // validate our logic - DELETE and replace with test in future
 		panic(fmt.Sprintf("host table differ in lenght hosts=%d machosts=%d  ", len(h.HostTable.Table), count))
 	}
-
 }
 
-// FindOrCreateHost will create a new host entry or return existing
+// findOrCreateHostWithLock will create a new host entry or return existing
 //
 // The funcion copies both the mac and the ip; it is safe to call this with a frame.IP(), frame.MAC()
-func (h *Session) FindOrCreateHost(addr Addr) (host *Host, found bool) {
+func (h *Session) findOrCreateHostWithLock(addr Addr) (host *Host, found bool) {
 
 	//optimise the common path
 	ipNew, _ := netaddr.FromStdIP(addr.IP)
@@ -121,15 +120,17 @@ func (h *Session) FindOrCreateHost(addr Addr) (host *Host, found bool) {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 
-	return h.findOrCreateHost(addr)
-}
+	/**
+		return h.findOrCreateHost(addr)
+	}
 
-// findOrCreateHost find the host using the frame IP (avoid copy if not needed)
-//
-// Must have engine lock before calling
-func (h *Session) findOrCreateHost(addr Addr) (host *Host, found bool) {
+	// findOrCreateHost find the host using the frame IP (avoid copy if not needed)
+	//
+	// Must have engine lock before calling
+	func (h *Session) findOrCreateHost(addr Addr) (host *Host, found bool) {
+		***/
 	// using netaddr IP
-	ipNew, _ := netaddr.FromStdIP(addr.IP)
+	// ipNew, _ := netaddr.FromStdIP(addr.IP)
 	now := time.Now()
 	if host, ok := h.HostTable.Table[ipNew]; ok {
 		host.MACEntry.Row.Lock() // lock the row
@@ -144,7 +145,7 @@ func (h *Session) findOrCreateHost(addr Addr) (host *Host, found bool) {
 			host.MACEntry.Row.Unlock() // release lock on previous mac
 
 			// Link host to new MACEntry
-			macEntry := h.MACTable.FindOrCreateNoLock(CopyMAC(addr.MAC))
+			macEntry := h.MACTable.findOrCreate(CopyMAC(addr.MAC))
 			macEntry.Row.Lock()          // acquire lock on new macEntry
 			macEntry.link(host)          // link macEntry to host
 			host.Addr.MAC = macEntry.MAC // new mac
@@ -161,7 +162,7 @@ func (h *Session) findOrCreateHost(addr Addr) (host *Host, found bool) {
 		host.MACEntry.Row.Unlock()
 		return host, true
 	}
-	macEntry := h.MACTable.FindOrCreateNoLock(CopyMAC(addr.MAC))
+	macEntry := h.MACTable.findOrCreate(CopyMAC(addr.MAC))
 	host = &Host{Addr: Addr{IP: CopyIP(addr.IP), MAC: macEntry.MAC}, MACEntry: macEntry, dirty: true, Online: false} // set Online to false to trigger Online transition
 	host.Manufacturer = FindManufacturer(macEntry.MAC)
 	if host.Manufacturer != "" && host.Manufacturer != host.MACEntry.Manufacturer {
@@ -205,16 +206,6 @@ func (h *Session) FindIP(ip net.IP) *Host {
 
 	newIP, _ := netaddr.FromStdIP(ip)
 	return h.HostTable.Table[newIP]
-}
-
-// IsCaptured returns true is mac is in capture mode
-func (h *Session) IsCaptured(mac net.HardwareAddr) bool {
-	h.mutex.RLock()
-	defer h.mutex.RUnlock()
-	if e, _ := h.MACTable.FindMACNoLock(mac); e != nil && e.Captured {
-		return true
-	}
-	return false
 }
 
 // findIP finds the host for IP wihout locking the engine

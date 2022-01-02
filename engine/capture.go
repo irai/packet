@@ -32,24 +32,12 @@ import (
 
 // Capture set the mac to capture mode
 func (h *Handler) Capture(mac net.HardwareAddr) error {
-	h.session.GlobalLock()
-	macEntry := h.session.MACTable.FindOrCreateNoLock(mac)
-	if macEntry.Captured {
-		h.session.GlobalUnlock()
+	if h.session.IsCaptured(mac) {
 		return nil
 	}
-	if macEntry.IsRouter {
-		h.session.GlobalUnlock()
-		return packet.ErrIsRouter
-	}
-	macEntry.Captured = true
 
-	list := []packet.Addr{}
-	for _, host := range macEntry.HostList {
-		list = append(list, packet.Addr{IP: host.Addr.IP, MAC: host.MACEntry.MAC})
-	}
-	h.session.GlobalUnlock()
-
+	h.session.Capture(mac)
+	list := h.session.IPAddrs(mac)
 	for _, addr := range list {
 		if err := h.lockAndStartHunt(addr); err != nil {
 			fmt.Printf("packet: error in initial capture ip=%s error=%s\n", addr.IP, err)
@@ -74,19 +62,14 @@ func (h *Handler) Capture(mac net.HardwareAddr) error {
 
 // Release removes the mac from capture mode
 func (h *Handler) Release(mac net.HardwareAddr) error {
-	h.session.GlobalLock()
-	macEntry, _ := h.session.MACTable.FindMACNoLock(mac)
-	if macEntry == nil {
-		h.session.GlobalUnlock()
+	if !h.session.IsCaptured(mac) {
 		return nil
 	}
-	list := []*packet.Host{}
-	list = append(list, macEntry.HostList...)
-	macEntry.Captured = false
-	h.session.GlobalUnlock()
 
-	for _, host := range list {
-		if err := h.lockAndStopHunt(host, packet.StageNormal); err != nil {
+	h.session.Release(mac)
+	list := h.session.IPAddrs(mac)
+	for _, addr := range list {
+		if err := h.lockAndStopHunt(addr, packet.StageNormal); err != nil {
 			return err
 		}
 	}
@@ -160,7 +143,8 @@ func (h *Handler) lockAndStartHunt(addr packet.Addr) (err error) {
 //  - packet.StageRedirected - the host is redirected; typically called when host went offline
 //                      or routing is no longer OK
 //
-func (h *Handler) lockAndStopHunt(host *packet.Host, stage packet.HuntStage) (err error) {
+func (h *Handler) lockAndStopHunt(addr packet.Addr, stage packet.HuntStage) (err error) {
+	/**
 	host.MACEntry.Row.Lock()
 	if host.HuntStage != packet.StageHunt {
 		host.HuntStage = stage
@@ -172,9 +156,11 @@ func (h *Handler) lockAndStopHunt(host *packet.Host, stage packet.HuntStage) (er
 	if packet.Debug {
 		fmt.Printf("packet: stop hunt for %s\n", host)
 	}
+	**/
+	fmt.Printf("packet: FIXME stop hunt for %s\n", addr)
 
-	addr := packet.Addr{MAC: host.MACEntry.MAC, IP: host.Addr.IP}
-	host.MACEntry.Row.Unlock()
+	// addr := packet.Addr{MAC: host.MACEntry.MAC, IP: host.Addr.IP}
+	// host.MACEntry.Row.Unlock()
 
 	// IP4 handlers
 	if addr.IP.To4() != nil {
@@ -332,6 +318,7 @@ func (h *Handler) lockAndSetOffline(host *packet.Host) {
 //       the new host is likely to be offline and stage normal
 func (h *Handler) lockAndProcessDHCP4Update(host *packet.Host, result packet.Result) (notify bool) {
 	if host != nil {
+		/**
 		host.MACEntry.Row.Lock()
 		host.DHCP4Name, notify = host.DHCP4Name.Merge(result.NameEntry)
 		if notify {
@@ -339,6 +326,7 @@ func (h *Handler) lockAndProcessDHCP4Update(host *packet.Host, result packet.Res
 			host.MACEntry.DHCP4Name, _ = host.MACEntry.DHCP4Name.Merge(host.DHCP4Name)
 		}
 		host.MACEntry.Row.Unlock()
+		***/
 
 		// when selecting or rebooting from another dhcp server,
 		// the host will not change state
@@ -346,18 +334,21 @@ func (h *Handler) lockAndProcessDHCP4Update(host *packet.Host, result packet.Res
 			return notify
 		}
 
-		if err := h.lockAndStopHunt(host, result.HuntStage); err != nil {
+		if err := h.lockAndStopHunt(host.Addr, result.HuntStage); err != nil {
 			fmt.Printf("packet: failed to stop hunt %s error=\"%s\"", host, err)
 		}
 
 		return notify
 	}
 
+	/**
 	// First dhcp discovery has no host entry
 	// Ensure there is a mac entry with the IP offer
 	if result.SrcAddr.IP != nil && h.session.NICInfo.HostIP4.Contains(result.SrcAddr.IP) {
-		entry := h.session.MACTable.FindOrCreateNoLock(result.SrcAddr.MAC)
-		entry.IP4Offer = packet.CopyIP(result.SrcAddr.IP)
+		h.session.DHCPUpdate(result.SrcAddr.MAC, result.SrcAddr.IP, result.NameEntry)
+		// entry := h.session.MACTable.FindOrCreateNoLock(result.SrcAddr.MAC)
+		// entry.IP4Offer = packet.CopyIP(result.SrcAddr.IP)
 	}
+	**/
 	return false
 }

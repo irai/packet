@@ -64,7 +64,7 @@ func TestHandler_findOrCreateHostTestCopyIPMAC(t *testing.T) {
 
 	session := setupTestHandler()
 
-	host, _ := session.findOrCreateHost(Addr{MAC: net.HardwareAddr(bufMAC), IP: net.IP(bufIP)})
+	host, _ := session.findOrCreateHostWithLock(Addr{MAC: net.HardwareAddr(bufMAC), IP: net.IP(bufIP)})
 	bufIP[0] = 0xff
 	bufMAC[0] = 0x00
 	if !host.Addr.IP.Equal(ip) {
@@ -79,7 +79,7 @@ func TestHandler_findOrCreateHostTestCopyIPMAC(t *testing.T) {
 	bufIP6 := []byte{0x20, 0x01, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}
 	ip6 := CopyIP(net.IP(bufIP6))
 
-	host, _ = session.findOrCreateHost(Addr{MAC: net.HardwareAddr(bufMAC), IP: net.IP(bufIP6)})
+	host, _ = session.findOrCreateHostWithLock(Addr{MAC: net.HardwareAddr(bufMAC), IP: net.IP(bufIP6)})
 	bufIP6[8] = 0xff
 	bufMAC[0] = 0x00
 	if !host.Addr.IP.Equal(ip6) {
@@ -89,9 +89,9 @@ func TestHandler_findOrCreateHostTestCopyIPMAC(t *testing.T) {
 		t.Error("findOrCreateHost wrong MAC", host, host.MACEntry)
 	}
 
-	if n := len(session.HostTable.Table); n != 2 {
+	if n := len(session.HostTable.Table); n != 4 {
 		session.printHostTable()
-		t.Errorf("findOrCreateHost invalid len=%d want=%d ", n, 3)
+		t.Errorf("findOrCreateHost invalid len=%d want=%d ", n, 4)
 	}
 }
 
@@ -106,7 +106,7 @@ func Benchmark_findOrCreateHost(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		ip[3] = byte(i % 64)
 		mac[5] = byte(i % 64)
-		host, _ := engine.findOrCreateHost(Addr{MAC: mac, IP: ip})
+		host, _ := engine.findOrCreateHostWithLock(Addr{MAC: mac, IP: ip})
 		if host.Addr.IP.Equal(net.IPv4zero) {
 			fmt.Println("invalid host")
 		}
@@ -115,11 +115,11 @@ func Benchmark_findOrCreateHost(b *testing.B) {
 
 func TestHost_UpdateMDNSName(t *testing.T) {
 	session := setupTestHandler()
-	host1, _ := session.findOrCreateHost(Addr{MAC: mac1, IP: ip1})
-	session.SetOnline(host1) // first notification
+	host1, _ := session.findOrCreateHostWithLock(Addr{MAC: mac1, IP: ip1})
+	session.notify(host1) // first notification
 	name := NameEntry{Type: "MDNS", Name: "abc", Model: "android"}
 	host1.UpdateMDNSName(name)
-	session.SetOnline(host1) // change of name notification
+	session.notify(host1) // change of name notification
 	var notification Notification
 	for i := 0; i < 2; i++ { // must get have 2 notifications - online and change of name
 		select {
@@ -135,11 +135,11 @@ func TestHost_UpdateMDNSName(t *testing.T) {
 
 func TestHost_UpdateLLMNRName(t *testing.T) {
 	session := setupTestHandler()
-	host1, _ := session.findOrCreateHost(Addr{MAC: mac1, IP: ip1})
-	session.SetOnline(host1) // first notification
+	host1, _ := session.findOrCreateHostWithLock(Addr{MAC: mac1, IP: ip1})
+	session.notify(host1) // first notification
 	name := NameEntry{Type: "LLMNR", Name: "abc", Model: "android"}
 	host1.UpdateLLMNRName(name)
-	session.SetOnline(host1) // change of name notification
+	session.notify(host1) // change of name notification
 	var notification Notification
 	for i := 0; i < 2; i++ { // must get have 2 notifications - online and change of name
 		select {
@@ -155,11 +155,11 @@ func TestHost_UpdateLLMNRName(t *testing.T) {
 
 func TestHost_UpdateSSDPName(t *testing.T) {
 	session := setupTestHandler()
-	host1, _ := session.findOrCreateHost(Addr{MAC: mac1, IP: ip1})
-	session.SetOnline(host1) // first notification
+	host1, _ := session.findOrCreateHostWithLock(Addr{MAC: mac1, IP: ip1})
+	session.notify(host1) // first notification
 	name := NameEntry{Type: "SSDP", Name: "abc", Model: "android"}
 	host1.UpdateSSDPName(name)
-	session.SetOnline(host1) // change of name notification
+	session.notify(host1) // change of name notification
 	var notification Notification
 	for i := 0; i < 2; i++ { // must get have 2 notifications - online and change of name
 		select {
@@ -175,11 +175,11 @@ func TestHost_UpdateSSDPName(t *testing.T) {
 
 func TestHost_UpdateNBNSName(t *testing.T) {
 	session := setupTestHandler()
-	host1, _ := session.findOrCreateHost(Addr{MAC: mac1, IP: ip1})
-	session.SetOnline(host1) // first notification
+	host1, _ := session.findOrCreateHostWithLock(Addr{MAC: mac1, IP: ip1})
+	session.notify(host1) // first notification
 	name := NameEntry{Type: "NBNS", Name: "abc", Model: "android"}
 	host1.UpdateNBNSName(name)
-	session.SetOnline(host1) // change of name notification
+	session.notify(host1) // change of name notification
 	var notification Notification
 	for i := 0; i < 2; i++ { // must get have 2 notifications - online and change of name
 		select {

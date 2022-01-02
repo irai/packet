@@ -2,6 +2,7 @@ package engine
 
 import (
 	"net"
+	"syscall"
 
 	"github.com/irai/packet"
 )
@@ -43,3 +44,25 @@ var (
 	hostAddr   = packet.Addr{MAC: hostMAC, IP: hostIP4}
 	routerAddr = packet.Addr{MAC: routerMAC, IP: routerIP4}
 )
+
+func newTestHost(session *packet.Session, srcAddr packet.Addr) packet.Frame {
+	// create an arp reply packet
+	p := make([]byte, packet.EthMaxSize)
+	ether := packet.EtherMarshalBinary(p, syscall.ETH_P_IP, srcAddr.MAC, packet.EthBroadcast)
+	if ip := srcAddr.IP.To4(); ip != nil {
+		ip4 := packet.IP4MarshalBinary(ether.Payload(), 255, srcAddr.IP, packet.IP4Broadcast)
+		ether, _ = ether.SetPayload(ip4)
+	} else {
+		ether = packet.EtherMarshalBinary(p, syscall.ETH_P_IPV6, srcAddr.MAC, packet.EthBroadcast)
+		ip6 := packet.IP6MarshalBinary(ether.Payload(), 255, srcAddr.IP, packet.IP6AllNodesMulticast)
+		ether, _ = ether.SetPayload(ip6)
+	}
+	frame, err := session.Parse(ether)
+	if err != nil {
+		panic(err)
+	}
+	if frame.Host == nil {
+		panic("invalid nil test host")
+	}
+	return frame
+}

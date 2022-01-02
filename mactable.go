@@ -112,9 +112,9 @@ func (h *Session) printMACTable() {
 	}
 }
 
-// FindOrCreateNoLock adds a mac to set
-func (s *MACTable) FindOrCreateNoLock(mac net.HardwareAddr) *MACEntry {
-	if e, _ := s.FindMACNoLock(mac); e != nil {
+// findOrCreate adds a mac to set
+func (s *MACTable) findOrCreate(mac net.HardwareAddr) *MACEntry {
+	if e, _ := s.findMAC(mac); e != nil {
 		return e
 	}
 	e := &MACEntry{MAC: mac, IP4: net.IPv4zero, IP6GUA: net.IPv6zero, IP6LLA: net.IPv6zero, IP4Offer: net.IPv4zero}
@@ -125,7 +125,7 @@ func (s *MACTable) FindOrCreateNoLock(mac net.HardwareAddr) *MACEntry {
 // del deletes the mac from set
 func (s *MACTable) delete(mac net.HardwareAddr) error {
 	var pos int
-	if _, pos = s.FindMACNoLock(mac); pos == -1 {
+	if _, pos = s.findMAC(mac); pos == -1 {
 		return nil
 	}
 
@@ -138,27 +138,7 @@ func (s *MACTable) delete(mac net.HardwareAddr) error {
 	return nil
 }
 
-// FindMACEntry returns pointer to macEntry or nil if not found
-func (h *Session) FindMACEntry(mac net.HardwareAddr) *MACEntry {
-	h.mutex.RLock()
-	defer h.mutex.RUnlock()
-	entry, _ := h.MACTable.FindMACNoLock(mac)
-	return entry
-}
-
-// IP4Offer returns the dhcp v4 ip offer if one is available.
-// This is used in the arp spoof module to reject
-// any announcements that conflic with our spoofed dhcp ip.
-func (h *Session) DHCPv4IPOffer(mac net.HardwareAddr) net.IP {
-	h.mutex.RLock()
-	defer h.mutex.RUnlock()
-	if entry, _ := h.MACTable.FindMACNoLock(mac); entry != nil {
-		return entry.IP4Offer
-	}
-	return nil
-}
-
-func (s *MACTable) FindMACNoLock(mac net.HardwareAddr) (*MACEntry, int) {
+func (s *MACTable) findMAC(mac net.HardwareAddr) (*MACEntry, int) {
 	for pos, v := range s.Table {
 		if bytes.Equal(v.MAC, mac) {
 			return v, pos

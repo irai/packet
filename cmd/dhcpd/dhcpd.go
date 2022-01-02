@@ -5,6 +5,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"flag"
 	"fmt"
 	"os"
@@ -55,6 +56,11 @@ func main() {
 					fmt.Println("error reading packet", err)
 				}
 				return
+			}
+
+			// Ignore packets sent by us
+			if bytes.Equal(packet.SrcMAC(buffer[:n]), s.NICInfo.HostAddr4.MAC) {
+				continue
 			}
 
 			frame, err := s.Parse(buffer[:n])

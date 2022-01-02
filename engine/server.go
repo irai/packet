@@ -58,18 +58,6 @@ func NewEngine(session *packet.Session) (h *Handler, err error) {
 	// default DNS handler
 	h.DNSHandler, _ = dns.New(h.session)
 
-	// create the host entry manually because we don't process host packets
-	host, _ := h.session.FindOrCreateHost(packet.Addr{MAC: h.session.NICInfo.HostMAC, IP: h.session.NICInfo.HostIP4.IP})
-	host.LastSeen = time.Now().Add(time.Hour * 24 * 365) // never expire
-	host.Online = true
-	host.MACEntry.Online = true
-
-	// create the router entry manually and set router flag
-	host, _ = h.session.FindOrCreateHost(packet.Addr{MAC: h.session.NICInfo.RouterMAC, IP: h.session.NICInfo.RouterIP4.IP})
-	host.MACEntry.IsRouter = true
-	host.Online = true
-	host.MACEntry.Online = true
-
 	return h, nil
 }
 

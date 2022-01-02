@@ -2,6 +2,7 @@ package dhcp4
 
 import (
 	"bytes"
+	"fmt"
 	"net"
 	"time"
 
@@ -10,6 +11,11 @@ import (
 )
 
 // handleDiscover respond with a DHCP offer packet
+//
+// At the ethernet and IP layer:
+//    srcMAC is set to the client mac
+//    srcIP is set to 0.0.0.0
+//    dstMAC and dstIP are set to the respective broadcast address.
 //
 // RFC2131: https://tools.ietf.org/html/rfc2131
 //
@@ -72,11 +78,14 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (d DHCP4) {
 
 	if lease.IPOffer == nil {
 		if err := h.allocIPOffer(lease, reqIP); err != nil {
-			// fmt.Printf("dhcp4 : error all ips allocated, failing silently: %s", err)
 			fastlog.NewLine(module, "all ips allocated, failing silently").Error(err).Write()
 			h.delete(lease)
 			return nil
 		}
+	}
+
+	if bytes.Equal(lease.IPOffer.To4(), h.session.NICInfo.HostAddr4.IP) || bytes.Equal(lease.IPOffer.To4(), h.session.NICInfo.RouterAddr4.IP) {
+		fmt.Println(module, "TRACE  ip allocation same as host ip or router ip", lease.IPOffer, h.session.NICInfo.HostAddr4.IP, h.session.NICInfo.RouterAddr4.IP)
 	}
 
 	// Client can send another discovery after the entry expiry
@@ -105,12 +114,8 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (d DHCP4) {
 		}
 	}
 
-	// TODO: fix this set the IP4 to be later checked in ARP ACD
-	/*
-		result.Update = true
-		result.SrcAddr = packet.Addr{MAC: lease.Addr.MAC, IP: lease.IPOffer}
-	*/
+	// Set the IP4 offer to be later checked in ARP ACD
+	h.session.SetDHCPv4IPOffer(lease.Addr.MAC, lease.IPOffer, packet.NameEntry{Type: module, Name: name})
 	fastlog.NewLine(module, "offer OK").ByteArray("xid", p.XId()).ByteArray("clientid", clientID).IP("ip", lease.IPOffer).Write()
-	fastlog.NewLine(module, "WARNING not returning IP offer").Write()
 	return ret
 }

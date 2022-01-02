@@ -199,6 +199,18 @@ func (config Config) NewSession() (*Session, error) {
 		}
 	}(session)
 
+	// create the host entry manually because we don't process host packets
+	host, _ := session.findOrCreateHostWithLock(session.NICInfo.HostAddr4)
+	host.LastSeen = time.Now().Add(time.Hour * 24 * 365) // never expire
+	host.Online = true
+	host.MACEntry.Online = true
+
+	// create the router entry manually and set router flag
+	host, _ = session.findOrCreateHostWithLock(session.NICInfo.RouterAddr4)
+	host.MACEntry.IsRouter = true
+	host.Online = true
+	host.MACEntry.Online = true
+
 	return session, nil
 }
 
@@ -222,14 +234,6 @@ func (h *Session) PrintTable() {
 	h.printHostTable()
 }
 
-func (h *Session) GlobalLock() {
-	h.mutex.Lock()
-}
-
-func (h *Session) GlobalUnlock() {
-	h.mutex.Unlock()
-}
-
 func (h *Session) ReadFrom(b []byte) (int, net.Addr, error) {
 	for {
 		n, addr, err := h.Conn.ReadFrom(b)
@@ -250,12 +254,20 @@ func (h *Session) ReadFrom(b []byte) (int, net.Addr, error) {
 // SetOnline set the host online and transition activities
 //
 // This funcion will generate the online event and mark the previous IP4 host as offline if required
-func (h *Session) SetOnline(host *Host) {
-	if host == nil {
-		return
-	}
-	now := time.Now()
+func (h *Session) SetOnline(frame Frame) {
 
+	if frame.Host == nil {
+		// Attempt to find a dhcp host entry
+		ip := h.DHCPv4IPOffer(frame.SrcAddr.MAC)
+		if frame.Host = h.FindIP(ip); frame.Host == nil {
+			return
+		}
+	}
+	h.notify(frame.Host)
+}
+
+func (h *Session) notify(host *Host) {
+	now := time.Now()
 	host.MACEntry.Row.RLock()
 	if host.Online && !host.dirty { // just another IP packet - nothing to do
 		if now.Sub(host.LastSeen) < time.Second*1 { // update LastSeen every 1 seconds to minimise locking
@@ -308,9 +320,6 @@ func (h *Session) SetOnline(host *Host) {
 	if host.Online && !host.dirty {
 		return
 	}
-
-	// if mac is captured, then start hunting process when IP is online
-	// captured := host.MACEntry.Captured
 
 	host.MACEntry.Online = true
 	host.Online = true
@@ -426,4 +435,108 @@ func (h *Session) purge(now time.Time) error {
 		}
 	}
 	return nil
+}
+
+// DHCPUpdate updates the mac and host entry with dhcp details.
+//
+// This is function is intended for DHCP processing modules to notify of the session when they encounter a new host.
+// A host using dynamic IP cannot use an IP address until it is confirmed by a dhcp server. Therefore various DHCP messages are
+// transmitted with a zero IP.
+//
+func (h *Session) DHCPUpdate(mac net.HardwareAddr, ip net.IP, name NameEntry) error {
+	if ip == nil || ip.IsUnspecified() {
+		return ErrInvalidIP
+	}
+	host, _ := h.findOrCreateHostWithLock(Addr{MAC: mac, IP: ip})
+	host.UpdateDHCP4Name(name)
+
+	host.MACEntry.Row.Lock()
+	defer host.MACEntry.Row.Unlock()
+
+	if !host.Online {
+		host.MACEntry.Online = true
+		host.Online = true
+		host.dirty = true
+	}
+	return nil
+}
+
+func (h *Session) SetDHCPv4IPOffer(mac net.HardwareAddr, ip net.IP, name NameEntry) {
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
+	entry := h.MACTable.findOrCreate(mac)
+	entry.IP4Offer = CopyIP(ip)
+	entry.DHCP4Name = name
+}
+
+// DHCPv4Offer returns the dhcp v4 ip offer if one is available.
+// This is used in the arp spoof module to reject
+// any announcements that conflict with the spoofed dhcp ip.
+func (h *Session) DHCPv4IPOffer(mac net.HardwareAddr) net.IP {
+	h.mutex.RLock()
+	defer h.mutex.RUnlock()
+	if entry, _ := h.MACTable.findMAC(mac); entry != nil {
+		return entry.IP4Offer
+	}
+	return nil
+}
+
+// FindMACEntry returns pointer to macEntry or nil if not found
+func (h *Session) FindMACEntry(mac net.HardwareAddr) *MACEntry {
+	h.mutex.RLock()
+	defer h.mutex.RUnlock()
+	entry, _ := h.MACTable.findMAC(mac)
+	return entry
+}
+
+// IsCaptured returns true is mac is in capture mode
+func (h *Session) IsCaptured(mac net.HardwareAddr) bool {
+	h.mutex.RLock()
+	defer h.mutex.RUnlock()
+	if e, _ := h.MACTable.findMAC(mac); e != nil && e.Captured {
+		return true
+	}
+	return false
+}
+
+func (h *Session) Capture(mac net.HardwareAddr) error {
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
+
+	macEntry := h.MACTable.findOrCreate(mac)
+	if macEntry.Captured {
+		return nil
+	}
+
+	if macEntry.IsRouter {
+		return ErrIsRouter
+	}
+	macEntry.Captured = true
+	return nil
+}
+
+func (h *Session) Release(mac net.HardwareAddr) error {
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
+	macEntry, _ := h.MACTable.findMAC(mac)
+	if macEntry != nil {
+		macEntry.Captured = false
+	}
+	return nil
+}
+
+// FindMACEntry returns pointer to macEntry or nil if not found
+func (h *Session) IPAddrs(mac net.HardwareAddr) []Addr {
+	h.mutex.RLock()
+	defer h.mutex.RUnlock()
+	e, _ := h.MACTable.findMAC(mac)
+	if e == nil {
+		return nil
+	}
+
+	list := make([]Addr, len(e.HostList))
+	for _, host := range e.HostList {
+		list = append(list, host.Addr)
+	}
+	return list
 }

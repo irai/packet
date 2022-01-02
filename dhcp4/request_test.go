@@ -11,8 +11,6 @@ import (
 )
 
 func Test_requestSimple(t *testing.T) {
-
-	// log.SetLevel(log.DebugLevel)
 	packet.DebugIP4 = false
 	packet.Debug = true
 	Debug = true
@@ -24,17 +22,16 @@ func Test_requestSimple(t *testing.T) {
 		name           string
 		wantResponse   bool
 		tableLen       int
-		responseCount  int
 		allocatedCount int
 		discoverCount  int
 		freeCount      int
 		srcAddr        packet.Addr
 		dstAddr        packet.Addr
 	}{
-		{name: "request-mac1", wantResponse: true, responseCount: 258, tableLen: 1, allocatedCount: 1, freeCount: 0, discoverCount: 0,
+		{name: "request-mac1", wantResponse: true, tableLen: 1, allocatedCount: 1, freeCount: 0, discoverCount: 0,
 			srcAddr: packet.Addr{MAC: mac1},
 		},
-		{name: "request-mac2", wantResponse: true, responseCount: 260, tableLen: 2, allocatedCount: 2, freeCount: 0, discoverCount: 0,
+		{name: "request-mac2", wantResponse: true, tableLen: 2, allocatedCount: 2, freeCount: 0, discoverCount: 0,
 			srcAddr: packet.Addr{MAC: mac2},
 		},
 	}
@@ -49,7 +46,6 @@ func Test_requestSimple(t *testing.T) {
 			checkLeaseTable(t, tc, tt.allocatedCount, tt.discoverCount, tt.freeCount)
 		})
 	}
-
 }
 
 func Test_requestExhaust(t *testing.T) {
@@ -60,11 +56,7 @@ func Test_requestExhaust(t *testing.T) {
 	tc := setupTestHandler()
 	defer tc.Close()
 
-	// TODO: fix arp notification for invalid host IPs for host (192.168.0.129) and router (192.168.0.11)
-	//       test code is sending incorrect arp notification for both host and router
 	exhaustAllIPs(t, tc, mac1)
-
-	time.Sleep(time.Second * 3) // WARNING: it takes about 2 seconds to read all 254 notifications
 
 	// send one last discover
 	tc.IPOffer = nil
@@ -132,15 +124,6 @@ func Test_requestAnotherHost(t *testing.T) {
 		t.Fatal("invalid  reply")
 	case <-time.After(time.Millisecond * 10):
 	}
-	/**
-	result := packet.Result{}
-	if !result.IsRouter || !result.Update ||
-		result.SrcAddr.IP == nil || result.SrcAddr.MAC == nil ||
-		result.HuntStage != packet.StageNoChange ||
-		result.NameEntry.Name != "host name" {
-		t.Fatalf("Test_requestAnotherHost() invalid update=%v isrouter=%v result=%+v ", result.Update, result.IsRouter, result)
-	}
-	***/
 	checkLeaseTable(t, tc, 0, 1, 0)
 
 	// new discover - captured host
@@ -177,10 +160,10 @@ func Test_requestAnotherHost(t *testing.T) {
 }
 
 func exhaustAllIPs(t *testing.T, tc *testContext, mac net.HardwareAddr) {
-	for i := 0; i < 254; i++ {
+	// will skip x.0, hostIP, routerIP and x.255
+	for i := 0; i < 252; i++ {
 		mac[5] = byte(i)
 		newDHCPHost(t, tc, mac)
-		// time.Sleep(time.Microsecond * 200)
 	}
-	checkLeaseTable(t, tc, 254, 0, 0)
+	checkLeaseTable(t, tc, 252, 0, 0)
 }

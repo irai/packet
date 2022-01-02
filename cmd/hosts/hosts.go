@@ -50,6 +50,6 @@ func main() {
 			fmt.Println("parse error", err)
 			continue
 		}
-		s.SetOnline(frame.Host)
+		s.SetOnline(frame)
 	}
 }

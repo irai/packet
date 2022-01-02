@@ -44,7 +44,7 @@ func (h *Handler) lockAndMonitorRoute(now time.Time) (err error) {
 		if errors.Is(err, packet.ErrNotRedirected) {
 			fastlog.NewLine(module, "ip4 routing NOK").Struct(addr).Write()
 			// Call stop hunt first to update stage to normal
-			if err := h.lockAndStopHunt(host, packet.StageNormal); err != nil {
+			if err := h.lockAndStopHunt(host.Addr, packet.StageNormal); err != nil {
 				fastlog.NewLine(module, "ip4 routing failed to stop hunt").Struct(addr).Error(err).Write()
 			}
 			if err := h.lockAndStartHunt(addr); err != nil {

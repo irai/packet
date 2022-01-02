@@ -152,7 +152,7 @@ func (h *Handler) processPacket(ether packet.Ether) (err error) {
 	d2 = time.Since(startTime)
 
 	if frame.Host != nil {
-		h.session.SetOnline(frame.Host)
+		h.session.SetOnline(frame)
 	}
 	d3 = time.Since(startTime)
 
@@ -244,7 +244,7 @@ func (h *Handler) ProcessSSDP(frame packet.Frame) (result packet.Result, err err
 				}
 				host.MACEntry.Row.Unlock()
 				if notify {
-					h.session.SetOnline(host)
+					h.session.SetOnline(frame)
 				}
 			}(frame.Host)
 			return result, nil

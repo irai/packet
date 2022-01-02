@@ -36,6 +36,15 @@ func IsUnicastMAC(mac net.HardwareAddr) bool {
 	return mac[0]&0x01 == 0x00
 }
 
+// SrcMAC returns the src mac address from an ethernet packet.
+// This is convenience function with just length validation.
+func SrcMAC(b []byte) net.HardwareAddr {
+	if len(b) >= 14 {
+		return net.HardwareAddr(b[6 : 6+6])
+	}
+	return nil
+}
+
 // Ether provide access to ethernet II fields without copying the structure
 // see: https://medium.com/@mdlayher/network-protocol-breakdown-ethernet-and-go-de985d726cc1
 //
@@ -115,19 +124,23 @@ func (p Ether) Payload() []byte {
 }
 
 func (p Ether) SetPayload(payload []byte) (Ether, error) {
+	tmp := p[:p.HeaderLen()+len(payload)]
 	// An Ethernet frame has a minimum size of 60 bytes because anything that is shorter is interpreted
 	// by receiving station as a frame resulting from a collision. This len was chosen to occupy the whole
 	// distance of 1500 meters so the whole cable is occupied and collisions can be avoided.
 	// pad smaller frames with zeros
 	// see: https://serverfault.com/questions/510657/is-the-64-byte-minimal-ethernet-packet-rule-respected-in-practice
-	tmp := p[:p.HeaderLen()+len(payload)]
-	if n := len(tmp); n < 60 {
-		tmp = tmp[:60]
-		for n < 60 {
-			tmp[n] = 0x00
-			n++
+
+	// On Linux, padding is added automatically by the kernel driver.
+	/*
+		if n := len(tmp); n < 60 {
+			tmp = tmp[:60]
+			for n < 60 {
+				tmp[n] = 0x00
+				n++
+			}
 		}
-	}
+	*/
 	return tmp, nil
 }
 

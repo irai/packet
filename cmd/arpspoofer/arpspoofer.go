@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"net"
@@ -110,6 +111,11 @@ func main() {
 				return
 			}
 
+			// Ignore packets sent by us
+			if bytes.Equal(packet.SrcMAC(buffer[:n]), s.NICInfo.HostAddr4.MAC) {
+				continue
+			}
+
 			frame, err := s.Parse(buffer[:n])
 			if err != nil {
 				fmt.Println("parse error", err)
@@ -129,7 +135,7 @@ func main() {
 				}
 			}
 
-			s.SetOnline(frame.Host)
+			s.SetOnline(frame)
 		}
 	}()
 

@@ -295,7 +295,7 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 	}
 
 	if Debug {
-		fastlog.NewLine(module, "dhcp").Label("src").Struct(frame.SrcAddr).Label("dst").Struct(frame.DstAddr).Struct(dhcpFrame).Write()
+		fastlog.NewLine(module, "process packet").Label("src").Struct(frame.SrcAddr).Label("dst").Struct(frame.DstAddr).Struct(dhcpFrame).Write()
 	}
 
 	options := dhcpFrame.ParseOptions()

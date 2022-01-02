@@ -11,7 +11,12 @@ import (
 
 // HandleRequest process client DHCPREQUEST message to servers
 //
-// either :
+// At the ethernet and IP layer:
+//    srcMAC is set to the client mac
+//    srcIP is set to 0.0.0.0 or to the client IP is the IP is already configured (ie. renew or rebind)
+//    dstMAC and dstIP are set to the respective broadcast address.
+//
+// The client is either :
 // (a) requesting offered parameters from one server and implicitly
 //     declining offers from all others (SELECTING)
 // (b) confirming correctness of previously allocated address after,
@@ -56,12 +61,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 	if tmp, ok := options[OptionServerIdentifier]; ok {
 		serverIP = net.IP(tmp).To4()
 	}
-	name := string(options[OptionHostName])
-	if host != nil {
-		if name != "" {
-			host.UpdateDHCP4Name(packet.NameEntry{Type: module, Name: name})
-		}
-	}
+	nameEntry := packet.NameEntry{Type: module, Name: string(options[OptionHostName])}
 
 	// ---------------------------------------------------------------------
 	// |              |INIT-REBOOT  |SELECTING    |RENEWING     |REBINDING |
@@ -95,7 +95,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 		operation = rebooting
 	}
 
-	fastlog.NewLine(module, "request rcvd").ByteArray("xid", p.XId()).ByteArray("clientid", clientID).IP("ip", reqIP).String("name", name).MAC("chaddr", p.CHAddr()).Write()
+	fastlog.NewLine(module, "request rcvd").ByteArray("xid", p.XId()).ByteArray("clientid", clientID).IP("ip", reqIP).String("name", nameEntry.Name).MAC("chaddr", p.CHAddr()).Write()
 
 	if Debug {
 		fastlog.NewLine(module, "request parameters").ByteArray("xid", p.XId()).IP("ciaddr", p.CIAddr()).Bool("brd", p.Broadcast()).IP("serverIP", serverIP).Write()
@@ -113,7 +113,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 		subnet = h.net2
 	}
 
-	lease := h.findOrCreate(clientID, p.CHAddr(), name)
+	lease := h.findOrCreate(clientID, p.CHAddr(), nameEntry.Name)
 
 	// Main switch
 	switch operation {
@@ -135,7 +135,6 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 			result.NameEntry.Name = name
 			result.HuntStage = packet.StageNoChange
 			***/
-			fastlog.NewLine(module, "WARNING in selecting not setting new host IP").MAC("mac", p.CHAddr()).IP("ip", reqIP).Write()
 
 			if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && captured) {
 				// The client is attempting to confirm an offer with another server
@@ -144,6 +143,8 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 				return nakPacket(p, subnet.DHCPServer, clientID)
 			}
 
+			// almost always a new host IP
+			h.session.DHCPUpdate(p.CHAddr(), reqIP, nameEntry)
 			fastlog.NewLine(module, "ignore select for another server").ByteArray("xid", p.XId()).IP("serverIP", serverIP).Write()
 			return nil // request not for us - silently discard packet
 		}
@@ -163,12 +164,10 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 		if lease.State != StateAllocated ||
 			!lease.Addr.IP.Equal(reqIP) || !bytes.Equal(lease.Addr.MAC, p.CHAddr()) ||
 			lease.DHCPExpiry.Before(time.Now()) {
-			// fmt.Printf("dhcp4 : request NACK - renew invalid or expired lease %s gw=%s\n", fields, subnet.DefaultGW)
 			fastlog.NewLine(module, "request NACK - renew invalid or expired lease").ByteArray("xid", p.XId()).IP("gw", subnet.DefaultGW).Write()
 
 			return nakPacket(p, subnet.DHCPServer, clientID)
 		}
-
 		fastlog.NewLine(module, "request ACK - renewing").ByteArray("xid", p.XId()).IP("ip", reqIP).Write()
 
 	case rebooting, rebinding:
@@ -185,7 +184,9 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 			result.NameEntry.Name = name
 			result.HuntStage = packet.StageNoChange
 		*/
-		fastlog.NewLine(module, "WARNING not setting name in rebooting IP").Write()
+
+		// Update session with DHCP details - almost always a new host IP will be setup
+		h.session.DHCPUpdate(p.CHAddr(), reqIP, nameEntry)
 
 		if lease.State == StateFree {
 			fastlog.NewLine(module, "client lease does not exist").ByteArray("xid", p.XId()).IP("ip", reqIP).Write()
@@ -232,7 +233,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 	}
 
 	// successful request
-	lease.Name = name
+	lease.Name = nameEntry.Name
 	if lease.State == StateDiscover {
 		lease.Addr.IP = lease.IPOffer
 		lease.IPOffer = nil
@@ -265,7 +266,9 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 	result.HuntStage = lease.subnet.Stage
 	result.NameEntry.Name = lease.Name
 	*/
-	fastlog.NewLine(module, "WARNING not setting name in request IP").Write()
+
+	// Update session with DHCP details - almost always a new host IP will be setup
+	h.session.DHCPUpdate(lease.Addr.MAC, lease.Addr.IP, nameEntry)
 
 	return ret
 }

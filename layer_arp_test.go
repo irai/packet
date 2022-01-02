@@ -109,28 +109,28 @@ func Test_Handler_ARPRequests(t *testing.T) {
 		{name: "whois1",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac2, EthernetBroadcast),
 			arp:     newPacket(OperationRequest, addr2, Addr{MAC: EthernetBroadcast, IP: ip3}),
-			wantErr: nil, wantLen: 1, wantIPs: 1, wantCountResponse: 0},
+			wantErr: nil, wantLen: 3, wantIPs: 1, wantCountResponse: 0},
 		{name: "whois1-dup2",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac2, EthernetBroadcast),
 			arp:     newPacket(OperationRequest, addr2, Addr{MAC: EthernetBroadcast, IP: ip3}),
-			wantErr: nil, wantLen: 1, wantIPs: 1},
+			wantErr: nil, wantLen: 3, wantIPs: 1},
 		{name: "whois1-dup3",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac2, EthernetBroadcast),
 			arp:     newPacket(OperationRequest, addr2, Addr{MAC: EthernetBroadcast, IP: ip3}),
-			wantErr: nil, wantLen: 1, wantIPs: 1},
+			wantErr: nil, wantLen: 3, wantIPs: 1},
 		{name: "whois2",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac3, EthernetBroadcast),
 			arp:     newPacket(OperationRequest, addr3, Addr{MAC: EthernetBroadcast, IP: routerIP4}),
-			wantErr: nil, wantLen: 2, wantIPs: 1},
+			wantErr: nil, wantLen: 4, wantIPs: 1},
 		{name: "announce-ip4",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac4, EthernetBroadcast),
 			arp:     newPacket(OperationRequest, addr4, Addr{MAC: EthernetBroadcast, IP: ip4}),
-			wantErr: nil, wantLen: 3, wantIPs: 1},
-		{name: "host-whois-ip3", // will include host mac - we don't care at the ARP level
+			wantErr: nil, wantLen: 5, wantIPs: 1},
+		{name: "host-whois-ip3", // host mac - ignore entry
 			ether:   newEtherPacket(syscall.ETH_P_ARP, hostMAC, EthernetBroadcast),
 			arp:     newPacket(OperationRequest, hostAddr, Addr{MAC: EthernetBroadcast, IP: ip3}),
-			wantErr: nil, wantLen: 4, wantIPs: 0},
-		{name: "router-whois-ip3",
+			wantErr: nil, wantLen: 5, wantIPs: 0},
+		{name: "router-whois-ip3", // router mac - ignore entry
 			ether:   newEtherPacket(syscall.ETH_P_ARP, routerMAC, EthernetBroadcast),
 			arp:     newPacket(OperationRequest, routerAddr, Addr{MAC: EthernetBroadcast, IP: ip3}),
 			wantErr: nil, wantLen: 5, wantIPs: 0},
@@ -138,7 +138,7 @@ func Test_Handler_ARPRequests(t *testing.T) {
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac5, EthernetBroadcast),
 			arp:     newPacket(OperationRequest, Addr{MAC: mac5, IP: net.IPv4zero.To4()}, Addr{MAC: EthernetZero, IP: ip5}),
 			wantErr: nil, wantLen: 5, wantIPs: 0, wantCountResponse: 1},
-		{name: "localink",
+		{name: "localink", // local link IP does not add host
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac2, EthernetBroadcast),
 			arp:     newPacket(OperationRequest, Addr{MAC: mac2, IP: localIP}, Addr{MAC: EthernetBroadcast, IP: localIP2}),
 			wantErr: nil, wantLen: 5, wantIPs: 0, wantCountResponse: 1},
@@ -149,6 +149,12 @@ func Test_Handler_ARPRequests(t *testing.T) {
 			if err != nil {
 				panic(err)
 			}
+
+			// TODO: this test should be moved to Parse
+			// if bytes.Equal(SrcMAC(ether), session.NICInfo.HostAddr4.MAC) {
+			// return
+			// }
+
 			// fmt.Println("frame ether: ", ether, "frame arp: ", ARP(ether.Payload()), "srcarp: ", tt.arp)
 			result, err := session.Parse(ether)
 			if err != tt.wantErr {
@@ -184,7 +190,7 @@ func Test_Handler_ServeReplies(t *testing.T) {
 		{name: "replyHost",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, hostMAC, mac2),
 			arp:     newPacket(OperationReply, hostAddr, addr2),
-			wantErr: nil, wantLen: 1, wantIPs: 0},
+			wantErr: nil, wantLen: 2, wantIPs: 0},
 		{name: "replyRouter",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, routerMAC, EthernetBroadcast),
 			arp:     newPacket(OperationReply, routerAddr, addr2),

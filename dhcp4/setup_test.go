@@ -121,10 +121,12 @@ func setupTestHandler() *testContext {
 
 	// fake nicinfo
 	nicInfo := &packet.NICInfo{
-		HostMAC:   hostMAC,
-		HostIP4:   net.IPNet{IP: hostIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
-		RouterIP4: net.IPNet{IP: routerIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
-		HomeLAN4:  homeLAN,
+		HostMAC:     hostMAC,
+		HostIP4:     net.IPNet{IP: hostIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
+		RouterIP4:   net.IPNet{IP: routerIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
+		RouterAddr4: routerAddr,
+		HostAddr4:   hostAddr,
+		HomeLAN4:    homeLAN,
 	}
 
 	tc.session, err = packet.Config{Conn: tc.inConn, NICInfo: nicInfo}.NewSession()
@@ -168,7 +170,6 @@ func newDHCPHost(t *testing.T, tc *testContext, mac net.HardwareAddr) []byte {
 	var ipOffer net.IP
 
 	ether := newDHCP4DiscoverFrame(srcAddr, dstAddr, srcAddr.MAC.String(), xid)
-	// dhcp := packet.UDP(packet.IP4(ether.Payload()).Payload()).Payload()
 	frame, err := tc.session.Parse(ether)
 	if err != nil {
 		panic(err)
@@ -178,7 +179,6 @@ func newDHCPHost(t *testing.T, tc *testContext, mac net.HardwareAddr) []byte {
 	}
 	select {
 	case p := <-tc.notifyReply:
-		// dhcp := DHCP4(packet.UDP(packet.IP4(packet.Ether(p).Payload()).Payload()).Payload())
 		frame, err = tc.session.Parse(p)
 		if err != nil || frame.PayloadID != packet.PayloadDHCP4 {
 			t.Fatal("invalid err or payloadID", err, frame.PayloadID)
@@ -189,16 +189,13 @@ func newDHCPHost(t *testing.T, tc *testContext, mac net.HardwareAddr) []byte {
 		if options[OptionSubnetMask] == nil || options[OptionRouter] == nil || options[OptionDomainNameServer] == nil {
 			t.Fatalf("DHCPHandler.handleDiscover() missing options =%v", options)
 		}
+		if ip := tc.h.session.DHCPv4IPOffer(dhcp.CHAddr()); !ipOffer.Equal(ip) {
+			t.Fatal("invalid table ip offer", ipOffer, ip)
+		}
+
 	case <-time.After(time.Millisecond * 10):
 		t.Fatal("failed to receive reply")
 	}
-
-	tc.Lock()
-	if tc.IPOffer == nil || !ipOffer.Equal(tc.IPOffer) {
-		tc.Unlock()
-		t.Fatal("didn't get ip offer, check sleep time", ipOffer, tc.IPOffer)
-	}
-	tc.Unlock()
 
 	ether = newDHCP4RequestFrame(srcAddr, dstAddr, srcAddr.MAC.String(), hostIP4, ipOffer, xid)
 	frame, err = tc.session.Parse(ether)

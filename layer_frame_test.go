@@ -18,16 +18,17 @@ func mustHex(b []byte) []byte {
 
 func testSession() *Session {
 	// fake nicinfo
-	hostMAC := net.HardwareAddr{0x00, 0xff, 0x03, 0x04, 0x05, 0x01} // keep first byte zero for unicast mac
-	hostIP := net.ParseIP("192.168.0.129").To4()
+	// hostMAC := net.HardwareAddr{0x00, 0xff, 0x03, 0x04, 0x05, 0x01} // keep first byte zero for unicast mac
+	// hostIP := net.ParseIP("192.168.0.129").To4()
 	homeLAN := net.IPNet{IP: net.IPv4(192, 168, 0, 0), Mask: net.IPv4Mask(255, 255, 255, 0)}
-	routerIP := net.ParseIP("192.168.0.11").To4()
+	// routerIP := net.ParseIP("192.168.0.11").To4()
 	nicInfo := &NICInfo{
-		HostMAC:   hostMAC,
-		HostIP4:   net.IPNet{IP: hostIP, Mask: net.IPv4Mask(255, 255, 255, 0)},
-		RouterIP4: net.IPNet{IP: routerIP, Mask: net.IPv4Mask(255, 255, 255, 0)},
-		HomeLAN4:  homeLAN,
-		HostAddr4: Addr{MAC: hostMAC, IP: hostIP},
+		HostMAC:     hostMAC,
+		HostIP4:     net.IPNet{IP: hostIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
+		RouterIP4:   net.IPNet{IP: routerIP4, Mask: net.IPv4Mask(255, 255, 255, 0)},
+		HomeLAN4:    homeLAN,
+		HostAddr4:   Addr{MAC: hostMAC, IP: hostIP4},
+		RouterAddr4: Addr{MAC: routerMAC, IP: routerIP4},
 	}
 
 	// TODO: fix this to discard writes like ioutil.Discard
@@ -48,21 +49,21 @@ func TestSession_Parse(t *testing.T) {
 	}{
 		{name: "ether nil", p: nil, wantErr: true},
 		{name: "ether too short", p: testEtherFrame[:10], wantErr: true},
-		{name: "ether frame", p: testEtherFrame, wantErr: false, wantPayloadID: PayloadEther},
-		{name: "ether rrcp", p: testEtherRRCP, wantErr: false, wantPayloadID: PayloadEther},
-		{name: "ipv4 invalid", p: testIPv4Frame, wantErr: true, wantPayloadID: PayloadIP4, wantHosts: 0},
-		{name: "icmp6 RA", p: testicmp6RourterSolicitation, wantErr: false, wantPayloadID: PayloadICMP6, wantHosts: 1},
-		{name: "dhcp", p: mustHex(testDhcpDiscover), wantErr: false, wantPayloadID: PayloadDHCP4, wantHosts: 1}, // discover does not create host
-		{name: "arp request", p: mustHex(testARPRequest), wantErr: false, wantPayloadID: PayloadARP, wantHosts: 2},
-		{name: "arp reply", p: mustHex(testARPReply), wantErr: false, wantPayloadID: PayloadARP, wantHosts: 2},
-		{name: "ssdp", p: mustHex(testSSDP), wantErr: false, wantPayloadID: PayloadSSDP, wantHosts: 2},
-		{name: "mdns", p: mustHex(testMDNS), wantErr: false, wantPayloadID: PayloadMDNS, wantHosts: 2},
-		{name: "dhcpv6", p: mustHex(testDHCPv6), wantErr: false, wantPayloadID: PayloadDHCP6, wantHosts: 3},
-		{name: "dns", p: mustHex(testDNS), wantErr: false, wantPayloadID: PayloadDNS, wantHosts: 3},
-		{name: "ntp", p: mustHex(testNTP), wantErr: false, wantPayloadID: PayloadNTP, wantHosts: 3},
-		{name: "TCP", p: mustHex(testTCP), wantErr: false, wantPayloadID: PayloadTCP, wantHosts: 3},
-		{name: "ICMPv4", p: mustHex(testICMPv4), wantErr: false, wantPayloadID: PayloadICMP4, wantHosts: 3},
-		{name: "IGMP", p: mustHex(testIGMP), wantErr: false, wantPayloadID: PayloadIGMP, wantHosts: 3},
+		{name: "ether frame", p: testEtherFrame, wantErr: false, wantPayloadID: PayloadEther, wantHosts: 2},
+		{name: "ether rrcp", p: testEtherRRCP, wantErr: false, wantPayloadID: PayloadRRCP, wantHosts: 2},
+		{name: "ipv4 invalid", p: testIPv4Frame, wantErr: true, wantPayloadID: PayloadIP4, wantHosts: 2},
+		{name: "icmp6 RA", p: testicmp6RourterSolicitation, wantErr: false, wantPayloadID: PayloadICMP6, wantHosts: 3},
+		{name: "dhcp", p: mustHex(testDhcpDiscover), wantErr: false, wantPayloadID: PayloadDHCP4, wantHosts: 3}, // discover does not create host
+		{name: "arp request", p: mustHex(testARPRequest), wantErr: false, wantPayloadID: PayloadARP, wantHosts: 4},
+		{name: "arp reply", p: mustHex(testARPReply), wantErr: false, wantPayloadID: PayloadARP, wantHosts: 4},
+		{name: "ssdp", p: mustHex(testSSDP), wantErr: false, wantPayloadID: PayloadSSDP, wantHosts: 4},
+		{name: "mdns", p: mustHex(testMDNS), wantErr: false, wantPayloadID: PayloadMDNS, wantHosts: 4},
+		{name: "dhcpv6", p: mustHex(testDHCPv6), wantErr: false, wantPayloadID: PayloadDHCP6, wantHosts: 5},
+		{name: "dns", p: mustHex(testDNS), wantErr: false, wantPayloadID: PayloadDNS, wantHosts: 5},
+		{name: "ntp", p: mustHex(testNTP), wantErr: false, wantPayloadID: PayloadNTP, wantHosts: 5},
+		{name: "TCP", p: mustHex(testTCP), wantErr: false, wantPayloadID: PayloadTCP, wantHosts: 5},
+		{name: "ICMPv4", p: mustHex(testICMPv4), wantErr: false, wantPayloadID: PayloadICMP4, wantHosts: 5},
+		{name: "IGMP", p: mustHex(testIGMP), wantErr: false, wantPayloadID: PayloadIGMP, wantHosts: 5},
 	}
 	h := testSession()
 	Debug = true
@@ -102,7 +103,7 @@ func TestSession_Parse(t *testing.T) {
 	}
 }
 
-var testEtherFrame = []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x55, 0x55, 0x55, 0x55, 0x55, 0x88, 0x99}
+var testEtherFrame = []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x55, 0x55, 0x55, 0x55, 0x55, 0xFF, 0xFF} // unknown ethertype = 0xffff
 
 var testIPv4Frame = []byte{
 	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x55, 0x55, 0x55, 0x55, 0x55, 0x08, 0x00, //ether frame
