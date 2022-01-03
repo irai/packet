@@ -3,6 +3,7 @@ package packet
 import (
 	"bytes"
 	"encoding/hex"
+	"fmt"
 	"net"
 	"testing"
 )
@@ -265,3 +266,19 @@ var testIGMP = []byte(
 		`0024 0000 4000 0102 4329 c0a8 0101 e000` + //  .$..@...C)......
 		`0001 9404 0000 1164 ec1e 0000 0000 027d` + //  .......d.......}
 		`0000 0000 0000 0000 0000 0000          `) //  ............
+
+func Benchmark_Parse(t *testing.B) {
+	session := testSession()
+	count = 0
+	b := mustHex(testDhcpDiscover)
+	for i := 0; i < t.N; i++ {
+		frame, err := session.Parse(b)
+		if err != nil {
+			t.Errorf("unexpected erro %s", err)
+		}
+		if frame.IP4() != nil {
+			count++
+		}
+	}
+	fmt.Println(count)
+}

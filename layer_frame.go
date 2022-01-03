@@ -141,6 +141,11 @@ type ProtoStats struct {
 // Parse returns a Frame containing references to common layers and the payload. It will also
 // create the host entry if this is a new IP. The function is fast as it
 // will map to the underlying array. No copy and no allocation takes place.
+//
+// Benchmark result: Jan 2021
+// cpu: 11th Gen Intel(R) Core(TM) i7-1165G7 @ 2.80GHz
+// Benchmark_Parse-8
+// 25281475	        47.58 ns/op	       0 B/op	       0 allocs/op
 func (h *Session) Parse(p []byte) (frame Frame, err error) {
 	frame.Ether = Ether(p)
 	if err := frame.Ether.IsValid(); err != nil {

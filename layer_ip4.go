@@ -25,8 +25,8 @@ func (p IP4) FlagMoreFragments() bool { return (uint8(p[6]) & 0b00100000) != 0 }
 func (p IP4) Fragment() uint16        { return ((uint16(p[6]) & 0b00011111) << 8) & uint16(p[7]) }
 func (p IP4) TTL() int                { return int(p[8]) }
 func (p IP4) Checksum() int           { return int(binary.BigEndian.Uint16(p[10:12])) }
-func (p IP4) Src() net.IP             { return net.IPv4(p[12], p[13], p[14], p[15]) }
-func (p IP4) Dst() net.IP             { return net.IPv4(p[16], p[17], p[18], p[19]) }
+func (p IP4) Src() net.IP             { return net.IP(p[12:16]) } // must use IP type to avoid allocation
+func (p IP4) Dst() net.IP             { return net.IP(p[16:20]) } // must use IP type to avoid allocation
 func (p IP4) NetaddrDst() netaddr.IP  { return netaddr.IPv4(p[16], p[17], p[18], p[19]) }
 func (p IP4) TotalLen() int           { return int(binary.BigEndian.Uint16(p[2:4])) } // total packet size including header and payload
 func (p IP4) Payload() []byte         { return p[p.IHL():p.TotalLen()] }
