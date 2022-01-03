@@ -46,7 +46,7 @@ func TestHandler_SignalNICStopped(t *testing.T) {
 	defer func() { monitorNICFrequency = keep }()
 	monitorNICFrequency = time.Millisecond * 3
 
-	session, err := Config{Conn: inConn, NICInfo: &nicInfo}.NewSession()
+	session, err := Config{Conn: inConn, NICInfo: &nicInfo}.NewSession("")
 	if err != nil {
 		t.Fatal("engine did not stop as expected", err)
 	}
@@ -61,7 +61,7 @@ func TestHandler_SignalNICStopped(t *testing.T) {
 	}
 }
 
-func TestHandler_Offline(t *testing.T) {
+func TestHandler_purge(t *testing.T) {
 	ip6LLA1 := net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}
 	ip6GUA1 := net.IP{0x20, 0x01, 0x44, 0x79, 0x1d, 0x01, 0x24, 0x01, 0x7c, 0xf2, 0x4f, 0x73, 0xf8, 0xc1, 0x00, 0x01}
 	ip6GUA2 := net.IP{0x20, 0x01, 0x44, 0x79, 0x1d, 0x01, 0x24, 0x01, 0x7c, 0xf2, 0x4f, 0x73, 0xf8, 0xc1, 0x00, 0x02}
@@ -71,20 +71,14 @@ func TestHandler_Offline(t *testing.T) {
 	Debug = true
 
 	// First create host with two IPs - IP3 and IP2 and set online
-	host1, _ := session.findOrCreateHostWithLock(Addr{MAC: mac1, IP: ip3})
-	session.Notify(Frame{Host: host1})
-	host2, _ := session.findOrCreateHostWithLock(Addr{MAC: mac1, IP: ip2})
-	session.Notify(Frame{Host: host2})
+	frame1 := newTestHost(session, Addr{MAC: mac1, IP: ip1})
+	frame2 := newTestHost(session, Addr{MAC: mac1, IP: ip2})
 
 	// create ipv6 hosts
-	host3, _ := session.findOrCreateHostWithLock(Addr{MAC: mac1, IP: ip6LLA1})
-	session.Notify(Frame{Host: host3})
-	host4, _ := session.findOrCreateHostWithLock(Addr{MAC: mac1, IP: ip6GUA1})
-	session.Notify(Frame{Host: host4})
-	host5, _ := session.findOrCreateHostWithLock(Addr{MAC: mac1, IP: ip6GUA2})
-	session.Notify(Frame{Host: host5})
-	host6, _ := session.findOrCreateHostWithLock(Addr{MAC: mac1, IP: ip6GUA3})
-	session.Notify(Frame{Host: host6})
+	frame3 := newTestHost(session, Addr{MAC: mac1, IP: ip6LLA1})
+	frame4 := newTestHost(session, Addr{MAC: mac1, IP: ip6GUA1})
+	frame5 := newTestHost(session, Addr{MAC: mac1, IP: ip6GUA2})
+	frame6 := newTestHost(session, Addr{MAC: mac1, IP: ip6GUA3})
 
 	if n := len(session.HostTable.Table); n != 8 {
 		session.PrintTable()
@@ -97,23 +91,29 @@ func TestHandler_Offline(t *testing.T) {
 	}
 	time.Sleep(time.Millisecond * 3)
 
+	if frame1.Host.Online || !frame2.Host.Online || !frame3.Host.Online || !frame4.Host.Online || !frame5.Host.Online || !frame6.Host.Online {
+		session.PrintTable()
+		t.Fatal("invalid online hosts")
+	}
 	// set hosts offline
-	session.notifyOffline(host1)
-	session.notifyOffline(host2)
-	session.notifyOffline(host3)
-	session.notifyOffline(host4)
-	session.notifyOffline(host5)
-	session.notifyOffline(host6)
+	now := time.Now()
+	session.purge(now.Add(session.OfflineDeadline))
+	if frame1.Host.Online || frame2.Host.Online || frame3.Host.Online || frame4.Host.Online || frame5.Host.Online || frame6.Host.Online {
+		session.PrintTable()
+		t.Fatal("invalid offline hosts")
+	}
 
 	if n := len(session.HostTable.Table); n != 8 {
 		session.PrintTable()
-		t.Fatal(fmt.Sprintf("invalid host table 2 len=%d ", n))
+		t.Fatal(fmt.Sprintf("invalid host table 8 len=%d ", n))
 	}
 
-	session.purge(time.Now().Add(time.Hour))
-	if n := len(session.HostTable.Table); n != 2 {
+	// in this test, it will also delete the routerIP host
+	session.purge(now.Add(session.PurgeDeadline))
+
+	if n := len(session.HostTable.Table); n != 1 {
 		session.PrintTable()
-		t.Fatal(fmt.Sprintf("invalid host table 2 len=%d ", n))
+		t.Fatal(fmt.Sprintf("invalid host table 1 len=%d ", n))
 	}
 	session.PrintTable()
 }
@@ -133,7 +133,7 @@ func TestHandler_findOrCreateHostDupIP(t *testing.T) {
 	session.DHCPUpdate(host2.Addr.MAC, host2.Addr.IP, NameEntry{Type: "dhcp", Name: "mac1"})
 
 	// set host offline
-	session.notifyOffline(host2)
+	session.makeOffline(host2)
 	if err := session.Capture(mac1); err != nil {
 		t.Fatal(err)
 	}
@@ -181,10 +181,9 @@ func TestHandler_findOrCreateHostDupIP(t *testing.T) {
 
 func TestSession_DHCPUpdate(t *testing.T) {
 	session := setupTestHandler()
-
 	Debug = false
 
-	// First create host with two IPs - IP3 and IP2 and set online
+	// create existing host for mac1
 	host1, _ := session.findOrCreateHostWithLock(Addr{MAC: mac1, IP: ip1})
 	session.Notify(Frame{Host: host1})
 

@@ -72,7 +72,7 @@ func testSession() *packet.Session {
 	// TODO: fix this to discard writes like ioutil.Discard
 	conn, _ := net.ListenPacket("udp4", "127.0.0.1:0")
 
-	session, _ := packet.Config{Conn: conn, NICInfo: nicInfo}.NewSession()
+	session, _ := packet.Config{Conn: conn, NICInfo: nicInfo}.NewSession("")
 	return session
 }
 

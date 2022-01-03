@@ -1,8 +1,6 @@
 package packet
 
 import (
-	"fmt"
-
 	"github.com/irai/packet/fastlog"
 )
 
@@ -52,7 +50,7 @@ func (h *Session) sendNotification(notification Notification) {
 		h.C <- notification
 		return
 	}
-	fmt.Printf("packet: error notification channel is full len=%d %v\n", len(h.C), notification)
+	fastlog.NewLine(module, "notification channel is full").Int("len", len(h.C)).Struct(notification).Write()
 }
 
 func (h *Session) GetNotificationChannel() <-chan Notification {

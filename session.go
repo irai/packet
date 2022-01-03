@@ -81,19 +81,19 @@ var (
 )
 
 type Session struct {
-	Conn            net.PacketConn
-	NICInfo         *NICInfo
-	ProbeDeadline   time.Duration     // send probe if no traffic received for this long
+	Conn            net.PacketConn    // the underlaying raw connection used for all read and write
+	NICInfo         *NICInfo          // keep interface information
+	ProbeDeadline   time.Duration     // send IP probe if no traffic received for this long
 	OfflineDeadline time.Duration     // mark Host offline if no traffic for this long
 	PurgeDeadline   time.Duration     // delete Host if no traffic for this long
-	HostTable       HostTable         // store IP list - one for each host
-	ipHeartBeat     uint32            // ipHeartBeat is set to 1 when we receive an IP packet
+	HostTable       HostTable         // store MAC/IP list - one for each IP host
 	MACTable        MACTable          // store mac list
 	mutex           sync.RWMutex      // global session mutex
 	Statistics      []ProtoStats      // keep per protocol statistics
 	C               chan Notification // channel for online & offline notifications
 	closeChan       chan bool         // channel to end all go routines
 	closed          bool              // indicate the session is closed
+	ipHeartBeat     uint32            // ipHeartBeat is set to 1 when we receive an IP packet
 }
 
 // Config contains configurable parameters that overide package defaults
@@ -118,42 +118,52 @@ const (
 // It is a variable so we can test easily.
 var monitorNICFrequency = time.Minute * 3
 
+// NewSession returns a session to read and write raw packets from the network interface card.
 func NewSession(nic string) (*Session, error) {
-	nicinfo, err := GetNICInfo(nic)
-	if err != nil {
-		fmt.Printf("interface not found nic=%s: %s\n", nic, err)
-		return nil, err
-	}
-	conn, err := NewServerConn(nicinfo.IFI, syscall.ETH_P_ALL, SocketConfig{Filter: nil, Promiscuous: true})
-	if err != nil {
-		fmt.Printf("conn error: %s", err)
-		return nil, err
-	}
-	return Config{Conn: conn, NICInfo: nicinfo, ProbeDeadline: DefaultProbeDeadline, OfflineDeadline: DefaultOfflineDeadline, PurgeDeadline: DefaultPurgeDeadline}.NewSession()
+	return Config{ProbeDeadline: DefaultProbeDeadline, OfflineDeadline: DefaultOfflineDeadline, PurgeDeadline: DefaultPurgeDeadline}.NewSession(nic)
 }
 
-func (config Config) NewSession() (*Session, error) {
-	session := new(Session)
+// NewSession accepts a configuration structure and returns a session to read and write raw packets from the network interface card.
+func (config Config) NewSession(nic string) (session *Session, err error) {
+	session = new(Session)
 	session.MACTable = newMACTable()
 	session.HostTable = newHostTable()
+	session.C = make(chan Notification, 128) // plenty of capacity to prevent blocking
+	session.closeChan = make(chan bool)
+
+	if session.NICInfo = config.NICInfo; session.NICInfo == nil {
+		session.NICInfo, err = GetNICInfo(nic)
+		if err != nil {
+			return nil, fmt.Errorf("failed to setup nic=%s: %w", nic, err)
+		}
+	}
+	if session.Conn = config.Conn; session.Conn == nil {
+		session.Conn, err = NewServerConn(session.NICInfo.IFI, syscall.ETH_P_ALL, SocketConfig{Filter: nil, Promiscuous: true})
+		if err != nil {
+			return nil, fmt.Errorf("failed to open raw connection: %w", err)
+		}
+
+	}
 
 	// create and populate stats table
 	session.Statistics = make([]ProtoStats, 32)
 	for i := 1; i < len(session.Statistics); i++ {
 		session.Statistics[i].Proto = PayloadID(i)
 	}
-	session.C = make(chan Notification, 128) // plenty of capacity to prevent blocking
-	session.Conn = config.Conn
-	session.NICInfo = config.NICInfo
-	session.closeChan = make(chan bool)
 
-	if session.ProbeDeadline = config.ProbeDeadline; session.ProbeDeadline < 0 || session.ProbeDeadline > time.Minute*30 {
+	if config.ProbeDeadline == 0 || config.OfflineDeadline == 0 || config.PurgeDeadline == 0 {
+		config.ProbeDeadline = DefaultProbeDeadline
+		config.PurgeDeadline = DefaultPurgeDeadline
+		config.OfflineDeadline = DefaultOfflineDeadline
+	}
+
+	if session.ProbeDeadline = config.ProbeDeadline; session.ProbeDeadline <= 0 || session.ProbeDeadline > time.Minute*30 {
 		return nil, fmt.Errorf("invalid ProbeDeadline=%v: %w", session.ProbeDeadline, ErrInvalidParam)
 	}
-	if session.OfflineDeadline = config.OfflineDeadline; session.OfflineDeadline < 0 || session.OfflineDeadline > time.Minute*60 || session.OfflineDeadline < session.ProbeDeadline {
+	if session.OfflineDeadline = config.OfflineDeadline; session.OfflineDeadline <= 0 || session.OfflineDeadline > time.Minute*60 || session.OfflineDeadline < session.ProbeDeadline {
 		return nil, fmt.Errorf("invalid OfflineDeadline=%v: %w", session.OfflineDeadline, ErrInvalidParam)
 	}
-	if session.PurgeDeadline = config.PurgeDeadline; session.PurgeDeadline < 0 || session.PurgeDeadline > time.Hour*24 {
+	if session.PurgeDeadline = config.PurgeDeadline; session.PurgeDeadline <= 0 || session.PurgeDeadline > time.Hour*24 {
 		return nil, fmt.Errorf("invalid PurgeDeadline=%v: %w", session.PurgeDeadline, ErrInvalidParam)
 	}
 
@@ -189,8 +199,7 @@ func (config Config) NewSession() (*Session, error) {
 				if Debug {
 					fastlog.NewLine(module, "minute check").Write()
 				}
-				now := time.Now()
-				go h.purge(now)
+				go h.purge(time.Now())
 
 			case <-h.closeChan:
 				fastlog.NewLine(module, "session minute loop goroutine ended").Write()
@@ -202,18 +211,24 @@ func (config Config) NewSession() (*Session, error) {
 	// create the host entry manually because we don't process host packets
 	host, _ := session.findOrCreateHostWithLock(session.NICInfo.HostAddr4)
 	host.LastSeen = time.Now().Add(time.Hour * 24 * 365) // never expire
+	host.MACEntry.LastSeen = host.LastSeen
+	host.MACEntry.IP4 = host.Addr.IP
+	host.MACEntry.IP6LLA = session.NICInfo.HostLLA.IP
 	host.Online = true
 	host.MACEntry.Online = true
 
 	// create the router entry manually and set router flag
 	host, _ = session.findOrCreateHostWithLock(session.NICInfo.RouterAddr4)
 	host.MACEntry.IsRouter = true
+	host.MACEntry.IP4 = host.Addr.IP
 	host.Online = true
 	host.MACEntry.Online = true
 
 	return session, nil
 }
 
+// Close stop all session goroutines and close notification channel and the underlaying raw connection.
+// The session is no longer valid after calling Close().
 func (h *Session) Close() {
 	if h.closed {
 		return
@@ -224,7 +239,7 @@ func (h *Session) Close() {
 	h.Conn.Close()
 }
 
-// PrintTable logs the table to standard out
+// PrintTable logs the table to standard out.
 func (h *Session) PrintTable() {
 	h.mutex.RLock()
 	defer h.mutex.RUnlock()
@@ -251,13 +266,14 @@ func (h *Session) ReadFrom(b []byte) (int, net.Addr, error) {
 	}
 }
 
-// Notify set the host online and transition activities
+// Notify generates the notification for host offline and online if required. The function
+// is only required if the caller wants to receive notifications via the notification channel.
+// If the caller is not interested in online/offline transitions, the function is not required to run.
 //
-// This funcion will generate the online event and mark the previous IP4 host as offline if required
+// Notify will only send a notification via the notification channel if a change is pending as a result
+// of processing the packet. It returns silently if there is no notification pending.
 func (h *Session) Notify(frame Frame) {
-
-	if frame.Host == nil {
-		// Attempt to find a dhcp host entry
+	if frame.Host == nil && frame.PayloadID == PayloadDHCP4 { // Attempt to find a dhcp host entry
 		ip := h.DHCPv4IPOffer(frame.SrcAddr.MAC)
 		if frame.Host = h.FindIP(ip); frame.Host == nil {
 			return
@@ -267,13 +283,10 @@ func (h *Session) Notify(frame Frame) {
 }
 
 func (h *Session) notify(frame Frame) {
-	now := time.Now()
 	frame.Host.MACEntry.Row.RLock()
-	if frame.Host.Online && !frame.Host.dirty { // just another IP packet - nothing to do
-		if now.Sub(frame.Host.LastSeen) < time.Second*1 { // update LastSeen every 1 seconds to minimise locking
-			frame.Host.MACEntry.Row.RUnlock()
-			return
-		}
+	if !frame.Host.dirty { // just another IP packet - nothing to do
+		frame.Host.MACEntry.Row.RUnlock()
+		return
 	}
 
 	// if transitioning to online, test if we need to notify previous IP is offline
@@ -291,26 +304,21 @@ func (h *Session) notify(frame Frame) {
 
 	// notify previous IP4 is offline
 	for _, v := range offline {
-		h.notifyOffline(v)
+		h.makeOffline(v)
 	}
 
 	// lock row for update
 	frame.Host.MACEntry.Row.Lock()
-	defer frame.Host.MACEntry.Row.Unlock()
-
-	// return immediately if host already online and not notification
-	if frame.Host.Online && !frame.Host.dirty {
-		return
-	}
-
 	notification := toNotification(frame.Host)
 	frame.Host.dirty = false
+	frame.Host.MACEntry.Row.Unlock()
 
 	h.sendNotification(notification)
 }
 
-func (h *Session) notifyOffline(host *Host) {
+func (h *Session) makeOffline(host *Host) {
 	host.MACEntry.Row.Lock()
+	host.Online = false
 	notification := toNotification(host)
 
 	// Update mac online status if all hosts are offline
@@ -324,11 +332,15 @@ func (h *Session) notifyOffline(host *Host) {
 	host.MACEntry.Online = macOnline
 	host.MACEntry.Row.Unlock()
 
-	h.sendNotification(notification)
+	// Don't send offline notifications if caller is not reading
+	if len(h.C) < cap(h.C) {
+		h.sendNotification(notification)
+	}
 }
 
 // purge set entries offline and subsequently delete them if no more traffic received.
 // The funcion is called each minute by the minute goroutine.
+// now is a parameter to allow testing - i.e set a now to future to trigger events quickly.
 func (h *Session) purge(now time.Time) error {
 	probeCutoff := now.Add(h.ProbeDeadline * -1)     // Check entries last updated before this time
 	offlineCutoff := now.Add(h.OfflineDeadline * -1) // Mark offline entries last updated before this time
@@ -338,7 +350,6 @@ func (h *Session) purge(now time.Time) error {
 	probe := make([]Addr, 0, 16)
 	offline := make([]*Host, 0, 16)
 
-	// h.session.GlobalRLock()
 	table := h.GetHosts()
 	for _, e := range table {
 		e.MACEntry.Row.RLock()
@@ -371,7 +382,7 @@ func (h *Session) purge(now time.Time) error {
 						fastlog.NewLine(module, "failed to probe ipv4").IP("ip", addr.IP).Error(err).Write()
 					}
 				} else {
-					if h.NICInfo.HostLLA.IP != nil { // in case host does not have IPv6 - this should never happen
+					if h.NICInfo.HostLLA.IP == nil { // in case host does not have IPv6 - this should never happen
 						fastlog.NewLine(module, "failed to probe ipv6 missing host ipv6").IP("ip", h.NICInfo.HostLLA.IP).Write()
 						continue
 					}
@@ -393,7 +404,7 @@ func (h *Session) purge(now time.Time) error {
 	}
 
 	for _, host := range offline {
-		h.notifyOffline(host) // will lock/unlock row
+		h.makeOffline(host) // will lock/unlock row
 	}
 
 	// delete after loop because this will change the table

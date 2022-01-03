@@ -420,5 +420,7 @@ func (h *Session) onlineTransition(host *Host) {
 			// don't set offline IP as we don't target LLA
 		}
 	}
-	fastlog.NewLine(module, "IP is online").Struct(host.Addr).Write()
+	if Debug {
+		fastlog.NewLine(module, "IP is online").Struct(host.Addr).Write()
+	}
 }

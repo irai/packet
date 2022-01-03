@@ -126,7 +126,7 @@ func setupTestHandler() *testContext {
 		HomeLAN4:    homeLAN,
 	}
 
-	tc.session, err = packet.Config{Conn: tc.inConn, NICInfo: nicInfo}.NewSession()
+	tc.session, err = packet.Config{Conn: tc.inConn, NICInfo: nicInfo}.NewSession("")
 
 	if Debug {
 		fmt.Println("nicinfo: ", tc.session.NICInfo)

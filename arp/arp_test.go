@@ -86,7 +86,7 @@ func setupTestHandler(t *testing.T) *testContext {
 		RouterAddr4: packet.Addr{MAC: routerMAC, IP: routerIP},
 	}
 
-	tc.session, err = packet.Config{Conn: tc.inConn, NICInfo: nicInfo}.NewSession()
+	tc.session, err = packet.Config{Conn: tc.inConn, NICInfo: nicInfo}.NewSession("")
 
 	if tc.arp, err = New(tc.session); err != nil {
 		t.Fatal(err)

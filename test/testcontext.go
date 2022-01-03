@@ -187,7 +187,7 @@ func NewTestContext() *TestContext {
 	}
 
 	config := packet.Config{Conn: tc.inConn, NICInfo: &nicInfo, OfflineDeadline: time.Millisecond * 500, PurgeDeadline: time.Second * 2}
-	s, err := config.NewSession()
+	s, err := config.NewSession("")
 	if err != nil {
 		panic(err)
 	}
