@@ -38,7 +38,6 @@ type Logger struct {
 
 var Std = &Logger{
 	Out:   os.Stderr,
-	pool:  sync.Pool{New: func() interface{} { return new([bufSize]byte) }},
 	lines: sync.Pool{New: func() interface{} { return new(Line) }},
 }
 
@@ -233,11 +232,14 @@ func (l *Line) Duration(name string, duration time.Duration) *Line {
 	return l
 }
 
-func (l *Line) Time(name string, time time.Time) *Line {
+func (l *Line) Time(name string, t time.Time) *Line {
 	l.appendByte(' ')
 	l.index = l.index + copy(l.buffer[l.index:], name)
 	l.appendByte(' ')
-	l.index = l.index + copy(l.buffer[l.index:], time.String())
+	tmp := make([]byte, 0, 64)
+	tmp = t.AppendFormat(tmp, time.StampMilli)
+	// l.index = l.index + copy(l.buffer[l.index:], time.String())
+	l.index = l.index + copy(l.buffer[l.index:], tmp)
 	return l
 }
 
@@ -319,8 +321,8 @@ func (l *Line) Int(name string, value int) *Line {
 	l.index = l.index + copy(l.buffer[l.index:], name)
 	l.buffer[l.index] = '='
 	l.index++
-	tmp := make([]byte, 0, 24) // just one allocation
-	tmp = strconv.AppendInt(tmp, int64(value), 10)
+	tmp := make([]byte, 0, 24)                     // zero allocation
+	tmp = strconv.AppendInt(tmp, int64(value), 10) // zero allocation
 	l.index = l.index + copy(l.buffer[l.index:], tmp)
 	// l.index = l.index + copy(l.buffer[l.index:], strconv.Itoa(value))
 	return l

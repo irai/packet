@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net"
 	"testing"
+	"time"
 )
 
 type testType struct{}
@@ -200,9 +201,27 @@ func Benchmark_Int(t *testing.B) {
 	// os.Stdout, _ = os.Open(os.DevNull)
 	// os.Stderr, _ = os.Open(os.DevNull)
 	count := 0
+	now := time.Now()
+	mac := net.HardwareAddr{0x00, 0xff, 0xaa, 0xbb, 0x55, 0x55}
 	for i := 0; i < t.N; i++ {
-		NewLine("test", "message").Int("int", 100).Uint8("uint8", 111).ToString()
-		// NewLine("test", "message").Write()
+		// some allocation
+		NewLine("test", "message").
+			// Duration("duration", time.Hour).
+			Write()
+
+		// No allocation
+		NewLine("test", "message").
+			Int("int", 100).
+			String("name", "my string").
+			Uint16("uint16", 1).
+			Uint32("uint32", 1).
+			Uint8("uint8", 111).
+			IP("ip", net.IPv4zero).
+			IP("ipv6", net.IPv6zero).
+			MAC("mac", mac).
+			ByteArray("array", []byte{1, 2, 3, 4, 5, 6, 7, 8, 9}).
+			Time("time", now).
+			Write()
 		count++
 	}
 	fmt.Println(count)
