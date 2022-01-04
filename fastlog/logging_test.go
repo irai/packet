@@ -195,3 +195,15 @@ func TestLine_FastLogArray(t *testing.T) {
 }
 
 **/
+
+func Benchmark_Int(t *testing.B) {
+	// os.Stdout, _ = os.Open(os.DevNull)
+	// os.Stderr, _ = os.Open(os.DevNull)
+	count := 0
+	for i := 0; i < t.N; i++ {
+		NewLine("test", "message").Int("int", 100).Uint8("uint8", 111).ToString()
+		// NewLine("test", "message").Write()
+		count++
+	}
+	fmt.Println(count)
+}

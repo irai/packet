@@ -319,7 +319,10 @@ func (l *Line) Int(name string, value int) *Line {
 	l.index = l.index + copy(l.buffer[l.index:], name)
 	l.buffer[l.index] = '='
 	l.index++
-	l.index = l.index + copy(l.buffer[l.index:], strconv.Itoa(value))
+	tmp := make([]byte, 0, 24) // just one allocation
+	tmp = strconv.AppendInt(tmp, int64(value), 10)
+	l.index = l.index + copy(l.buffer[l.index:], tmp)
+	// l.index = l.index + copy(l.buffer[l.index:], strconv.Itoa(value))
 	return l
 }
 
