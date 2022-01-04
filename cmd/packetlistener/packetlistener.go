@@ -145,7 +145,7 @@ func main() {
 	go func() {
 		for {
 			select {
-			case notification, ok := <-handlers.engine.Session().GetNotificationChannel():
+			case notification, ok := <-handlers.engine.Session().C:
 				if !ok {
 					return
 				}

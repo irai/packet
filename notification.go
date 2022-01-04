@@ -52,7 +52,3 @@ func (h *Session) sendNotification(notification Notification) {
 	}
 	fastlog.NewLine(module, "notification channel is full").Int("len", len(h.C)).Struct(notification).Write()
 }
-
-func (h *Session) GetNotificationChannel() <-chan Notification {
-	return h.C
-}
