@@ -12,7 +12,7 @@ import (
 )
 
 // Package fastlog implements a simple, fast logger for hotpath logging. It is
-// 3 times faster than using fmt.Printf().
+// 2.x times faster than using fmt.Printf().
 //
 // It achieves this by:
 //  - avoiding type introspection
@@ -23,9 +23,12 @@ import (
 //  - assumes a max fixed memory buffer len of 2048k per message - ie. it will segfault if the caller passes longer data
 //  - pool of reusable buffers
 //
-// Results: July 2021 logging Ethernet frame
-// Benchmark_FastLogPrintf-8                1454368               780 ns/op             274 B/op          8 allocs/op
-// Benchmark_FastLogLinePrint-8             4046708               282 ns/op              34 B/op          2 allocs/op
+// Results: Jan 2022
+// cpu: 11th Gen Intel(R) Core(TM) i7-1165G7 @ 2.80GHz
+// Benchmark_Fastlog/printf_struct_reference-8         	 1693278	       705.4 ns/op	     344 B/op	       8 allocs/op
+// Benchmark_Fastlog/fastlog_struct_reference-8        	 6253689	       173.1 ns/op	     144 B/op	       1 allocs/op
+// Benchmark_Fastlog/some_alloc-8                      	 5560839	       214.9 ns/op	     152 B/op	       2 allocs/op
+// Benchmark_Fastlog/zero_alloc-8                      	 2933750	       433.3 ns/op	       0 B/op	       0 allocs/op
 
 // bufSize sets the maximum len for a log entry
 const bufSize = 2048

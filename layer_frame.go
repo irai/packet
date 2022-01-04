@@ -76,6 +76,19 @@ func (frame Frame) setOnlineTransition() uint { return frame.flags | 0b01 }
 func (frame Frame) offlineTransition() bool    { return frame.flags&0x02 == 0x02 }
 func (frame Frame) setOfflineTransition() uint { return frame.flags | 0b10 }
 
+func (frame Frame) Log(line *fastlog.Line) *fastlog.Line {
+	line.String("payloadID", frame.PayloadID.String())
+	line.MAC("srcMAC", frame.SrcAddr.MAC)
+	line.IP("srcIP", frame.SrcAddr.IP)
+	line.MAC("dstMAC", frame.DstAddr.MAC)
+	line.IP("dstIP", frame.DstAddr.IP)
+	line.Int("payloadlen", len(frame.Payload()))
+	if frame.Host != nil {
+		line.Bool("captured", frame.Host.MACEntry.Captured)
+	}
+	return line
+}
+
 // ARP returns a reference to the ARP packet or nil if this is not a ARP packet.
 func (f Frame) ARP() ARP {
 	if f.PayloadID == PayloadARP {

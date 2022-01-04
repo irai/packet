@@ -16,6 +16,7 @@ import (
 
 	"github.com/irai/packet"
 	"github.com/irai/packet/dhcp4"
+	"github.com/irai/packet/fastlog"
 )
 
 var (
@@ -69,6 +70,9 @@ func main() {
 				continue
 			}
 
+			if *debug && frame.PayloadID != packet.PayloadTCP {
+				frame.Log(fastlog.NewLine("dhcpd", "got packet")).Write()
+			}
 			switch frame.PayloadID {
 			case packet.PayloadDHCP4:
 				if err := dhcpd.ProcessPacket(frame); err != nil {
@@ -119,8 +123,12 @@ func main() {
 				switch p {
 				case "packet":
 					packet.Debug = !packet.Debug
-				case "dhcp4":
+				case "dhcp4", "dhcp":
 					dhcp4.Debug = !dhcp4.Debug
+				case "all":
+					packet.Debug = !packet.Debug
+					dhcp4.Debug = packet.Debug
+					*debug = packet.Debug
 				}
 
 			case "q":
@@ -128,7 +136,7 @@ func main() {
 
 			default:
 				fmt.Println("")
-				fmt.Println("change log level:   log packet|arp|icmp")
+				fmt.Println("change log level:   log packet|dhcp|all")
 				fmt.Println("list hosts      :   l|list")
 				fmt.Println("quit            :   q")
 			}

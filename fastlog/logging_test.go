@@ -9,16 +9,16 @@ import (
 	"time"
 )
 
-type testType struct{}
+type simpleType struct{}
 
-func (t testType) FastLog(l *Line) *Line {
+func (t simpleType) FastLog(l *Line) *Line {
 	return l
 }
-func (t testType) String() string {
-	return "test"
+func (t simpleType) String() string {
+	return "simpleType"
 }
 
-type testComplex struct {
+type complexType struct {
 	mac      net.HardwareAddr
 	ip       net.IP
 	str      string
@@ -28,7 +28,7 @@ type testComplex struct {
 	n        int
 }
 
-func (t testComplex) FastLog(l *Line) *Line {
+func (t complexType) FastLog(l *Line) *Line {
 	l.MAC("mac", t.mac)
 	l.IP("ip", t.ip)
 	l.String("str", t.str)
@@ -36,6 +36,10 @@ func (t testComplex) FastLog(l *Line) *Line {
 	l.IPArray("iparray", t.ipArray)
 	l.StringArray("strarray", t.strArray)
 	return l
+}
+
+func (t complexType) String() string {
+	return fmt.Sprintf("mac=%s ip=%s str=%s buffer=%v array=%v", t.mac, t.ip, t.str, t.buffer, t.ipArray)
 }
 
 func TestLine_PrintUint32(t *testing.T) {
@@ -165,8 +169,8 @@ func TestLine_appendIP6(t *testing.T) {
 
 func TestLine_Nil(t *testing.T) {
 	l := NewLine("test", "")
-	var line testType
-	var ptr *testType
+	var line simpleType
+	var ptr *simpleType
 	l.Struct(nil)
 	l.Struct(line)
 	l.Struct(ptr)
@@ -197,32 +201,56 @@ func TestLine_FastLogArray(t *testing.T) {
 
 **/
 
-func Benchmark_Int(t *testing.B) {
+func Benchmark_Fastlog(b *testing.B) {
 	// os.Stdout, _ = os.Open(os.DevNull)
 	// os.Stderr, _ = os.Open(os.DevNull)
-	count := 0
 	now := time.Now()
 	mac := net.HardwareAddr{0x00, 0xff, 0xaa, 0xbb, 0x55, 0x55}
-	for i := 0; i < t.N; i++ {
-		// some allocation
-		NewLine("test", "message").
-			// Duration("duration", time.Hour).
-			Write()
 
-		// No allocation
-		NewLine("test", "message").
-			Int("int", 100).
-			String("name", "my string").
-			Uint16("uint16", 1).
-			Uint32("uint32", 1).
-			Uint8("uint8", 111).
-			IP("ip", net.IPv4zero).
-			IP("ipv6", net.IPv6zero).
-			MAC("mac", mac).
-			ByteArray("array", []byte{1, 2, 3, 4, 5, 6, 7, 8, 9}).
-			Time("time", now).
-			Write()
-		count++
-	}
-	fmt.Println(count)
+	s := complexType{mac: mac, ip: net.IPv4zero, str: "my string"}
+
+	Std.Out = ioutil.Discard
+	b.Run("printf struct reference", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			fmt.Fprintf(Std.Out, "struct: %v\n", s)
+		}
+	})
+
+	b.Run("fastlog struct reference", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			NewLine("test", "message").Struct(s).Write()
+		}
+	})
+
+	// these methods have some allocation
+	b.Run("some alloc", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			NewLine("test", "message").
+				Duration("duration", time.Hour).
+				Struct(s).
+				Write()
+		}
+	})
+
+	// No allocation
+	b.Run("zero alloc", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			NewLine("test", "message").
+				Int("int", 100).
+				String("name", "my string").
+				Uint16("uint16", 1).
+				Uint32("uint32", 1).
+				Uint8("uint8", 111).
+				IP("ip", net.IPv4zero).
+				IP("ipv6", net.IPv6zero).
+				MAC("mac", mac).
+				ByteArray("array", []byte{1, 2, 3, 4, 5, 6, 7, 8, 9}).
+				Time("time", now).
+				Write()
+		}
+	})
 }
