@@ -99,7 +99,7 @@ func main() {
 
 	buffer := make([]byte, packet.EthMaxSize)
 	for {
-		n, _, err := s.Conn.ReadFrom(buffer)
+		n, _, err := s.ReadFrom(buffer)
 		if err != nil {
 			fmt.Println("error reading packet", err)
 			return
