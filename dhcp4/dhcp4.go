@@ -76,13 +76,13 @@ type leaseTable map[string]*Lease
 // Handler is the main dhcp4 handler
 type Handler struct {
 	session   *packet.Session // engine handler
-	mode      Mode            // if true, force decline and release packets to homeDHCPServer
+	mode      Mode            // operating mode: primary, secondary, nice
 	filename  string          // leases filename
-	closed    bool            // indicates that detach function was called
+	closed    bool            // indicates that Close() function was called
 	closeChan chan bool       // channel to close underlying goroutines
-	table     leaseTable      // lease table
+	table     leaseTable      // in memory lease table
 	net1      *dhcpSubnet     // home LAN
-	net2      *dhcpSubnet     // netfilter LAN
+	net2      *dhcpSubnet     // netfilter LAN - a subnet of net1
 	sync.Mutex
 }
 
@@ -133,7 +133,7 @@ func (config Config) New(session *packet.Session) (h *Handler, err error) {
 		LAN:        net.IPNet{IP: config.NetfilterIP.IP.Mask(config.NetfilterIP.Mask), Mask: config.NetfilterIP.Mask},
 		DefaultGW:  config.NetfilterIP.IP.To4(),
 		DHCPServer: session.NICInfo.HostAddr4.IP,
-		DNSServer:  packet.CloudFlareFamilyDNS1,
+		DNSServer:  packet.DNSv4CloudFlareFamily1,
 		Stage:      packet.StageRedirected,
 		// FirstIP:    net.ParseIP("192.168.0.10"),
 		// LastIP:     net.ParseIP("192.168.0.127"),

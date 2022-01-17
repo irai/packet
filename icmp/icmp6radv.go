@@ -9,30 +9,10 @@ import (
 	"inet.af/netaddr"
 )
 
-// Cloudflare DNS IP6: 2606:4700:4700::1111 or 2606:4700:4700::1001
 var (
-	DNS6Cloudflare1 = net.IP{0x26, 0x06, 0x47, 0x00, 0x47, 0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0x11, 0x11}
-	DNS6Cloudflare2 = net.IP{0x26, 0x06, 0x47, 0x00, 0x47, 0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0x10, 0x01}
 	RDNSSCLoudflare = &packet.RecursiveDNSServer{
 		Lifetime: time.Minute * 10,
-		Servers:  []net.IP{DNS6Cloudflare1, DNS6Cloudflare2},
-	}
-)
-
-// My home IP6 prefix: Internode
-// useful for testing
-var (
-	// home: 2001:4479:1901:a001
-	prefix = net.IP{0x20, 0x01, 0x44, 0x79, 0x19, 0x01, 0xa0, 0x01, 0, 0, 0, 0, 0, 0, 0, 0}
-
-	MyHomePrefix = []packet.PrefixInformation{
-		{
-			PrefixLength:                   64,
-			Prefix:                         prefix,
-			AutonomousAddressConfiguration: true,
-			ValidLifetime:                  time.Minute * 10,
-			PreferredLifetime:              time.Minute * 5,
-		},
+		Servers:  []net.IP{packet.DNSv6Cloudflare1, packet.DNSv6Cloudflare2},
 	}
 )
 

@@ -67,10 +67,12 @@ var (
 // CLoudFlare family
 // https://developers.cloudflare.com/1.1.1.1/1.1.1.1-for-families
 var (
-	CloudFlareDNS1       = net.IPv4(1, 1, 1, 2) // malware
-	CloudFlareDNS2       = net.IPv4(1, 0, 0, 2) // malware
-	CloudFlareFamilyDNS1 = net.IPv4(1, 1, 1, 3) // malware and adult sites
-	CloudFlareFamilyDNS2 = net.IPv4(1, 0, 0, 3) // malware and adult sites
+	DNSv4CloudFlare1       = net.IPv4(1, 1, 1, 2) // malware
+	DNSv6Cloudflare1       = net.IP{0x26, 0x06, 0x47, 0x00, 0x47, 0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0x11, 0x11}
+	DNSv4CloudFlare2       = net.IPv4(1, 0, 0, 2) // malware
+	DNSv6Cloudflare2       = net.IP{0x26, 0x06, 0x47, 0x00, 0x47, 0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0x10, 0x01}
+	DNSv4CloudFlareFamily1 = net.IPv4(1, 1, 1, 3) // malware and adult sites
+	DNSv4CloudFlareFamily2 = net.IPv4(1, 0, 0, 3) // malware and adult sites
 
 	// OpenDNS
 	OpenDNS1 = net.IPv4(208, 67, 222, 123)

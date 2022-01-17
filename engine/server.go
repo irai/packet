@@ -92,7 +92,7 @@ func (h *Handler) AttachICMP4(p icmp.ICMP4Handler) {
 	h.ICMP4Handler = p
 }
 func (h *Handler) DetachICMP4() error {
-	if err := h.ICMP4Handler.Stop(); err != nil {
+	if err := h.ICMP4Handler.Close(); err != nil {
 		return err
 	}
 	h.ICMP4Handler = icmp.ICMP4NOOP{}
@@ -140,9 +140,9 @@ func (h *Handler) PrintTable() {
 func (h *Handler) startPlugins() error {
 	time.Sleep(time.Second * 1) // wait for reader to start
 
-	if err := h.ICMP4Handler.Start(); err != nil {
-		fmt.Println("error: in ICMP4 start:", err)
-	}
+	// if err := h.ICMP4Handler.Start(); err != nil {
+	// fmt.Println("error: in ICMP4 start:", err)
+	// }
 	if err := h.ICMP6Handler.Start(); err != nil {
 		fmt.Println("error: in ICMP6 start:", err)
 	}
@@ -161,7 +161,7 @@ func (h *Handler) startPlugins() error {
 }
 
 func (h *Handler) stopPlugins() error {
-	if err := h.ICMP4Handler.Stop(); err != nil {
+	if err := h.ICMP4Handler.Close(); err != nil {
 		fmt.Println("error: in ICMP4 stop:", err)
 	}
 	if err := h.ICMP6Handler.Close(); err != nil {

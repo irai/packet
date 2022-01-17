@@ -19,12 +19,6 @@ var Debug bool
 const module4 = "icmp4"
 const module6 = "icmp6"
 
-// Event represents and ICMP6 event from a host
-type Event struct {
-	Type ipv6.ICMPType
-	Host packet.Host
-}
-
 type ICMP6Handler interface {
 	FindRouter(net.IP) Router
 	PingAll() error
@@ -179,8 +173,6 @@ var repeat int = -1
 
 // ProcessPacket handles icmp6 packets
 func (h *Handler6) ProcessPacket(pkt packet.Frame) (err error) {
-
-	// ether := packet.Ether(p)
 	ip6Frame := pkt.IP6()
 	icmp6Frame := packet.ICMP(pkt.Payload())
 

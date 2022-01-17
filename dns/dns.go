@@ -512,7 +512,7 @@ func ReverseDNS(ip netaddr.IP) error {
 		PreferGo: true,
 		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
 			d := net.Dialer{}
-			return d.DialContext(ctx, network, net.JoinHostPort(packet.CloudFlareDNS1.String(), "53")) //CloudFlare
+			return d.DialContext(ctx, network, net.JoinHostPort(packet.DNSv4CloudFlare1.String(), "53")) //CloudFlare
 		},
 	}
 

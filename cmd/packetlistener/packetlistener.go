@@ -135,7 +135,7 @@ func main() {
 	handlers.engine.AttachICMP6(handlers.icmp6)
 
 	// DHCP4
-	handlers.dhcp4, err = dhcp4.Config{NetfilterIP: handlers.netfilterIP, DNSServer: packet.CloudFlareDNS1, LeaseFilename: "./dhcpconfig.yaml"}.New(s)
+	handlers.dhcp4, err = dhcp4.Config{NetfilterIP: handlers.netfilterIP, DNSServer: packet.DNSv4CloudFlare1, LeaseFilename: "./dhcpconfig.yaml"}.New(s)
 	if err != nil {
 		fmt.Printf("Failed to create dhcp4 handler: netfilterIP=%s error=%s", handlers.netfilterIP, err)
 		os.Exit(-1)
@@ -218,7 +218,7 @@ func doEngine(h *handlers, tokens []string) {
 				fmt.Println("error icmp6 is already attached")
 				return
 			}
-			h.dhcp4, err = dhcp4.Config{NetfilterIP: h.netfilterIP, DNSServer: packet.CloudFlareDNS1, LeaseFilename: "./dhcpconfig.yaml"}.New(h.engine.Session())
+			h.dhcp4, err = dhcp4.Config{NetfilterIP: h.netfilterIP, DNSServer: packet.DNSv4CloudFlare1, LeaseFilename: "./dhcpconfig.yaml"}.New(h.engine.Session())
 			// h.dhcp4, err = dhcp4.New(h.engine.Session(), h.netfilterIP, icmp.DNS6Cloudflare1, "")
 		default:
 			fmt.Println("invalid engine name")
