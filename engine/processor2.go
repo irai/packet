@@ -45,7 +45,7 @@ func (h *Handler) processPacket(ether packet.Ether) (err error) {
 		}
 
 	case packet.PayloadICMP4:
-		if err = h.ICMP4Handler.ProcessPacket(frame.Host, frame.Ether, frame.Payload()); err != nil {
+		if err = h.ICMP4Handler.ProcessPacket(frame.Host, frame.Ether(), frame.Payload()); err != nil {
 			fastlog.NewLine("packet", "error processing icmp4").Error(err).Write()
 			return err
 		}
@@ -72,17 +72,17 @@ func (h *Handler) processPacket(ether packet.Ether) (err error) {
 		}
 
 	case packet.PayloadDHCP6:
-		fastlog.NewLine("ether", "dhcp6 packet").Struct(frame.Ether).LF().Module("udp", "dhcp6 packet").Struct(frame.UDP()).Write()
+		fastlog.NewLine("ether", "dhcp6 packet").Struct(frame.Ether()).LF().Module("udp", "dhcp6 packet").Struct(frame.UDP()).Write()
 		fastlog.NewLine("packet", "ignore dhcp6 packet").ByteArray("payload", frame.UDP().Payload()).Write()
 
 	case packet.PayloadWSDP:
 		if packet.Debug {
-			fastlog.NewLine(module, "ether").Struct(frame.Ether).Struct(frame.Host).Write()
+			fastlog.NewLine(module, "ether").Struct(frame.Ether()).Struct(frame.Host).Write()
 		}
 		fastlog.NewLine(module, "wsd frame").String("payload", string(frame.Payload())).Write()
 
 	case packet.PayloadDNS:
-		dnsEntry, err := h.DNSHandler.ProcessDNS(nil, frame.Ether, frame.Payload())
+		dnsEntry, err := h.DNSHandler.ProcessDNS(nil, frame.Ether(), frame.Payload())
 		if err != nil {
 			fmt.Printf("packet: error processing dns: %s\n", err)
 			return err
@@ -98,23 +98,23 @@ func (h *Handler) processPacket(ether packet.Ether) (err error) {
 
 	case packet.PayloadNTP: // Network time synchonization protocol
 		// do nothing
-		fastlog.NewLine(module, "NTP frame").Struct(frame.Ether).Write()
+		fastlog.NewLine(module, "NTP frame").Struct(frame.Ether()).Write()
 
 	case packet.PayloadPlex:
 		// Plex application multicast on these ports to find players.
 		// G'Day Mate (GDM) multicast packets
 		// https://github.com/NineWorlds/serenity-android/wiki/Good-Day-Mate
-		fastlog.NewLine(module, "plex frame").Struct(frame.Ether).IP("srcip", frame.Ether.SrcIP()).IP("dstip", frame.Ether.DstIP()).ByteArray("payload", frame.Payload()).Write()
+		fastlog.NewLine(module, "plex frame").Struct(frame.Ether()).IP("srcip", frame.Ether().SrcIP()).IP("dstip", frame.Ether().DstIP()).ByteArray("payload", frame.Payload()).Write()
 
 	case packet.PayloadUbiquiti:
 		// Ubiquiti device discovery protocol
 		// https://help.ui.com/hc/en-us/articles/204976244-EdgeRouter-Ubiquiti-Device-Discovery
-		fastlog.NewLine("proto", "ubiquiti device discovery").Struct(frame.Ether).IP("srcip", frame.Ether.SrcIP()).IP("dstip", frame.Ether.DstIP()).ByteArray("payload", frame.Ether.Payload()).Write()
+		fastlog.NewLine("proto", "ubiquiti device discovery").Struct(frame.Ether()).IP("srcip", frame.Ether().SrcIP()).IP("dstip", frame.Ether().DstIP()).ByteArray("payload", frame.Ether().Payload()).Write()
 
 	case packet.PayloadIGMP:
 		// Internet Group Management Protocol - Ipv4 multicast groups
 		// do nothing
-		fastlog.NewLine("packet", "ipv4 igmp packet").Struct(frame.Ether).Write()
+		fastlog.NewLine("packet", "ipv4 igmp packet").Struct(frame.Ether()).Write()
 
 	case packet.PayloadEthernetPause:
 		if err := ProcessEthernetPause(frame); err != nil {
@@ -141,7 +141,7 @@ func (h *Handler) processPacket(ether packet.Ether) (err error) {
 			return err
 		}
 	default:
-		fastlog.NewLine(module, "protocol unknown").Struct(frame.Ether).Int("proto", int(frame.PayloadID)).Write()
+		fastlog.NewLine(module, "protocol unknown").Struct(frame.Ether()).Int("proto", int(frame.PayloadID)).Write()
 	}
 	d2 = time.Since(startTime)
 
@@ -158,7 +158,7 @@ func (h *Handler) processPacket(ether packet.Ether) (err error) {
 }
 
 func processInvalid(frame packet.Frame, pos int) error {
-	fastlog.NewLine(module, "unexpected ethernet type").Struct(frame.Ether).ByteArray("payload", frame.Payload()).Write()
+	fastlog.NewLine(module, "unexpected ethernet type").Struct(frame.Ether()).ByteArray("payload", frame.Payload()).Write()
 	return nil
 }
 
@@ -184,7 +184,7 @@ func (h *Handler) ProcessMDNS(frame packet.Frame) (err error) {
 func (h *Handler) ProcessLLMNR(frame packet.Frame) (err error) {
 	// case udpSrcPort == 5355 || udpDstPort == 5355:
 	// Link Local Multicast Name Resolution (LLMNR)
-	fastlog.NewLine(module, "ether").Struct(frame.Ether).Module(module, "received llmnr packet").Write()
+	fastlog.NewLine(module, "ether").Struct(frame.Ether()).Module(module, "received llmnr packet").Write()
 	ipv4Hosts, ipv6Hosts, err := h.DNSHandler.ProcessMDNS(frame)
 	if err != nil {
 		fmt.Printf("packet: error processing llmnr: %s\n", err)
@@ -204,7 +204,7 @@ func (h *Handler) ProcessLLMNR(frame packet.Frame) (err error) {
 func (h *Handler) ProcessSSDP(frame packet.Frame) (err error) {
 	// case udpDstPort == 1900:
 	// Microsoft Simple Service Discovery Protocol
-	nameEntry, location, err := h.DNSHandler.ProcessSSDP(frame.Host, frame.Ether, frame.Payload())
+	nameEntry, location, err := h.DNSHandler.ProcessSSDP(frame.Host, frame.Ether(), frame.Payload())
 	if err != nil {
 		fastlog.NewLine(module, "error processing ssdp").Error(err).ByteArray("payload", frame.Payload()).Write()
 		return err
@@ -250,13 +250,13 @@ func (h *Handler) ProcessSSDP(frame packet.Frame) (err error) {
 func (h *Handler) ProcessNBNS(frame packet.Frame) (err error) {
 	// case udpDstPort == 137 || udpDstPort == 138:
 	// Netbions NBNS
-	entry, err := h.DNSHandler.ProcessNBNS(frame.Host, frame.Ether, frame.Payload())
+	entry, err := h.DNSHandler.ProcessNBNS(frame.Host, frame.Ether(), frame.Payload())
 	if err != nil {
 		// don't log as error if dns parsing cannot handle nbns reserved keyword.
 		// error: "skipping Question Name: segment prefix is reserved"
 		// TODO: fix nbns parsing
 		if strings.Contains(err.Error(), "prefix is reserved") {
-			fastlog.NewLine(module, "nbns prefix is reserved - fixme").ByteArray("frame", frame.Ether).Write()
+			fastlog.NewLine(module, "nbns prefix is reserved - fixme").ByteArray("frame", frame.Ether()).Write()
 			return err
 		}
 		fastlog.NewLine(module, "error processing nbns").Error(err).Write()
@@ -293,7 +293,7 @@ func ProcessRRCP(frame packet.Frame) error {
 		fastlog.NewLine(module, "invalid RRCP frame").Error(err).ByteArray("frame", frame.Payload()).Write()
 		return err
 	}
-	fastlog.NewLine(module, "RRCP frame").Struct(frame.Ether).ByteArray("payload", p).Write()
+	fastlog.NewLine(module, "RRCP frame").Struct(frame.Ether()).ByteArray("payload", p).Write()
 	return nil
 }
 
@@ -304,7 +304,7 @@ func ProcessLLDP(frame packet.Frame) error {
 		fastlog.NewLine(module, "invalid LLDP frame").Error(err).ByteArray("frame", p).Write()
 		return err
 	}
-	fastlog.NewLine(module, "LLDP frame").Struct(frame.Ether).Struct(p).Write()
+	fastlog.NewLine(module, "LLDP frame").Struct(frame.Ether()).Struct(p).Write()
 	return nil
 }
 
@@ -315,7 +315,7 @@ func Process802_11r(frame packet.Frame) error {
 	// by ensuring that the client device does not need to re-authenticate to the RADIUS server
 	// every time it roams from one access point to another.
 	// fmt.Printf("packet: 802.11r Fast Roaming frame %s payload=[% x]\n", ether, ether[:])
-	fastlog.NewLine(module, "802.11r Fast Roaming frame").Struct(frame.Ether).ByteArray("payload", frame.Payload()).Write()
+	fastlog.NewLine(module, "802.11r Fast Roaming frame").Struct(frame.Ether()).ByteArray("payload", frame.Payload()).Write()
 	return nil
 }
 
@@ -330,7 +330,7 @@ func ProcessIEEE1905(frame packet.Frame) error {
 		fastlog.NewLine(module, "invalid IEEE 1905 frame").Error(err).ByteArray("frame", p).Write()
 		return err
 	}
-	fastlog.NewLine(module, "IEEE 1905.1 frame").Struct(frame.Ether).Struct(p).Write()
+	fastlog.NewLine(module, "IEEE 1905.1 frame").Struct(frame.Ether()).Struct(p).Write()
 	return nil
 }
 
@@ -338,7 +338,7 @@ func ProcessSonos(frame packet.Frame) error {
 	// case 0x6970: // Sonos Data Routing Optimisation
 	// References to type EthType 0x6970 appear in a Sonos patent
 	// https://portal.unifiedpatents.com/patents/patent/US-20160006778-A1
-	fastlog.NewLine(module, "Sonos data routing frame").Struct(frame.Ether).ByteArray("payload", frame.Payload()).Write()
+	fastlog.NewLine(module, "Sonos data routing frame").Struct(frame.Ether()).ByteArray("payload", frame.Payload()).Write()
 	return nil
 }
 

@@ -75,8 +75,8 @@ func TestSession_Parse(t *testing.T) {
 			if err != nil {
 				return
 			}
-			if gotFrame.Ether == nil {
-				t.Errorf("Session.Parse() %s ether = %v, want %v", tt.name, gotFrame.Ether, tt.wantFrame)
+			if gotFrame.Ether() == nil {
+				t.Errorf("Session.Parse() %s ether = %v, want %v", tt.name, gotFrame.Ether(), tt.wantFrame)
 			}
 			if p := gotFrame.IP4(); p != nil && p.IsValid() != nil {
 				t.Errorf("Session.Parse() %s invalid ip4 packet = %v", tt.name, p.IsValid())

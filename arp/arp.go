@@ -161,7 +161,7 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 		// | request    | 1 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  targetIP |
 		// +============+===+===========+===========+============+============+===================+===========+
 		if Debug {
-			fastlog.NewLine(module, "ether").Struct(frame.Ether).Module(module, "request received").IP("ip", arpFrame.DstIP()).Struct(arpFrame).Write()
+			fastlog.NewLine(module, "ether").Struct(frame.Ether()).Module(module, "request received").IP("ip", arpFrame.DstIP()).Struct(arpFrame).Write()
 		}
 		// if we are spoofing the src host and the src host is trying to discover the router IP,
 		// reply on behalf of the router
@@ -188,7 +188,7 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 		// | ACD probe  | 1 | broadcast | clientMAC | clientMAC  | 0x00       | 0x00              |  targetIP |
 		// +============+===+===========+===========+============+============+===================+===========+
 		if Debug {
-			fastlog.NewLine(module, "ether").Struct(frame.Ether).Module(module, "probe recvd").Struct(arpFrame).Write()
+			fastlog.NewLine(module, "ether").Struct(frame.Ether()).Module(module, "probe recvd").Struct(arpFrame).Write()
 		}
 
 		// if dhcpv4 spoofing then reject any other ip that is not the spoofed IP on offer
@@ -210,7 +210,7 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 		// | ACD announ | 1 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  clientIP |
 		// +============+===+===========+===========+============+============+===================+===========+
 		if Debug {
-			fastlog.NewLine(module, "ether").Struct(frame.Ether).Module(module, "announcement recvd").Struct(arpFrame).Write()
+			fastlog.NewLine(module, "ether").Struct(frame.Ether()).Module(module, "announcement recvd").Struct(arpFrame).Write()
 		}
 
 	default:
@@ -221,7 +221,7 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 		// | gratuitous | 2 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  clientIP |
 		// +============+===+===========+===========+============+============+===================+===========+
 		if Debug {
-			fastlog.NewLine(module, "ether").Struct(frame.Ether).Module(module, "reply recvd").Struct(arpFrame).Write()
+			fastlog.NewLine(module, "ether").Struct(frame.Ether()).Module(module, "reply recvd").Struct(arpFrame).Write()
 		}
 	}
 	return nil

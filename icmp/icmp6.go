@@ -191,7 +191,7 @@ func (h *Handler6) ProcessPacket(pkt packet.Frame) (err error) {
 
 	t := ipv6.ICMPType(icmp6Frame.Type())
 	if Debug && t != ipv6.ICMPTypeRouterAdvertisement {
-		fastlog.NewLine("icmp6", "ether").Struct(pkt.Ether).Module("icmp6", "ip6").Struct(ip6Frame).Module("icmp6", "icmp").Struct(icmp6Frame).Write()
+		fastlog.NewLine("icmp6", "ether").Struct(pkt.Ether()).Module("icmp6", "ip6").Struct(ip6Frame).Module("icmp6", "icmp").Struct(icmp6Frame).Write()
 	}
 
 	switch t {
@@ -241,7 +241,7 @@ func (h *Handler6) ProcessPacket(pkt packet.Frame) (err error) {
 		//
 		if ip6Frame.Src().IsUnspecified() {
 			if Debug {
-				fmt.Printf("icmp6 : dad probe for target=%s srcip=%s srcmac=%s dstip=%s dstmac=%s\n", frame.TargetAddress(), ip6Frame.Src(), pkt.Ether.Src(), ip6Frame.Dst(), pkt.Ether.Dst())
+				fmt.Printf("icmp6 : dad probe for target=%s srcip=%s srcmac=%s dstip=%s dstmac=%s\n", frame.TargetAddress(), ip6Frame.Src(), pkt.Ether().Src(), ip6Frame.Dst(), pkt.Ether().Dst())
 			}
 			// result.Update = true
 			// result.SrcAddr = packet.Addr{MAC: ether.Src(), IP: frame.TargetAddress()} // ok to pass frame addr
@@ -252,7 +252,7 @@ func (h *Handler6) ProcessPacket(pkt packet.Frame) (err error) {
 		// So, send our own neighbour solicitation to discover the IP
 		if frame.TargetAddress().IsGlobalUnicast() {
 			srcAddr := packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: h.session.NICInfo.HostLLA.IP}
-			dstAddr := packet.Addr{MAC: pkt.Ether.Dst(), IP: ip6Frame.Dst()}
+			dstAddr := packet.Addr{MAC: pkt.Ether().Dst(), IP: ip6Frame.Dst()}
 			h.session.ICMP6SendNeighbourSolicitation(srcAddr, dstAddr, frame.TargetAddress())
 		}
 		return nil
@@ -289,7 +289,7 @@ func (h *Handler6) ProcessPacket(pkt packet.Frame) (err error) {
 
 		mac := options.SourceLLA.MAC
 		if mac == nil || len(mac) != packet.EthAddrLen {
-			mac = pkt.Ether.Src()
+			mac = pkt.Ether().Src()
 			fmt.Printf("icmp6 : options missing sourceLLA options=%v\n", options)
 		}
 
@@ -308,7 +308,7 @@ func (h *Handler6) ProcessPacket(pkt packet.Frame) (err error) {
 		h.Unlock()
 
 		if Debug {
-			l := fastlog.NewLine("icmp6", "ether").Struct(pkt.Ether).Module("icmp6", "ip6").Struct(ip6Frame)
+			l := fastlog.NewLine("icmp6", "ether").Struct(pkt.Ether()).Module("icmp6", "ip6").Struct(ip6Frame)
 			l.Module("icmp6", "router advertisement").Struct(icmp6Frame).Sprintf("options", router.Options)
 			l.Write()
 		}

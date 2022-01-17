@@ -48,7 +48,7 @@ const (
 // Frame describes a network packet and the various protocol layers within it.
 // It maintains a reference to common protocols like IP4, IP6, UDP, TCP.
 type Frame struct {
-	Ether         Ether     // slice reference to the complete packet
+	ether         Ether     // reference the full packet
 	offsetIP4     int       // offset to IP4 packet
 	offsetIP6     int       // offset to IP6 packet
 	offsetUDP     int       // offset to UDP packet
@@ -81,22 +81,27 @@ func (frame Frame) Log(line *fastlog.Line) *fastlog.Line {
 	return line
 }
 
-// ARP returns a reference to the ARP packet or nil if this is not a ARP packet.
+func (f Frame) Ether() Ether {
+	return f.ether
+}
+
+// ARP returns a reference to the ARP packet or nil if this is not an ARP packet.
 func (f Frame) ARP() ARP {
 	if f.PayloadID == PayloadARP {
-		return ARP(f.Ether[f.offsetPayload:])
+		return ARP(f.ether[f.offsetPayload:])
 	}
 	return nil
 }
 
-func (f Frame) IsIP() bool {
+// HasIP returns true if the packet contains either an IPv4 or IPv6 frame.
+func (f Frame) HasIP() bool {
 	return (f.offsetIP4 != 0 || f.offsetIP6 != 0)
 }
 
 // IP4 returns a reference to the IP4 packet or nil if this is not an IPv4 packet.
 func (f Frame) IP4() IP4 {
 	if f.offsetIP4 != 0 {
-		return IP4(f.Ether[f.offsetIP4:])
+		return IP4(f.ether[f.offsetIP4:])
 	}
 	return nil
 }
@@ -104,7 +109,7 @@ func (f Frame) IP4() IP4 {
 // IP6 returns a reference to the IP6 packet or nil if this is not an IPv6 packet.
 func (f Frame) IP6() IP6 {
 	if f.offsetIP6 != 0 {
-		return IP6(f.Ether[f.offsetIP6:])
+		return IP6(f.ether[f.offsetIP6:])
 	}
 	return nil
 }
@@ -112,7 +117,7 @@ func (f Frame) IP6() IP6 {
 // UDP returns a reference to the UDP packet or nil if this is not a UDP packet.
 func (f Frame) UDP() UDP {
 	if f.offsetUDP != 0 {
-		return UDP(f.Ether[f.offsetUDP:])
+		return UDP(f.ether[f.offsetUDP:])
 	}
 	return nil
 }
@@ -120,7 +125,7 @@ func (f Frame) UDP() UDP {
 // TCP returns a reference to the TCP packet or nil if this is not a TCP packet.
 func (f Frame) TCP() TCP {
 	if f.offsetTCP != 0 {
-		return TCP(f.Ether[f.offsetTCP:])
+		return TCP(f.ether[f.offsetTCP:])
 	}
 	return nil
 }
@@ -131,7 +136,7 @@ func (f Frame) TCP() TCP {
 // In case of protocol validation errors the Payload will return the last valid payload.
 func (f Frame) Payload() []byte {
 	if f.offsetPayload != 0 {
-		return f.Ether[f.offsetPayload:]
+		return f.ether[f.offsetPayload:]
 	}
 	return nil
 }
@@ -152,15 +157,15 @@ type ProtoStats struct {
 // Benchmark_Parse-8
 // 25281475	        47.58 ns/op	       0 B/op	       0 allocs/op
 func (h *Session) Parse(p []byte) (frame Frame, err error) {
-	frame.Ether = Ether(p)
-	if err := frame.Ether.IsValid(); err != nil {
+	frame.ether = p
+	if err := frame.ether.IsValid(); err != nil {
 		return Frame{}, err
 	}
 	frame.Session = h
-	frame.SrcAddr.MAC = frame.Ether.Src()
-	frame.DstAddr.MAC = frame.Ether.Dst()
+	frame.SrcAddr.MAC = frame.ether.Src()
+	frame.DstAddr.MAC = frame.ether.Dst()
 	frame.PayloadID = PayloadEther
-	frame.offsetPayload = frame.Ether.HeaderLen()
+	frame.offsetPayload = frame.ether.HeaderLen()
 
 	// Only interested in unicast ethernet
 	if !IsUnicastMAC(frame.SrcAddr.MAC) {
@@ -171,13 +176,13 @@ func (h *Session) Parse(p []byte) (frame Frame, err error) {
 	// a unifying standard, IEEE 802.3x-1997, was introduced that required that EtherType values be greater than or equal to 1536.
 	// Thus, values of 1500 and below for this field indicate that the field is used as the size of the payload of the Ethernet frame
 	// while values of 1536 and above indicate that the field is used to represent an EtherType.
-	if frame.Ether.EtherType() < 1536 {
+	if frame.ether.EtherType() < 1536 {
 		frame.PayloadID = Payload8023
 		return frame, nil
 	}
 
 	var proto uint8
-	switch frame.Ether.EtherType() {
+	switch frame.ether.EtherType() {
 	case syscall.ETH_P_IP:
 		frame.PayloadID = PayloadIP4
 		ip4 := IP4(frame.Payload())
@@ -258,43 +263,43 @@ func (h *Session) Parse(p []byte) (frame Frame, err error) {
 	case 0x8808: // Ethernet pause frame
 		frame.PayloadID = PayloadEthernetPause
 		h.Statistics[PayloadEthernetPause].Count++
-		frame.offsetPayload = frame.Ether.HeaderLen()
+		frame.offsetPayload = frame.Ether().HeaderLen()
 		return frame, nil
 
 	case 0x8899: // Realtek remote control protocol (RRCP)
 		frame.PayloadID = PayloadRRCP
 		h.Statistics[PayloadRRCP].Count++
-		frame.offsetPayload = frame.Ether.HeaderLen()
+		frame.offsetPayload = frame.Ether().HeaderLen()
 		return frame, nil
 
 	case 0x88cc: // Local link discovery protocol (LLDP)
 		frame.PayloadID = PayloadLLDP
 		h.Statistics[PayloadLLDP].Count++
-		frame.offsetPayload = frame.Ether.HeaderLen()
+		frame.offsetPayload = frame.Ether().HeaderLen()
 		return frame, nil
 
 	case 0x890d: // 802.11r
 		frame.PayloadID = Payload802_11r
 		h.Statistics[Payload802_11r].Count++
-		frame.offsetPayload = frame.Ether.HeaderLen()
+		frame.offsetPayload = frame.Ether().HeaderLen()
 		return frame, nil
 
 	case 0x893a: // IEEE 1905
 		frame.PayloadID = PayloadIEEE1905
 		h.Statistics[PayloadIEEE1905].Count++
-		frame.offsetPayload = frame.Ether.HeaderLen()
+		frame.offsetPayload = frame.Ether().HeaderLen()
 		return frame, nil
 
 	case 0x6970: // Sonos proprietary protocol
 		frame.PayloadID = PayloadSonos
 		h.Statistics[PayloadSonos].Count++
-		frame.offsetPayload = frame.Ether.HeaderLen()
+		frame.offsetPayload = frame.Ether().HeaderLen()
 		return frame, nil
 
 	case 0x880a: // not sure what this is but seen often on home LANs
 		frame.PayloadID = Payload880a
 		h.Statistics[Payload880a].Count++
-		frame.offsetPayload = frame.Ether.HeaderLen()
+		frame.offsetPayload = frame.Ether().HeaderLen()
 		return frame, nil
 
 	default:

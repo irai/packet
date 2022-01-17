@@ -18,7 +18,7 @@ var (
 
 func filterByMAC(mac net.HardwareAddr) func(packet.Frame) bool {
 	return func(frame packet.Frame) bool {
-		if bytes.Equal(frame.Ether.Src(), mac) || bytes.Equal(frame.Ether.Dst(), mac) {
+		if bytes.Equal(frame.Ether().Src(), mac) || bytes.Equal(frame.Ether().Dst(), mac) {
 			return false
 		}
 		return true
@@ -52,7 +52,7 @@ func filterByIP(ip net.IP) func(packet.Frame) bool {
 }
 
 func log(frame packet.Frame) {
-	fmt.Println("ether  :", frame.Ether)
+	fmt.Println("ether  :", frame.Ether())
 	if udp := frame.UDP(); udp != nil {
 		fmt.Printf("udp   : src=%s dst=%s\n", frame.SrcAddr, frame.DstAddr)
 	}

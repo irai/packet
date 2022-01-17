@@ -119,7 +119,7 @@ func Process8023Frame(frame Frame, pos int) (int, int, error) {
 		stpCount++
 		now := time.Now()
 		if stpNextLog.Before(now) {
-			fastlog.NewLine(module, "LLC STP protocol").Struct(frame.Ether).Struct(llc).Int("count", stpCount).ByteArray("payload", frame.Ether.Payload()).Write()
+			fastlog.NewLine(module, "LLC STP protocol").Struct(frame.Ether()).Struct(llc).Int("count", stpCount).ByteArray("payload", frame.Ether().Payload()).Write()
 			stpNextLog = now.Add(time.Minute * 5)
 		}
 		return 0, 0, nil
@@ -132,12 +132,12 @@ func Process8023Frame(frame Frame, pos int) (int, int, error) {
 			return 0, 0, err
 		}
 		// fmt.Printf("packet: LLC SNAP protocol %s %s payload=[% x]\n", ether, snap, ether[:])
-		fastlog.NewLine(module, "LLC SNAP protocol").Struct(frame.Ether).Struct(snap).ByteArray("payload", frame.Ether.Payload()).Write()
+		fastlog.NewLine(module, "LLC SNAP protocol").Struct(frame.Ether()).Struct(snap).ByteArray("payload", frame.Ether().Payload()).Write()
 		return 0, 0, nil
 	}
 
 	if llc.DSAP() == 0xe0 && llc.SSAP() == 0xe0 {
-		fastlog.NewLine(module, "IPX protocol").Struct(frame.Ether).ByteArray("payload", frame.Ether.Payload()).Write()
+		fastlog.NewLine(module, "IPX protocol").Struct(frame.Ether()).ByteArray("payload", frame.Ether().Payload()).Write()
 		return 0, 0, nil
 	}
 
@@ -146,6 +146,6 @@ func Process8023Frame(frame Frame, pos int) (int, int, error) {
 	//    sudo tcpdump -vv -x not ip6 and not ip and not arp
 	//    then switch a mobile phone to airplane mode to force a network reconnect
 	// fmt.Printf("packet: rcvd 802.3 LLC frame %s %s payload=[% x]\n", ether, llc, ether[:])
-	fastlog.NewLine(module, "802.3 LLC frame").Struct(frame.Ether).ByteArray("payload", frame.Ether.Payload()).Write()
+	fastlog.NewLine(module, "802.3 LLC frame").Struct(frame.Ether()).ByteArray("payload", frame.Ether().Payload()).Write()
 	return 0, 0, nil
 }
