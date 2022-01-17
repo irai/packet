@@ -205,7 +205,6 @@ func TestHandler_handleRequest(t *testing.T) {
 		name          string
 		p             []byte
 		updateReqIP   bool // indicate if we want to update the offer
-		want          packet.Result
 		dhcp          DHCP4
 		wantErr       bool
 		wantReplyType MessageType

@@ -316,9 +316,9 @@ func (h *Handler) lockAndSetOffline(host *packet.Host) {
 //
 // Note: typically called with a new IP host and not the previous IP.
 //       the new host is likely to be offline and stage normal
-func (h *Handler) lockAndProcessDHCP4Update(host *packet.Host, result packet.Result) (notify bool) {
+/**
+func (h *Handler) dELETElockAndProcessDHCP4Update(host *packet.Host, result packet.Result) (notify bool) {
 	if host != nil {
-		/**
 		host.MACEntry.Row.Lock()
 		host.DHCP4Name, notify = host.DHCP4Name.Merge(result.NameEntry)
 		if notify {
@@ -326,7 +326,6 @@ func (h *Handler) lockAndProcessDHCP4Update(host *packet.Host, result packet.Res
 			host.MACEntry.DHCP4Name, _ = host.MACEntry.DHCP4Name.Merge(host.DHCP4Name)
 		}
 		host.MACEntry.Row.Unlock()
-		***/
 
 		// when selecting or rebooting from another dhcp server,
 		// the host will not change state
@@ -341,7 +340,6 @@ func (h *Handler) lockAndProcessDHCP4Update(host *packet.Host, result packet.Res
 		return notify
 	}
 
-	/**
 	// First dhcp discovery has no host entry
 	// Ensure there is a mac entry with the IP offer
 	if result.SrcAddr.IP != nil && h.session.NICInfo.HostAddr4.IP.Contains(result.SrcAddr.IP) {
@@ -349,6 +347,6 @@ func (h *Handler) lockAndProcessDHCP4Update(host *packet.Host, result packet.Res
 		// entry := h.session.MACTable.FindOrCreateNoLock(result.SrcAddr.MAC)
 		// entry.IP4Offer = packet.CopyIP(result.SrcAddr.IP)
 	}
-	**/
 	return false
 }
+**/

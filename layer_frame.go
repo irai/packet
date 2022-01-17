@@ -45,14 +45,6 @@ const (
 	Payload880a          PayloadID = 29
 )
 
-type Result struct {
-	Update    bool      // Set to true if update is required
-	HuntStage HuntStage // DHCP4 hunt stage
-	NameEntry NameEntry // Name
-	SrcAddr   Addr      // reference to frame MAC, IP and Port (i.e. not copied) - the engine will copy if required
-	IsRouter  bool      // Mark host as router
-}
-
 // Frame describes a network packet and the various protocol layers within it.
 // It maintains a reference to common protocols like IP4, IP6, UDP, TCP.
 type Frame struct {

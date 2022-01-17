@@ -22,6 +22,7 @@ func (a Addr) String() string {
 	return fastlog.NewLine("", "").Struct(a).ToString()
 }
 
+// FastLog implements fastlog interface.
 func (a Addr) FastLog(l *fastlog.Line) *fastlog.Line {
 	l.MAC("mac", a.MAC)
 	l.IP("ip", a.IP)

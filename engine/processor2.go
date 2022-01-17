@@ -20,7 +20,6 @@ func (h *Handler) processPacket(ether packet.Ether) (err error) {
 	}
 	d1 = time.Since(startTime)
 
-	var result packet.Result
 	switch frame.PayloadID {
 	case packet.PayloadTCP: // most common traffic on a LAN
 		// do nothing
@@ -44,14 +43,9 @@ func (h *Handler) processPacket(ether packet.Ether) (err error) {
 			fmt.Printf("packet: error processing dhcp4: %s\n", err)
 			return err
 		}
-		if frame.Host != nil && result.Update {
-			if h.lockAndProcessDHCP4Update(frame.Host, result) {
-				result.Update = true
-			}
-		}
 
 	case packet.PayloadICMP4:
-		if result, err = h.ICMP4Handler.ProcessPacket(frame.Host, frame.Ether, frame.Payload()); err != nil {
+		if err = h.ICMP4Handler.ProcessPacket(frame.Host, frame.Ether, frame.Payload()); err != nil {
 			fastlog.NewLine("packet", "error processing icmp4").Error(err).Write()
 			return err
 		}
@@ -63,7 +57,7 @@ func (h *Handler) processPacket(ether packet.Ether) (err error) {
 		}
 
 	case packet.PayloadSSDP:
-		if result, err = h.ProcessSSDP(frame); err != nil {
+		if err = h.ProcessSSDP(frame); err != nil {
 			return err
 		}
 
@@ -98,7 +92,7 @@ func (h *Handler) processPacket(ether packet.Ether) (err error) {
 		}
 
 	case packet.PayloadLLMNR:
-		if result, err = h.ProcessLLMNR(frame); err != nil {
+		if err = h.ProcessLLMNR(frame); err != nil {
 			return err
 		}
 
@@ -163,9 +157,9 @@ func (h *Handler) processPacket(ether packet.Ether) (err error) {
 	return nil
 }
 
-func processInvalid(frame packet.Frame, pos int) (packet.Result, error) {
+func processInvalid(frame packet.Frame, pos int) error {
 	fastlog.NewLine(module, "unexpected ethernet type").Struct(frame.Ether).ByteArray("payload", frame.Payload()).Write()
-	return packet.Result{}, nil
+	return nil
 }
 
 func (h *Handler) ProcessMDNS(frame packet.Frame) (err error) {
@@ -187,14 +181,14 @@ func (h *Handler) ProcessMDNS(frame packet.Frame) (err error) {
 	return nil
 }
 
-func (h *Handler) ProcessLLMNR(frame packet.Frame) (result packet.Result, err error) {
+func (h *Handler) ProcessLLMNR(frame packet.Frame) (err error) {
 	// case udpSrcPort == 5355 || udpDstPort == 5355:
 	// Link Local Multicast Name Resolution (LLMNR)
 	fastlog.NewLine(module, "ether").Struct(frame.Ether).Module(module, "received llmnr packet").Write()
 	ipv4Hosts, ipv6Hosts, err := h.DNSHandler.ProcessMDNS(frame)
 	if err != nil {
 		fmt.Printf("packet: error processing llmnr: %s\n", err)
-		return result, err
+		return err
 	}
 	if frame.Host != nil {
 		if len(ipv4Hosts) > 0 {
@@ -204,16 +198,16 @@ func (h *Handler) ProcessLLMNR(frame packet.Frame) (result packet.Result, err er
 			fastlog.NewLine(module, "mdns ipv6 ignoring host").Struct(v).Write()
 		}
 	}
-	return result, nil
+	return nil
 }
 
-func (h *Handler) ProcessSSDP(frame packet.Frame) (result packet.Result, err error) {
+func (h *Handler) ProcessSSDP(frame packet.Frame) (err error) {
 	// case udpDstPort == 1900:
 	// Microsoft Simple Service Discovery Protocol
 	nameEntry, location, err := h.DNSHandler.ProcessSSDP(frame.Host, frame.Ether, frame.Payload())
 	if err != nil {
 		fastlog.NewLine(module, "error processing ssdp").Error(err).ByteArray("payload", frame.Payload()).Write()
-		return result, err
+		return err
 	}
 
 	if frame.Host != nil {
@@ -247,10 +241,10 @@ func (h *Handler) ProcessSSDP(frame packet.Frame) (result packet.Result, err err
 					h.session.Notify(frame)
 				}
 			}(frame.Host)
-			return result, nil
+			return nil
 		}
 	}
-	return result, nil
+	return nil
 }
 
 func (h *Handler) ProcessNBNS(frame packet.Frame) (err error) {

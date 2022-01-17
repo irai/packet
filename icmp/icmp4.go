@@ -13,7 +13,7 @@ import (
 type ICMP4Handler interface {
 	Start() error
 	Stop() error
-	ProcessPacket(host *packet.Host, p []byte, header []byte) (packet.Result, error)
+	ProcessPacket(host *packet.Host, p []byte, header []byte) error
 	StartHunt(packet.Addr) (packet.HuntStage, error)
 	StopHunt(packet.Addr) (packet.HuntStage, error)
 	CheckAddr(packet.Addr) (packet.HuntStage, error)
@@ -26,8 +26,8 @@ type ICMP4NOOP struct {
 
 func (p ICMP4NOOP) Start() error { return nil }
 func (p ICMP4NOOP) Stop() error  { return nil }
-func (p ICMP4NOOP) ProcessPacket(*packet.Host, []byte, []byte) (packet.Result, error) {
-	return packet.Result{}, nil
+func (p ICMP4NOOP) ProcessPacket(*packet.Host, []byte, []byte) error {
+	return nil
 }
 func (p ICMP4NOOP) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
 	return packet.StageNoChange, nil
@@ -91,7 +91,7 @@ func (h *Handler4) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
 	return packet.StageNormal, nil
 }
 
-func (h *Handler4) ProcessPacket(host *packet.Host, p []byte, header []byte) (packet.Result, error) {
+func (h *Handler4) ProcessPacket(host *packet.Host, p []byte, header []byte) error {
 
 	ether := packet.Ether(p)
 	ip4Frame := packet.IP4(ether.Payload())
@@ -103,7 +103,7 @@ func (h *Handler4) ProcessPacket(host *packet.Host, p []byte, header []byte) (pa
 		// ICMPEcho start from icmp frame
 		echo := packet.ICMPEcho(icmpFrame)
 		if err := echo.IsValid(); err != nil {
-			return packet.Result{}, err
+			return err
 		}
 		if Debug {
 			fastlog.NewLine(module4, "echo reply recvd").IP("srcIP", ip4Frame.Src()).Struct(echo).Write()
@@ -128,12 +128,12 @@ func (h *Handler4) ProcessPacket(host *packet.Host, p []byte, header []byte) (pa
 		}
 		if len(header) < 8+20 { // minimum 8 bytes icmp + 20 ip4
 			fmt.Println("icmp4 : invalid destination unreachable packet", ip4Frame.Src(), len(header))
-			return packet.Result{}, packet.ErrParseFrame
+			return packet.ErrParseFrame
 		}
 		originalIP4Frame := packet.IP4(header[8:]) // ip4 starts after icmp 8 bytes
 		if err := originalIP4Frame.IsValid(); err != nil {
 			fmt.Println("icmp4 : invalid destination unreachable packet", ip4Frame.Src(), len(header), err)
-			return packet.Result{}, packet.ErrParseFrame
+			return packet.ErrParseFrame
 		}
 		var port uint16
 		switch originalIP4Frame.Protocol() {
@@ -141,14 +141,14 @@ func (h *Handler4) ProcessPacket(host *packet.Host, p []byte, header []byte) (pa
 			udp := packet.UDP(originalIP4Frame.Payload())
 			if err := udp.IsValid(); err != nil {
 				fmt.Println("icmp4 : invalid upd destination unreacheable", ip4Frame.Src(), originalIP4Frame, err)
-				return packet.Result{}, err
+				return err
 			}
 			port = udp.DstPort()
 		case syscall.IPPROTO_TCP:
 			tcp := packet.TCP(originalIP4Frame.Payload())
 			if err := tcp.IsValid(); err != nil {
 				fmt.Println("icmp4 : invalid tcp destination unreacheable", ip4Frame.Src(), originalIP4Frame, err)
-				return packet.Result{}, packet.ErrParseFrame
+				return packet.ErrParseFrame
 			}
 			port = tcp.DstPort()
 		}
@@ -158,5 +158,5 @@ func (h *Handler4) ProcessPacket(host *packet.Host, p []byte, header []byte) (pa
 	default:
 		fmt.Printf("icmp4 not implemented type=%d: frame:0x[% x]\n", icmpFrame.Type(), icmpFrame)
 	}
-	return packet.Result{}, nil
+	return nil
 }

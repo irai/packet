@@ -79,10 +79,6 @@ func (s HuntStage) String() string {
 	return "noop"
 }
 
-func (e Result) String() string {
-	return fmt.Sprintf("huntstage=%s name=%s %s", e.HuntStage, e.NameEntry, e.SrcAddr)
-}
-
 // newHostTable returns a HostTable Session
 func newHostTable() HostTable {
 	return HostTable{Table: make(map[netaddr.IP]*Host, 64)}

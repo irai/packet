@@ -101,17 +101,15 @@ func TestHandler_Spoof(t *testing.T) {
 	mac, _ := net.ParseMAC("02:42:ca:78:04:50")
 
 	tests := []struct {
-		name       string
-		frame      []byte
-		wantResult packet.Result
-		wantErr    bool
+		name        string
+		frame       []byte
+		wantErr     bool
+		wantDirty   bool
+		wantSrcAddr packet.Addr
 	}{
-		{name: "na_override", frame: testicmp6NAOverride, wantErr: false,
-			wantResult: packet.Result{Update: true, SrcAddr: packet.Addr{MAC: mac, IP: net.ParseIP("fe80::ce32:e5ff:fe0e:67f4")}}},
-		{name: "na_solicited", frame: testicmp6NASolicited, wantErr: false,
-			wantResult: packet.Result{Update: false, SrcAddr: packet.Addr{}}},
-		{name: "rs_nopayload", frame: testicmp6RourterSolicitation, wantErr: false,
-			wantResult: packet.Result{Update: false, SrcAddr: packet.Addr{}}},
+		{name: "na_override", frame: testicmp6NAOverride, wantErr: false, wantDirty: true, wantSrcAddr: packet.Addr{MAC: mac, IP: net.ParseIP("fe80::ce32:e5ff:fe0e:67f4")}},
+		{name: "na_solicited", frame: testicmp6NASolicited, wantErr: false, wantDirty: false, wantSrcAddr: packet.Addr{}},
+		{name: "rs_nopayload", frame: testicmp6RourterSolicitation, wantErr: false, wantDirty: false, wantSrcAddr: packet.Addr{}},
 	}
 
 	for _, tt := range tests {
@@ -134,12 +132,12 @@ func TestHandler_Spoof(t *testing.T) {
 				t.Errorf("Handler.ProcessPacket() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			// if gotResult.Update != tt.wantResult.Update {
+			// if frame.Host.Dirty() != tt.wantResult.Update {
 			// t.Errorf("Handler.ProcessPacket() invalid result update=%v, want=%v", gotResult.Update, tt.wantResult.Update)
 			// }
-			if !frame.SrcAddr.IP.Equal(tt.wantResult.SrcAddr.IP) ||
-				!bytes.Equal(frame.SrcAddr.MAC, tt.wantResult.SrcAddr.MAC) {
-				t.Errorf("Handler.ProcessPacket() invalid addr=%v, want=%v", frame.SrcAddr, tt.wantResult.SrcAddr)
+			if !frame.SrcAddr.IP.Equal(tt.wantSrcAddr.IP) ||
+				!bytes.Equal(frame.SrcAddr.MAC, tt.wantSrcAddr.MAC) {
+				t.Errorf("Handler.ProcessPacket() invalid addr=%v, want=%v", frame.SrcAddr, tt.wantSrcAddr)
 				return
 			}
 		})

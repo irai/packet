@@ -63,13 +63,15 @@ func TestHandler_anotherHostDHCP(t *testing.T) {
 	}
 
 	// simulate DHCP same host result
+	/**
 	result := packet.Result{}
 	result.Update = true
 	result.IsRouter = true // hack to mark result as a new host
 	result.SrcAddr = addr  // same addr IP
 	result.NameEntry.Name = "New name"
 	result.HuntStage = packet.StageNoChange
-	engine.lockAndProcessDHCP4Update(frame1.Host, result)
+	*/
+	// engine.lockAndProcessDHCP4Update(frame1.Host, result)
 	// it is the same IP, stage should not change
 	if frame1.Host.HuntStage != packet.StageHunt {
 		t.Fatalf("invalid stage=%v want=%v", frame1.Host.HuntStage, packet.StageHunt)
