@@ -11,7 +11,13 @@ import (
 )
 
 type ICMP4Handler interface {
-	packet.PacketProcessor
+	Start() error
+	Stop() error
+	ProcessPacket(host *packet.Host, p []byte, header []byte) (packet.Result, error)
+	StartHunt(packet.Addr) (packet.HuntStage, error)
+	StopHunt(packet.Addr) (packet.HuntStage, error)
+	CheckAddr(packet.Addr) (packet.HuntStage, error)
+	MinuteTicker(time.Time) error
 	Ping(dstAddr packet.Addr, timeout time.Duration) (err error)
 }
 
