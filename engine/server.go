@@ -29,8 +29,6 @@ type buffer struct {
 // Handler implements network handler
 type Handler struct {
 	session      *packet.Session // store shared session values
-	HandlerIP4   packet.PacketProcessor
-	HandlerIP6   packet.PacketProcessor
 	ICMP4Handler icmp.ICMP4Handler
 	ICMP6Handler icmp.ICMP6Handler
 	DHCP4Handler dhcp4.DHCP4Handler
@@ -49,8 +47,6 @@ func NewEngine(session *packet.Session) (h *Handler, err error) {
 
 	// no plugins to start
 	h.ARPHandler = arp.ARPNOOP{}
-	h.HandlerIP4 = packet.PacketNOOP{}
-	h.HandlerIP6 = packet.PacketNOOP{}
 	h.ICMP4Handler = icmp.ICMP4NOOP{}
 	h.ICMP6Handler = icmp.ICMP6NOOP{}
 	h.DHCP4Handler = dhcp4.PacketNOOP{}
@@ -144,12 +140,6 @@ func (h *Handler) PrintTable() {
 func (h *Handler) startPlugins() error {
 	time.Sleep(time.Second * 1) // wait for reader to start
 
-	if err := h.HandlerIP4.Start(); err != nil {
-		fmt.Println("error: in IP4 start:", err)
-	}
-	if err := h.HandlerIP6.Start(); err != nil {
-		fmt.Println("error: in IP6 start:", err)
-	}
 	if err := h.ICMP4Handler.Start(); err != nil {
 		fmt.Println("error: in ICMP4 start:", err)
 	}
@@ -171,12 +161,6 @@ func (h *Handler) startPlugins() error {
 }
 
 func (h *Handler) stopPlugins() error {
-	if err := h.HandlerIP4.Stop(); err != nil {
-		fmt.Println("error: in IP4 stop:", err)
-	}
-	if err := h.HandlerIP6.Stop(); err != nil {
-		fmt.Println("error: in IP6 stop:", err)
-	}
 	if err := h.ICMP4Handler.Stop(); err != nil {
 		fmt.Println("error: in ICMP4 stop:", err)
 	}

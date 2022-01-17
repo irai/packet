@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"strconv"
-	"strings"
 	"sync"
 	"syscall"
 
@@ -27,7 +26,13 @@ const (
 // EtherBufferPool implemts a simple buffer pool for Ethernet packets
 var EtherBufferPool = sync.Pool{New: func() interface{} { return new([EthMaxSize]byte) }}
 
-// isUnicastMAC return true if the mac address is unicast
+// ARP global variables
+var (
+	EthernetBroadcast = net.HardwareAddr{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
+	EthernetZero      = net.HardwareAddr{0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
+)
+
+// IsUnicastMAC return true if the mac address is unicast
 //
 // Bit 0 in the first octet is reserved for broadcast or multicast traffic.
 // When we have unicast traffic this bit will be set to 0.
@@ -69,6 +74,7 @@ func (p Ether) Dst() net.HardwareAddr { return net.HardwareAddr(p[:6]) }
 func (p Ether) Src() net.HardwareAddr { return net.HardwareAddr(p[6 : 6+6]) }
 func (p Ether) EtherType() uint16     { return binary.BigEndian.Uint16(p[12:14]) } // same pos as PayloadLen
 
+// SrcIP i a convenience function to return the source IP address. It returns nil if no IP packet is present.
 func (p Ether) SrcIP() net.IP {
 	switch p.EtherType() {
 	case syscall.ETH_P_IP:
@@ -79,6 +85,7 @@ func (p Ether) SrcIP() net.IP {
 	return nil
 }
 
+// SrcIP i a convenience function to return the destination IP address. It returns nil if no IP packet is present.
 func (p Ether) DstIP() net.IP {
 	switch p.EtherType() {
 	case syscall.ETH_P_IP:
@@ -89,6 +96,7 @@ func (p Ether) DstIP() net.IP {
 	return nil
 }
 
+// SrcIP i a convenience function to return the destination IP address in netaddr.IP format. It returns nil if no IP packet is present.
 func (p Ether) NetaddrDstIP() netaddr.IP {
 	if ip, ok := netaddr.FromStdIP(p.DstIP()); ok {
 		return ip
@@ -96,6 +104,7 @@ func (p Ether) NetaddrDstIP() netaddr.IP {
 	return netaddr.IP{}
 }
 
+// HeaderLen returns the header length.
 func (p Ether) HeaderLen() int {
 	switch p.EtherType() {
 	case syscall.ETH_P_IP, syscall.ETH_P_IPV6, syscall.ETH_P_ARP:
@@ -112,6 +121,7 @@ func (p Ether) HeaderLen() int {
 	return 14
 }
 
+// Payload returns a slice to the payload after the header.
 func (p Ether) Payload() []byte {
 	n := p.HeaderLen()
 	if len(p) > n {
@@ -123,6 +133,7 @@ func (p Ether) Payload() []byte {
 	return nil
 }
 
+// SetPayload extends the ether packet to include payload.
 func (p Ether) SetPayload(payload []byte) (Ether, error) {
 	tmp := p[:p.HeaderLen()+len(payload)]
 	// An Ethernet frame has a minimum size of 60 bytes because anything that is shorter is interpreted
@@ -144,8 +155,9 @@ func (p Ether) SetPayload(payload []byte) (Ether, error) {
 	return tmp, nil
 }
 
+// AppendPayload copy payload after the ethernet header and returns the extended ether slice.
 func (p Ether) AppendPayload(payload []byte) (Ether, error) {
-	if len(payload)+14 > cap(p) { //must be enough capcity to store header + payload
+	if len(payload)+14 > cap(p) { //must be enough capacity to store header + payload
 		return nil, ErrPayloadTooBig
 	}
 	copy(p.Payload()[:cap(payload)], payload)
@@ -166,20 +178,10 @@ func (p Ether) AppendPayload(payload []byte) (Ether, error) {
 }
 
 func (p Ether) String() string {
-	var b strings.Builder
-	b.Grow(80)
-	b.WriteString("type=0x")
-	fmt.Fprintf(&b, "%x", p.EtherType())
-	b.WriteString(" src=")
-	b.WriteString(p.Src().String())
-	b.WriteString(" dst=")
-	b.WriteString(p.Dst().String())
-	b.WriteString(" len=")
-	fmt.Fprintf(&b, "%d", len(p))
-	return b.String()
+	return fastlog.NewLine("", "").Struct(p).ToString()
 }
 
-// Print implements fastlog struct interface
+// Fastlog implements fastlog struct interface
 func (p Ether) FastLog(line *fastlog.Line) *fastlog.Line {
 	line.Uint16Hex("type", p.EtherType())
 	line.MAC("src", p.Src())
@@ -188,13 +190,13 @@ func (p Ether) FastLog(line *fastlog.Line) *fastlog.Line {
 	return line
 }
 
-// EtherMarshalBinary creates a ethernet frame in at b using the values
-// It panic if b is nil or not sufficient to store a full len ethernet packet
-func EtherMarshalBinary(b []byte, hType uint16, srcMAC net.HardwareAddr, dstMAC net.HardwareAddr) Ether {
+// EncodeEther creates a ethernet frame at b using the parameters.
+// It panic if b is nil or not sufficient to store a full len ethernet packet. In most cases this is a coding error.
+func EncodeEther(b []byte, hType uint16, srcMAC net.HardwareAddr, dstMAC net.HardwareAddr) Ether {
 	if cap(b) < 14 {
 		panic("ether buffer too small")
 	}
-	b = b[:14] // change slice in case slice is less than 14
+	b = b[:14] // use only 14 bytes
 	copy(b[0:6], dstMAC)
 	copy(b[6:6+6], srcMAC)
 	binary.BigEndian.PutUint16(b[12:14], hType)
@@ -252,8 +254,7 @@ func (p EthernetPause) Duration() uint16 { return binary.BigEndian.Uint16(p[2:4]
 func (p EthernetPause) Reserved() []byte { return p[4:] }
 
 func (p EthernetPause) String() string {
-	line := fastlog.NewLine("", "")
-	return p.FastLog(line).ToString()
+	return fastlog.NewLine("", "").Struct(p).ToString()
 }
 
 func (p EthernetPause) FastLog(line *fastlog.Line) *fastlog.Line {
@@ -312,8 +313,7 @@ func (p LLDP) getTLV(n int) (t int, l int, v []byte, err error) {
 }
 
 func (p LLDP) String() string {
-	line := fastlog.NewLine("", "")
-	return p.FastLog(line).ToString()
+	return fastlog.NewLine("", "").Struct(p).ToString()
 }
 
 func (p LLDP) Type(t int) string {

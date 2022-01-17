@@ -130,7 +130,7 @@ func TestHandler_findOrCreateHostDupIP(t *testing.T) {
 	session.Notify(Frame{Host: host2})
 
 	// test that name will clear - this was a previous bug
-	session.DHCPUpdate(host2.Addr.MAC, host2.Addr.IP, NameEntry{Type: "dhcp", Name: "mac1"})
+	session.DHCPv4Update(host2.Addr.MAC, host2.Addr.IP, NameEntry{Type: "dhcp", Name: "mac1"})
 
 	// set host offline
 	session.makeOffline(host2)
@@ -217,7 +217,7 @@ func TestSession_DHCPUpdate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := session.DHCPUpdate(tt.addr.MAC, tt.addr.IP, NameEntry{Type: "dhcp", Name: tt.dhcpName}); (err != nil) != tt.wantErr {
+			if err := session.DHCPv4Update(tt.addr.MAC, tt.addr.IP, NameEntry{Type: "dhcp", Name: tt.dhcpName}); (err != nil) != tt.wantErr {
 				t.Fatalf("%s: Session.DHCPUpdate() error = %v, wantErr %v", tt.name, err, tt.wantErr)
 			}
 

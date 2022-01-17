@@ -144,7 +144,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 			}
 
 			// almost always a new host IP
-			h.session.DHCPUpdate(p.CHAddr(), reqIP, nameEntry)
+			h.session.DHCPv4Update(p.CHAddr(), reqIP, nameEntry)
 			fastlog.NewLine(module, "ignore select for another server").ByteArray("xid", p.XId()).IP("serverIP", serverIP).Write()
 			return nil // request not for us - silently discard packet
 		}
@@ -186,7 +186,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 		*/
 
 		// Update session with DHCP details - almost always a new host IP will be setup
-		h.session.DHCPUpdate(p.CHAddr(), reqIP, nameEntry)
+		h.session.DHCPv4Update(p.CHAddr(), reqIP, nameEntry)
 
 		if lease.State == StateFree {
 			fastlog.NewLine(module, "client lease does not exist").ByteArray("xid", p.XId()).IP("ip", reqIP).Write()
@@ -268,7 +268,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 	*/
 
 	// Update session with DHCP details - almost always a new host IP will be setup
-	h.session.DHCPUpdate(lease.Addr.MAC, lease.Addr.IP, nameEntry)
+	h.session.DHCPv4Update(lease.Addr.MAC, lease.Addr.IP, nameEntry)
 
 	return ret
 }

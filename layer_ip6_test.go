@@ -10,7 +10,7 @@ import (
 func TestIP6MarshalBinary(t *testing.T) {
 	const hopLimit = 1
 
-	ip6 := IP6MarshalBinary(nil, hopLimit, ip6LLAHost, ip6LLA4)
+	ip6 := EncodeIP6(nil, hopLimit, ip6LLAHost, ip6LLA4)
 	if len(ip6) != 40 {
 		t.Fatal("invalid ip6 len", ip6)
 	}
@@ -64,11 +64,11 @@ func TestIP6Payload(t *testing.T) {
 	mypayload := []byte{0xf, 0xb, 0xa}
 
 	buf := make([]byte, EthMaxSize) // allocate in the stack
-	ether := EtherMarshalBinary(buf, syscall.ETH_P_IPV6, routerMAC, mac2)
+	ether := EncodeEther(buf, syscall.ETH_P_IPV6, routerMAC, mac2)
 	if len(ether) != 14 {
 		t.Fatal("invalid ether len", len(ether))
 	}
-	ip6 := IP6MarshalBinary(ether.Payload(), 1, ip6LLAHost, ip6LLA2)
+	ip6 := EncodeIP6(ether.Payload(), 1, ip6LLAHost, ip6LLA2)
 	if len(ip6) != 40 {
 		t.Fatal("invalid ip6 len", len(ip6))
 	}

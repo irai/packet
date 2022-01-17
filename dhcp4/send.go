@@ -12,9 +12,9 @@ func sendDHCP4Packet(conn net.PacketConn, srcAddr packet.Addr, dstAddr packet.Ad
 	b := packet.EtherBufferPool.Get().(*[packet.EthMaxSize]byte)
 	defer packet.EtherBufferPool.Put(b)
 	ether := packet.Ether(b[0:])
-	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IP, srcAddr.MAC, dstAddr.MAC)
-	ip4 := packet.IP4MarshalBinary(ether.Payload(), 50, srcAddr.IP, dstAddr.IP)
-	udp := packet.UDPMarshalBinary(ip4.Payload(), srcAddr.Port, dstAddr.Port)
+	ether = packet.EncodeEther(ether, syscall.ETH_P_IP, srcAddr.MAC, dstAddr.MAC)
+	ip4 := packet.EncodeIP4(ether.Payload(), 50, srcAddr.IP, dstAddr.IP)
+	udp := packet.EncodeUDP(ip4.Payload(), srcAddr.Port, dstAddr.Port)
 	udp, err = udp.AppendPayload(p)
 	if err != nil {
 		return err

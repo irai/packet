@@ -58,7 +58,7 @@ func (p IP6) FastLog(line *fastlog.Line) *fastlog.Line {
 	return line
 }
 
-func IP6MarshalBinary(p []byte, hopLimit uint8, srcIP net.IP, dstIP net.IP) IP6 {
+func EncodeIP6(p []byte, hopLimit uint8, srcIP net.IP, dstIP net.IP) IP6 {
 	if p == nil || cap(p) < IP6HeaderLen {
 		p = make([]byte, IP6HeaderLen) // enough capacity for a max IP6 frame
 	}

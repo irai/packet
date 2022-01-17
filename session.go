@@ -22,19 +22,16 @@ var (
 	DebugIP4 bool
 	DebugUDP bool
 
-	// An IP host group address is mapped to an Ethernet multicast address
-	// by placing the low-order 23-bits of the IP address into the low-order
-	// 23 bits of the Ethernet multicast address 01-00-5E-00-00-00 (hex).
-	EthBroadcast     = net.HardwareAddr{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 	IP4Broadcast     = net.IPv4(255, 255, 255, 255)
 	IP4BroadcastAddr = Addr{MAC: EthBroadcast, IP: IP4Broadcast}
 
-	Eth4AllNodesMulticast = net.HardwareAddr{0x01, 0x00, 0x5e, 0, 0, 0x01}
+	EthBroadcast          = net.HardwareAddr{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 	IP4AllNodesMulticast  = net.IPv4(224, 0, 0, 1)
+	Eth4AllNodesMulticast = net.HardwareAddr{0x01, 0x00, 0x5e, 0, 0, 0x01} // Ethernet multicast 01-00-5E plus low-order 23-bits of the IP address.
 	IP4AllNodesAddr       = Addr{MAC: Eth4AllNodesMulticast, IP: IP4AllNodesMulticast}
 
-	Eth4RoutersMulticast   = net.HardwareAddr{0x01, 0x00, 0x5e, 0, 0, 0x02}
 	IP4AllRoutersMulticast = net.IPv4(224, 0, 0, 2)
+	Eth4RoutersMulticast   = net.HardwareAddr{0x01, 0x00, 0x5e, 0, 0, 0x02}
 
 	Eth6AllNodesMulticast = net.HardwareAddr{0x33, 0x33, 0, 0, 0, 0x01}
 	IP6AllNodesMulticast  = net.IP{0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}
@@ -80,6 +77,7 @@ var (
 	OpenDNS2 = net.IPv4(208, 67, 220, 123)
 )
 
+// Session holds the session context for a given network interface.
 type Session struct {
 	Conn            net.PacketConn    // the underlaying raw connection used for all read and write
 	NICInfo         *NICInfo          // keep interface information
@@ -98,9 +96,7 @@ type Session struct {
 
 // Config contains configurable parameters that overide package defaults
 type Config struct {
-	// Conn enables the client to override the connection with a another packet conn
-	// useful for testing
-	Conn            net.PacketConn // override connection
+	Conn            net.PacketConn // override underlying connection - useful for testing
 	NICInfo         *NICInfo       // override nic information - set to non nil to create a test Handler
 	ProbeDeadline   time.Duration  // override probe deadline
 	OfflineDeadline time.Duration  // override offline deadline
@@ -109,9 +105,9 @@ type Config struct {
 
 // Default dealines
 const (
-	DefaultProbeDeadline   = time.Minute * 2
-	DefaultOfflineDeadline = time.Minute * 5
-	DefaultPurgeDeadline   = time.Minute * 61
+	DefaultProbeDeadline   = time.Minute * 2  // probe IP every two minutes
+	DefaultOfflineDeadline = time.Minute * 5  // set offline if not IP not seen for this long
+	DefaultPurgeDeadline   = time.Minute * 61 // purge from table if not seen for this long
 )
 
 // monitorNICFrequency sets the frequency to check the network card is working properly.
@@ -208,7 +204,7 @@ func (config Config) NewSession(nic string) (session *Session, err error) {
 		}
 	}(session)
 
-	// create the host entry manually because we don't process host packets
+	// create our own Host entry manually because we don't create for host packets
 	host, _ := session.findOrCreateHostWithLock(session.NICInfo.HostAddr4)
 	host.LastSeen = time.Now().Add(time.Hour * 24 * 365) // never expire
 	host.MACEntry.LastSeen = host.LastSeen
@@ -418,13 +414,12 @@ func (h *Session) purge(now time.Time) error {
 	return nil
 }
 
-// DHCPUpdate updates the mac and host entry with dhcp details.
+// DHCPv4Update updates the mac and host entry with dhcp details.
+// A DHCP processing module should call this when it encounters a new host in a DHCP discovery/request message.
 //
-// This is function is intended for DHCP processing modules to notify of the session when they encounter a new host.
-// A host using dynamic IP cannot use an IP address until it is confirmed by a dhcp server. Therefore various DHCP messages are
-// transmitted with a zero IP.
-//
-func (h *Session) DHCPUpdate(mac net.HardwareAddr, ip net.IP, name NameEntry) error {
+// A host using DHCP cannot use an IP address until it is confirmed by a dhcp server. Therefore various DHCP messages are
+// transmitted with a zero IP and in particular the DHCP discover does not have a srcIP.
+func (h *Session) DHCPv4Update(mac net.HardwareAddr, ip net.IP, name NameEntry) error {
 	if ip == nil || ip.IsUnspecified() {
 		return ErrInvalidIP
 	}
@@ -440,6 +435,8 @@ func (h *Session) DHCPUpdate(mac net.HardwareAddr, ip net.IP, name NameEntry) er
 	return nil
 }
 
+// SetDHCPv4IPOffer set an IPv4 offer for the mac.
+// A DCP processing module should call this when it wants to record the IP it has offered for a given mac.
 func (h *Session) SetDHCPv4IPOffer(mac net.HardwareAddr, ip net.IP, name NameEntry) {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
@@ -449,8 +446,7 @@ func (h *Session) SetDHCPv4IPOffer(mac net.HardwareAddr, ip net.IP, name NameEnt
 }
 
 // DHCPv4Offer returns the dhcp v4 ip offer if one is available.
-// This is used in the arp spoof module to reject
-// any announcements that conflict with the spoofed dhcp ip.
+// This is used in the arp spoof module to reject announcements that conflict with the offered dhcp ip.
 func (h *Session) DHCPv4IPOffer(mac net.HardwareAddr) net.IP {
 	h.mutex.RLock()
 	defer h.mutex.RUnlock()
@@ -478,6 +474,7 @@ func (h *Session) IsCaptured(mac net.HardwareAddr) bool {
 	return false
 }
 
+// Capture sets the mac to capture mode
 func (h *Session) Capture(mac net.HardwareAddr) error {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
@@ -494,6 +491,7 @@ func (h *Session) Capture(mac net.HardwareAddr) error {
 	return nil
 }
 
+// Release sets the mac to normal mode (not captured)
 func (h *Session) Release(mac net.HardwareAddr) error {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
@@ -504,7 +502,7 @@ func (h *Session) Release(mac net.HardwareAddr) error {
 	return nil
 }
 
-// FindMACEntry returns pointer to macEntry or nil if not found
+// IPAddrs retun the array of hosts for the mac.
 func (h *Session) IPAddrs(mac net.HardwareAddr) []Addr {
 	h.mutex.RLock()
 	defer h.mutex.RUnlock()

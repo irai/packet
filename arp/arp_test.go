@@ -45,14 +45,15 @@ var (
 
 func newEtherPacket(hType uint16, srcMAC net.HardwareAddr, dstMAC net.HardwareAddr) packet.Ether {
 	buf := make([]byte, packet.EthMaxSize)
-	p := packet.EtherMarshalBinary(buf, hType, srcMAC, dstMAC)
+	p := packet.EncodeEther(buf, hType, srcMAC, dstMAC)
 	return p
 }
 
 func newARPPacket(op uint16, srcAddr packet.Addr, dstAddr packet.Addr) packet.ARP {
-	p, err := packet.ARPMarshalBinary(nil, op, srcAddr, dstAddr)
-	if err != nil {
-		panic(err)
+	b := make([]byte, 128)
+	p := packet.EncodeARP(b, op, srcAddr, dstAddr)
+	if p == nil {
+		panic("invalid arp packet")
 	}
 	return p
 }

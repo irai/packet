@@ -10,19 +10,13 @@ import (
 	"github.com/irai/packet/fastlog"
 )
 
-var (
-	// EthernetBroadcast defines the broadcast address
-	EthernetBroadcast = net.HardwareAddr{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
-	EthernetZero      = net.HardwareAddr{0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
-)
-
 // ARP Operation types
 const (
 	OperationRequest = 1
 	OperationReply   = 2
 )
 
-// ARP memory mapped arp packet
+// ARP provides access to ARP fields without copying the structure.
 type ARP []byte
 
 // arpLen length is header + 2 * MACs + 2 IPs
@@ -70,16 +64,11 @@ func (b ARP) FastLog(line *fastlog.Line) *fastlog.Line {
 	return line
 }
 
-// ARPMarshalBinary creates a wire ARP frame ready for transmission
+// EncodeARP creates a wire ARP frame ready for transmission
 // see format: https://en.wikipedia.org/wiki/Address_Resolution_Protocol
-//
-// operation - 1 request, 2 reply
-func ARPMarshalBinary(b []byte, operation uint16, srcAddr Addr, dstAddr Addr) (ARP, error) {
-	if b == nil {
-		b = make([]byte, arpLen)
-	}
+func EncodeARP(b []byte, operation uint16, srcAddr Addr, dstAddr Addr) ARP {
 	if cap(b) < arpLen {
-		return nil, ErrInvalidLen
+		panic("invalid arp buffer")
 	}
 	b = b[:arpLen] // change the slice to accomodate the index below in case slice is less than arpLen
 
@@ -87,12 +76,12 @@ func ARPMarshalBinary(b []byte, operation uint16, srcAddr Addr, dstAddr Addr) (A
 	binary.BigEndian.PutUint16(b[2:4], syscall.ETH_P_IP) // Protocol type - IPv4 0x0800
 	b[4] = 6                                             // mac len - fixed
 	b[5] = 4                                             // ipv4 len - fixed
-	binary.BigEndian.PutUint16(b[6:8], operation)        // operation
+	binary.BigEndian.PutUint16(b[6:8], operation)        // operation - 1 request, 2 reply
 	copy(b[8:8+6], srcAddr.MAC[:6])
 	copy(b[14:14+4], srcAddr.IP.To4()[:4])
 	copy(b[18:18+6], dstAddr.MAC[:6])
 	copy(b[24:24+4], dstAddr.IP.To4()[:4])
-	return b, nil
+	return b
 }
 
 func (h *Session) ARPRequestTo(dst net.HardwareAddr, targetIP net.IP) error {
@@ -177,17 +166,14 @@ func (h *Session) ARPAnnounceTo(dst net.HardwareAddr, targetIP net.IP) (err erro
 // | ACD announ | 1 | broadcast | hostMAC   | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  clientIP |
 // +============+===+===========+===========+============+============+===================+===========+
 //
-func (h *Session) ARPRequestRaw(dst net.HardwareAddr, sender Addr, target Addr) error {
+func (h *Session) ARPRequestRaw(dst net.HardwareAddr, sender Addr, target Addr) (err error) {
 	b := EtherBufferPool.Get().(*[EthMaxSize]byte)
 	defer EtherBufferPool.Put(b)
 	ether := Ether(b[0:])
 
 	// Send packet with ether src set to host but arp packet set to target
-	ether = EtherMarshalBinary(ether, syscall.ETH_P_ARP, h.NICInfo.HostAddr4.MAC, dst)
-	arp, err := ARPMarshalBinary(ether.Payload(), OperationRequest, sender, target)
-	if err != nil {
-		return err
-	}
+	ether = EncodeEther(ether, syscall.ETH_P_ARP, h.NICInfo.HostAddr4.MAC, dst)
+	arp := EncodeARP(ether.Payload(), OperationRequest, sender, target)
 	if ether, err = ether.SetPayload(arp); err != nil {
 		return err
 	}
@@ -208,21 +194,18 @@ func (h *Session) ARPReply(dst net.HardwareAddr, sender Addr, target Addr) error
 	return h.reply(dst, sender, target)
 }
 
-// reply sends a ARP reply packet from src to dst.
+// reply sends an ARP reply packet from src to dst.
 //
 // dstEther identifies the target for the Ethernet packet : i.e. use EthernetBroadcast for gratuitous ARP
 // func (h *Session) reply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
-func (h *Session) reply(dst net.HardwareAddr, sender Addr, target Addr) error {
+func (h *Session) reply(dst net.HardwareAddr, sender Addr, target Addr) (err error) {
 	b := EtherBufferPool.Get().(*[EthMaxSize]byte)
 	defer EtherBufferPool.Put(b)
 	ether := Ether(b[0:])
 
 	// Send packet with ether src set to host but arp packet set to target
-	ether = EtherMarshalBinary(ether, syscall.ETH_P_ARP, h.NICInfo.HostAddr4.MAC, dst)
-	arp, err := ARPMarshalBinary(ether.Payload(), OperationReply, sender, target)
-	if err != nil {
-		return err
-	}
+	ether = EncodeEther(ether, syscall.ETH_P_ARP, h.NICInfo.HostAddr4.MAC, dst)
+	arp := EncodeARP(ether.Payload(), OperationReply, sender, target)
 	if ether, err = ether.SetPayload(arp); err != nil {
 		return err
 	}

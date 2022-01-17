@@ -9,7 +9,7 @@ import (
 
 func DONTestPadding(t *testing.T) {
 	buf := make([]byte, EthMaxSize) // allocate in the stack
-	ether := EtherMarshalBinary(buf, syscall.ETH_P_IP, routerMAC, mac2)
+	ether := EncodeEther(buf, syscall.ETH_P_IP, routerMAC, mac2)
 	payload := []byte{0x04, 0x55, 0x33}
 	var err error
 	if ether, err = ether.AppendPayload(payload); err != nil {
@@ -19,7 +19,7 @@ func DONTestPadding(t *testing.T) {
 		t.Errorf("invalid append payload len= %v", len(ether))
 	}
 
-	ether = EtherMarshalBinary(buf, syscall.ETH_P_IPV6, routerMAC, mac2)
+	ether = EncodeEther(buf, syscall.ETH_P_IPV6, routerMAC, mac2)
 	if ether, err = ether.SetPayload(payload); err != nil {
 		t.Fatal("error in append ", err)
 	}

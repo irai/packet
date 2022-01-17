@@ -145,9 +145,9 @@ func (h *DNSHandler) sendNBNS(srcAddr packet.Addr, dstAddr packet.Addr, p DNS) (
 	b := packet.EtherBufferPool.Get().(*[packet.EthMaxSize]byte)
 	defer packet.EtherBufferPool.Put(b)
 	ether := packet.Ether(b[0:])
-	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IP, srcAddr.MAC, dstAddr.MAC)
-	ip4 := packet.IP4MarshalBinary(ether.Payload(), 255, srcAddr.IP, dstAddr.IP)
-	udp := packet.UDPMarshalBinary(ip4.Payload(), 137, 137)
+	ether = packet.EncodeEther(ether, syscall.ETH_P_IP, srcAddr.MAC, dstAddr.MAC)
+	ip4 := packet.EncodeIP4(ether.Payload(), 255, srcAddr.IP, dstAddr.IP)
+	udp := packet.EncodeUDP(ip4.Payload(), 137, 137)
 	if udp, err = udp.AppendPayload(p); err != nil {
 		return err
 	}

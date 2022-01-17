@@ -59,9 +59,9 @@ func TestDHCPHandler_handleDiscover(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var err error
 			ether := packet.Ether(make([]byte, packet.EthMaxSize))
-			ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IP, tt.srcAddr.MAC, tt.dstAddr.MAC)
-			ip4 := packet.IP4MarshalBinary(ether.Payload(), 50, tt.srcAddr.IP, tt.dstAddr.IP)
-			udp := packet.UDPMarshalBinary(ip4.Payload(), tt.srcAddr.Port, tt.dstAddr.Port)
+			ether = packet.EncodeEther(ether, syscall.ETH_P_IP, tt.srcAddr.MAC, tt.dstAddr.MAC)
+			ip4 := packet.EncodeIP4(ether.Payload(), 50, tt.srcAddr.IP, tt.dstAddr.IP)
+			udp := packet.EncodeUDP(ip4.Payload(), tt.srcAddr.Port, tt.dstAddr.Port)
 			udp, _ = udp.AppendPayload(tt.packet)
 			ip4 = ip4.SetPayload(udp, syscall.IPPROTO_UDP)
 			if ether, err = ether.SetPayload(ip4); err != nil {
@@ -135,9 +135,9 @@ func TestDHCPHandler_exhaust(t *testing.T) {
 				mac[5] = byte(i)
 				var err error
 				ether := packet.Ether(make([]byte, packet.EthMaxSize))
-				ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IP, tt.srcAddr.MAC, tt.dstAddr.MAC)
-				ip4 := packet.IP4MarshalBinary(ether.Payload(), 50, tt.srcAddr.IP, tt.dstAddr.IP)
-				udp := packet.UDPMarshalBinary(ip4.Payload(), tt.srcAddr.Port, tt.dstAddr.Port)
+				ether = packet.EncodeEther(ether, syscall.ETH_P_IP, tt.srcAddr.MAC, tt.dstAddr.MAC)
+				ip4 := packet.EncodeIP4(ether.Payload(), 50, tt.srcAddr.IP, tt.dstAddr.IP)
+				udp := packet.EncodeUDP(ip4.Payload(), tt.srcAddr.Port, tt.dstAddr.Port)
 				dhcp := Marshall(udp.Payload(), BootRequest, Discover, mac, net.IPv4zero, net.IPv4zero, []byte{0x01}, false, options, options[OptionParameterRequestList])
 				udp = udp.SetPayload(dhcp)
 				ip4 = ip4.SetPayload(udp, syscall.IPPROTO_UDP)

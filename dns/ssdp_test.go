@@ -152,7 +152,7 @@ func TestDNSHandler_ProcessSSDPFrame(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ether := packet.EtherMarshalBinary(make([]byte, 1500), syscall.ETH_P_IP, mac1, mac2)
+			ether := packet.EncodeEther(make([]byte, 1500), syscall.ETH_P_IP, mac1, mac2)
 			ip := packet.IP4(tt.frame)
 			fmt.Println("ip", ip)
 			udp := packet.UDP(ip.Payload())

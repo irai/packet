@@ -272,9 +272,9 @@ func newDHCP4DiscoverFrame(src packet.Addr, dst packet.Addr, name string, xid []
 	options[dhcp4.OptionHostName] = []byte(name)
 
 	ether := packet.Ether(make([]byte, packet.EthMaxSize))
-	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IP, src.MAC, dst.MAC)
-	ip4 := packet.IP4MarshalBinary(ether.Payload(), 50, src.IP, dst.IP)
-	udp := packet.UDPMarshalBinary(ip4.Payload(), src.Port, dst.Port)
+	ether = packet.EncodeEther(ether, syscall.ETH_P_IP, src.MAC, dst.MAC)
+	ip4 := packet.EncodeIP4(ether.Payload(), 50, src.IP, dst.IP)
+	udp := packet.EncodeUDP(ip4.Payload(), src.Port, dst.Port)
 	dhcp := dhcp4.Marshall(udp.Payload(), dhcp4.BootRequest, dhcp4.Discover, src.MAC, src.IP, net.IPv4zero, xid, false, options, options[dhcp4.OptionParameterRequestList])
 	udp = udp.SetPayload(dhcp)
 	ip4 = ip4.SetPayload(udp, syscall.IPPROTO_UDP)
@@ -293,9 +293,9 @@ func newDHCP4RequestFrame(src packet.Addr, dst packet.Addr, name string, serverI
 	options[dhcp4.OptionHostName] = []byte(name)
 
 	ether := packet.Ether(make([]byte, packet.EthMaxSize))
-	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_IP, src.MAC, dst.MAC)
-	ip4 := packet.IP4MarshalBinary(ether.Payload(), 50, src.IP, dst.IP)
-	udp := packet.UDPMarshalBinary(ip4.Payload(), src.Port, dst.Port)
+	ether = packet.EncodeEther(ether, syscall.ETH_P_IP, src.MAC, dst.MAC)
+	ip4 := packet.EncodeIP4(ether.Payload(), 50, src.IP, dst.IP)
+	udp := packet.EncodeUDP(ip4.Payload(), src.Port, dst.Port)
 	dhcp := dhcp4.Marshall(udp.Payload(), dhcp4.BootRequest, dhcp4.Request, src.MAC, requestedIP, net.IPv4zero, xid, false, options, options[dhcp4.OptionParameterRequestList])
 	udp = udp.SetPayload(dhcp)
 	ip4 = ip4.SetPayload(udp, syscall.IPPROTO_UDP)
@@ -309,8 +309,8 @@ func newDHCP4RequestFrame(src packet.Addr, dst packet.Addr, name string, serverI
 func newARPFrame(src packet.Addr, dst packet.Addr, operation uint16) packet.Ether {
 	var err error
 	ether := packet.Ether(make([]byte, packet.EthMaxSize))
-	ether = packet.EtherMarshalBinary(ether, syscall.ETH_P_ARP, src.MAC, dst.MAC)
-	arpFrame, _ := packet.ARPMarshalBinary(ether.Payload(), operation, src, dst)
+	ether = packet.EncodeEther(ether, syscall.ETH_P_ARP, src.MAC, dst.MAC)
+	arpFrame := packet.EncodeARP(ether.Payload(), operation, src, dst)
 	if ether, err = ether.SetPayload(arpFrame); err != nil {
 		panic(err.Error())
 	}

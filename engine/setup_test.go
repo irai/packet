@@ -48,13 +48,13 @@ var (
 func newTestHost(session *packet.Session, srcAddr packet.Addr) packet.Frame {
 	// create an arp reply packet
 	p := make([]byte, packet.EthMaxSize)
-	ether := packet.EtherMarshalBinary(p, syscall.ETH_P_IP, srcAddr.MAC, packet.EthBroadcast)
+	ether := packet.EncodeEther(p, syscall.ETH_P_IP, srcAddr.MAC, packet.EthBroadcast)
 	if ip := srcAddr.IP.To4(); ip != nil {
-		ip4 := packet.IP4MarshalBinary(ether.Payload(), 255, srcAddr.IP, packet.IP4Broadcast)
+		ip4 := packet.EncodeIP4(ether.Payload(), 255, srcAddr.IP, packet.IP4Broadcast)
 		ether, _ = ether.SetPayload(ip4)
 	} else {
-		ether = packet.EtherMarshalBinary(p, syscall.ETH_P_IPV6, srcAddr.MAC, packet.EthBroadcast)
-		ip6 := packet.IP6MarshalBinary(ether.Payload(), 255, srcAddr.IP, packet.IP6AllNodesMulticast)
+		ether = packet.EncodeEther(p, syscall.ETH_P_IPV6, srcAddr.MAC, packet.EthBroadcast)
+		ip6 := packet.EncodeIP6(ether.Payload(), 255, srcAddr.IP, packet.IP6AllNodesMulticast)
 		ether, _ = ether.SetPayload(ip6)
 	}
 	frame, err := session.Parse(ether)

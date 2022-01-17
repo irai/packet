@@ -60,7 +60,7 @@ func (p IP4) FastLog(line *fastlog.Line) *fastlog.Line {
 	return line
 }
 
-func IP4MarshalBinary(p []byte, ttl byte, src net.IP, dst net.IP) IP4 {
+func EncodeIP4(p []byte, ttl byte, src net.IP, dst net.IP) IP4 {
 	options := []byte{}
 	var hdrLen = ipv4.HeaderLen + len(options) // len includes options
 	const fragOffset = 0
@@ -172,7 +172,7 @@ func (p UDP) IsValid() error {
 	return fmt.Errorf("invalid udp len=%d: %w", len(p), ErrFrameLen)
 }
 
-func UDPMarshalBinary(p []byte, srcPort uint16, dstPort uint16) UDP {
+func EncodeUDP(p []byte, srcPort uint16, dstPort uint16) UDP {
 	if cap(p) < UDPHeaderLen {
 		return nil
 	}

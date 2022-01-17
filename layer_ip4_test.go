@@ -27,7 +27,7 @@ func Benchmark_packetAlloc(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		func() {
 			buf := make([]byte, EthMaxSize)
-			ether = EtherMarshalBinary(buf[:], syscall.ETH_P_IPV6, hostMAC, mac2)
+			ether = EncodeEther(buf[:], syscall.ETH_P_IPV6, hostMAC, mac2)
 			if ether.EtherType() == 0 {
 				fmt.Println("test")
 			}
@@ -44,7 +44,7 @@ func Benchmark_packetNoAlloc(b *testing.B) {
 		func() {
 			mutex.Lock()
 			defer mutex.Unlock()
-			ether = EtherMarshalBinary(buf[:], syscall.ETH_P_IPV6, hostMAC, mac2)
+			ether = EncodeEther(buf[:], syscall.ETH_P_IPV6, hostMAC, mac2)
 			if ether.EtherType() == 0 {
 				fmt.Println("test")
 			}
