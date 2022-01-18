@@ -106,10 +106,10 @@ func (p IP4) AppendPayload(b []byte, protocol byte) (IP4, error) {
 		return nil, ErrPayloadTooBig
 	}
 	p = p[:len(p)+len(b)] // change slice in case slice is less than required
-	copy(p.Payload(), b)
-	p[9] = protocol
 	totalLen := uint16(ipv4.HeaderLen + len(b))
 	binary.BigEndian.PutUint16(p[2:4], totalLen)
+	copy(p.Payload(), b)
+	p[9] = protocol
 	checksum := p.CalculateChecksum()
 	p[11] = byte(checksum >> 8)
 	p[10] = byte(checksum)
