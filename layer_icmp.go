@@ -78,6 +78,21 @@ func (p ICMPEcho) EchoData() []byte {
 	return nil
 }
 
+func EncodeICMPEcho(b []byte, t uint8, code uint8, id uint16, seq uint16, data []byte) ICMPEcho {
+	n := 8 + len(data)
+	if n > cap(b) {
+		return nil
+	}
+	b = b[:n]
+	b[0] = t
+	b[1] = code
+	binary.BigEndian.PutUint16(b[2:4], 0)
+	binary.BigEndian.PutUint16(b[4:6], id)
+	binary.BigEndian.PutUint16(b[6:8], seq)
+	copy(b[8:], data)
+	return b[:n]
+}
+
 func (p ICMPEcho) String() string {
 	return fastlog.NewLine("", "").Struct(p).ToString()
 }
@@ -428,7 +443,6 @@ func (h *Session) icmp4SendPacket(srcAddr Addr, dstAddr Addr, p ICMP) (err error
 		return err
 	}
 	if _, err := h.Conn.WriteTo(ether, &dstAddr); err != nil {
-		fmt.Println("icmp4 : error sending packet ", dstAddr, err)
 		return err
 	}
 	return nil

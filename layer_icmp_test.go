@@ -3,6 +3,7 @@ package packet
 import (
 	"fmt"
 	"net"
+	"syscall"
 	"testing"
 	"time"
 
@@ -11,13 +12,11 @@ import (
 )
 
 func Test_IP6Lib(t *testing.T) {
-
-	ip, err := netaddr.ParseIP("2001:4479:1d01:2401::")
-
+	// simple sanity test
+	_, err := netaddr.ParseIP("2001:4479:1d01:2401::")
 	if err != nil {
 		t.Error("invalid IP ", err)
 	}
-	fmt.Println(ip)
 }
 
 func TestICMP4Redirect_IsValid(t *testing.T) {
@@ -94,7 +93,7 @@ func Test_icmp6(t *testing.T) {
 	}
 
 	Debug = false
-	session := testSession()
+	session, _ := testSession()
 
 	buffer := make([]byte, 1500)
 	for _, tt := range tests {
@@ -180,21 +179,21 @@ func Test_icmp6(t *testing.T) {
 }
 
 func Benchmark_Ping256(b *testing.B) {
-	tc := setupTestHandler()
-	defer tc.Close()
+	session, _ := testSession()
+	defer session.Close()
 	for i := 0; i < b.N; i++ {
-		ping256(tc)
+		ping256(session)
 	}
 }
 
-func ping256(tc *Session) {
+func ping256(s *Session) {
 	channel := make(chan net.IP, 20)
 	srcIP := hostIP4
 	for i := 1; i < 255; i++ {
 		ip := CopyIP(srcIP).To4() // new buffer, we are sending this in the channel
 		ip[3] = uint8(i)
 		go func(ip net.IP) {
-			if tc.Ping6(hostAddr, Addr{IP: ip}, time.Second*2) != nil {
+			if s.Ping6(hostAddr, Addr{IP: ip}, time.Second*2) != nil {
 				channel <- net.IPv4zero
 				return
 			}
@@ -207,5 +206,42 @@ func ping256(tc *Session) {
 		if !ip.Equal(net.IPv4zero) {
 			fmt.Printf("Found client ip=%s", ip)
 		}
+	}
+}
+
+func TestSession_Ping(t *testing.T) {
+	session, client := testSession()
+	defer session.Close()
+
+	Debug = true
+
+	addr := Addr{MAC: mac1, IP: ip1}
+	go func() {
+		buf := make([]byte, EthMaxSize)
+		n, _, err := client.ReadFrom(buf)
+		if err != nil {
+			return
+		}
+		ether := Ether(buf[:n])
+		ip4 := IP4(ether.Payload())
+		echo := ICMPEcho(ip4.Payload())
+		if err := echo.IsValid(); err != nil {
+			panic(err)
+		}
+		out := make([]byte, EthMaxSize)
+		ether = EncodeEther(out, syscall.ETH_P_IP, addr.MAC, session.NICInfo.HostAddr4.MAC)
+		ip4 = EncodeIP4(ether.Payload(), 64, addr.IP, session.NICInfo.HostAddr4.IP)
+		e := EncodeICMPEcho(ip4.Payload(), ICMP4TypeEchoReply, echo.Code(), echo.EchoID(), echo.EchoSeq(), echo.EchoData())
+		ip4 = ip4.SetPayload(e, syscall.IPPROTO_ICMP)
+		ether, _ = ether.SetPayload(ip4)
+		session.Parse(ether)
+	}()
+
+	if err := session.Ping(addr, time.Millisecond*100); err != nil {
+		t.Errorf("Session.Ping() error = %v", err)
+	}
+
+	if err := session.Ping(addr, time.Millisecond*100); err != ErrTimeout {
+		t.Errorf("Session.Ping() error = %v", err)
 	}
 }

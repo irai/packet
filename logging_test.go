@@ -14,7 +14,7 @@ func Benchmark_FastLogPrint(b *testing.B) {
 	ip4 := EncodeIP4(ether.Payload(), 255, ip1, IP4Broadcast)
 	ether, _ = ether.SetPayload(ip4)
 
-	h := testSession()
+	h, _ := testSession()
 	frame, _ := h.Parse(ether)
 
 	fastlog.Std.Out = ioutil.Discard

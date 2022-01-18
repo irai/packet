@@ -10,8 +10,29 @@ import (
 	"time"
 )
 
+func testSession() (*Session, net.PacketConn) {
+	// fake nicinfo
+	// hostMAC := net.HardwareAddr{0x00, 0xff, 0x03, 0x04, 0x05, 0x01} // keep first byte zero for unicast mac
+	// hostIP := net.ParseIP("192.168.0.129").To4()
+	homeLAN := net.IPNet{IP: net.IPv4(192, 168, 0, 0), Mask: net.IPv4Mask(255, 255, 255, 0)}
+	// routerIP := net.ParseIP("192.168.0.11").To4()
+	nicInfo := &NICInfo{
+		HomeLAN4:    homeLAN,
+		HostAddr4:   Addr{MAC: hostMAC, IP: hostIP4},
+		RouterAddr4: Addr{MAC: routerMAC, IP: routerIP4},
+	}
+
+	// TODO: fix this to discard writes like ioutil.Discard
+	// conn, _ := net.ListenPacket("udp4", "127.0.0.1:0")
+	conn, outConn := TestNewBufferedConn()
+	// go TestReadAndDiscardLoop(outConn) // MUST read the out conn to avoid blocking the sender
+
+	session, _ := Config{Conn: conn, NICInfo: nicInfo}.NewSession("")
+	return session, outConn
+}
+
 func TestSession_Notify(t *testing.T) {
-	session := setupTestHandler()
+	session, _ := testSession()
 	// first host
 	frame1 := newTestHost(session, Addr{MAC: mac1, IP: ip1})
 	session.Notify(frame1)
@@ -67,7 +88,7 @@ func TestHandler_purge(t *testing.T) {
 	ip6GUA2 := net.IP{0x20, 0x01, 0x44, 0x79, 0x1d, 0x01, 0x24, 0x01, 0x7c, 0xf2, 0x4f, 0x73, 0xf8, 0xc1, 0x00, 0x02}
 	ip6GUA3 := net.IP{0x20, 0x01, 0x44, 0x79, 0x1d, 0x01, 0x24, 0x01, 0x7c, 0xf2, 0x4f, 0x73, 0xf8, 0xc1, 0x00, 0x03}
 
-	session := setupTestHandler()
+	session, _ := testSession()
 	Debug = true
 
 	// First create host with two IPs - IP3 and IP2 and set online
@@ -119,7 +140,7 @@ func TestHandler_purge(t *testing.T) {
 }
 
 func TestHandler_findOrCreateHostDupIP(t *testing.T) {
-	session := setupTestHandler()
+	session, _ := testSession()
 
 	Debug = false
 
@@ -180,7 +201,7 @@ func TestHandler_findOrCreateHostDupIP(t *testing.T) {
 }
 
 func TestSession_DHCPUpdate(t *testing.T) {
-	session := setupTestHandler()
+	session, _ := testSession()
 	Debug = false
 
 	// create existing host for mac1

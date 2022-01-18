@@ -40,7 +40,8 @@ func (p *bufferedPacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
 
 func (p *bufferedPacketConn) WriteTo(b []byte, addr net.Addr) (int, error) {
 	if len(p.clientChan) > maxBufSize-1 {
-		panic(fmt.Sprintf("buffered conn writing without read will block forever len=%d", len(p.clientChan)))
+		fmt.Printf("test buffered conn writing is full len=%d", len(p.clientChan))
+		return 0, nil
 	}
 	t := make([]byte, len(b))
 	copy(t, b)

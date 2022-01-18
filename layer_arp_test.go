@@ -86,7 +86,7 @@ func TestMarshalBinary(t *testing.T) {
 }
 
 func Test_Handler_ARPRequests(t *testing.T) {
-	session := setupTestHandler()
+	session, _ := testSession()
 
 	// Debug = true
 
@@ -169,7 +169,7 @@ func Test_Handler_ARPRequests(t *testing.T) {
 }
 
 func Test_Handler_ServeReplies(t *testing.T) {
-	session := setupTestHandler()
+	session, _ := testSession()
 	// Debug = true
 
 	tests := []struct {

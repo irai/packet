@@ -51,11 +51,6 @@ var (
 	// dnsIP4 = net.IPv4(8, 8, 8, 8)
 )
 
-func setupTestHandler() *Session {
-	h := testSession()
-	return h
-}
-
 func newTestHost(session *Session, srcAddr Addr) Frame {
 	// create an arp reply packet
 	p := make([]byte, EthMaxSize)
@@ -85,7 +80,7 @@ func TestHandler_findOrCreateHostTestCopyIPMAC(t *testing.T) {
 	bufMAC := []byte{1, 1, 1, 2, 2, 2}
 	mac := net.HardwareAddr{1, 1, 1, 2, 2, 2}
 
-	session := setupTestHandler()
+	session, _ := testSession()
 
 	host, _ := session.findOrCreateHostWithLock(Addr{MAC: net.HardwareAddr(bufMAC), IP: net.IP(bufIP)})
 	bufIP[0] = 0xff
@@ -119,7 +114,7 @@ func TestHandler_findOrCreateHostTestCopyIPMAC(t *testing.T) {
 }
 
 func Benchmark_findOrCreateHost(b *testing.B) {
-	engine := setupTestHandler()
+	engine, _ := testSession()
 
 	// March 2021 - running benchmark on WSL 2 - 64 hosts
 	// Benchmark_findOrCreateHost-8   	 7318504	       145 ns/op	       0 B/op	       0 allocs/op
@@ -137,7 +132,7 @@ func Benchmark_findOrCreateHost(b *testing.B) {
 }
 
 func TestHost_UpdateMDNSName(t *testing.T) {
-	session := setupTestHandler()
+	session, _ := testSession()
 	host1, _ := session.findOrCreateHostWithLock(Addr{MAC: mac1, IP: ip1})
 	session.notify(Frame{Host: host1}) // first notification
 	name := NameEntry{Type: "MDNS", Name: "abc", Model: "android"}
@@ -157,7 +152,7 @@ func TestHost_UpdateMDNSName(t *testing.T) {
 }
 
 func TestHost_UpdateLLMNRName(t *testing.T) {
-	session := setupTestHandler()
+	session, _ := testSession()
 	host1, _ := session.findOrCreateHostWithLock(Addr{MAC: mac1, IP: ip1})
 	session.notify(Frame{Host: host1}) // first notification
 	name := NameEntry{Type: "LLMNR", Name: "abc", Model: "android"}
@@ -177,7 +172,7 @@ func TestHost_UpdateLLMNRName(t *testing.T) {
 }
 
 func TestHost_UpdateSSDPName(t *testing.T) {
-	session := setupTestHandler()
+	session, _ := testSession()
 	host1, _ := session.findOrCreateHostWithLock(Addr{MAC: mac1, IP: ip1})
 	session.notify(Frame{Host: host1}) // first notification
 	name := NameEntry{Type: "SSDP", Name: "abc", Model: "android"}
@@ -197,7 +192,7 @@ func TestHost_UpdateSSDPName(t *testing.T) {
 }
 
 func TestHost_UpdateNBNSName(t *testing.T) {
-	session := setupTestHandler()
+	session, _ := testSession()
 	host1, _ := session.findOrCreateHostWithLock(Addr{MAC: mac1, IP: ip1})
 	session.notify(Frame{Host: host1}) // first notification
 	name := NameEntry{Type: "NBNS", Name: "abc", Model: "android"}
