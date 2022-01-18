@@ -125,7 +125,7 @@ func (h *Handler6) Start() error {
 	if err := h.session.ICMP6SendRouterSolicitation(); err != nil {
 		return err
 	}
-	if err := ExecPing(packet.IP6AllNodesMulticast.String() + "%" + h.session.NICInfo.IFI.Name); err != nil { // ping with external cmd tool
+	if err := packet.ExecPing(packet.IP6AllNodesMulticast.String() + "%" + h.session.NICInfo.IFI.Name); err != nil { // ping with external cmd tool
 		fmt.Printf("icmp6 : error in initial ping all nodes multicast - ignoring : %s\n", err)
 	}
 	return nil
@@ -162,7 +162,7 @@ func (h *Handler6) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
 	}
 
 	// ping response is optional and could be disabled on a given host
-	if err := h.Ping(srcAddr, addr, time.Second*2); err != nil {
+	if err := h.session.Ping6(srcAddr, addr, time.Second*2); err != nil {
 		return packet.StageNoChange, packet.ErrTimeout
 	}
 
@@ -335,7 +335,6 @@ func (h *Handler6) ProcessPacket(pkt packet.Frame) (err error) {
 		if Debug {
 			fmt.Printf("icmp6 : echo reply from ip=%s %s\n", ip6Frame.Src(), echo)
 		}
-		echoNotify(echo.EchoID()) // unblock ping if waiting
 		return nil
 
 	case ipv6.ICMPTypeEchoRequest: // 0x80

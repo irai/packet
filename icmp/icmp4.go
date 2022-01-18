@@ -3,49 +3,11 @@ package icmp
 import (
 	"fmt"
 	"syscall"
-	"time"
 
 	"github.com/irai/packet"
 	"github.com/irai/packet/fastlog"
 	"golang.org/x/net/ipv4"
 )
-
-type ICMP4Handler interface {
-	// Start() error
-	Close() error
-	ProcessPacket(packet.Frame) error
-	StartHunt(packet.Addr) (packet.HuntStage, error)
-	StopHunt(packet.Addr) (packet.HuntStage, error)
-	CheckAddr(packet.Addr) (packet.HuntStage, error)
-	MinuteTicker(time.Time) error
-	Ping(dstAddr packet.Addr, timeout time.Duration) (err error)
-}
-
-type ICMP4NOOP struct {
-}
-
-// func (p ICMP4NOOP) Start() error { return nil }
-func (p ICMP4NOOP) Close() error { return nil }
-func (p ICMP4NOOP) ProcessPacket(packet.Frame) error {
-	return nil
-}
-func (p ICMP4NOOP) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
-	return packet.StageNoChange, nil
-}
-func (p ICMP4NOOP) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
-	return packet.StageNoChange, nil
-}
-func (p ICMP4NOOP) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
-	return packet.StageNoChange, nil
-}
-func (p ICMP4NOOP) MinuteTicker(now time.Time) error { return nil }
-
-// func (p ICMP4NOOP) Close() error                     { return nil }
-func (p ICMP4NOOP) Ping(dstAddr packet.Addr, timeout time.Duration) error {
-	return nil
-}
-
-var _ ICMP4Handler = &Handler4{}
 
 // Handler4 maintains the underlying socket connection
 type Handler4 struct {
@@ -63,22 +25,6 @@ func (h *Handler4) Close() error {
 	return nil
 }
 
-// Start implements PacketProcessor interface
-// func (h *Handler4) Start() error {
-// return nil
-// }
-
-// Stop implements PacketProcessor interface
-// func (h *Handler4) Stop() error {
-// h.Close()
-// return nil
-// }
-
-// MinuteTicker implements packet processor interface
-func (h *Handler4) MinuteTicker(now time.Time) error {
-	return nil
-}
-
 // StartHunt implements PacketProcessor interface
 func (h *Handler4) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
 	return packet.StageHunt, nil
@@ -93,6 +39,9 @@ func (h *Handler4) ProcessPacket(frame packet.Frame) error {
 	ether := frame.Ether()
 	ip4Frame := packet.IP4(ether.Payload())
 	icmpFrame := packet.ICMP(frame.Payload())
+	if err := icmpFrame.IsValid(); err != nil {
+		return fmt.Errorf("invalid icmp frame: %w", err)
+	}
 
 	switch icmpFrame.Type() {
 	case uint8(ipv4.ICMPTypeEchoReply):
@@ -105,7 +54,6 @@ func (h *Handler4) ProcessPacket(frame packet.Frame) error {
 		if Debug {
 			fastlog.NewLine(module4, "echo reply recvd").IP("srcIP", ip4Frame.Src()).Struct(echo).Write()
 		}
-		echoNotify(echo.EchoID()) // unblock ping if waiting
 
 	case uint8(ipv4.ICMPTypeEcho):
 		echo := packet.ICMPEcho(icmpFrame)

@@ -538,7 +538,7 @@ func cmd(h *handlers) {
 					continue
 				}
 				// if err := h.SendEchoRequest(packet.Addr{MAC: packet.Eth4AllNodesMulticast, IP: ip}, 2, 2); err != nil {
-				if err := h.icmp4.Ping(
+				if err := h.engine.Session().Ping(
 					packet.Addr{MAC: packet.Eth4AllNodesMulticast, IP: ip}, time.Second*2); err != nil {
 					if errors.Is(err, packet.ErrTimeout) {
 						fmt.Println("ping timeout ")
@@ -554,7 +554,7 @@ func cmd(h *handlers) {
 					fmt.Println("error icmp6 is detached")
 					continue
 				}
-				if err := h.icmp6.Ping(
+				if err := h.engine.Session().Ping6(
 					packet.Addr{MAC: h.engine.Session().NICInfo.HostAddr4.MAC, IP: h.engine.Session().NICInfo.HostLLA.IP},
 					packet.Addr{MAC: packet.Eth6AllNodesMulticast, IP: ip}, time.Second*2); err != nil {
 					// if err := h6.Ping(h6.LLA().IP, ip, time.Second*2); err != nil {

@@ -45,9 +45,11 @@ func (h *Handler) processPacket(ether packet.Ether) (err error) {
 		}
 
 	case packet.PayloadICMP4:
-		if err = h.ICMP4Handler.ProcessPacket(frame); err != nil {
-			fastlog.NewLine("packet", "error processing icmp4").Error(err).Write()
-			return err
+		if h.ICMP4Handler != nil {
+			if err = h.ICMP4Handler.ProcessPacket(frame); err != nil {
+				fastlog.NewLine("packet", "error processing icmp4").Error(err).Write()
+				return err
+			}
 		}
 
 	case packet.PayloadICMP6:

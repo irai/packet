@@ -33,21 +33,23 @@ func (h *Handler) lockAndMonitorRoute(now time.Time) (err error) {
 
 		macEntry.Row.RUnlock()
 
-		_, err := h.ICMP4Handler.CheckAddr(addr) // ping host
-		if err == nil {
-			if packet.Debug {
-				fastlog.NewLine(module, "ip4 routing OK").Struct(addr).Write()
+		if h.ICMP4Handler != nil {
+			err := h.session.ValidateDefaultRouter(addr) // ping host
+			if err == nil {
+				if packet.Debug {
+					fastlog.NewLine(module, "ip4 routing OK").Struct(addr).Write()
+				}
+				continue
 			}
-			continue
-		}
-		if errors.Is(err, packet.ErrNotRedirected) {
-			fastlog.NewLine(module, "ip4 routing NOK").Struct(addr).Write()
-			// Call stop hunt first to update stage to normal
-			if err := h.lockAndStopHunt(host.Addr, packet.StageNormal); err != nil {
-				fastlog.NewLine(module, "ip4 routing failed to stop hunt").Struct(addr).Error(err).Write()
-			}
-			if err := h.lockAndStartHunt(addr); err != nil {
-				fastlog.NewLine(module, "ip4 routing failed to start hunt").Struct(addr).Error(err).Write()
+			if errors.Is(err, packet.ErrNotRedirected) {
+				fastlog.NewLine(module, "ip4 routing NOK").Struct(addr).Write()
+				// Call stop hunt first to update stage to normal
+				if err := h.lockAndStopHunt(host.Addr, packet.StageNormal); err != nil {
+					fastlog.NewLine(module, "ip4 routing failed to stop hunt").Struct(addr).Error(err).Write()
+				}
+				if err := h.lockAndStartHunt(addr); err != nil {
+					fastlog.NewLine(module, "ip4 routing failed to start hunt").Struct(addr).Error(err).Write()
+				}
 			}
 		}
 	}
@@ -67,7 +69,7 @@ func (h *Handler) minuteChecker(now time.Time) {
 	// }
 
 	// ICMP4 Handler - no lock
-	h.ICMP4Handler.MinuteTicker(now)
+	// h.ICMP4Handler.MinuteTicker(now)
 
 	// ICMP6 - no lock
 	if err := h.ICMP6Handler.MinuteTicker(now); err != nil {

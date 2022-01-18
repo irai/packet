@@ -4,12 +4,19 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"sync"
 	"syscall"
+	"time"
 
 	"github.com/irai/packet/fastlog"
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv4"
 	"golang.org/x/net/ipv6"
+)
+
+const (
+	ICMP4TypeEchoReply = 0   // Echo Reply
+	ICMP6TypeEchoReply = 129 // Echo Reply
 )
 
 // ICMP enable access to ICMP frame without copying
@@ -492,4 +499,138 @@ func (h *Session) icmp6SendPacket(srcAddr Addr, dstAddr Addr, b []byte) error {
 	}
 
 	return nil
+}
+
+type icmpEntry struct {
+	msgRecv bool
+	expire  time.Time
+	wakeup  chan bool
+}
+
+var icmpTable = struct {
+	sync.Mutex
+	table map[uint16]*icmpEntry // must use pointer because of channel in struct
+	id    uint16
+}{
+	table: make(map[uint16]*icmpEntry),
+	id:    1,
+}
+
+func echoNotify(id uint16) {
+	icmpTable.Lock()
+	if len(icmpTable.table) <= 0 {
+		icmpTable.Unlock()
+		return
+	}
+
+	if entry, ok := icmpTable.table[id]; ok {
+		entry.msgRecv = true
+		close(entry.wakeup)
+		delete(icmpTable.table, id)
+	}
+	icmpTable.Unlock()
+}
+
+// Ping send a ping request and wait for a reply
+func (h *Session) Ping6(srcAddr Addr, dstAddr Addr, timeout time.Duration) (err error) {
+	if timeout <= 0 || timeout > time.Second*10 {
+		timeout = time.Second * 2
+	}
+	msg := icmpEntry{expire: time.Now().Add(timeout), wakeup: make(chan bool)}
+	seq := uint16(1)
+
+	icmpTable.Lock()
+	id := icmpTable.id
+	icmpTable.id++
+	icmpTable.table[id] = &msg
+	icmpTable.Unlock()
+
+	if err = h.ICMP6SendEchoRequest(srcAddr, dstAddr, id, seq); err != nil {
+		return err
+	}
+
+	// wait until chan closed or timeout
+	select {
+	case <-msg.wakeup:
+	case <-time.After(timeout):
+	}
+
+	// in case of timeout, the entry still exist
+	icmpTable.Lock()
+	delete(icmpTable.table, id)
+	icmpTable.Unlock()
+
+	if !msg.msgRecv {
+		return ErrTimeout
+	}
+	return nil
+}
+
+// Ping send a ping request and wait for a reply
+func (h *Session) Ping(dstAddr Addr, timeout time.Duration) (err error) {
+	return h.ping(h.NICInfo.HostAddr4, dstAddr, timeout)
+}
+
+func (h *Session) ping(srcAddr Addr, dstAddr Addr, timeout time.Duration) (err error) {
+	if timeout <= 0 || timeout > time.Second*10 {
+		timeout = time.Second * 2
+	}
+	msg := icmpEntry{expire: time.Now().Add(timeout), wakeup: make(chan bool)}
+	seq := uint16(1)
+
+	icmpTable.Lock()
+	id := icmpTable.id
+	icmpTable.id++
+	icmpTable.table[id] = &msg
+	icmpTable.Unlock()
+
+	if err = h.ICMP4SendEchoRequest(srcAddr, dstAddr, id, seq); err != nil {
+		return err
+	}
+
+	// wait until chan closed or timeout
+	select {
+	case <-msg.wakeup:
+	case <-time.After(timeout):
+	}
+
+	// in case of timeout, the entry still exist
+	icmpTable.Lock()
+	delete(icmpTable.table, id)
+	icmpTable.Unlock()
+
+	if !msg.msgRecv {
+		return ErrTimeout
+	}
+	return nil
+}
+
+// ValidateDefaultRouter validates the default route is pointing to us by pinging
+// client using home router IP as source IP. The reply will come to us
+// when the default route on client is netfilter. If not, the ping
+// reply will not be received.
+//
+// Note: the reply will also come to us if the client is undergoing
+// an arp attack (hunt).
+func (h *Session) ValidateDefaultRouter(addr Addr) error {
+	// Test if client is online first
+	// If client does not respond to echo, there is little we can test
+	if err := h.Ping(addr, time.Second*2); err != nil {
+		fastlog.NewLine(module, "not responding to ping").Struct(addr).Write()
+		return ErrTimeout
+	}
+
+	// first attempt
+	err := h.ping(Addr{MAC: h.NICInfo.HostAddr4.MAC, IP: h.NICInfo.RouterAddr4.IP}, addr, time.Second*2)
+	if err == nil {
+		return nil
+	}
+
+	// second attempt
+	err = h.ping(Addr{MAC: h.NICInfo.HostAddr4.MAC, IP: h.NICInfo.RouterAddr4.IP}, addr, time.Second*2)
+	if err == nil {
+		return nil
+	}
+
+	return ErrNotRedirected
 }

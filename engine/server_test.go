@@ -30,7 +30,6 @@ func setupTestHandler() *Handler {
 	h := &Handler{}
 	// no plugins to start
 	h.ARPHandler = arp.ARPNOOP{}
-	h.ICMP4Handler = icmp.ICMP4NOOP{}
 	h.ICMP6Handler = icmp.ICMP6NOOP{}
 	h.DHCP4Handler = dhcp4.PacketNOOP{}
 	// h.session = &packet.Session{HostTable: packet.NewHostTable(), MACTable: packet.NewMACTable()}

@@ -373,11 +373,35 @@ func (h *Session) Parse(p []byte) (frame Frame, err error) {
 		return frame, nil
 
 	case syscall.IPPROTO_ICMP:
+		icmpFrame := ICMP(frame.Payload())
+		if err := icmpFrame.IsValid(); err != nil {
+			return frame, err
+		}
+		// process echo reply to unblock ping if running
+		if icmpFrame.Type() == ICMP4TypeEchoReply {
+			echo := ICMPEcho(icmpFrame)
+			if err := echo.IsValid(); err != nil {
+				return frame, err
+			}
+			echoNotify(echo.EchoID()) // unblock ping if waiting
+		}
 		frame.PayloadID = PayloadICMP4
 		h.Statistics[PayloadICMP4].Count++
 		return frame, nil
 
 	case syscall.IPPROTO_ICMPV6:
+		icmpFrame := ICMP(frame.Payload())
+		if err := icmpFrame.IsValid(); err != nil {
+			return frame, err
+		}
+		// process echo reply to unblock ping if running
+		if icmpFrame.Type() == ICMP6TypeEchoReply {
+			echo := ICMPEcho(icmpFrame)
+			if err := echo.IsValid(); err != nil {
+				return frame, err
+			}
+			echoNotify(echo.EchoID()) // unblock ping if waiting
+		}
 		frame.PayloadID = PayloadICMP6
 		h.Statistics[PayloadICMP6].Count++
 		return frame, nil

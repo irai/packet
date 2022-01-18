@@ -118,8 +118,10 @@ func (h *Handler) lockAndStartHunt(addr packet.Addr) (err error) {
 			if _, err := h.ARPHandler.StartHunt(addr); err != nil {
 				fmt.Printf("packet: failed to start arp hunt: %s", err.Error())
 			}
-			if _, err := h.ICMP4Handler.StartHunt(addr); err != nil {
-				fmt.Printf("packet: failed to start icmp4 hunt: %s", err.Error())
+			if h.ICMP4Handler != nil {
+				if _, err := h.ICMP4Handler.StartHunt(addr); err != nil {
+					fmt.Printf("packet: failed to start icmp4 hunt: %s", err.Error())
+				}
 			}
 			if err := h.DHCP4Handler.StartHunt(addr); err != nil {
 				fmt.Printf("packet: fai1led to start dhcp4 hunt: %s", err.Error())
@@ -169,8 +171,10 @@ func (h *Handler) lockAndStopHunt(addr packet.Addr, stage packet.HuntStage) (err
 			if err := h.DHCP4Handler.StopHunt(addr); err != nil && !errors.Is(err, packet.ErrNotFound) {
 				fmt.Printf("packet: failed to stop dhcp4 hunt: %s", err.Error())
 			}
-			if _, err := h.ICMP4Handler.StopHunt(addr); err != nil {
-				fmt.Printf("packet: failed to stop icmp4 hunt: %s", err.Error())
+			if h.ICMP4Handler != nil {
+				if _, err := h.ICMP4Handler.StopHunt(addr); err != nil {
+					fmt.Printf("packet: failed to stop icmp4 hunt: %s", err.Error())
+				}
 			}
 			if _, err := h.ARPHandler.StopHunt(addr); err != nil {
 				fmt.Printf("packet: failed to stop arp hunt: %s", err.Error())

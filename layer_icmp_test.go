@@ -2,7 +2,9 @@ package packet
 
 import (
 	"fmt"
+	"net"
 	"testing"
+	"time"
 
 	"golang.org/x/net/ipv6"
 	"inet.af/netaddr"
@@ -174,5 +176,36 @@ func Test_icmp6(t *testing.T) {
 				// TODO: implement
 			}
 		})
+	}
+}
+
+func Benchmark_Ping256(b *testing.B) {
+	tc := setupTestHandler()
+	defer tc.Close()
+	for i := 0; i < b.N; i++ {
+		ping256(tc)
+	}
+}
+
+func ping256(tc *Session) {
+	channel := make(chan net.IP, 20)
+	srcIP := hostIP4
+	for i := 1; i < 255; i++ {
+		ip := CopyIP(srcIP).To4() // new buffer, we are sending this in the channel
+		ip[3] = uint8(i)
+		go func(ip net.IP) {
+			if tc.Ping6(hostAddr, Addr{IP: ip}, time.Second*2) != nil {
+				channel <- net.IPv4zero
+				return
+			}
+			channel <- ip
+		}(ip)
+		time.Sleep(time.Millisecond * 5)
+	}
+	for i := 1; i < 255; i++ {
+		ip := <-channel
+		if !ip.Equal(net.IPv4zero) {
+			fmt.Printf("Found client ip=%s", ip)
+		}
 	}
 }

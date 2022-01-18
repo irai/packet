@@ -5,7 +5,6 @@ import (
 	"net"
 
 	"github.com/irai/packet"
-	"github.com/irai/packet/icmp"
 )
 
 // SegmentLAN will identify a free IP on the opposite half segment from the routerIP.
@@ -79,7 +78,7 @@ func locateFreeIP(nic string, hostIP net.IP, ip net.IP, start uint8, end uint8) 
 
 		// ping to populate arp table
 		if nic != "" {
-			icmp.ExecPing(ip.String()) // populate arp table
+			packet.ExecPing(ip.String()) // populate arp table
 		}
 
 		// check if arp table has the IP

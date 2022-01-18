@@ -29,7 +29,7 @@ type buffer struct {
 // Handler implements network handler
 type Handler struct {
 	session      *packet.Session // store shared session values
-	ICMP4Handler icmp.ICMP4Handler
+	ICMP4Handler *icmp.Handler4
 	ICMP6Handler icmp.ICMP6Handler
 	DHCP4Handler dhcp4.DHCP4Handler
 	ARPHandler   arp.ARPHandler
@@ -47,7 +47,6 @@ func NewEngine(session *packet.Session) (h *Handler, err error) {
 
 	// no plugins to start
 	h.ARPHandler = arp.ARPNOOP{}
-	h.ICMP4Handler = icmp.ICMP4NOOP{}
 	h.ICMP6Handler = icmp.ICMP6NOOP{}
 	h.DHCP4Handler = dhcp4.PacketNOOP{}
 
@@ -88,14 +87,14 @@ func (h *Handler) DetachARP() error {
 	return nil
 }
 
-func (h *Handler) AttachICMP4(p icmp.ICMP4Handler) {
+func (h *Handler) AttachICMP4(p *icmp.Handler4) {
 	h.ICMP4Handler = p
 }
 func (h *Handler) DetachICMP4() error {
 	if err := h.ICMP4Handler.Close(); err != nil {
 		return err
 	}
-	h.ICMP4Handler = icmp.ICMP4NOOP{}
+	h.ICMP4Handler = nil
 	return nil
 }
 
