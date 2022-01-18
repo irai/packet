@@ -56,11 +56,14 @@ func TestReadAndDiscardLoop(conn net.PacketConn) error {
 		if err != nil {
 			return nil
 		}
+		if n == 0 {
+			return nil
+		}
 
 		buf = buf[:n]
 		ether := Ether(buf)
 		if err := ether.IsValid(); err != nil {
-			s := fmt.Sprintf("error ether client packet %s", ether)
+			s := fmt.Sprintf("error ether bytes=%d client packet %s", n, ether)
 			panic(s)
 		}
 
