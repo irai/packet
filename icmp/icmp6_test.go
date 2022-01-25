@@ -34,8 +34,6 @@ func Test_ICMP6Redirect(t *testing.T) {
 	tc := setupTestHandler()
 	defer tc.Close()
 
-	// ether := packet.Ether(icmp6Redirect)
-	// fmt.Println("ether", ether)
 	frame, err := tc.h.session.Parse(icmp6Redirect)
 	if err != nil {
 		t.Fatal(err)
@@ -99,7 +97,7 @@ func TestHandler_Spoof(t *testing.T) {
 	defer tc.Close()
 
 	mac, _ := net.ParseMAC("02:42:ca:78:04:50")
-
+	mac2, _ := net.ParseMAC("f8:d0:27:3c:9f:86")
 	tests := []struct {
 		name        string
 		frame       []byte
@@ -108,19 +106,12 @@ func TestHandler_Spoof(t *testing.T) {
 		wantSrcAddr packet.Addr
 	}{
 		{name: "na_override", frame: testicmp6NAOverride, wantErr: false, wantDirty: true, wantSrcAddr: packet.Addr{MAC: mac, IP: net.ParseIP("fe80::ce32:e5ff:fe0e:67f4")}},
-		{name: "na_solicited", frame: testicmp6NASolicited, wantErr: false, wantDirty: false, wantSrcAddr: packet.Addr{}},
-		{name: "rs_nopayload", frame: testicmp6RourterSolicitation, wantErr: false, wantDirty: false, wantSrcAddr: packet.Addr{}},
+		{name: "na_solicited", frame: testicmp6NASolicited, wantErr: false, wantDirty: true, wantSrcAddr: packet.Addr{MAC: mac2, IP: net.ParseIP("fe80::fad0:27ff:fe3c:9f86")}},
+		{name: "rs_nopayload", frame: testicmp6RourterSolicitation, wantErr: false, wantDirty: false, wantSrcAddr: packet.Addr{MAC: mac2, IP: net.ParseIP("fe80::fad0:27ff:fe3c:9f86")}},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			/*
-				ether := packet.Ether(tt.frame)
-				ip6Frame := packet.IP6(ether.Payload())
-				if err := ip6Frame.IsValid(); err != nil {
-					t.Fatal("invalid ip6 frame", err)
-				}
-			*/
 			frame, err := tc.h.session.Parse(tt.frame)
 			if err != nil {
 				t.Errorf("Handler.ProcessPacket() error = %v", err)
@@ -132,14 +123,17 @@ func TestHandler_Spoof(t *testing.T) {
 				t.Errorf("Handler.ProcessPacket() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			// if frame.Host.Dirty() != tt.wantResult.Update {
-			// t.Errorf("Handler.ProcessPacket() invalid result update=%v, want=%v", gotResult.Update, tt.wantResult.Update)
-			// }
+			if frame.Host.Dirty() != tt.wantDirty {
+				t.Errorf("Handler.ProcessPacket() invalid result update=%v, want=%v", frame.Host.Dirty(), tt.wantDirty)
+			}
 			if !frame.SrcAddr.IP.Equal(tt.wantSrcAddr.IP) ||
 				!bytes.Equal(frame.SrcAddr.MAC, tt.wantSrcAddr.MAC) {
-				t.Errorf("Handler.ProcessPacket() invalid addr=%v, want=%v", frame.SrcAddr, tt.wantSrcAddr)
+				t.Errorf("Handler.ProcessPacket() invalid addr %v, want %v", frame.SrcAddr, tt.wantSrcAddr)
 				return
 			}
+
+			// clear notifications
+			tc.h.session.Notify(frame)
 		})
 	}
 }

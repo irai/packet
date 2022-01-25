@@ -98,6 +98,11 @@ func (h *Session) printHostTable() {
 	}
 }
 
+// Dirty returns true if the host was updated by Parse and a notification is due.
+func (host *Host) Dirty() bool {
+	return host.dirty
+}
+
 // findOrCreateHostWithLock will create a new host entry or return existing
 //
 // The funcion copies both the mac and the ip; it is safe to call this with a frame.IP(), frame.MAC()
