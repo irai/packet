@@ -3,7 +3,6 @@ package dns
 import (
 	"fmt"
 	"net"
-	"syscall"
 	"testing"
 
 	"github.com/irai/packet"
@@ -31,20 +30,15 @@ func TestMDNSHandler_PTR(t *testing.T) {
 	dnsHandler, _ := New(session)
 	Debug = true
 
-	ip := packet.IP4(ptrMessage)
-	fmt.Println("ip", ip)
-	udp := packet.UDP(ip.Payload())
-	fmt.Println("udp", udp)
-	p := DNS(udp.Payload())
+	frame, err := session.Parse(ptrMessage)
+	if err != nil {
+		t.Fatal("invalid packet", err)
+	}
+	p := DNS(frame.Payload())
 	if p.IsValid() != nil {
 		t.Fatal("invalid dns packet")
 	}
 	fmt.Println("dns", p)
-
-	frame, err := session.Parse(ptrMessage)
-	if err != nil {
-		t.Fatal("invalid dns packet", err)
-	}
 
 	ipv4Host, ipv6Host, err := dnsHandler.ProcessMDNS(frame)
 	if err != nil {
@@ -163,20 +157,13 @@ func TestMDNSHandler_Sonos(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ether := packet.Ether(tt.frame)
-			ip := packet.IP4(ether.Payload())
-			fmt.Println("ip", ip)
-			udp := packet.UDP(ip.Payload())
-			fmt.Println("udp", udp)
-			p := DNS(udp.Payload())
-			if p.IsValid() != nil {
-				t.Fatal("invalid dns packet")
-			}
-			fmt.Println("dns", p)
-
 			frame, err := session.Parse(tt.frame)
 			if err != nil {
 				t.Fatal("invalid dns packet", err)
+			}
+			p := DNS(frame.Payload())
+			if p.IsValid() != nil {
+				t.Fatal("invalid dns packet")
 			}
 
 			ipv4Host, _, err := dnsHandler.ProcessMDNS(frame)
@@ -328,31 +315,15 @@ func TestMDNSHandler_Apple(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ether := packet.Ether(tt.frame)
-			var ip4 packet.IP4
-			var ip6 packet.IP6
-			var payload []byte
-			if ether.EtherType() == syscall.ETH_P_IP {
-				ip4 = packet.IP4(ether.Payload())
-				payload = ip4.Payload()
-				fmt.Println("ip4", ip4)
-			} else {
-				ip6 = packet.IP6(ether.Payload())
-				payload = ip6.Payload()
-				fmt.Println("ip6", ip6)
-			}
-			udp := packet.UDP(payload)
-			fmt.Println("udp", udp)
-			p := DNS(udp.Payload())
-			if p.IsValid() != nil {
-				t.Fatal("invalid dns packet")
-			}
-			fmt.Println("dns", p)
-
 			frame, err := session.Parse(tt.frame)
 			if err != nil {
 				t.Fatal("invalid dns packet", err)
 			}
+			p := DNS(frame.UDP().Payload())
+			if p.IsValid() != nil {
+				t.Fatal("invalid dns packet")
+			}
+			fmt.Println("dns", p)
 
 			ipv4Host, _, err := dnsHandler.ProcessMDNS(frame)
 			if (err != nil) != tt.wantErr {
