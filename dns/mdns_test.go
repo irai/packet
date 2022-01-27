@@ -185,7 +185,23 @@ func TestMDNSHandler_Sonos(t *testing.T) {
 
 // sudo tcpdump -en -v -XX -t port 5353
 // 8c:85:90:ae:ab:fc > 01:00:5e:00:00:fb, ethertype IPv4 (0x0800), length 533: (tos 0x0, ttl 255, id 55143, offset 0, flags [none], proto UDP (17), length 519)
-// 192.168.0.110.5353 > 224.0.0.251.5353: [udp sum ok] 0*- [0q] 9/0/6 Goth._device-info._tcp.local. TXT "model=MacBookPro14,1" "osxvers=20" "ecolor=157,157,160", Goth._osc._udp.local. (Cache flush) TXT "AppleLogic=LogicProX" "mfk=1", _services._dns-sd._udp.local. PTR _osc._udp.local., _osc._udp.local. PTR Goth._osc._udp.local., 3hhn4qluf9wvx._apple-lgremote._tcp.local. (Cache flush) TXT "/hostType=0" "/protocolVersion=8" "_d=Goth", _services._dns-sd._udp.local. PTR _apple-lgremote._tcp.local., _apple-lgremote._tcp.local. PTR 3hhn4qluf9wvx._apple-lgremote._tcp.local., Goth._osc._udp.local. (Cache flush) SRV Goth.local.:7000 0 0, 3hhn4qluf9wvx._apple-lgremote._tcp.local. (Cache flush) SRV Goth.local.:53936 0 0 ar: Goth.local. (Cache flush) AAAA fe80::4ba:e168:7b49:7bea, Goth.local. (Cache flush) AAAA 2001:4479:1901:ab02:14ba:6685:d42e:32b1, Goth.local. (Cache flush) A 192.168.0.110, Goth.local. (Cache flush) NSEC, Goth._osc._udp.local. (Cache flush) NSEC, 3hhn4qluf9wvx._apple-lgremote._tcp.local. (Cache flush) NSEC (491)
+// 192.168.0.110.5353 > 224.0.0.251.5353: [udp sum ok] 0*- [0q] 9/0/6
+//   Goth._device-info._tcp.local. TXT "model=MacBookPro14,1" "osxvers=20" "ecolor=157,157,160",
+//   Goth._osc._udp.local. (Cache flush) TXT "AppleLogic=LogicProX" "mfk=1",
+//   _services._dns-sd._udp.local. PTR _osc._udp.local.,
+//   _osc._udp.local. PTR Goth._osc._udp.local.,
+//   3hhn4qluf9wvx._apple-lgremote._tcp.local. (Cache flush) TXT "/hostType=0" "/protocolVersion=8" "_d=Goth",
+//   _services._dns-sd._udp.local. PTR _apple-lgremote._tcp.local.,
+//   _apple-lgremote._tcp.local. PTR 3hhn4qluf9wvx._apple-lgremote._tcp.local.,
+//   Goth._osc._udp.local. (Cache flush) SRV Goth.local.:7000 0 0,
+//   3hhn4qluf9wvx._apple-lgremote._tcp.local. (Cache flush) SRV Goth.local.:53936 0 0
+// ar:
+//   Goth.local. (Cache flush) AAAA fe80::4ba:e168:7b49:7bea,
+//   Goth.local. (Cache flush) AAAA 2001:4479:1901:ab02:14ba:6685:d42e:32b1,
+//   Goth.local. (Cache flush) A 192.168.0.110,
+//   Goth.local. (Cache flush) NSEC,
+//   Goth._osc._udp.local. (Cache flush) NSEC,
+//   3hhn4qluf9wvx._apple-lgremote._tcp.local. (Cache flush) NSEC (491)
 var frameMacBook = []byte{
 	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x55, 0x55, 0x55, 0x55, 0x55, 0x08, 0x00, //ether packet
 	0x45, 0x00, 0x02, 0x07, 0xd7, 0x67, 0x00, 0x00, 0xff, 0x11, 0x40, 0x6c, 0xc0, 0xa8, 0x00, 0x6e, // E....g....@l...n
