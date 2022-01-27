@@ -82,7 +82,9 @@ var nbnsFrame = []byte{
 }
 
 func Test_NBNS(t *testing.T) {
-	session := testSession()
+	session, clientConn := testSession()
+	defer session.Close()
+	go packet.TestReadAndDiscardLoop(clientConn) // MUST read the out conn to avoid blocking the server
 	dnsHandler, _ := New(session)
 	Debug = true
 
@@ -142,11 +144,16 @@ current nbns frame sent by us
 		***/
 
 func TestDNSHandler_SendNBNSNodeStatus(t *testing.T) {
-	session := testSession()
+	session, clientConn := testSession()
+	defer session.Close()
+	// go packet.TestReadAndDiscardLoop(clientConn) // MUST read the out conn to avoid blocking the server
 	dnsHandler, _ := New(session)
 
 	if err := dnsHandler.SendNBNSNodeStatus(); err != nil {
 		// TODO: need to fix empty session conn to prevent error when writing test
 		fmt.Println("TODO need to fix empty conn", err)
+	}
+	if clientConn == nil {
+		t.Error("FIX this test")
 	}
 }

@@ -1,6 +1,8 @@
 package dns
 
 import (
+	"bytes"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"testing"
@@ -9,8 +11,16 @@ import (
 	"inet.af/netaddr"
 )
 
-func testSession() *packet.Session {
-	// fake nicinfo
+func mustHex(b []byte) []byte {
+	b = bytes.ReplaceAll(b, []byte{' '}, nil)
+	n, err := hex.Decode(b, b)
+	if err != nil {
+		panic(err)
+	}
+	return b[:n]
+}
+
+func testSession() (*packet.Session, net.PacketConn) {
 	hostMAC := net.HardwareAddr{0x00, 0xff, 0x03, 0x04, 0x05, 0x01} // keep first byte zero for unicast mac
 	routerMAC := net.HardwareAddr{0x00, 0x66, 0x66, 0x66, 0x66, 0x66}
 	hostIP := net.ParseIP("192.168.0.129").To4()
@@ -22,12 +32,82 @@ func testSession() *packet.Session {
 		RouterAddr4: packet.Addr{MAC: routerMAC, IP: routerIP},
 	}
 
-	// TODO: fix this to discard writes like ioutil.Discard
-	conn, _ := net.ListenPacket("udp4", "127.0.0.1:0")
-
-	session, _ := packet.Config{Conn: conn, NICInfo: nicInfo}.NewSession("")
-	return session
+	serverConn, clientConn := packet.TestNewBufferedConn()
+	session, _ := packet.Config{Conn: serverConn, NICInfo: nicInfo}.NewSession("")
+	return session, clientConn
 }
+
+func (p DNS) testDecode() (e DNSEntry, err error) {
+	// question for doing name decoding.  We use a single reusable question to avoid
+	// name decoding on a single object via multiple DecodeFromBytes calls
+	// requiring constant allocation of small byte slices.
+	var buffer []byte
+	var answers []byte
+	var question Question
+
+	index := 12
+	question, index, err = decodeQuestion(p, index, buffer)
+	if err != nil {
+		fmt.Printf("dns   : error decoding questions %s %s", err, p)
+		return e, err
+	}
+
+	e = newDNSEntry()
+	e.Name = string(question.Name)
+
+	if _, _, err = e.decodeAnswers(p, index, answers); err != nil {
+		fmt.Printf("dns   : error decoding answers %s %s", err, p)
+		return e, err
+	}
+
+	return e, nil
+}
+
+/**
+dig youtube.com  -  sudo tcpdump -en -v -XX -t port 53
+34:e8:94:42:29:a9 > 02:42:15:e6:10:08, ethertype IPv4 (0x0800), length 98: (tos 0x0, ttl 63, id 0, offset 0, flags [DF], proto UDP (17), length 84)
+    192.168.1.1.53 > 192.168.0.129.39768: 32691 1/0/1 youtube.com. A 142.250.66.238 (56)
+*/
+
+var testYouTubeCom = mustHex([]byte(
+	`0242 15e6 1008 34e8 9442 29a9 0800 4500` + //  .B....4..B)...E.
+		`0054 0000 4000 3f11 b8c6 c0a8 0101 c0a8` + //  .T..@.?.........
+		`0081 0035 9b58 0040 3f81 7fb3 8180 0001` + //  ...5.X.@?.......
+		`0001 0000 0001 0779 6f75 7475 6265 0363` + //  .......youtube.c
+		`6f6d 0000 0100 01c0 0c00 0100 0100 0000` + //  om..............
+		`d200 048e fa42 ee00 0029 1000 0000 0000` + //  .....B...)......
+		`0000`))
+
+/*
+34:e8:94:42:29:a9 > 02:42:15:e6:10:08, ethertype IPv4 (0x0800), length 248: (tos 0x0, ttl 63, id 0, offset 0, flags [DF], proto UDP (17), length 234)
+    192.168.1.1.53 > 192.168.0.129.60567: 36646 9/0/1
+	www.youtube.com. CNAME youtube-ui.l.google.com.,
+	youtube-ui.l.google.com. A 142.250.76.110,
+	youtube-ui.l.google.com. A 142.250.204.14,
+	youtube-ui.l.google.com. A 172.217.167.78,
+	youtube-ui.l.google.com. A 142.250.66.238,
+	youtube-ui.l.google.com. A 142.250.67.14,
+	youtube-ui.l.google.com. A 142.250.71.78,
+	youtube-ui.l.google.com. A 172.217.167.110,
+	youtube-ui.l.google.com. A 142.250.66.206 (206)
+*/
+var testWwwYouTubeCom = mustHex([]byte(
+	`0242 15e6 1008 34e8 9442 29a9 0800 4500` + //  .B....4..B)...E.
+		`00ea 0000 4000 3f11 b830 c0a8 0101 c0a8` + //  ....@.?..0......
+		`0081 0035 ec97 00d6 2019 8f26 8180 0001` + //  ...5.......&....
+		`0009 0000 0001 0377 7777 0779 6f75 7475` + //  .......www.youtu
+		`6265 0363 6f6d 0000 0100 01c0 0c00 0500` + //  be.com..........
+		`0100 00dd 6700 160a 796f 7574 7562 652d` + //  ....g...youtube-
+		`7569 016c 0667 6f6f 676c 65c0 18c0 2d00` + //  ui.l.google...-.
+		`0100 0100 0000 ac00 048e fa4c 6ec0 2d00` + //  ...........Ln.-.
+		`0100 0100 0000 ac00 048e facc 0ec0 2d00` + //  ..............-.
+		`0100 0100 0000 ac00 04ac d9a7 4ec0 2d00` + //  ............N.-.
+		`0100 0100 0000 ac00 048e fa42 eec0 2d00` + //  ...........B..-.
+		`0100 0100 0000 ac00 048e fa43 0ec0 2d00` + //  ...........C..-.
+		`0100 0100 0000 ac00 048e fa47 4ec0 2d00` + //  ...........GN.-.
+		`0100 0100 0000 ac00 04ac d9a7 6ec0 2d00` + //  ............n.-.
+		`0100 0100 0000 ac00 048e fa42 ce00 0029` + //  ...........B...)
+		`1000 0000 0000 0000                    `)) //  ........
 
 /**
 ; dig facebook.com - sudo tcpdump -X -t port 53
@@ -50,108 +130,23 @@ facebook.com.           94      IN      A       157.240.8.35
 ;; MSG SIZE  rcvd: 57
 */
 
-var wwwFacebookComAnswer = []byte{
-	0x45, 0x00, 0x00, 0x55, 0x00, 0x00, 0x40, 0x00, 0x3f, 0x11, 0xb8, 0xc5, 0xc0, 0xa8, 0x01, 0x01, // E..U..@.?.......
-	0xc0, 0xa8, 0x00, 0x81, 0x00, 0x35, 0xa5, 0x70, 0x00, 0x41, 0xfb, 0x2b, 0x50, 0x15, 0x81, 0x80, // .....5.p.A.+P...
-	0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x66, 0x61, 0x63, 0x65, 0x62, 0x6f, 0x6f, // .........faceboo
-	0x6b, 0x03, 0x63, 0x6f, 0x6d, 0x00, 0x00, 0x01, 0x00, 0x01, 0xc0, 0x0c, 0x00, 0x01, 0x00, 0x01, // k.com...........
-	0x00, 0x00, 0x00, 0xe8, 0x00, 0x04, 0x9d, 0xf0, 0x08, 0x23, 0x00, 0x00, 0x29, 0x10, 0x00, 0x00, // .........#..)...
-	0x00, 0x00, 0x00, 0x00, 0x00,
-}
-
-func TestDNS_DecodeFacebook(t *testing.T) {
-
-	ip := packet.IP4(wwwFacebookComAnswer)
-	fmt.Println("ip", ip)
-	udp := packet.UDP(ip.Payload())
-	fmt.Println("udp", udp)
-	p := DNS(udp.Payload())
-	fmt.Println("dns", p)
-	if p.IsValid() != nil {
-		t.Fatal("invalid dns packet")
-	}
-
-	entry, err := p.decode()
-	if err != nil {
-		t.Fatal("cannot decode", err)
-	}
-	r, ok := entry.IP4Records[netaddr.IPv4(157, 240, 8, 35)]
-	if !ok || r.Name != "facebook.com" {
-		t.Fatalf("invalid packet %+v ", r)
-	}
-}
-
-/**
-;; dig www.youtube.com - sudo tcpdump -X -t port 53
-;; global options: +cmd
-;; Got answer:
-;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 8855
-;; flags: qr rd ra; QUERY: 1, ANSWER: 10, AUTHORITY: 0, ADDITIONAL: 1
-
-;; OPT PSEUDOSECTION:
-; EDNS: version: 0, flags:; udp: 4096
-;; QUESTION SECTION:
-;www.youtube.com.               IN      A
-
-;; ANSWER SECTION:
-www.youtube.com.        11843   IN      CNAME   youtube-ui.l.google.com.
-youtube-ui.l.google.com. 7      IN      A       142.250.66.238
-youtube-ui.l.google.com. 7      IN      A       142.250.67.14
-youtube-ui.l.google.com. 7      IN      A       142.250.71.78
-youtube-ui.l.google.com. 7      IN      A       142.250.76.110
-youtube-ui.l.google.com. 7      IN      A       142.250.204.14
-youtube-ui.l.google.com. 7      IN      A       172.217.167.78
-youtube-ui.l.google.com. 7      IN      A       172.217.167.110
-youtube-ui.l.google.com. 7      IN      A       142.250.66.174
-youtube-ui.l.google.com. 7      IN      A       142.250.66.206
-
-;; Query time: 11 msec
-;; SERVER: 192.168.1.1#53(192.168.1.1)
-;; WHEN: Mon May 17 23:25:40 AEST 2021
-;; MSG SIZE  rcvd: 222
+/*
+dig www.facebook.com
+34:e8:94:42:29:a9 > 02:42:15:e6:10:08, ethertype IPv4 (0x0800), length 132: (tos 0x0, ttl 63, id 0, offset 0, flags [DF], proto UDP (17), length 118)
+    192.168.1.1.53 > 192.168.0.129.55588: 24213 2/0/1 www.facebook.com. CNAME star-mini.c10r.facebook.com., star-mini.c10r.facebook.com. A 157.240.8.35 (90)
 */
-var wwwYouTubeComResponse = []byte{
-	0x45, 0x00, 0x00, 0xfa, 0x00, 0x00, 0x40, 0x00, 0x3f, 0x11, 0xb8, 0x20, 0xc0, 0xa8, 0x01, 0x01, // E.....@.?.......
-	0xc0, 0xa8, 0x00, 0x81, 0x00, 0x35, 0xd0, 0x01, 0x00, 0xe6, 0x67, 0x08, 0xe0, 0xc6, 0x81, 0x80, // .....5....g.....
-	0x00, 0x01, 0x00, 0x0a, 0x00, 0x00, 0x00, 0x01, 0x03, 0x77, 0x77, 0x77, 0x07, 0x79, 0x6f, 0x75, // .........www.you
-	0x74, 0x75, 0x62, 0x65, 0x03, 0x63, 0x6f, 0x6d, 0x00, 0x00, 0x01, 0x00, 0x01, 0xc0, 0x0c, 0x00, // tube.com........
-	0x05, 0x00, 0x01, 0x00, 0x00, 0x30, 0x09, 0x00, 0x16, 0x0a, 0x79, 0x6f, 0x75, 0x74, 0x75, 0x62, // .....0....youtub
-	0x65, 0x2d, 0x75, 0x69, 0x01, 0x6c, 0x06, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0xc0, 0x18, 0xc0, // e-ui.l.google...
-	0x2d, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0xb6, 0x00, 0x04, 0x8e, 0xfa, 0x42, 0xce, 0xc0, // -............B..
-	0x2d, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0xb6, 0x00, 0x04, 0x8e, 0xfa, 0x42, 0xee, 0xc0, // -............B..
-	0x2d, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0xb6, 0x00, 0x04, 0x8e, 0xfa, 0x43, 0x0e, 0xc0, // -............C..
-	0x2d, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0xb6, 0x00, 0x04, 0x8e, 0xfa, 0x47, 0x4e, 0xc0, // -............GN.
-	0x2d, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0xb6, 0x00, 0x04, 0x8e, 0xfa, 0x4c, 0x6e, 0xc0, // -............Ln.
-	0x2d, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0xb6, 0x00, 0x04, 0x8e, 0xfa, 0xcc, 0x0e, 0xc0, // -...............
-	0x2d, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0xb6, 0x00, 0x04, 0xac, 0xd9, 0xa7, 0x4e, 0xc0, // -.............N.
-	0x2d, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0xb6, 0x00, 0x04, 0xac, 0xd9, 0xa7, 0x6e, 0xc0, // -.............n.
-	0x2d, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0xb6, 0x00, 0x04, 0x8e, 0xfa, 0x42, 0xae, 0x00, // -............B..
-	0x00, 0x29, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // .)........
-}
+var testWwwFacebookComAnswer = mustHex([]byte(
+	`0242 15e6 1008 34e8 9442 29a9 0800 4500` + //  .B....4..B)...E.
+		`0076 0000 4000 3f11 b8a4 c0a8 0101 c0a8` + //  .v..@.?.........
+		`0081 0035 d924 0062 fa53 5e95 8180 0001` + //  ...5.$.b.S^.....
+		`0002 0000 0001 0377 7777 0866 6163 6562` + //  .......www.faceb
+		`6f6f 6b03 636f 6d00 0001 0001 c00c 0005` + //  ook.com.........
+		`0001 0000 05b5 0011 0973 7461 722d 6d69` + //  .........star-mi
+		`6e69 0463 3130 72c0 10c0 2e00 0100 0100` + //  ni.c10r.........
+		`0000 3100 049d f008 2300 0029 1000 0000` + //  ..1.....#..)....
+		`0000 0000                              `)) //  ....
 
-func TestDNS_DecodeYouTube(t *testing.T) {
-
-	ip := packet.IP4(wwwYouTubeComResponse)
-	fmt.Println("ip", ip)
-	udp := packet.UDP(ip.Payload())
-	fmt.Println("udp", udp)
-	p := DNS(udp.Payload())
-	fmt.Println("dns", p)
-	if p.IsValid() != nil {
-		t.Fatal("invalid dns packet")
-	}
-
-	entry, err := p.decode()
-	if err != nil {
-		t.Fatal("cannot decode", err)
-	}
-	r, ok := entry.IP4Records[netaddr.IPv4(142, 250, 66, 206)]
-	if len(entry.IP4Records) != 9 || !ok || r.Name != "youtube-ui.l.google.com" {
-		t.Fatalf("invalid packet %+v ", r)
-	}
-}
-
-/**
+/*
 ; dig www.blockthekids.com - sudo tcpdump -X -t port 53
 ;; global options: +cmd
 ;; Got answer:
@@ -174,47 +169,31 @@ td-balancer-ause1-67-249.wixdns.net. 242 IN A   35.244.67.249
 ;; SERVER: 192.168.1.1#53(192.168.1.1)
 ;; WHEN: Tue May 18 10:38:12 AEST 2021
 ;; MSG SIZE  rcvd: 190
+
+		34:e8:94:42:29:a9 > 02:42:15:e6:10:08, ethertype IPv4 (0x0800), length 232: (tos 0x0, ttl 63, id 0, offset 0, flags [DF], proto UDP (17), length 218)
+    192.168.1.1.53 > 192.168.0.129.46239: 24076 5/0/1
+	www.blockthekids.com. CNAME www245.wixdns.net.,
+	www245.wixdns.net. CNAME balancer.wixdns.net.,
+	balancer.wixdns.net. CNAME c098a3f6-balancer.wixdns.net.,
+	c098a3f6-balancer.wixdns.net. CNAME td-balancer-ause1-67-249.wixdns.net.,
+	td-balancer-ause1-67-249.wixdns.net. A 35.244.67.249 (190)
 */
-
-var wwwBlockthekidsComResponse = []byte{
-	0x45, 0x00, 0x00, 0xda, 0x00, 0x00, 0x40, 0x00, 0x3f, 0x11, 0xb8, 0x40, 0xc0, 0xa8, 0x01, 0x01, // E.....@.?..@....
-	0xc0, 0xa8, 0x00, 0x81, 0x00, 0x35, 0x92, 0x23, 0x00, 0xc6, 0xa5, 0xdd, 0xc8, 0x19, 0x81, 0x80, // .....5.#........
-	0x00, 0x01, 0x00, 0x05, 0x00, 0x00, 0x00, 0x01, 0x03, 0x77, 0x77, 0x77, 0x0c, 0x62, 0x6c, 0x6f, // .........www.blo
-	0x63, 0x6b, 0x74, 0x68, 0x65, 0x6b, 0x69, 0x64, 0x73, 0x03, 0x63, 0x6f, 0x6d, 0x00, 0x00, 0x01, // ckthekids.com...
-	0x00, 0x01, 0xc0, 0x0c, 0x00, 0x05, 0x00, 0x01, 0x00, 0x00, 0x38, 0x40, 0x00, 0x13, 0x06, 0x77, // ..........8@...w
-	0x77, 0x77, 0x32, 0x34, 0x35, 0x06, 0x77, 0x69, 0x78, 0x64, 0x6e, 0x73, 0x03, 0x6e, 0x65, 0x74, // ww245.wixdns.net
-	0x00, 0xc0, 0x32, 0x00, 0x05, 0x00, 0x01, 0x00, 0x00, 0x02, 0x58, 0x00, 0x0b, 0x08, 0x62, 0x61, // ..2.......X...ba
-	0x6c, 0x61, 0x6e, 0x63, 0x65, 0x72, 0xc0, 0x39, 0xc0, 0x51, 0x00, 0x05, 0x00, 0x01, 0x00, 0x00, // lancer.9.Q......
-	0x01, 0x26, 0x00, 0x14, 0x11, 0x63, 0x30, 0x39, 0x38, 0x61, 0x33, 0x66, 0x36, 0x2d, 0x62, 0x61, // .&...c098a3f6-ba
-	0x6c, 0x61, 0x6e, 0x63, 0x65, 0x72, 0xc0, 0x39, 0xc0, 0x68, 0x00, 0x05, 0x00, 0x01, 0x00, 0x00, // lancer.9.h......
-	0x01, 0x26, 0x00, 0x1b, 0x18, 0x74, 0x64, 0x2d, 0x62, 0x61, 0x6c, 0x61, 0x6e, 0x63, 0x65, 0x72, // .&...td-balancer
-	0x2d, 0x61, 0x75, 0x73, 0x65, 0x31, 0x2d, 0x36, 0x37, 0x2d, 0x32, 0x34, 0x39, 0xc0, 0x39, 0xc0, // -ause1-67-249.9.
-	0x88, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0xf2, 0x00, 0x04, 0x23, 0xf4, 0x43, 0xf9, 0x00, // ...........#.C..
-	0x00, 0x29, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-}
-
-func TestDNS_DecodeBlockTheKids(t *testing.T) {
-
-	ip := packet.IP4(wwwBlockthekidsComResponse)
-	udp := packet.UDP(ip.Payload())
-	p := DNS(udp.Payload())
-	if p.IsValid() != nil {
-		t.Fatal("invalid dns packet")
-	}
-
-	entry, err := p.decode()
-	if err != nil {
-		t.Fatal("cannot decode", err)
-	}
-	r, ok := entry.IP4Records[netaddr.IPv4(35, 244, 67, 249)]
-	if len(entry.IP4Records) != 1 || !ok || r.Name != "td-balancer-ause1-67-249.wixdns.net" {
-		t.Fatalf("invalid packet %+v ", r)
-	}
-	r2, ok2 := entry.CNameRecords["www245.wixdns.net"]
-	if len(entry.CNameRecords) != 4 || !ok2 {
-		t.Fatalf("invalid cname packet %+v ", r2)
-	}
-}
+var testWwwBlockTheKidsCom = mustHex([]byte(
+	`0242 15e6 1008 34e8 9442 29a9 0800 4500` + //  .B....4..B)...E.
+		`00da 0000 4000 3f11 b840 c0a8 0101 c0a8` + //  ....@.?..@......
+		`0081 0035 b49f 00c6 c0c9 5e0c 8180 0001` + //  ...5......^.....
+		`0005 0000 0001 0377 7777 0c62 6c6f 636b` + //  .......www.block
+		`7468 656b 6964 7303 636f 6d00 0001 0001` + //  thekids.com.....
+		`c00c 0005 0001 0000 3840 0013 0677 7777` + //  ........8@...www
+		`3234 3506 7769 7864 6e73 036e 6574 00c0` + //  245.wixdns.net..
+		`3200 0500 0100 0001 4400 0b08 6261 6c61` + //  2.......D...bala
+		`6e63 6572 c039 c051 0005 0001 0000 0078` + //  ncer.9.Q.......x
+		`0014 1163 3039 3861 3366 362d 6261 6c61` + //  ...c098a3f6-bala
+		`6e63 6572 c039 c068 0005 0001 0000 0078` + //  ncer.9.h.......x
+		`001b 1874 642d 6261 6c61 6e63 6572 2d61` + //  ...td-balancer-a
+		`7573 6531 2d36 372d 3234 39c0 39c0 8800` + //  use1-67-249.9...
+		`0100 0100 0003 3400 0423 f443 f900 0029` + //  ......4..#.C...)
+		`1000 0000 0000 0000                    `)) //  ........
 
 /***
 ; <<>> DiG 9.16.1-Ubuntu <<>> -x 17.253.67.203
@@ -236,9 +215,9 @@ func TestDNS_DecodeBlockTheKids(t *testing.T) {
 ;; WHEN: Sat May 22 08:06:46 AEST 2021
 ;; MSG SIZE  rcvd: 98
 */
-
 // IP 192.168.1.1.domain > netfilter.33201: 50185 1/0/1 PTR ausyd2-vip-bx-003.aaplimg.com. (98)
 var wwwPTRResponse = []byte{
+	0x02, 0x42, 0xca, 0x78, 0x04, 0x50, 0x7e, 0xe8, 0x94, 0x42, 0x29, 0xaa, 0x08, 0x00, // ethernet
 	0x45, 0x00, 0x00, 0x7e, 0x00, 0x00, 0x40, 0x00, 0x3f, 0x11, 0xb8, 0x9c, 0xc0, 0xa8, 0x01, 0x01, // E..~..@.?.......
 	0xc0, 0xa8, 0x00, 0x81, 0x00, 0x35, 0x81, 0xb1, 0x00, 0x6a, 0x07, 0x8d, 0xc4, 0x09, 0x81, 0x80, // .....5...j......
 	0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x03, 0x32, 0x30, 0x33, 0x02, 0x36, 0x37, 0x03, // .........203.67.
@@ -249,48 +228,73 @@ var wwwPTRResponse = []byte{
 	0x6f, 0x6d, 0x00, 0x00, 0x00, 0x29, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // om...)........
 }
 
-func TestDNS_DecodePTR(t *testing.T) {
+func TestDNSHandler_ProcessDNS(t *testing.T) {
 
-	ip := packet.IP4(wwwPTRResponse)
-	udp := packet.UDP(ip.Payload())
-	p := DNS(udp.Payload())
-	if p.IsValid() != nil {
-		t.Fatal("invalid dns packet")
+	tests := []struct {
+		name        string
+		packet      []byte
+		wantName    string
+		wantIP4     netaddr.IP
+		wantIP4Name string
+		wantPTRName string
+		wantPTRIP4  netaddr.IP
+		wantErr     bool
+	}{
+		{name: "www.facebook.com", wantErr: false, packet: testWwwFacebookComAnswer, wantName: "www.facebook.com", wantIP4: netaddr.IPv4(157, 240, 8, 35), wantIP4Name: "star-mini.c10r.facebook.com"},
+		{name: "www.youtube.com", wantErr: false, packet: testWwwYouTubeCom, wantName: "www.youtube.com", wantIP4: netaddr.IPv4(142, 250, 66, 206), wantIP4Name: "youtube-ui.l.google.com"},
+		{name: "youtube.com", wantErr: false, packet: testYouTubeCom, wantName: "youtube.com", wantIP4: netaddr.IPv4(142, 250, 66, 238), wantIP4Name: "youtube.com"},
+		{name: "www.blockthekids.com", wantErr: false, packet: testWwwBlockTheKidsCom, wantName: "www.blockthekids.com", wantIP4: netaddr.IPv4(35, 244, 67, 249), wantIP4Name: "td-balancer-ause1-67-249.wixdns.net"},
+		{name: "ptr", wantErr: false, packet: wwwPTRResponse, wantName: "203.67.253.17.in-addr.arpa", wantPTRIP4: netaddr.IPv4(17, 253, 67, 203), wantPTRName: "ausyd2-vip-bx-003.aaplimg.com"},
 	}
 
-	entry, err := p.decode()
+	session, _ := testSession()
+	defer session.Close()
+	dnsHandler, err := New(session)
 	if err != nil {
-		t.Fatal("cannot decode", err)
+		t.Fatal("invalid packet", err)
 	}
-	r, ok := entry.PTRRecords["ausyd2-vip-bx-003.aaplimg.com"]
-	if len(entry.PTRRecords) != 1 || !ok || r.IP != netaddr.IPv4(17, 253, 67, 203) {
-		t.Fatalf("invalid dns rr %+v ", r)
-	}
-}
-
-func TestDNS_ProcessDNS(t *testing.T) {
-	session := testSession()
-	dnsHandler, _ := New(session)
 	Debug = true
 
-	for _, v := range [][]byte{wwwYouTubeComResponse, wwwFacebookComAnswer, wwwBlockthekidsComResponse, wwwFacebookComAnswer} {
-		ip := packet.IP4(v)
-		udp := packet.UDP(ip.Payload())
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			frame, err := session.Parse(tt.packet)
+			if err != nil {
+				t.Fatal("invalid packet", err)
+			}
+			gotE, err := dnsHandler.ProcessDNS(frame)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("DNSHandler.ProcessDNS() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if gotE.Name != tt.wantName {
+				t.Errorf("DNSHandler.ProcessDNS() invalid name= %+v, want=%v", gotE, tt.wantName)
+			}
+			if !tt.wantIP4.IsZero() {
+				r, ok := gotE.IP4Records[tt.wantIP4]
+				if !ok || r.Name != tt.wantIP4Name {
+					t.Errorf("invalid record %+v ", r)
+				}
+			}
+			if tt.wantPTRName != "" {
+				r, ok := gotE.PTRRecords[tt.wantPTRName]
+				if !ok || r.IP != tt.wantPTRIP4 {
+					t.Errorf("invalid record %+v ", r)
+				}
 
-		r, err := dnsHandler.ProcessDNS(nil, nil, udp.Payload())
-		if err != nil {
-			t.Fatalf("invalid process packet bltk %+v %s", r, err)
-		}
+			}
+		})
 	}
-	if n := len(dnsHandler.DNSTable); n != 3 {
-		t.Fatalf("invalid dns table len=%v want=3 ", n)
-	}
-	fmt.Printf("table %+v", dnsHandler.DNSTable)
 
+	if n := len(dnsHandler.DNSTable); n != 5 {
+		t.Fatalf("invalid dns table len=%v want=5 ", n)
+	}
 }
 
 func TestDNS_reverseDNS(t *testing.T) {
-	session := testSession()
+	session, clientConn := testSession()
+	defer session.Close()
+	go packet.TestReadAndDiscardLoop(clientConn) // MUST read the out conn to avoid blocking the server
+
 	dnsHandler, _ := New(session)
 	Debug = true
 
@@ -322,16 +326,21 @@ func TestDNS_reverseDNS(t *testing.T) {
 // Benchmark_DNSConcurrentAccess test concurrent access performance
 // Benchmark_DNSConcurrentAccess-8   	  114400	     10260 ns/op	    6267 B/op	      52 allocs/op
 func Benchmark_DNSConcurrentAccess(b *testing.B) {
-	session := testSession()
+	session, clientConn := testSession()
+	defer session.Close()
+	go packet.TestReadAndDiscardLoop(clientConn) // MUST read the out conn to avoid blocking the server
+
 	dnsHandler, _ := New(session)
 
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			for _, v := range [][]byte{wwwYouTubeComResponse, wwwFacebookComAnswer, wwwBlockthekidsComResponse, wwwFacebookComAnswer, wwwPTRResponse} {
-				ip := packet.IP4(v)
-				udp := packet.UDP(ip.Payload())
+			for _, v := range [][]byte{testWwwYouTubeCom, testWwwFacebookComAnswer, testWwwBlockTheKidsCom, testWwwFacebookComAnswer} {
+				frame, err := session.Parse(v)
+				if err != nil {
+					b.Errorf("invalid process packet bltk %s", err)
+				}
 
-				r, err := dnsHandler.ProcessDNS(nil, nil, udp.Payload())
+				r, err := dnsHandler.ProcessDNS(frame)
 				if err != nil {
 					b.Fatalf("invalid process packet bltk %+v %s\n", r, err)
 				}
@@ -344,8 +353,8 @@ func Benchmark_DNSConcurrentAccess(b *testing.B) {
 			if e.Name != "www.youtube.com" {
 				b.Fatal("invalid youtube name", e)
 			}
-			e = dnsHandler.DNSFind("facebook.com")
-			if e.Name != "facebook.com" {
+			e = dnsHandler.DNSFind("www.facebook.com")
+			if e.Name != "www.facebook.com" {
 				dnsHandler.PrintDNSTable()
 				b.Fatal("invalid facebook name", e)
 			}
@@ -359,4 +368,42 @@ func Benchmark_DNSConcurrentAccess(b *testing.B) {
 	b.RunParallel("youtube", func(b *testing.B) {
 	})
 	**/
+}
+
+func BenchmarkEncode(b *testing.B) {
+	session, _ := testSession()
+	defer session.Close()
+
+	frame, _ := session.Parse(testWwwYouTubeCom)
+
+	b.ReportAllocs()
+
+	b.Run("decodeName with buffer", func(b *testing.B) {
+		buffer := make([]byte, 0, 64)
+		for i := 0; i < b.N; i++ {
+			dnsFrame := DNS(frame.Payload())
+			question, index, err := decodeQuestion(dnsFrame, 12, buffer)
+			if err != nil || question.Name == nil || index == -1 {
+				b.Fatal("Message.Pack() =", err, question, index)
+			}
+			e := newDNSEntry()
+			if _, _, err = e.decodeAnswers(dnsFrame, index, buffer); err != nil {
+				b.Fatal("Message.Pack() decode error =", err)
+			}
+		}
+	})
+	b.Run("decodeName empty buffer", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			var buffer []byte
+			dnsFrame := DNS(frame.Payload())
+			question, index, err := decodeQuestion(dnsFrame, 12, buffer)
+			if err != nil || question.Name == nil || index == -1 {
+				b.Fatal("Message.Pack() =", err, question, index)
+			}
+			e := newDNSEntry()
+			if _, _, err = e.decodeAnswers(dnsFrame, index, buffer); err != nil {
+				b.Fatal("Message.Pack() decode error =", err)
+			}
+		}
+	})
 }

@@ -84,7 +84,7 @@ func (h *Handler) processPacket(ether packet.Ether) (err error) {
 		fastlog.NewLine(module, "wsd frame").String("payload", string(frame.Payload())).Write()
 
 	case packet.PayloadDNS:
-		dnsEntry, err := h.DNSHandler.ProcessDNS(nil, frame.Ether(), frame.Payload())
+		dnsEntry, err := h.DNSHandler.ProcessDNS(frame)
 		if err != nil {
 			fmt.Printf("packet: error processing dns: %s\n", err)
 			return err

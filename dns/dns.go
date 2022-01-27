@@ -49,6 +49,12 @@ func New(session *packet.Session) (h *DNSHandler, err error) {
 	return h, nil
 }
 
+func (h *DNSHandler) Close() error {
+	h.DNSTable = nil
+	h.mdnsCache = nil
+	return nil
+}
+
 func (h *DNSHandler) Start() error {
 	if err := h.SendNBNSNodeStatus(); err != nil {
 		return err
@@ -238,60 +244,69 @@ func dnsQueryMarshal(tranID uint16, flags uint16, encodedName []byte, questionTy
 	return b[:16+n]
 }
 
-func (p DNS) decode() (e DNSEntry, err error) {
-	// buffer for doing name decoding.  We use a single reusable buffer to avoid
-	// name decoding on a single object via multiple DecodeFromBytes calls
-	// requiring constant allocation of small byte slices.
-	var buffer []byte
-
-	index := 12
-	index, err = e.decodeQuestion(p, index, &buffer)
-	if err != nil {
-		fmt.Printf("dns   : error decoding questions %s %s", err, p)
-		return e, err
-	}
-
-	e = newDNSEntry()
-
-	if _, _, err = e.decodeAnswers(p, index, &buffer); err != nil {
-		fmt.Printf("dns   : error decoding answers %s %s", err, p)
-		return e, err
-	}
-
-	return e, nil
+type Question struct {
+	Name  []byte
+	Type  uint16
+	Class uint16
 }
 
-func (e *DNSEntry) decodeQuestion(p DNS, index int, buffer *[]byte) (int, error) {
+func decodeQuestion(p DNS, index int, buffer []byte) (question Question, off int, err error) {
 	if p.QDCount() != 1 { // assume a single question
-		return -1, packet.ErrParseFrame
+		return Question{}, -1, packet.ErrParseFrame
 	}
 
 	// get first answer
 	if index+6 > len(p) { // must have at least 2 bytes name, 4 bytes type and class
-		return -1, packet.ErrParseFrame
+		return Question{}, -1, packet.ErrParseFrame
 	}
-	name, endq, err := decodeName(p, index, buffer, 1)
+	name, endq, err := decodeName(p, index, &buffer, 1)
 	if err != nil {
-		return -1, err
+		return Question{}, -1, err
 	}
 
-	// d.Type = binary.BigEndian.Uint16(p[endq : endq+2])    // 2 bytes
-	// d.Class = binary.BigEndian.Uint16(p[endq+2 : endq+4]) // 2 bytes
-	index = endq + 4 // 4 bytes type and class
-	e.Name = string(name)
+	question.Name = name
+	question.Type = binary.BigEndian.Uint16(p[endq : endq+2])    // 2 bytes
+	question.Class = binary.BigEndian.Uint16(p[endq+2 : endq+4]) // 2 bytes
+	index = endq + 4                                             // 4 bytes type and class
 
-	return index, nil
+	return question, index, nil
 }
 
 // decode decodes the resource record, returning the total length of the record.
 //
 // not goroutine safe:
 //   must acquire lock before calling as function will update maps
-func (e *DNSEntry) decodeAnswers(p DNS, offset int, buffer *[]byte) (int, bool, error) {
+func (e *DNSEntry) decodeAnswers(p DNS, offset int, buffer []byte) (int, bool, error) {
+	return e.decodeRRs(int(p.ANCount()), p, offset, buffer)
+}
 
+// decodeRRs decodes resource records returning the total length of the record.
+//  DNSResourceRecord
+//  0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+//  +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+//  |                                               |
+//  /                                               /
+//  /                      NAME                     /
+//  |                                               |
+//  +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+//  |                      TYPE                     |
+//  +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+//  |                     CLASS                     |
+//  +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+//  |                      TTL                      |
+//  |                                               |
+//  +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+//  |                   RDLENGTH                    |
+//  +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--|
+//  /                     RDATA                     /
+//  /                                               /
+//  +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+func (e *DNSEntry) decodeRRs(count int, p DNS, offset int, buffer []byte) (int, bool, error) {
 	var updated bool
-	for i := 0; i < int(p.ANCount()); i++ {
-		name, endq, err := decodeName(p, offset, buffer, 1)
+	var tmpBuf []byte // temporary buffer to avoid allocation
+	for i := 0; i < count; i++ {
+		tmpBuf = buffer
+		name, endq, err := decodeName(p, offset, &tmpBuf, 1)
 		if err != nil {
 			return 0, false, fmt.Errorf("invalid label: %w", err)
 		}
@@ -327,15 +342,14 @@ func (e *DNSEntry) decodeAnswers(p DNS, offset int, buffer *[]byte) (int, bool, 
 			}
 
 		case 5: // CNAME
-
 			var cname []byte
-			cname, _, err = decodeName(p, endq+10, buffer, 1)
+			tmpBuf = buffer
+			cname, _, err = decodeName(p, endq+10, &tmpBuf, 1)
 			if err != nil {
 				return 0, false, fmt.Errorf("invalid CNAME data: %w", err)
 			}
-			n := string(name)
-			if _, found := e.CNameRecords[n]; !found {
-				r := NameResourceRecord{Name: n, TTL: ttl, CName: string(cname)}
+			if _, found := e.CNameRecords[string(name)]; !found {
+				r := NameResourceRecord{Name: string(name), TTL: ttl, CName: string(cname)}
 				e.CNameRecords[r.Name] = r
 				updated = true
 			}
@@ -357,7 +371,8 @@ func (e *DNSEntry) decodeAnswers(p DNS, offset int, buffer *[]byte) (int, bool, 
 			}
 			ip := netaddr.IPv4(tmp[3], tmp[2], tmp[1], tmp[0])
 			var ptr []byte
-			ptr, _, err = decodeName(p, endq+10, buffer, 1)
+			tmpBuf = buffer
+			ptr, _, err = decodeName(p, endq+10, &tmpBuf, 1)
 			if err != nil {
 				return 0, false, fmt.Errorf("invalid PTR data: %w", err)
 			}
@@ -459,6 +474,7 @@ loop:
 			return nil, 0, fmt.Errorf("qname '0x80' unsupported yet (data=%x index=%d)",
 				data[index], index)
 		}
+
 		if index >= len(data) {
 			return nil, 0, packet.ErrParseFrame
 		}
@@ -534,13 +550,12 @@ func ReverseDNS(ip netaddr.IP) error {
 	return nil
 }
 
-// ProcessDNS parse the DNS packet and record in DNS table.
+// ProcessDNS parse the DNS packet and record in DNS cache table.
 //
 // It returns a copy of the DNSEntry that is free from race conditions. The caller has a unique copy.
 //
-// TODO: optimise copy only on new values
-func (h *DNSHandler) ProcessDNS(host *packet.Host, ether packet.Ether, payload []byte) (e DNSEntry, err error) {
-	p := DNS(payload)
+func (h *DNSHandler) ProcessDNS(frame packet.Frame) (e DNSEntry, err error) {
+	p := DNS(frame.Payload())
 	if err := p.IsValid(); err != nil {
 		return DNSEntry{}, err
 	}
@@ -548,23 +563,22 @@ func (h *DNSHandler) ProcessDNS(host *packet.Host, ether packet.Ether, payload [
 	// buffer for doing name decoding.  We use a single reusable buffer to avoid
 	// name decoding on a single object via multiple DecodeFromBytes calls
 	// requiring constant allocation of small byte slices.
-	var buffer []byte
-	tmp := DNSEntry{}
+	buffer := make([]byte, 0, 64) // allocate enough to minimise allocation
+	var question Question
 
 	index := 12
-	index, err = tmp.decodeQuestion(p, index, &buffer)
+	question, index, err = decodeQuestion(p, index, buffer)
 	if err != nil {
-		fmt.Printf("dns   : error decoding questions %s %s", err, p)
 		return DNSEntry{}, err
 	}
 
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 
-	e, found := h.DNSTable[tmp.Name]
+	e, found := h.DNSTable[string(question.Name)] // lookup directly from []byte to avoid allocation
 	if !found {
 		e = newDNSEntry()
-		e.Name = tmp.Name
+		e.Name = string(question.Name)
 		e.IP4Records = make(map[netaddr.IP]IPResourceRecord)
 		e.IP6Records = make(map[netaddr.IP]IPResourceRecord)
 		e.CNameRecords = make(map[string]NameResourceRecord)
@@ -572,8 +586,7 @@ func (h *DNSHandler) ProcessDNS(host *packet.Host, ether packet.Ether, payload [
 	}
 
 	var updated bool
-	if _, updated, err = e.decodeAnswers(p, index, &buffer); err != nil {
-		fmt.Printf("dns   : error decoding answers %s %s", err, p)
+	if _, updated, err = e.decodeAnswers(p, index, buffer); err != nil {
 		return DNSEntry{}, err
 	}
 	if updated {

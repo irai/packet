@@ -24,7 +24,10 @@ var ptrMessage = []byte{
 }
 
 func TestMDNSHandler_PTR(t *testing.T) {
-	session := testSession()
+	session, clientConn := testSession()
+	defer session.Close()
+	go packet.TestReadAndDiscardLoop(clientConn) // MUST read the out conn to avoid blocking the server
+
 	dnsHandler, _ := New(session)
 	Debug = true
 
@@ -134,7 +137,9 @@ var sonosResponse3 = []byte{
 }
 
 func TestMDNSHandler_Sonos(t *testing.T) {
-	session := testSession()
+	session, clientConn := testSession()
+	defer session.Close()
+	go packet.TestReadAndDiscardLoop(clientConn) // MUST read the out conn to avoid blocking the server
 	dnsHandler, _ := New(session)
 	Debug = true
 
@@ -294,7 +299,9 @@ var frameWindows10AnnouncementiIP4 = []byte{
 }
 
 func TestMDNSHandler_Apple(t *testing.T) {
-	session := testSession()
+	session, clientConn := testSession()
+	defer session.Close()
+	go packet.TestReadAndDiscardLoop(clientConn) // MUST read the out conn to avoid blocking the server
 	dnsHandler, _ := New(session)
 	Debug = true
 
