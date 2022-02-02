@@ -561,8 +561,7 @@ func (h *DNSHandler) ProcessDNS(frame packet.Frame) (e DNSEntry, err error) {
 	}
 
 	// buffer for doing name decoding.  We use a single reusable buffer to avoid
-	// name decoding on a single object via multiple DecodeFromBytes calls
-	// requiring constant allocation of small byte slices.
+	// constant allocation of small byte slices during dns name parsing.
 	buffer := make([]byte, 0, 64) // allocate enough to minimise allocation
 	var question Question
 
