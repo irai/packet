@@ -513,7 +513,7 @@ func (h *Session) IPAddrs(mac net.HardwareAddr) []Addr {
 		return nil
 	}
 
-	list := make([]Addr, len(e.HostList))
+	list := make([]Addr, 0, len(e.HostList))
 	for _, host := range e.HostList {
 		list = append(list, host.Addr)
 	}
