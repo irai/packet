@@ -156,6 +156,24 @@ func (p DHCP4) SetFile(file []byte) {
 // Map of DHCP options
 type Options map[OptionCode][]byte
 
+func (o Options) HostName() string {
+	return string(o[OptionHostName])
+}
+
+func (o Options) RequestedIPAddress() net.IP {
+	if tmp, ok := o[OptionRequestedIPAddress]; ok {
+		return net.IP(tmp).To4()
+	}
+	return nil
+}
+
+func (o Options) ServerID() net.IP {
+	if tmp, ok := o[OptionServerIdentifier]; ok {
+		return net.IP(tmp).To4()
+	}
+	return nil
+}
+
 func (p DHCP4) validateOptions() error {
 	opts := p.Options()
 	if len(opts) < 2 {
