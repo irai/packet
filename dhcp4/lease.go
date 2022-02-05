@@ -70,6 +70,15 @@ func (h *Handler) findByIP(ip net.IP) *Lease {
 	return nil
 }
 
+func (h *Handler) findByMAC(mac net.HardwareAddr) *Lease {
+	for _, v := range h.table {
+		if bytes.Equal(v.Addr.MAC, mac) {
+			return v
+		}
+	}
+	return nil
+}
+
 func (h *Handler) findOrCreate(clientID []byte, mac net.HardwareAddr, name string) *Lease {
 	var captured bool
 	subnet := h.net1

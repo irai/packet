@@ -1,6 +1,7 @@
 package dhcp4
 
 import (
+	"crypto/rand"
 	"fmt"
 	"net"
 	"sync"
@@ -34,6 +35,8 @@ var (
 	routerAddr = packet.Addr{MAC: routerMAC, IP: routerIP4}
 
 	dnsIP4 = net.IPv4(8, 8, 8, 8)
+
+	dhcpDst = packet.Addr{MAC: packet.EthBroadcast, IP: net.IPv4zero, Port: DHCP4ServerPort}
 )
 
 type testContext struct {
@@ -155,7 +158,7 @@ func (tc *testContext) Close() {
 	tc.wg.Wait()
 }
 
-func newDHCPHost(t *testing.T, tc *testContext, mac net.HardwareAddr) []byte {
+func newDHCPHost(t *testing.T, tc *testContext, mac net.HardwareAddr, name string) []byte {
 	tc.xid++
 	xid := []byte(fmt.Sprintf("%d", tc.xid))
 	srcAddr := packet.Addr{MAC: mac, IP: net.IPv4zero, Port: DHCP4ClientPort}
@@ -166,7 +169,7 @@ func newDHCPHost(t *testing.T, tc *testContext, mac net.HardwareAddr) []byte {
 	tc.Unlock()
 	var ipOffer net.IP
 
-	ether := newDHCP4DiscoverFrame(srcAddr, dstAddr, srcAddr.MAC.String(), xid)
+	ether := newDHCP4DiscoverFrame(srcAddr, name, xid)
 	frame, err := tc.session.Parse(ether)
 	if err != nil {
 		panic(err)
@@ -194,7 +197,7 @@ func newDHCPHost(t *testing.T, tc *testContext, mac net.HardwareAddr) []byte {
 		t.Fatal("failed to receive reply")
 	}
 
-	ether = newDHCP4RequestFrame(srcAddr, dstAddr, srcAddr.MAC.String(), hostIP4, ipOffer, xid)
+	ether = newDHCP4RequestFrame(srcAddr, dstAddr, name, hostIP4, ipOffer, xid)
 	frame, err = tc.session.Parse(ether)
 	if err != nil {
 		panic(err)
@@ -258,15 +261,19 @@ func newDHCP4DeclineFrame(src packet.Addr, dst packet.Addr, declineIP net.IP, se
 	return ether
 }
 
-func newDHCP4DiscoverFrame(src packet.Addr, dst packet.Addr, name string, xid []byte) packet.Ether {
+func newDHCP4DiscoverFrame(src packet.Addr, name string, xid []byte) packet.Ether {
+	if xid == nil {
+		xid = make([]byte, 4)
+		rand.Read(xid)
+	}
 	options := Options{}
 	options[OptionParameterRequestList] = []byte{byte(OptionServerIdentifier), byte(OptionRequestedIPAddress), byte(OptionDomainNameServer), byte(OptionClientIdentifier)}
 	options[OptionHostName] = []byte(name)
 
 	ether := packet.Ether(make([]byte, packet.EthMaxSize))
-	ether = packet.EncodeEther(ether, syscall.ETH_P_IP, src.MAC, dst.MAC)
-	ip4 := packet.EncodeIP4(ether.Payload(), 50, src.IP, dst.IP)
-	udp := packet.EncodeUDP(ip4.Payload(), src.Port, dst.Port)
+	ether = packet.EncodeEther(ether, syscall.ETH_P_IP, src.MAC, dhcpDst.MAC)
+	ip4 := packet.EncodeIP4(ether.Payload(), 50, src.IP, dhcpDst.IP)
+	udp := packet.EncodeUDP(ip4.Payload(), src.Port, dhcpDst.Port)
 	dhcp := Marshall(udp.Payload(), BootRequest, Discover, src.MAC, src.IP, net.IPv4zero, xid, false, options, options[OptionParameterRequestList])
 	udp = udp.SetPayload(dhcp)
 	ip4 = ip4.SetPayload(udp, syscall.IPPROTO_UDP)

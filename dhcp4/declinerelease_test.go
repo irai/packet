@@ -19,7 +19,7 @@ func Test_declineSimple(t *testing.T) {
 
 	srcAddr := packet.Addr{MAC: mac5, IP: net.IPv4zero, Port: DHCP4ClientPort}
 	dstAddr := packet.Addr{MAC: hostMAC, IP: hostIP4, Port: DHCP4ServerPort}
-	xid := newDHCPHost(t, tc, srcAddr.MAC)
+	xid := newDHCPHost(t, tc, srcAddr.MAC, "host1")
 	checkLeaseTable(t, tc, 1, 0, 0)
 
 	ether := newDHCP4DeclineFrame(srcAddr, dstAddr, tc.IPOffer, hostIP4, xid)
@@ -51,7 +51,7 @@ func Test_DeclineFromAnotherServer(t *testing.T) {
 	dstAddr := packet.Addr{MAC: packet.EthernetBroadcast, IP: net.IPv4zero, Port: DHCP4ServerPort}
 
 	// discover packet
-	ether := newDHCP4DiscoverFrame(srcAddr, dstAddr, "name1", xid)
+	ether := newDHCP4DiscoverFrame(srcAddr, "name1", xid)
 	frame, err := tc.session.Parse(ether)
 	if err != nil {
 		panic(err)
@@ -84,7 +84,7 @@ func Test_DeclineFromAnotherServer(t *testing.T) {
 	checkLeaseTable(t, tc, 0, 1, 0)
 
 	// request for our server
-	newDHCPHost(t, tc, srcAddr.MAC)
+	newDHCPHost(t, tc, srcAddr.MAC, "host2")
 	if tc.count != 2 { // count offers
 		t.Errorf("DHCPHandler.handleDiscover() invalid response count=%d want=%d", tc.count, 2)
 	}

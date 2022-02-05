@@ -102,6 +102,50 @@ func TestDHCPHandler_handleDiscover(t *testing.T) {
 	checkLeaseTable(t, tc, 0, 2, 0)
 }
 
+func TestDHCPHandler_handleDiscoverCaptured(t *testing.T) {
+	options := Options{}
+	options[OptionCode(OptionParameterRequestList)] = []byte{byte(OptionDomainNameServer)}
+
+	// packet.DebugIP4 = true
+	Debug = true
+	os.Remove(testDHCPFilename)
+	tc := setupTestHandler()
+	defer tc.Close()
+
+	t.Run("mac1 normal", func(t *testing.T) {
+		hostName := "host1"
+		addr := packet.Addr{MAC: mac1}
+		p := newDHCP4DiscoverFrame(addr, hostName, nil)
+		frame, err := tc.session.Parse(p)
+		if err != nil {
+			panic(err)
+		}
+		err = tc.h.ProcessPacket(frame)
+		if lease := tc.h.findByMAC(addr.MAC); lease == nil || !lease.IPOffer.Equal(net.IPv4(192, 168, 0, 1)) || lease.Name != hostName || lease.State != StateDiscover ||
+			lease.subnet != tc.h.net1 {
+			tc.h.PrintTable()
+			t.Error("invalid discover state lease", lease)
+		}
+	})
+
+	t.Run("mac1 capture", func(t *testing.T) {
+		hostName := "host1"
+		addr := packet.Addr{MAC: mac1}
+		tc.session.Capture(addr.MAC)
+		p := newDHCP4DiscoverFrame(addr, hostName, nil)
+		frame, err := tc.session.Parse(p)
+		if err != nil {
+			panic(err)
+		}
+		err = tc.h.ProcessPacket(frame)
+		if lease := tc.h.findByMAC(addr.MAC); lease == nil || !lease.IPOffer.Equal(net.IPv4(192, 168, 0, 130)) || lease.Name != hostName || lease.State != StateDiscover ||
+			lease.subnet != tc.h.net2 {
+			tc.h.PrintTable()
+			t.Error("invalid discover state lease", lease)
+		}
+	})
+}
+
 func TestDHCPHandler_exhaust(t *testing.T) {
 	options := Options{}
 	options[OptionCode(OptionParameterRequestList)] = []byte{byte(OptionDomainNameServer)}

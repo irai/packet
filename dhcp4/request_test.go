@@ -1,6 +1,7 @@
 package dhcp4
 
 import (
+	"bytes"
 	"fmt"
 	"net"
 	"os"
@@ -37,7 +38,7 @@ func Test_requestSimple(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			newDHCPHost(t, tc, tt.srcAddr.MAC)
+			newDHCPHost(t, tc, tt.srcAddr.MAC, tt.name)
 
 			if n := len(tc.h.table); n != tt.tableLen {
 				tc.h.printTable()
@@ -45,6 +46,30 @@ func Test_requestSimple(t *testing.T) {
 			}
 			checkLeaseTable(t, tc, tt.allocatedCount, tt.discoverCount, tt.freeCount)
 		})
+	}
+}
+
+func Test_requestCaptured(t *testing.T) {
+	packet.DebugIP4 = false
+	packet.Debug = true
+	Debug = true
+	os.Remove(testDHCPFilename)
+	tc := setupTestHandler()
+	defer tc.Close()
+
+	hostName := "host1"
+	addr := packet.Addr{MAC: mac1}
+	ip := net.IPv4(192, 168, 0, 130)
+	tc.session.Capture(addr.MAC)
+	newDHCPHost(t, tc, addr.MAC, hostName)
+	if lease := tc.h.findByMAC(addr.MAC); lease == nil || !lease.Addr.IP.Equal(ip) || lease.Name != hostName || lease.State != StateAllocated ||
+		lease.subnet != tc.h.net2 {
+		tc.h.PrintTable()
+		t.Error("invalid lease", lease)
+	}
+	if host := tc.session.FindIP(ip); host == nil || host.DHCP4Name.Name != hostName || !host.Online || !bytes.Equal(host.MACEntry.MAC, addr.MAC) || !host.MACEntry.Captured {
+		tc.session.PrintTable()
+		t.Error("invalid host", host)
 	}
 }
 
@@ -64,8 +89,8 @@ func Test_requestExhaust(t *testing.T) {
 	xid := []byte(fmt.Sprintf("%d", tc.xid))
 	mac5 = net.HardwareAddr{0x00, 0xff, 0xaa, 0xbb, 0x05, 0x05} // new mac
 	srcAddr := packet.Addr{MAC: mac5, IP: net.IPv4zero, Port: DHCP4ClientPort}
-	dstAddr := packet.Addr{MAC: packet.EthernetBroadcast, IP: net.IPv4zero, Port: DHCP4ServerPort}
-	ether := newDHCP4DiscoverFrame(srcAddr, dstAddr, "onelastname", xid)
+	// dstAddr := packet.Addr{MAC: packet.EthernetBroadcast, IP: net.IPv4zero, Port: DHCP4ServerPort}
+	ether := newDHCP4DiscoverFrame(srcAddr, "onelastname", xid)
 	frame, err := tc.session.Parse(ether)
 	if err != nil {
 		panic(err)
@@ -95,7 +120,7 @@ func Test_requestAnotherHost(t *testing.T) {
 	dstAddr := packet.Addr{MAC: packet.EthernetBroadcast, IP: net.IPv4zero, Port: DHCP4ServerPort}
 
 	// first discover packet
-	ether := newDHCP4DiscoverFrame(srcAddr, dstAddr, "host name", xid)
+	ether := newDHCP4DiscoverFrame(srcAddr, "host name", xid)
 	frame, err := tc.session.Parse(ether)
 	if err != nil {
 		panic(err)
@@ -127,7 +152,7 @@ func Test_requestAnotherHost(t *testing.T) {
 	checkLeaseTable(t, tc, 0, 1, 0)
 
 	// new discover - captured host
-	ether = newDHCP4DiscoverFrame(srcAddr, dstAddr, "host name", xid)
+	ether = newDHCP4DiscoverFrame(srcAddr, "host name", xid)
 	frame, err = tc.session.Parse(ether)
 	if err != nil {
 		panic(err)
@@ -163,7 +188,7 @@ func exhaustAllIPs(t *testing.T, tc *testContext, mac net.HardwareAddr) {
 	// will skip x.0, hostIP, routerIP and x.255
 	for i := 0; i < 252; i++ {
 		mac[5] = byte(i)
-		newDHCPHost(t, tc, mac)
+		newDHCPHost(t, tc, mac, mac.String())
 	}
 	checkLeaseTable(t, tc, 252, 0, 0)
 }
