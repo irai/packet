@@ -140,7 +140,7 @@ func (h *Session) findOrCreateHostWithLock(addr Addr) (host *Host, found bool) {
 	}
 
 	macEntry := h.MACTable.findOrCreate(CopyMAC(addr.MAC))
-	host = &Host{Addr: Addr{IP: CopyIP(addr.IP), MAC: macEntry.MAC}, MACEntry: macEntry, Online: false} // set Online to false to trigger Online transition
+	host = &Host{Addr: Addr{IP: CopyIP(addr.IP), MAC: macEntry.MAC}, MACEntry: macEntry, Online: false} // set to false to trigger Online transition
 	host.dirty = true
 	host.Manufacturer = FindManufacturer(macEntry.MAC)
 	if host.Manufacturer != "" && host.Manufacturer != host.MACEntry.Manufacturer {

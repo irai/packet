@@ -272,10 +272,13 @@ func (h *Session) ReadFrom(b []byte) (int, net.Addr, error) {
 // of processing the packet. It returns silently if there is no notification pending.
 func (h *Session) Notify(frame Frame) {
 	if frame.Host == nil && frame.PayloadID == PayloadDHCP4 { // Attempt to find a dhcp host entry
-		ip := h.DHCPv4IPOffer(frame.SrcAddr.MAC)
-		if frame.Host = h.FindIP(ip); frame.Host == nil {
+		frame.SrcAddr.IP = h.DHCPv4IPOffer(frame.SrcAddr.MAC)
+		if frame.SrcAddr.IP == nil {
 			return
 		}
+		frame.Host, _ = h.findOrCreateHostWithLock(frame.SrcAddr)
+		frame.Session.onlineTransition(frame.Host)
+		frame.setOnlineTransition()
 	}
 	h.notify(frame)
 }
@@ -488,6 +491,9 @@ func (h *Session) Capture(mac net.HardwareAddr) error {
 
 	if macEntry.IsRouter {
 		return ErrIsRouter
+	}
+	if Debug {
+		fastlog.NewLine(module, "captured").MAC("mac", mac).Write()
 	}
 	macEntry.Captured = true
 	return nil
