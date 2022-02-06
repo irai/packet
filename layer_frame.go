@@ -437,7 +437,7 @@ func (h *Session) onlineTransition(host *Host) {
 			if ip := v.Addr.IP.To4(); ip != nil && !ip.Equal(host.Addr.IP) {
 				if v.Online {
 					if Debug {
-						fastlog.NewLine(module, "IP is offline").Struct(host).Write()
+						fastlog.NewLine(module, "IP is offline").Struct(v.Addr).Write()
 					}
 					v.Online = false
 					v.dirty = true

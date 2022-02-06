@@ -264,81 +264,6 @@ func (h *Session) ReadFrom(b []byte) (int, net.Addr, error) {
 	}
 }
 
-// Notify generates the notification for host offline and online if required. The function
-// is only required if the caller wants to receive notifications via the notification channel.
-// If the caller is not interested in online/offline transitions, the function is not required to run.
-//
-// Notify will only send a notification via the notification channel if a change is pending as a result
-// of processing the packet. It returns silently if there is no notification pending.
-func (h *Session) Notify(frame Frame) {
-	if frame.Host == nil && frame.PayloadID == PayloadDHCP4 { // Attempt to find a dhcp host entry
-		frame.SrcAddr.IP = h.DHCPv4IPOffer(frame.SrcAddr.MAC)
-		if frame.SrcAddr.IP == nil {
-			return
-		}
-		frame.Host, _ = h.findOrCreateHostWithLock(frame.SrcAddr)
-		frame.Session.onlineTransition(frame.Host)
-		frame.setOnlineTransition()
-	}
-	h.notify(frame)
-}
-
-func (h *Session) notify(frame Frame) {
-	frame.Host.MACEntry.Row.RLock()
-	if !frame.Host.dirty { // just another IP packet - nothing to do
-		frame.Host.MACEntry.Row.RUnlock()
-		return
-	}
-
-	// if transitioning to online, test if we need to notify previous IP is offline
-	offline := []*Host{}
-	if frame.onlineTransition() {
-		if frame.Host.Addr.IP.To4() != nil {
-			for _, v := range frame.Host.MACEntry.HostList {
-				if !v.Online && v.dirty {
-					offline = append(offline, v)
-				}
-			}
-		}
-	}
-	frame.Host.MACEntry.Row.RUnlock()
-
-	// notify previous IP4 is offline
-	for _, v := range offline {
-		h.makeOffline(v)
-	}
-
-	// lock row for update
-	frame.Host.MACEntry.Row.Lock()
-	notification := toNotification(frame.Host)
-	frame.Host.dirty = false
-	frame.Host.MACEntry.Row.Unlock()
-
-	h.sendNotification(notification)
-}
-
-func (h *Session) makeOffline(host *Host) {
-	host.MACEntry.Row.Lock()
-	host.Online = false
-	notification := toNotification(host)
-
-	// Update mac online status if all hosts are offline
-	macOnline := false
-	for _, host := range host.MACEntry.HostList {
-		if host.Online {
-			macOnline = true
-			break
-		}
-	}
-	host.MACEntry.Online = macOnline
-	host.MACEntry.Row.Unlock()
-
-	// Don't send offline notifications if caller is not reading
-	if len(h.C) < cap(h.C) {
-		h.sendNotification(notification)
-	}
-}
-
 // purge set entries offline and subsequently delete them if no more traffic received.
 // The funcion is called each minute by the minute goroutine.
 // now is a parameter to allow testing - i.e set a now to future to trigger events quickly.
@@ -419,6 +344,89 @@ func (h *Session) purge(now time.Time) error {
 	return nil
 }
 
+// Notify generates the notification for host offline and online if required. The function
+// is only required if the caller wants to receive notifications via the notification channel.
+// If the caller is not interested in online/offline transitions, the function is not required to run.
+//
+// Notify will only send a notification via the notification channel if a change is pending as a result
+// of processing the packet. It returns silently if there is no notification pending.
+func (h *Session) Notify(frame Frame) {
+	if frame.Host == nil {
+		if frame.PayloadID != PayloadDHCP4 {
+			return
+		}
+		// Attempt to find a dhcp host entry with saved IP from UpdateDHCP
+		frame.SrcAddr.IP = h.DHCPv4IPOffer(frame.SrcAddr.MAC)
+		if frame.SrcAddr.IP == nil {
+			return
+		}
+		frame.Host = h.findIP(frame.SrcAddr.IP)
+		if frame.Host == nil {
+			return
+		}
+		// frame.Session.onlineTransition(frame.Host)
+		frame.flags = frame.setOnlineTransition()
+	}
+	h.notify(frame)
+}
+
+func (h *Session) notify(frame Frame) {
+	frame.Host.MACEntry.Row.RLock()
+	if !frame.Host.dirty { // just another IP packet - nothing to do
+		frame.Host.MACEntry.Row.RUnlock()
+		return
+	}
+
+	// if transitioning to online, test if we need to notify previous IP is offline
+	offline := []*Host{}
+	if frame.onlineTransition() {
+		if frame.Host.Addr.IP.To4() != nil {
+			for _, v := range frame.Host.MACEntry.HostList {
+				if !v.Online && v.dirty {
+					offline = append(offline, v)
+				}
+			}
+		}
+	}
+	frame.Host.MACEntry.Row.RUnlock()
+
+	// notify previous IP4 is offline
+	for _, v := range offline {
+		h.makeOffline(v)
+	}
+
+	// lock row for update
+	frame.Host.MACEntry.Row.Lock()
+	notification := toNotification(frame.Host)
+	frame.Host.dirty = false
+	frame.Host.MACEntry.Row.Unlock()
+
+	h.sendNotification(notification)
+}
+
+func (h *Session) makeOffline(host *Host) {
+	host.MACEntry.Row.Lock()
+	host.Online = false
+	host.dirty = false
+	notification := toNotification(host)
+
+	// Update mac online status if all hosts are offline
+	macOnline := false
+	for _, host := range host.MACEntry.HostList {
+		if host.Online {
+			macOnline = true
+			break
+		}
+	}
+	host.MACEntry.Online = macOnline
+	host.MACEntry.Row.Unlock()
+
+	// Don't send offline notifications if caller is not reading
+	if len(h.C) < cap(h.C) {
+		h.sendNotification(notification)
+	}
+}
+
 // DHCPv4Update updates the mac and host entry with dhcp details.
 // A DHCP processing module should call this when it encounters a new host in a DHCP discovery/request message.
 //
@@ -434,6 +442,7 @@ func (h *Session) DHCPv4Update(mac net.HardwareAddr, ip net.IP, name NameEntry) 
 	host.MACEntry.Row.Lock()
 	defer host.MACEntry.Row.Unlock()
 
+	host.MACEntry.IP4Offer = host.Addr.IP // hack: keep IP to lookup in notify
 	if !host.Online {
 		h.onlineTransition(host)
 	}
@@ -445,9 +454,9 @@ func (h *Session) DHCPv4Update(mac net.HardwareAddr, ip net.IP, name NameEntry) 
 func (h *Session) SetDHCPv4IPOffer(mac net.HardwareAddr, ip net.IP, name NameEntry) {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
-	entry := h.MACTable.findOrCreate(mac)
-	entry.IP4Offer = CopyIP(ip)
-	entry.DHCP4Name = name
+	macEntry := h.MACTable.findOrCreate(mac)
+	macEntry.IP4Offer = CopyIP(ip)
+	macEntry.DHCP4Name = name
 }
 
 // DHCPv4Offer returns the dhcp v4 ip offer if one is available.

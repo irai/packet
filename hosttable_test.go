@@ -67,7 +67,7 @@ func newTestHost(session *Session, srcAddr Addr) Frame {
 	if err != nil {
 		panic(err)
 	}
-	if frame.Host == nil {
+	if !srcAddr.IP.Equal(net.IPv4zero) && frame.Host == nil {
 		panic("invalid nil test host")
 	}
 	return frame

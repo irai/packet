@@ -36,19 +36,73 @@ func TestSession_Notify(t *testing.T) {
 	// first host
 	frame1 := newTestHost(session, Addr{MAC: mac1, IP: ip1})
 	session.Notify(frame1)
+	Debug = true
+
+	select {
+	case <-time.After(time.Millisecond * 10):
+		t.Fatal("notification timeout")
+	case notification := <-session.C:
+		if !notification.Addr.IP.Equal(frame1.Host.Addr.IP) || !notification.Online {
+			t.Error("invalid online notification 1", notification)
+		}
+	}
 
 	// second host
 	frame2 := newTestHost(session, Addr{MAC: mac1, IP: ip2})
 	session.Notify(frame2)
 
-	// must get have 3 notifications - online, offline, online
-	for i := 0; i < 3; i++ {
-		select {
-		case <-session.C:
-		case <-time.After(time.Second):
-			t.Fatal("did not receive notification number", i)
+	// Offline notification
+	select {
+	case <-time.After(time.Millisecond * 10):
+		t.Error("notification timeout")
+	case notification := <-session.C:
+		if !notification.Addr.IP.Equal(frame1.Host.Addr.IP) || notification.Online {
+			t.Error("invalid offline notification 1", notification)
 		}
 	}
+	// Online notification
+	select {
+	case <-time.After(time.Millisecond * 10):
+		t.Error("notification timeout")
+	case notification := <-session.C:
+		if !notification.Addr.IP.Equal(frame2.Host.Addr.IP) || !notification.Online {
+			t.Error("invalid online notification 2", notification)
+		}
+	}
+
+	// Third host - dhcp - host is nil when zero IP in dhcp packet
+	frame3 := newTestHost(session, Addr{MAC: mac1, IP: net.IPv4zero})
+	session.DHCPv4Update(frame3.SrcAddr.MAC, ip3, NameEntry{Type: "dhcp", Name: "new name"})
+	frame3.PayloadID = PayloadDHCP4 // force to setup dhcp notify
+	session.Notify(frame3)
+
+	// Offline notification
+	select {
+	case <-time.After(time.Millisecond * 10):
+		t.Error("notification timeout")
+	case notification := <-session.C:
+		if !notification.Addr.IP.Equal(frame2.Host.Addr.IP) || notification.Online {
+			session.PrintTable()
+			t.Error("invalid offline notification 2", notification)
+		}
+	}
+	// Online notification
+	select {
+	case <-time.After(time.Millisecond * 10):
+		t.Error("notification timeout")
+	case notification := <-session.C:
+		if !notification.Addr.IP.Equal(ip3) || !notification.Online {
+			t.Error("invalid online notification 2", notification)
+		}
+	}
+	// no more notifications
+	select {
+	case <-time.After(time.Millisecond * 10):
+		// ok if timeout - no more notifications
+	case notification := <-session.C:
+		t.Error("unexpected final notification", notification)
+	}
+
 }
 
 func TestHandler_SignalNICStopped(t *testing.T) {
