@@ -206,6 +206,7 @@ func newDHCPHost(t *testing.T, tc *testContext, mac net.HardwareAddr, name strin
 	if err = tc.h.ProcessPacket(frame); err != nil {
 		t.Fatalf("Test_Requests:%s error = %v", "newDHCPHOst", err)
 	}
+	tc.h.session.Notify(frame)
 	select {
 	case p := <-tc.notifyReply:
 		dhcp := DHCP4(packet.UDP(packet.IP4(packet.Ether(p).Payload()).Payload()).Payload())

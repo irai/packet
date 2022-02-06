@@ -81,13 +81,21 @@ func Test_requestCaptured(t *testing.T) {
 			tc.session.PrintTable()
 			t.Error("invalid host", host)
 		}
+		select {
+		case <-time.After(time.Millisecond * 200):
+			t.Error("timeout")
+		case notification := <-tc.session.C:
+			if !notification.Addr.IP.Equal(ip) || !notification.Online {
+				t.Error("invalid online notification", notification)
+			}
+		}
 	})
 
 	t.Run("host2", func(t *testing.T) {
 		hostName := "host2"
 		addr := packet.Addr{MAC: mac2}
 		newDHCPHost(t, tc, addr.MAC, hostName)
-		ip := net.IPv4(192, 168, 0, 130)
+		ip := net.IPv4(192, 168, 0, 131)
 		tc.session.Capture(addr.MAC)
 		newDHCPHost(t, tc, addr.MAC, hostName)
 		if lease := tc.h.findByMAC(addr.MAC); lease == nil || !lease.Addr.IP.Equal(ip) || lease.Name != hostName || lease.State != StateAllocated ||
@@ -105,24 +113,24 @@ func Test_requestCaptured(t *testing.T) {
 		case <-time.After(time.Millisecond * 200):
 			t.Error("timeout")
 		case notification := <-tc.session.C:
-			if !notification.Online {
-				t.Error("invalid notification", notification)
+			if !notification.Addr.IP.Equal(net.IPv4(192, 168, 0, 1)) || !notification.Online {
+				t.Error("invalid online notification 1", notification)
 			}
 		}
 		select {
 		case <-time.After(time.Millisecond * 200):
 			t.Fatal("timeout")
 		case notification := <-tc.session.C:
-			if notification.Online {
-				t.Error("invalid notification", notification)
+			if !notification.Addr.IP.Equal(net.IPv4(192, 168, 0, 1)) || notification.Online {
+				t.Error("invalid offline notification", notification)
 			}
 		}
 		select {
 		case <-time.After(time.Millisecond * 200):
 			t.Fatal("timeout")
 		case notification := <-tc.session.C:
-			if !notification.Online {
-				t.Error("invalid notification", notification)
+			if !notification.Addr.IP.Equal(net.IPv4(192, 168, 0, 131)) || !notification.Online {
+				t.Error("invalid online notification 2", notification)
 			}
 		}
 	})
