@@ -58,6 +58,7 @@ func (l Lease) FastLog(line *fastlog.Line) *fastlog.Line {
 	line.String("capture", l.subnet.Stage.String())
 	line.IP("gw", l.subnet.DefaultGW)
 	line.String("mask", l.subnet.LAN.Mask.String())
+	line.String("subnet", l.subnet.ID)
 	return line
 }
 

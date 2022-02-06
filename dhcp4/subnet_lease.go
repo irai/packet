@@ -25,6 +25,7 @@ type SubnetConfig struct {
 	LastIP     net.IP           // Last IP in range
 	Duration   time.Duration    // lease duration
 	Stage      packet.HuntStage // Default stage for subnet
+	ID         string           // Used for logging
 }
 
 // dhcpSubnet hold the 256 lease array for subnet
@@ -43,6 +44,7 @@ func newSubnet(config SubnetConfig) (*dhcpSubnet, error) {
 
 	subnet := dhcpSubnet{}
 	subnet.LAN = net.IPNet{IP: config.LAN.IP.Mask(config.LAN.Mask).To4(), Mask: config.LAN.Mask}
+	subnet.ID = config.ID
 
 	// get broadcast addr
 	subnet.broadcast = packet.CopyIP(subnet.LAN.IP).To4()

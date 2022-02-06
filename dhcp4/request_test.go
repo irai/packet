@@ -45,6 +45,15 @@ func Test_requestSimple(t *testing.T) {
 				t.Errorf("DHCPHandler.handleDiscover() invalid lease table len=%d want=%d", n, tt.tableLen)
 			}
 			checkLeaseTable(t, tc, tt.allocatedCount, tt.discoverCount, tt.freeCount)
+			select {
+			case <-time.After(time.Millisecond * 200):
+				t.Error("timeout")
+			case notification := <-tc.session.C:
+				if !notification.Online {
+					tc.session.PrintTable()
+					t.Error("invalid notification", notification)
+				}
+			}
 		})
 	}
 }
@@ -52,25 +61,71 @@ func Test_requestSimple(t *testing.T) {
 func Test_requestCaptured(t *testing.T) {
 	packet.DebugIP4 = false
 	packet.Debug = true
-	Debug = true
+	Debug = false
 	os.Remove(testDHCPFilename)
 	tc := setupTestHandler()
 	defer tc.Close()
 
-	hostName := "host1"
-	addr := packet.Addr{MAC: mac1}
-	ip := net.IPv4(192, 168, 0, 130)
-	tc.session.Capture(addr.MAC)
-	newDHCPHost(t, tc, addr.MAC, hostName)
-	if lease := tc.h.findByMAC(addr.MAC); lease == nil || !lease.Addr.IP.Equal(ip) || lease.Name != hostName || lease.State != StateAllocated ||
-		lease.subnet != tc.h.net2 {
-		tc.h.PrintTable()
-		t.Error("invalid lease", lease)
-	}
-	if host := tc.session.FindIP(ip); host == nil || host.DHCP4Name.Name != hostName || !host.Online || !bytes.Equal(host.MACEntry.MAC, addr.MAC) || !host.MACEntry.Captured {
-		tc.session.PrintTable()
-		t.Error("invalid host", host)
-	}
+	t.Run("host1", func(t *testing.T) {
+		hostName := "host1"
+		addr := packet.Addr{MAC: mac1}
+		ip := net.IPv4(192, 168, 0, 130)
+		tc.session.Capture(addr.MAC)
+		newDHCPHost(t, tc, addr.MAC, hostName)
+		if lease := tc.h.findByMAC(addr.MAC); lease == nil || !lease.Addr.IP.Equal(ip) || lease.Name != hostName || lease.State != StateAllocated ||
+			lease.subnet != tc.h.net2 {
+			tc.h.PrintTable()
+			t.Error("invalid lease", lease)
+		}
+		if host := tc.session.FindIP(ip); host == nil || host.DHCP4Name.Name != hostName || !host.Online || !bytes.Equal(host.MACEntry.MAC, addr.MAC) || !host.MACEntry.Captured {
+			tc.session.PrintTable()
+			t.Error("invalid host", host)
+		}
+	})
+
+	t.Run("host2", func(t *testing.T) {
+		hostName := "host2"
+		addr := packet.Addr{MAC: mac2}
+		newDHCPHost(t, tc, addr.MAC, hostName)
+		ip := net.IPv4(192, 168, 0, 130)
+		tc.session.Capture(addr.MAC)
+		newDHCPHost(t, tc, addr.MAC, hostName)
+		if lease := tc.h.findByMAC(addr.MAC); lease == nil || !lease.Addr.IP.Equal(ip) || lease.Name != hostName || lease.State != StateAllocated ||
+			lease.subnet != tc.h.net2 {
+			tc.h.PrintTable()
+			t.Error("invalid lease", lease)
+		}
+		if host := tc.session.FindIP(ip); host == nil || host.DHCP4Name.Name != hostName || !host.Online || !bytes.Equal(host.MACEntry.MAC, addr.MAC) || !host.MACEntry.Captured {
+			tc.session.PrintTable()
+			t.Error("invalid host", host)
+		}
+
+		// wait for three notifications
+		select {
+		case <-time.After(time.Millisecond * 200):
+			t.Error("timeout")
+		case notification := <-tc.session.C:
+			if !notification.Online {
+				t.Error("invalid notification", notification)
+			}
+		}
+		select {
+		case <-time.After(time.Millisecond * 200):
+			t.Fatal("timeout")
+		case notification := <-tc.session.C:
+			if notification.Online {
+				t.Error("invalid notification", notification)
+			}
+		}
+		select {
+		case <-time.After(time.Millisecond * 200):
+			t.Fatal("timeout")
+		case notification := <-tc.session.C:
+			if !notification.Online {
+				t.Error("invalid notification", notification)
+			}
+		}
+	})
 }
 
 func Test_requestExhaust(t *testing.T) {

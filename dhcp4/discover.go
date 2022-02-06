@@ -116,6 +116,6 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (d DHCP4) {
 
 	// Set the IP4 offer to be later checked in ARP ACD
 	h.session.SetDHCPv4IPOffer(lease.Addr.MAC, lease.IPOffer, packet.NameEntry{Type: module, Name: name})
-	fastlog.NewLine(module, "offer OK").ByteArray("xid", p.XId()).ByteArray("clientid", clientID).IP("ip", lease.IPOffer).Write()
+	fastlog.NewLine(module, "offer OK").ByteArray("xid", p.XId()).ByteArray("clientid", clientID).IP("ip", lease.IPOffer).String("subnet", lease.subnet.ID).Write()
 	return ret
 }

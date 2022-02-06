@@ -156,7 +156,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 			fastlog.NewLine(module, "request NACK - select invalid parameters").ByteArray("xid", p.XId()).ByteArray("lxid", lease.XID).IP("leaseIP", lease.Addr.IP).Write()
 			return nakPacket(p, subnet.DHCPServer, clientID)
 		}
-		fastlog.NewLine(module, "request ACK - select").ByteArray("xid", p.XId()).ByteArray("clientid", clientID).IP("ip", reqIP).Write()
+		fastlog.NewLine(module, "request ACK - select").ByteArray("xid", p.XId()).ByteArray("clientid", clientID).IP("ip", reqIP).String("subnet", lease.subnet.ID).Write()
 
 	case renewing:
 		// If renewing then this packet was unicast to us and the client

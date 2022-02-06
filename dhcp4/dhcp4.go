@@ -39,7 +39,7 @@ const (
 
 // Config contains configuration overrides
 type Config struct {
-	ClientConn    net.PacketConn
+	// ClientConn    net.PacketConn
 	Mode          Mode
 	NetfilterIP   net.IPNet
 	DNSServer     net.IP
@@ -160,6 +160,8 @@ func (config Config) New(session *packet.Session) (h *Handler, err error) {
 			return nil, fmt.Errorf("netfilter config : %w", err)
 		}
 	}
+	h.net1.ID = "net1"
+	h.net2.ID = "net2"
 
 	// Add static and classless route options
 	h.net2.appendRouteOptions(h.net1.DefaultGW, h.net1.LAN.Mask, h.net2.DefaultGW)

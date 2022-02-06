@@ -139,7 +139,7 @@ func setupTestHandler() *testContext {
 		NetfilterIP:   net.IPNet{IP: hostIP4, Mask: net.IPv4Mask(255, 255, 255, 128)},
 		DNSServer:     dnsIP4,
 		LeaseFilename: testDHCPFilename,
-		ClientConn:    tc.clientInConn}
+	}
 	tc.h, err = config.New(tc.session)
 	// tc.h, err = Config{ClientConn: tc.clientInConn}.New(tc.session, net.IPNet{IP: hostIP4, Mask: net.IPv4Mask(255, 255, 255, 128)}, dnsIP4, testDHCPFilename)
 	if err != nil {
@@ -177,6 +177,7 @@ func newDHCPHost(t *testing.T, tc *testContext, mac net.HardwareAddr, name strin
 	if err := tc.h.ProcessPacket(frame); err != nil {
 		t.Fatalf("Test_Requests:%s error = %v", "newDHCPHOst", err)
 	}
+	tc.h.session.Notify(frame)
 	select {
 	case p := <-tc.notifyReply:
 		frame, err = tc.session.Parse(p)
