@@ -95,7 +95,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 		operation = rebooting
 	}
 
-	fastlog.NewLine(module, "request rcvd").ByteArray("xid", p.XId()).ByteArray("clientid", clientID).IP("ip", reqIP).String("name", nameEntry.Name).MAC("chaddr", p.CHAddr()).Write()
+	fastlog.NewLine(module, "request rcvd").ByteArray("xid", p.XId()).ByteArray("clientid", clientID).IP("ip", reqIP).String("name", nameEntry.Name).MAC("chaddr", p.CHAddr()).IP("serverID", serverIP).Write()
 
 	if Debug {
 		fastlog.NewLine(module, "request parameters").ByteArray("xid", p.XId()).IP("ciaddr", p.CIAddr()).Bool("brd", p.Broadcast()).IP("serverIP", serverIP).Write()
