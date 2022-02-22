@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -33,15 +34,27 @@ import (
 // bufSize sets the maximum len for a log entry
 const bufSize = 2048
 
+// type logLevel struct {
+// l int32
+// }
+type logLevel uint32
+
+const (
+	LevelError = logLevel(0)
+	LevelInfo  = logLevel(1)
+	LevelDebug = logLevel(2)
+)
+
+var lines = sync.Pool{New: func() interface{} { return new(Line) }}
+
 type Logger struct {
-	Out   io.Writer
-	pool  sync.Pool
-	lines sync.Pool
+	Out    io.Writer
+	module string
+	level  uint32 // atomic int32
 }
 
-var Std = &Logger{
-	Out:   os.Stderr,
-	lines: sync.Pool{New: func() interface{} { return new(Line) }},
+type FastLog interface {
+	FastLog(*Line) *Line
 }
 
 type Line struct {
@@ -49,16 +62,41 @@ type Line struct {
 	index  int
 }
 
-type FastLog interface {
-	FastLog(*Line) *Line
+var Std = New("logger")
+
+func (l *Logger) SetLevel(level logLevel) {
+	atomic.StoreUint32(&l.level, uint32(level))
+}
+
+func (l *Logger) IsInfo() bool {
+	return atomic.LoadUint32(&l.level) >= uint32(LevelInfo)
+}
+
+func (l *Logger) IsDebug() bool {
+	return atomic.LoadUint32(&l.level) >= uint32(LevelDebug)
+}
+
+func New(module string) *Logger {
+	return NewOut(os.Stderr, module)
+}
+
+func NewOut(out io.Writer, module string) *Logger {
+	return &Logger{
+		Out:    out,
+		module: module,
+	}
 }
 
 func NewLine(module string, msg string) *Line {
 	return Std.NewLine(module, msg)
 }
 
+func (logger *Logger) Msg(msg string) *Line {
+	return logger.NewLine(logger.module, msg)
+}
+
 func (logger *Logger) NewLine(module string, msg string) *Line {
-	l := Std.lines.Get().(*Line)
+	l := lines.Get().(*Line)
 	l.index = 0
 	return l.newModule(module, msg)
 }
@@ -96,7 +134,7 @@ func (l *Line) LF() *Line {
 func (l *Line) ToString() string {
 	str := string(l.buffer[:l.index])
 	l.index = copy(l.buffer[:], "invalid buffer freed via ToString()") // guarding against reuse by caller
-	Std.lines.Put(l)
+	lines.Put(l)
 	return str
 }
 
@@ -109,7 +147,7 @@ func (l *Line) Write() error {
 	l.buffer[l.index] = '\n'
 	_, err := Std.Out.Write(l.buffer[:l.index+1])
 	l.index = copy(l.buffer[:], "invalid buffer freed via Write()") // guarding against reuse by caller
-	Std.lines.Put(l)
+	lines.Put(l)
 	return err
 }
 
