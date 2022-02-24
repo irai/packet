@@ -60,7 +60,7 @@ var lines = sync.Pool{New: func() interface{} { return new(Line) }}
 
 type Logger struct {
 	Out    io.Writer
-	module string
+	module [8]byte
 	level  uint32 // atomic int32
 }
 
@@ -118,10 +118,12 @@ func New(module string) *Logger {
 }
 
 func NewOut(out io.Writer, module string) *Logger {
-	return &Logger{
-		Out:    out,
-		module: module,
+	l := &Logger{Out: out}
+	copy(l.module[:], "      :")
+	if module != "" {
+		copy(l.module[:6], module)
 	}
+	return l
 }
 
 func NewLine(module string, msg string) *Line {
@@ -129,7 +131,16 @@ func NewLine(module string, msg string) *Line {
 }
 
 func (logger *Logger) Msg(msg string) *Line {
-	return logger.NewLine(logger.module, msg)
+	l := lines.Get().(*Line)
+	copy(l.buffer[0:7], logger.module[:])
+	l.index = l.index + 7
+	if msg != "" {
+		l.appendByte(' ')
+		l.appendByte('"')
+		l.index = l.index + copy(l.buffer[l.index:], msg)
+		l.appendByte('"')
+	}
+	return l
 }
 
 func (logger *Logger) NewLine(module string, msg string) *Line {
@@ -166,8 +177,8 @@ func (l *Line) LF() *Line {
 	return l
 }
 
-// ToString converts the buffer to string and return the buffer to the pool.
-// The buffer is no longer available after calling this function.
+// ToString converts the line to string and return the line to the pool.
+// The line buffer is no longer available after calling this function.
 func (l *Line) ToString() string {
 	str := string(l.buffer[:l.index])
 	l.index = copy(l.buffer[:], "invalid buffer freed via ToString()") // guarding against reuse by caller
@@ -175,8 +186,8 @@ func (l *Line) ToString() string {
 	return str
 }
 
-// Write writes the buffer and return the buffer to the pool.
-// The buffer is no longer available after calling this function.
+// Write writes the line and return the line to the pool.
+// The line buffer is no longer available after calling this function.
 func (l *Line) Write() error {
 	if l.index >= len(l.buffer) { // add as last character
 		l.index--

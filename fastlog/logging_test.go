@@ -253,4 +253,23 @@ func Benchmark_Fastlog(b *testing.B) {
 				Write()
 		}
 	})
+
+	logger := New("test")
+	b.Run("zero_alloc_initialised", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			logger.Msg("message").
+				Int("int", 100).
+				String("name", "my string").
+				Uint16("uint16", 1).
+				Uint32("uint32", 1).
+				Uint8("uint8", 111).
+				IP("ip", net.IPv4zero).
+				IP("ipv6", net.IPv6zero).
+				MAC("mac", mac).
+				ByteArray("array", []byte{1, 2, 3, 4, 5, 6, 7, 8, 9}).
+				Time("time", now).
+				Write()
+		}
+	})
 }
