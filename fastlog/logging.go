@@ -60,7 +60,7 @@ var lines = sync.Pool{New: func() interface{} { return new(Line) }}
 
 type Logger struct {
 	Out    io.Writer
-	module [8]byte
+	module [7]byte
 	level  uint32 // atomic int32
 }
 
