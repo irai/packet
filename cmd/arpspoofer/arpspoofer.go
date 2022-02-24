@@ -12,6 +12,7 @@ import (
 
 	"github.com/irai/packet"
 	"github.com/irai/packet/arp"
+	"github.com/irai/packet/fastlog"
 	"github.com/irai/packet/icmp"
 )
 
@@ -19,7 +20,7 @@ import (
 var (
 	nic   = flag.String("i", "eth0", "nic interface")
 	ipstr = flag.String("ip", "", "target ip address as in 192.168.0.30")
-	debug = flag.Bool("d", false, "set to true to show debug messages")
+	debug = flag.String("d", "info", "set to info or debug to show debug messages")
 )
 
 func processNotification(s *packet.Session, targetIP net.IP) {
@@ -75,9 +76,9 @@ func main() {
 	}
 	defer s.Close()
 
-	arp.Debug = *debug
-	icmp.Debug = *debug
-	packet.Debug = *debug
+	// arp.Debug = *debug
+	// icmp.Debug = *debug
+	packet.Logger.SetLevel(fastlog.Str2LogLevel(*debug))
 
 	// instanciate the arp spoofer
 	arpSpoofer, err = arp.New(s)
@@ -186,11 +187,12 @@ func main() {
 
 			case "log":
 				p := getString(tokens, 1)
+				level := getString(tokens, 2)
 				switch p {
 				case "packet":
-					packet.Debug = !packet.Debug
+					packet.Logger.SetLevel(fastlog.Str2LogLevel(level))
 				case "arp":
-					arp.Debug = !arp.Debug
+					arp.Logger.SetLevel(fastlog.Str2LogLevel(level))
 				case "icmp":
 					icmp.Debug = !icmp.Debug
 				}

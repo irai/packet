@@ -17,11 +17,6 @@ const module = "packet"
 
 // Global variables
 var (
-	Debug    bool
-	DebugIP6 bool
-	DebugIP4 bool
-	DebugUDP bool
-
 	Logger = fastlog.New(module)
 
 	IP4Broadcast     = net.IPv4(255, 255, 255, 255)

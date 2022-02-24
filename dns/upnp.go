@@ -89,7 +89,7 @@ func (h *DNSHandler) UPNPServiceDiscovery(addr packet.Addr, location string) (na
 	if err != nil {
 		return packet.NameEntry{}, err
 	}
-	if packet.Debug {
+	if packet.Logger.IsDebug() {
 		fmt.Printf("engine: retrieved upnp name=%s model=%s manufacturer=%s\n", service.Device.Name, service.Device.Model, service.Device.Manufacturer)
 	}
 

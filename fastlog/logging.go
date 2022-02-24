@@ -46,6 +46,16 @@ const (
 	LevelDebug = LogLevel(2)
 )
 
+func (l LogLevel) String() string {
+	switch l {
+	case LevelError:
+		return "error"
+	case LevelInfo:
+		return "info"
+	}
+	return "debug"
+}
+
 var lines = sync.Pool{New: func() interface{} { return new(Line) }}
 
 type Logger struct {
@@ -75,12 +85,28 @@ func Str2LogLevel(level string) LogLevel {
 	return LevelError
 }
 
+func (l *Logger) Level() LogLevel {
+	return LogLevel(atomic.LoadUint32(&l.level))
+}
+
 func (l *Logger) SetLevel(level LogLevel) {
 	atomic.StoreUint32(&l.level, uint32(level))
 }
 
+func (l *Logger) Disable() {
+	atomic.StoreUint32(&l.level, uint32(LevelError))
+}
+
+func (l *Logger) EnableInfo() {
+	atomic.StoreUint32(&l.level, uint32(LevelInfo))
+}
+
 func (l *Logger) IsInfo() bool {
 	return atomic.LoadUint32(&l.level) >= uint32(LevelInfo)
+}
+
+func (l *Logger) EnableDebug() {
+	atomic.StoreUint32(&l.level, uint32(LevelDebug))
 }
 
 func (l *Logger) IsDebug() bool {

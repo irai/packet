@@ -12,8 +12,7 @@ import (
 )
 
 func Test_requestSimple(t *testing.T) {
-	packet.DebugIP4 = false
-	packet.Debug = true
+	packet.Logger.SetLevel(fastlog.DebugLevel)
 	Debug = true
 	os.Remove(testDHCPFilename)
 	tc := setupTestHandler()
@@ -60,7 +59,7 @@ func Test_requestSimple(t *testing.T) {
 
 func Test_requestCaptured(t *testing.T) {
 	packet.DebugIP4 = false
-	packet.Debug = true
+	packet.Logger.SetLevel(fastlog.DebugLevel)
 	Debug = false
 	os.Remove(testDHCPFilename)
 	tc := setupTestHandler()
@@ -138,7 +137,7 @@ func Test_requestCaptured(t *testing.T) {
 
 func Test_requestExhaust(t *testing.T) {
 
-	packet.Debug = false
+	packet.Logger.SetLevel(fastlog.LevelError)
 	Debug = false
 	os.Remove(testDHCPFilename)
 	tc := setupTestHandler()

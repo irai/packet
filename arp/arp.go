@@ -59,12 +59,11 @@ type Config struct {
 	ProbeInterval time.Duration
 }
 
-var (
-	// Debug - set Debug to true to see debugging messages
-	Debug bool
-)
-
 const module = "arp"
+
+var (
+	Logger = fastlog.New(module)
+)
 
 // New creates the ARP handler
 func New(session *packet.Session) (h *Handler, err error) {
@@ -100,7 +99,7 @@ func (h *Handler) PrintTable() {
 	h.arpMutex.Lock()
 	defer h.arpMutex.Unlock()
 	for _, v := range h.huntList {
-		fastlog.NewLine(module, "hunting").Struct(v).Write()
+		Logger.Msg("hunting").Struct(v).Write()
 	}
 }
 
@@ -129,8 +128,8 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 
 	// skip link local packets
 	if arpFrame.SrcIP().IsLinkLocalUnicast() || arpFrame.DstIP().IsLinkLocalUnicast() {
-		if Debug {
-			fastlog.NewLine(module, "skipping link local packet").Struct(arpFrame).Write()
+		if Logger.IsDebug() {
+			Logger.Msg("skipping link local packet").Struct(arpFrame).Write()
 		}
 		return nil
 	}
@@ -149,7 +148,7 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 			operation = request
 		}
 	default:
-		fastlog.NewLine(module, "invalid operation").Struct(arpFrame).Write()
+		Logger.Msg("invalid operation").Struct(arpFrame).Write()
 		return nil
 	}
 
@@ -160,8 +159,8 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 		// +============+===+===========+===========+============+============+===================+===========+
 		// | request    | 1 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  targetIP |
 		// +============+===+===========+===========+============+============+===================+===========+
-		if Debug {
-			fastlog.NewLine(module, "ether").Struct(frame.Ether()).Module(module, "request received").IP("ip", arpFrame.DstIP()).Struct(arpFrame).Write()
+		if Logger.IsDebug() {
+			Logger.Msg("ether").Struct(frame.Ether()).Module(module, "request received").IP("ip", arpFrame.DstIP()).Struct(arpFrame).Write()
 		}
 		// if we are spoofing the src host and the src host is trying to discover the router IP,
 		// reply on behalf of the router
@@ -169,11 +168,11 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 		_, hunting := h.huntList[string(arpFrame.SrcMAC())]
 		h.arpMutex.Unlock()
 		if hunting && arpFrame.DstIP().Equal(h.session.NICInfo.RouterAddr4.IP) {
-			if Debug {
-				fastlog.NewLine(module, "router spoofing - send reply I am").IP("ip", arpFrame.DstIP()).MAC("dstmac", arpFrame.SrcMAC()).Write()
+			if Logger.IsDebug() {
+				Logger.Msg("router spoofing - send reply I am").IP("ip", arpFrame.DstIP()).MAC("dstmac", arpFrame.SrcMAC()).Write()
 			}
 			if err := h.session.ARPReply(arpFrame.SrcMAC(), packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: arpFrame.DstIP()}, packet.Addr{MAC: arpFrame.SrcMAC(), IP: arpFrame.SrcIP()}); err != nil {
-				fastlog.NewLine(module, "failed to send spoofing reply").MAC("mac", arpFrame.SrcMAC()).Error(err).Write()
+				Logger.Msg("failed to send spoofing reply").MAC("mac", arpFrame.SrcMAC()).Error(err).Write()
 			}
 			return nil
 		}
@@ -187,8 +186,8 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 		// +============+===+===========+===========+============+============+===================+===========+
 		// | ACD probe  | 1 | broadcast | clientMAC | clientMAC  | 0x00       | 0x00              |  targetIP |
 		// +============+===+===========+===========+============+============+===================+===========+
-		if Debug {
-			fastlog.NewLine(module, "ether").Struct(frame.Ether()).Module(module, "probe recvd").Struct(arpFrame).Write()
+		if Logger.IsDebug() {
+			Logger.Msg("ether").Struct(frame.Ether()).Module(module, "probe recvd").Struct(arpFrame).Write()
 		}
 
 		// if dhcpv4 spoofing then reject any other ip that is not the spoofed IP on offer
@@ -196,7 +195,7 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 			// Note: detected one situation where android probed external DNS IP. Not sure if this occur in other clients.
 			//     arp  : probe reject for ip=8.8.8.8 from mac=84:11:9e:03:89:c0 (android phone) - 10 March 2021
 			if h.session.NICInfo.HomeLAN4.Contains(arpFrame.DstIP()) {
-				fastlog.NewLine(module, "probe reject for").IP("ip", arpFrame.DstIP()).MAC("fromMAC", arpFrame.SrcMAC()).IP("offer", offer).Write()
+				Logger.Msg("probe reject for").IP("ip", arpFrame.DstIP()).MAC("fromMAC", arpFrame.SrcMAC()).IP("offer", offer).Write()
 				// unicast reply to srcMAC
 				h.session.ARPReply(arpFrame.SrcMAC(), packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: arpFrame.DstIP()}, packet.Addr{MAC: arpFrame.SrcMAC(), IP: net.IP(packet.IP4Broadcast)})
 			}
@@ -209,8 +208,8 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 		// +============+===+===========+===========+============+============+===================+===========+
 		// | ACD announ | 1 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  clientIP |
 		// +============+===+===========+===========+============+============+===================+===========+
-		if Debug {
-			fastlog.NewLine(module, "ether").Struct(frame.Ether()).Module(module, "announcement recvd").Struct(arpFrame).Write()
+		if Logger.IsDebug() {
+			Logger.Msg("ether").Struct(frame.Ether()).Module(module, "announcement recvd").Struct(arpFrame).Write()
 		}
 
 	default:
@@ -220,8 +219,8 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 		// | reply      | 2 | clientMAC | targetMAC | targetMAC  | targetIP   | clientMAC         |  clientIP |
 		// | gratuitous | 2 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  clientIP |
 		// +============+===+===========+===========+============+============+===================+===========+
-		if Debug {
-			fastlog.NewLine(module, "ether").Struct(frame.Ether()).Module(module, "reply recvd").Struct(arpFrame).Write()
+		if Logger.IsDebug() {
+			Logger.Msg("ether").Struct(frame.Ether()).Module(module, "reply recvd").Struct(arpFrame).Write()
 		}
 	}
 	return nil

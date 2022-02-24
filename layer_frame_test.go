@@ -44,7 +44,8 @@ func TestSession_Parse(t *testing.T) {
 		{name: "IGMP", p: mustHex(testIGMP), wantErr: false, wantPayloadID: PayloadIGMP, wantHosts: 5},
 	}
 	h, _ := testSession()
-	Debug = true
+	Logger.EnableInfo()
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gotFrame, err := h.Parse(tt.p)

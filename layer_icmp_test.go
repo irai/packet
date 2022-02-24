@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/irai/packet/fastlog"
 	"golang.org/x/net/ipv6"
 	"inet.af/netaddr"
 )
@@ -92,7 +93,7 @@ func Test_icmp6(t *testing.T) {
 		{name: "ra", wantErr: false, p: icmp6_ra_req},
 	}
 
-	Debug = false
+	// Logger.SetLevel(fastlog.LevelDebug)
 	session, _ := testSession()
 
 	buffer := make([]byte, 1500)
@@ -213,7 +214,7 @@ func TestSession_Ping(t *testing.T) {
 	session, client := testSession()
 	defer session.Close()
 
-	Debug = true
+	Logger.SetLevel(fastlog.LevelDebug)
 
 	addr := Addr{MAC: mac1, IP: ip1}
 	go func() {

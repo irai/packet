@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/fastlog"
 )
 
 var (
@@ -99,9 +100,6 @@ func setupTestHandler(t *testing.T) *testContext {
 
 func (tc *testContext) Close() {
 	time.Sleep(time.Millisecond * 20) // wait for all packets to finish
-	if Debug {
-		fmt.Println("teminating context")
-	}
 	tc.cancel()
 	tc.wg.Wait()
 }
@@ -154,8 +152,8 @@ func readResponse(ctx context.Context, tc *testContext) error {
 }
 
 func Test_Handler_BasicTest(t *testing.T) {
-	Debug = true
-	packet.Debug = true
+	Logger.SetLevel(fastlog.LevelDebug)
+	packet.Logger.SetLevel(fastlog.LevelDebug)
 	tc := setupTestHandler(t)
 	defer tc.Close()
 

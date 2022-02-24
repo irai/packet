@@ -7,13 +7,15 @@ import (
 	"time"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/fastlog"
 )
 
 func Test_Probe_Reject(t *testing.T) {
 	tc := setupTestHandler(t)
 	defer tc.Close()
-	Debug = true
-	packet.Debug = true
+
+	Logger.SetLevel(fastlog.LevelDebug)
+	packet.Logger.SetLevel(fastlog.LevelDebug)
 
 	tests := []struct {
 		name              string

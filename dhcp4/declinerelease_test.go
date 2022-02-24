@@ -8,10 +8,11 @@ import (
 	"time"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/fastlog"
 )
 
 func Test_declineSimple(t *testing.T) {
-	packet.Debug = false
+	packet.Logger.SetLevel(fastlog.LevelError)
 	Debug = false
 	os.Remove(testDHCPFilename)
 	tc := setupTestHandler()

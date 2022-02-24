@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/fastlog"
 )
 
 func testRequestPacket(mt MessageType, chAddr net.HardwareAddr, cIAddr net.IP, xId []byte, broadcast bool, options Options) DHCP4 {
@@ -150,8 +151,7 @@ func TestDHCPHandler_exhaust(t *testing.T) {
 	options := Options{}
 	options[OptionCode(OptionParameterRequestList)] = []byte{byte(OptionDomainNameServer)}
 
-	packet.DebugIP4 = false
-	packet.Debug = false
+	packet.Logger.SetLevel(fastlog.LevelError)
 	Debug = false
 	os.Remove(testDHCPFilename)
 	tc := setupTestHandler()

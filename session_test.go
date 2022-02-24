@@ -8,6 +8,8 @@ import (
 	"os/signal"
 	"testing"
 	"time"
+
+	"github.com/irai/packet/fastlog"
 )
 
 func testSession() (*Session, net.PacketConn) {
@@ -36,7 +38,7 @@ func TestSession_Notify(t *testing.T) {
 	// first host
 	frame1 := newTestHost(session, Addr{MAC: mac1, IP: ip1})
 	session.Notify(frame1)
-	Debug = true
+	Logger.SetLevel(fastlog.LevelDebug)
 
 	select {
 	case <-time.After(time.Millisecond * 10):
@@ -106,7 +108,7 @@ func TestSession_Notify(t *testing.T) {
 }
 
 func TestHandler_SignalNICStopped(t *testing.T) {
-	Debug = true
+	Logger.SetLevel(fastlog.LevelDebug)
 	nicInfo := NICInfo{
 		RouterAddr4: Addr{MAC: routerMAC, IP: routerIP4},
 		HostAddr4:   Addr{MAC: hostMAC, IP: hostIP4},
@@ -143,7 +145,7 @@ func TestHandler_purge(t *testing.T) {
 	ip6GUA3 := net.IP{0x20, 0x01, 0x44, 0x79, 0x1d, 0x01, 0x24, 0x01, 0x7c, 0xf2, 0x4f, 0x73, 0xf8, 0xc1, 0x00, 0x03}
 
 	session, _ := testSession()
-	Debug = true
+	Logger.SetLevel(fastlog.LevelDebug)
 
 	// First create host with two IPs - IP3 and IP2 and set online
 	frame1 := newTestHost(session, Addr{MAC: mac1, IP: ip1})
@@ -196,7 +198,7 @@ func TestHandler_purge(t *testing.T) {
 func TestHandler_findOrCreateHostDupIP(t *testing.T) {
 	session, _ := testSession()
 
-	Debug = false
+	// Logger.SetLevel(fastlog.LevelDebug)
 
 	// First create host with two IPs - IP3 and IP2 and set online
 	host1, _ := session.findOrCreateHostWithLock(Addr{MAC: mac1, IP: ip3})
@@ -256,7 +258,7 @@ func TestHandler_findOrCreateHostDupIP(t *testing.T) {
 
 func TestSession_DHCPUpdate(t *testing.T) {
 	session, _ := testSession()
-	Debug = false
+	// Logger.SetLevel(fastlog.LevelDebug)
 
 	// create existing host for mac1
 	host1, _ := session.findOrCreateHostWithLock(Addr{MAC: mac1, IP: ip1})

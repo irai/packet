@@ -424,8 +424,8 @@ func (h *Session) ICMP4SendEchoRequest(srcAddr Addr, dstAddr Addr, id uint16, se
 		return err
 	}
 
-	if Debug {
-		fastlog.NewLine(module, "send echo4 request").IP("srcIP", srcAddr.IP).IP("dstIP", dstAddr.IP).Struct(ICMPEcho(p)).Write()
+	if Logger.IsDebug() {
+		Logger.Msg("send echo4 request").IP("srcIP", srcAddr.IP).IP("dstIP", dstAddr.IP).Struct(ICMPEcho(p)).Write()
 	}
 	return h.icmp4SendPacket(srcAddr, dstAddr, p)
 }
@@ -468,8 +468,8 @@ func (h *Session) ICMP6SendEchoRequest(srcAddr Addr, dstAddr Addr, id uint16, se
 		return err
 	}
 
-	if Debug {
-		fastlog.NewLine(module, "send echo6 request").IP("srcIP", srcAddr.IP).IP("dstIP", dstAddr.IP).Struct(ICMPEcho(p)).Write()
+	if Logger.IsDebug() {
+		Logger.Msg("send echo6 request").IP("srcIP", srcAddr.IP).IP("dstIP", dstAddr.IP).Struct(ICMPEcho(p)).Write()
 	}
 	return h.icmp6SendPacket(srcAddr, dstAddr, p)
 }
@@ -630,7 +630,7 @@ func (h *Session) ValidateDefaultRouter(addr Addr) error {
 	// Test if client is online first
 	// If client does not respond to echo, there is little we can test
 	if err := h.Ping(addr, time.Second*2); err != nil {
-		fastlog.NewLine(module, "not responding to ping").Struct(addr).Write()
+		Logger.Msg("not responding to ping").Struct(addr).Write()
 		return ErrTimeout
 	}
 
