@@ -89,8 +89,8 @@ func (h *Session) ARPRequestTo(dst net.HardwareAddr, targetIP net.IP) error {
 	if targetIP == nil {
 		return ErrInvalidIP
 	}
-	if Debug {
-		fastlog.NewLine(module, "send request - who is").IP("ip", targetIP).IP("tell", h.NICInfo.HostAddr4.IP).MAC("dst", dst).Write()
+	if Logger.IsDebug() {
+		Logger.Msg("send request - who is").IP("ip", targetIP).IP("tell", h.NICInfo.HostAddr4.IP).MAC("dst", dst).Write()
 	}
 	return h.ARPRequestRaw(dst, h.NICInfo.HostAddr4, Addr{MAC: EthernetBroadcast, IP: targetIP})
 }
@@ -101,8 +101,8 @@ func (h *Session) ARPRequest(targetIP net.IP) error {
 	if targetIP == nil {
 		return ErrInvalidIP
 	}
-	if Debug {
-		fastlog.NewLine(module, "send request - who is").IP("ip", targetIP).IP("tell", h.NICInfo.HostAddr4.IP).Write()
+	if Logger.IsDebug() {
+		Logger.Msg("send request - who is").IP("ip", targetIP).IP("tell", h.NICInfo.HostAddr4.IP).Write()
 	}
 	return h.ARPRequestRaw(EthernetBroadcast, h.NICInfo.HostAddr4, Addr{MAC: EthernetBroadcast, IP: targetIP})
 }
@@ -135,11 +135,11 @@ func (h *Session) ARPProbe(ip net.IP) error {
 // legitimately using the IP address immediately after sending the first
 // of the two ARP Announcements;
 func (h *Session) ARPAnnounceTo(dst net.HardwareAddr, targetIP net.IP) (err error) {
-	if Debug {
+	if Logger.IsDebug() {
 		if bytes.Equal(dst, EthernetBroadcast) {
-			fastlog.NewLine(module, "send announcement broadcast - I am").IP("ip", targetIP).Write()
+			Logger.Msg("send announcement broadcast - I am").IP("ip", targetIP).Write()
 		} else {
-			fastlog.NewLine(module, "send announcement unicast - I am").IP("ip", targetIP).MAC("dst", dst).Write()
+			Logger.Msg("send announcement unicast - I am").IP("ip", targetIP).MAC("dst", dst).Write()
 		}
 	}
 	err = h.ARPRequestRaw(dst,
@@ -187,8 +187,8 @@ func (h *Session) ARPRequestRaw(dst net.HardwareAddr, sender Addr, target Addr) 
 // Call with dstHwAddr = ethernet.Broadcast to reply to all
 // func (h *Session) ARPReply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
 func (h *Session) ARPReply(dst net.HardwareAddr, sender Addr, target Addr) error {
-	if Debug {
-		fastlog.NewLine(module, "send reply ip is at").IP("ip", sender.IP).MAC("mac", sender.MAC).Write()
+	if Logger.IsDebug() {
+		Logger.Msg("send reply ip is at").IP("ip", sender.IP).MAC("mac", sender.MAC).Write()
 		// fmt.Printf("arp   : send reply - ip=%s is at mac=%s\n", sender.IP, sender.MAC)
 	}
 	return h.reply(dst, sender, target)
@@ -228,8 +228,8 @@ func (h *Session) ARPWhoIs(ip net.IP) (Addr, error) {
 		time.Sleep(time.Millisecond * 50 * time.Duration(i+1))
 	}
 
-	if Debug {
-		fastlog.NewLine(module, "whois not found").IP("ip", ip).Write()
+	if Logger.IsDebug() {
+		Logger.Msg("whois not found").IP("ip", ip).Write()
 		h.PrintTable()
 	}
 	return Addr{}, ErrNotFound
@@ -259,14 +259,14 @@ func (h *Session) ARPScan() error {
 		err := h.ARPRequest(ip)
 		if err != nil {
 			if err1, ok := err.(net.Error); ok && err1.Temporary() {
-				if Debug {
-					fastlog.NewLine(module, "error in write socket is temporary - retry ").Error(err1).Write()
+				if Logger.IsDebug() {
+					Logger.Msg("error in write socket is temporary - retry ").Error(err1).Write()
 				}
 				continue
 			}
 
-			if Debug {
-				fastlog.NewLine(module, "arp request error").Error(err).Write()
+			if Logger.IsDebug() {
+				Logger.Msg("arp request error").Error(err).Write()
 			}
 			return err
 		}

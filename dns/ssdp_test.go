@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/fastlog"
 )
 
 var (
@@ -136,7 +137,7 @@ func TestDNSHandler_ProcessSSDPFrame(t *testing.T) {
 	session, _ := testSession()
 	defer session.Close()
 	dnsHandler, _ := New(session)
-	Debug = true
+	ssdpLogger.SetLevel(fastlog.LevelDebug)
 
 	tests := []struct {
 		name         string
@@ -459,7 +460,7 @@ var serviceDefinitionTPLink = []byte(`
 `)
 
 func TestDNSHandler_ProcessSSDPDescription(t *testing.T) {
-	Debug = true
+	ssdpLogger.SetLevel(fastlog.LevelDebug)
 	tests := []struct {
 		name      string
 		service   []byte

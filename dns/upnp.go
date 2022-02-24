@@ -48,9 +48,9 @@ func unmarshalUPNPServiceDescriptor(b []byte) (v UPNPService, err error) {
 		fmt.Printf("ssdp: error unmarshal message %v [%+x]", err, b)
 		return v, err
 	}
-	if Debug {
-		fmt.Printf("ssdp  : upnp service description name=%s model=%s manufacturer=%s mnumber=%s description=%s\n",
-			v.Device.Name, v.Device.Model, v.Device.Manufacturer, v.Device.ModelNumber, v.Device.ModelDescription)
+	if ssdpLogger.IsInfo() {
+		ssdpLogger.Msg("upnp service description").String("name", v.Device.Name).
+			String("model", v.Device.Model).String("manufacturer", v.Device.Manufacturer).String("model", v.Device.Model).String("description", v.Device.ModelDescription).Write()
 	}
 	return v, nil
 }

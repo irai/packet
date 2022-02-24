@@ -428,16 +428,16 @@ func (h *Session) onlineTransition(host *Host) {
 
 	if host.Addr.IP.To4() != nil {
 		if !host.Addr.IP.Equal(host.MACEntry.IP4) { // changed IP4
-			if Debug {
-				fastlog.NewLine(module, "host changed ip4").MAC("mac", host.MACEntry.MAC).IP("from", host.MACEntry.IP4).IP("to", host.Addr.IP).Write()
+			if Logger.IsDebug() {
+				Logger.Msg("host changed ip4").MAC("mac", host.MACEntry.MAC).IP("from", host.MACEntry.IP4).IP("to", host.Addr.IP).Write()
 			}
 		}
 		host.MACEntry.IP4 = host.Addr.IP
 		for _, v := range host.MACEntry.HostList {
 			if ip := v.Addr.IP.To4(); ip != nil && !ip.Equal(host.Addr.IP) {
 				if v.Online {
-					if Debug {
-						fastlog.NewLine(module, "IP is offline").Struct(v.Addr).Write()
+					if Logger.IsDebug() {
+						Logger.Msg("IP is offline").Struct(v.Addr).Write()
 					}
 					v.Online = false
 					v.dirty = true
@@ -446,20 +446,20 @@ func (h *Session) onlineTransition(host *Host) {
 		}
 	} else {
 		if host.Addr.IP.IsGlobalUnicast() && !host.Addr.IP.Equal(host.MACEntry.IP6GUA) { // changed IP6 global unique address
-			if Debug {
-				fastlog.NewLine(module, "host changed ip6").MAC("mac", host.MACEntry.MAC).IP("from", host.MACEntry.IP6GUA).IP("to", host.Addr.IP).Write()
+			if Logger.IsDebug() {
+				Logger.Msg("host changed ip6").MAC("mac", host.MACEntry.MAC).IP("from", host.MACEntry.IP6GUA).IP("to", host.Addr.IP).Write()
 			}
 			host.MACEntry.IP6GUA = host.Addr.IP
 		}
 		if host.Addr.IP.IsLinkLocalUnicast() && !host.Addr.IP.Equal(host.MACEntry.IP6LLA) { // changed IP6 link local address
-			if Debug {
-				fastlog.NewLine(module, "host changed ip6LLA").MAC("mac", host.MACEntry.MAC).IP("from", host.MACEntry.IP6LLA).IP("to", host.Addr.IP).Write()
+			if Logger.IsDebug() {
+				Logger.Msg("host changed ip6LLA").MAC("mac", host.MACEntry.MAC).IP("from", host.MACEntry.IP6LLA).IP("to", host.Addr.IP).Write()
 			}
 			host.MACEntry.IP6LLA = host.Addr.IP
 			// don't set offline IP as we don't target LLA
 		}
 	}
-	if Debug {
-		fastlog.NewLine(module, "IP is online").Struct(host.Addr).Write()
+	if Logger.IsInfo() {
+		Logger.Msg("IP is online").Struct(host.Addr).Write()
 	}
 }

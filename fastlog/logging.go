@@ -7,6 +7,7 @@ import (
 	"os"
 	"reflect"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -34,15 +35,15 @@ import (
 // bufSize sets the maximum len for a log entry
 const bufSize = 2048
 
-// type logLevel struct {
+// type LogLevel struct {
 // l int32
 // }
-type logLevel uint32
+type LogLevel uint32
 
 const (
-	LevelError = logLevel(0)
-	LevelInfo  = logLevel(1)
-	LevelDebug = logLevel(2)
+	LevelError = LogLevel(0)
+	LevelInfo  = LogLevel(1)
+	LevelDebug = LogLevel(2)
 )
 
 var lines = sync.Pool{New: func() interface{} { return new(Line) }}
@@ -64,7 +65,17 @@ type Line struct {
 
 var Std = New("logger")
 
-func (l *Logger) SetLevel(level logLevel) {
+func Str2LogLevel(level string) LogLevel {
+	switch strings.ToLower(level) {
+	case "info":
+		return LevelInfo
+	case "debug":
+		return LevelDebug
+	}
+	return LevelError
+}
+
+func (l *Logger) SetLevel(level LogLevel) {
 	atomic.StoreUint32(&l.level, uint32(level))
 }
 

@@ -131,7 +131,7 @@ func (h *Session) findOrCreateHostWithLock(addr Addr) (host *Host, found bool) {
 		host.MACEntry.Row.Unlock() // lock the row
 
 		if deleteHost {
-			fastlog.NewLine(module, "error mac address differ - duplicated IP?").Struct(addr).Struct(host).String("iplookup", ipNew.String()).Write()
+			Logger.Msg("error mac address differ - duplicated IP?").Struct(addr).Struct(host).String("iplookup", ipNew.String()).Write()
 			h.printHostTable()
 			h.deleteHost(addr.IP)
 			// TODO: previous host is offline then???
@@ -158,8 +158,8 @@ func (h *Session) findOrCreateHostWithLock(addr Addr) (host *Host, found bool) {
 
 func (h *Session) deleteHost(ip net.IP) {
 	if host := h.findIP(ip); host != nil {
-		if Debug {
-			fastlog.NewLine(module, "delete host").IP("ip", ip).Struct(host).Write()
+		if Logger.IsDebug() {
+			Logger.Msg("delete host").IP("ip", ip).Struct(host).Write()
 		}
 		host.MACEntry.unlink(host)
 		newIP, _ := netaddr.FromStdIP(ip)
@@ -169,8 +169,8 @@ func (h *Session) deleteHost(ip net.IP) {
 		}
 		return
 	}
-	if Debug {
-		fastlog.NewLine(module, "delete host IP not found").IP("ip", ip).Write()
+	if Logger.IsDebug() {
+		Logger.Msg("delete host IP not found").IP("ip", ip).Write()
 	}
 }
 
@@ -220,7 +220,7 @@ func (host *Host) UpdateDHCP4Name(name NameEntry) {
 	host.DHCP4Name, notify = host.DHCP4Name.Merge(name)
 	if notify {
 		host.dirty = true
-		fastlog.NewLine(module, "updated dhcpv4 name").Struct(host.Addr).Struct(host.DHCP4Name).Write()
+		Logger.Msg("updated dhcpv4 name").Struct(host.Addr).Struct(host.DHCP4Name).Write()
 		host.MACEntry.DHCP4Name, _ = host.MACEntry.DHCP4Name.Merge(host.DHCP4Name)
 	}
 }
@@ -232,7 +232,7 @@ func (host *Host) UpdateLLMNRName(name NameEntry) {
 	host.LLMNRName, notify = host.LLMNRName.Merge(name)
 	if notify {
 		host.dirty = true
-		fastlog.NewLine(module, "updated llmnr name").Struct(host.Addr).Struct(host.LLMNRName).Write()
+		Logger.Msg("updated llmnr name").Struct(host.Addr).Struct(host.LLMNRName).Write()
 		host.MACEntry.LLMNRName, _ = host.MACEntry.LLMNRName.Merge(host.LLMNRName)
 	}
 }
@@ -244,7 +244,7 @@ func (host *Host) UpdateMDNSName(name NameEntry) {
 	host.MDNSName, notify = host.MDNSName.Merge(name)
 	if notify {
 		host.dirty = true
-		fastlog.NewLine(module, "updated mdns name").Struct(host.Addr).Struct(host.MDNSName).Write()
+		Logger.Msg("updated mdns name").Struct(host.Addr).Struct(host.MDNSName).Write()
 		host.MACEntry.MDNSName, _ = host.MACEntry.MDNSName.Merge(host.MDNSName)
 	}
 }
@@ -256,7 +256,7 @@ func (host *Host) UpdateSSDPName(name NameEntry) {
 	host.SSDPName, notify = host.SSDPName.Merge(name)
 	if notify {
 		host.dirty = true
-		fastlog.NewLine(module, "updated ssdp name").Struct(host.Addr).Struct(host.SSDPName).Write()
+		Logger.Msg("updated ssdp name").Struct(host.Addr).Struct(host.SSDPName).Write()
 		host.MACEntry.SSDPName, _ = host.MACEntry.SSDPName.Merge(host.SSDPName)
 	}
 }
@@ -268,7 +268,7 @@ func (host *Host) UpdateNBNSName(name NameEntry) {
 	host.NBNSName, notify = host.NBNSName.Merge(name)
 	if notify {
 		host.dirty = true
-		fastlog.NewLine(module, "updated nbns name").Struct(host.Addr).Struct(host.NBNSName).Write()
+		Logger.Msg("updated nbns name").Struct(host.Addr).Struct(host.NBNSName).Write()
 		host.MACEntry.NBNSName, _ = host.MACEntry.NBNSName.Merge(host.NBNSName)
 	}
 }

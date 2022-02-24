@@ -22,6 +22,8 @@ var (
 	DebugIP4 bool
 	DebugUDP bool
 
+	Logger = fastlog.New(module)
+
 	IP4Broadcast     = net.IPv4(255, 255, 255, 255)
 	IP4BroadcastAddr = Addr{MAC: EthBroadcast, IP: IP4Broadcast}
 
@@ -180,8 +182,8 @@ func (config Config) NewSession(nic string) (session *Session, err error) {
 				}
 				atomic.StoreUint32(&h.ipHeartBeat, 0)
 			case <-session.closeChan:
-				if Debug {
-					fastlog.NewLine(module, "nic monitoring goroutine ended").Write()
+				if Logger.IsDebug() {
+					Logger.Msg("nic monitoring goroutine ended").Write()
 				}
 				return
 			}
@@ -194,8 +196,8 @@ func (config Config) NewSession(nic string) (session *Session, err error) {
 		for {
 			select {
 			case <-ticker.C:
-				if Debug {
-					fastlog.NewLine(module, "minute check").Write()
+				if Logger.IsDebug() {
+					Logger.Msg("minute check").Write()
 				}
 				go h.purge(time.Now())
 
@@ -255,8 +257,8 @@ func (h *Session) ReadFrom(b []byte) (int, net.Addr, error) {
 		}
 
 		if err, ok := err.(net.Error); ok && err.Temporary() {
-			if Debug {
-				fastlog.NewLine(module, "temporary conn read error").Error(err).Write()
+			if Logger.IsDebug() {
+				Logger.Msg("temporary conn read error").Error(err).Write()
 			}
 			continue
 		}
@@ -501,8 +503,8 @@ func (h *Session) Capture(mac net.HardwareAddr) error {
 	if macEntry.IsRouter {
 		return ErrIsRouter
 	}
-	if Debug {
-		fastlog.NewLine(module, "captured").MAC("mac", mac).Write()
+	if Logger.IsInfo() {
+		Logger.NewLine(module, "captured").MAC("mac", mac).Write()
 	}
 	macEntry.Captured = true
 	return nil
@@ -515,6 +517,9 @@ func (h *Session) Release(mac net.HardwareAddr) error {
 	macEntry, _ := h.MACTable.findMAC(mac)
 	if macEntry != nil {
 		macEntry.Captured = false
+		if Logger.IsInfo() {
+			Logger.NewLine(module, "release").MAC("mac", mac).Write()
+		}
 	}
 	return nil
 }
