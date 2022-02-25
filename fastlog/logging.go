@@ -25,12 +25,13 @@ import (
 //  - assumes a max fixed memory buffer len of 2048k per message - ie. it will segfault if the caller passes longer data
 //  - pool of reusable buffers
 //
-// Results: Jan 2022
+// Results: Feb 2022
 // cpu: 11th Gen Intel(R) Core(TM) i7-1165G7 @ 2.80GHz
-// Benchmark_Fastlog/printf_struct_reference-8         	 1693278	       705.4 ns/op	     344 B/op	       8 allocs/op
-// Benchmark_Fastlog/fastlog_struct_reference-8        	 6253689	       173.1 ns/op	     144 B/op	       1 allocs/op
-// Benchmark_Fastlog/some_alloc-8                      	 5560839	       214.9 ns/op	     152 B/op	       2 allocs/op
-// Benchmark_Fastlog/zero_alloc-8                      	 2933750	       433.3 ns/op	       0 B/op	       0 allocs/op
+// Benchmark_Fastlog/printf_struct_reference-8         	 1662555	       708.9 ns/op	     344 B/op	       8 allocs/op
+// Benchmark_Fastlog/fastlog_struct_reference-8        	 7287508	       160.4 ns/op	     144 B/op	       1 allocs/op
+// Benchmark_Fastlog/some_alloc-8                      	 5657701	       215.1 ns/op	     152 B/op	       2 allocs/op
+// Benchmark_Fastlog/zero_alloc-8                      	 2952026	       406.2 ns/op	       0 B/op	       0 allocs/op
+// Benchmark_Fastlog/zero_alloc_initialised-8          	 3058251	       393.3 ns/op	       0 B/op	       0 allocs/op
 
 // bufSize sets the maximum len for a log entry
 const bufSize = 2048
@@ -133,7 +134,7 @@ func NewLine(module string, msg string) *Line {
 func (logger *Logger) Msg(msg string) *Line {
 	l := lines.Get().(*Line)
 	copy(l.buffer[0:7], logger.module[:])
-	l.index = l.index + 7
+	l.index = 7
 	if msg != "" {
 		l.appendByte(' ')
 		l.appendByte('"')
