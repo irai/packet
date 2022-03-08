@@ -9,10 +9,11 @@ import (
 	"time"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/fastlog"
 )
 
 func Test_requestSimple(t *testing.T) {
-	packet.Logger.SetLevel(fastlog.DebugLevel)
+	packet.Logger.SetLevel(fastlog.LevelDebug)
 	Debug = true
 	os.Remove(testDHCPFilename)
 	tc := setupTestHandler()
@@ -58,8 +59,7 @@ func Test_requestSimple(t *testing.T) {
 }
 
 func Test_requestCaptured(t *testing.T) {
-	packet.DebugIP4 = false
-	packet.Logger.SetLevel(fastlog.DebugLevel)
+	packet.Logger.SetLevel(fastlog.LevelDebug)
 	Debug = false
 	os.Remove(testDHCPFilename)
 	tc := setupTestHandler()

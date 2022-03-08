@@ -32,7 +32,7 @@ type NICInfo struct {
 }
 
 func (e NICInfo) String() string {
-	return fmt.Sprintf("mac=%s hostip4=%s lla=%s gua=%s routerIP4=%s routerMAC=%s", e.HostAddr4.MAC, e.HostAddr4.IP, e.HostLLA, e.HostGUA, e.RouterAddr4.IP, e.RouterAddr4.MAC)
+	return fmt.Sprintf("mac=%s homeLAN=%s hostip4=%s lla=%s gua=%s routerIP4=%s routerMAC=%s", e.HostAddr4.MAC, e.HomeLAN4, e.HostAddr4.IP, e.HostLLA, e.HostGUA, e.RouterAddr4.IP, e.RouterAddr4.MAC)
 }
 
 // CopyIP simply copies the IP to a new buffer

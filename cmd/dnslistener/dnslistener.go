@@ -21,7 +21,7 @@ import (
 
 var (
 	nic   = flag.String("i", "eth0", "nic interface")
-	debug = flag.Bool("d", false, "set to true to show debug messages")
+	debug = flag.String("d", "info", "set to error or info or debug to control debug messages")
 )
 
 var dnshandler *dns.DNSHandler
@@ -39,7 +39,7 @@ func main() {
 		return
 	}
 
-	packet.Debug = *debug
+	packet.Logger.SetLevel(fastlog.Str2LogLevel(*debug))
 
 	dnshandler, err = dns.New(s)
 	if err != nil {
@@ -65,7 +65,7 @@ func main() {
 				continue
 			}
 
-			if *debug && frame.PayloadID != packet.PayloadTCP {
+			if packet.Logger.IsDebug() && frame.PayloadID != packet.PayloadTCP {
 				frame.Log(fastlog.NewLine("dhcpd", "got packet")).Write()
 			}
 			switch frame.PayloadID {
@@ -121,15 +121,14 @@ func main() {
 
 			case "log":
 				p := getString(tokens, 1)
+				level := fastlog.Str2LogLevel(getString(tokens, 2))
 				switch p {
 				case "packet":
-					packet.Debug = !packet.Debug
+					packet.Logger.SetLevel(level)
 				case "dhcp4", "dhcp":
 					dhcp4.Debug = !dhcp4.Debug
 				case "all":
-					packet.Debug = !packet.Debug
-					dhcp4.Debug = packet.Debug
-					*debug = packet.Debug
+					packet.Logger.SetLevel(level)
 				}
 
 			case "q":

@@ -204,8 +204,8 @@ func configChanged(config SubnetConfig, current SubnetConfig) bool {
 		(config.Duration != 0 && config.Duration != current.Duration) ||
 		(config.FirstIP != nil && !config.FirstIP.Equal(current.FirstIP)) ||
 		(config.LastIP != nil && !config.LastIP.Equal(current.LastIP)) {
-		fmt.Printf("dhcp4: config parameters changed  config=%+v", config)
-		fmt.Printf("dhcp4: config parameters changed current=%+v", current)
+		fmt.Printf("dhcp4: config parameters changed new config=%+v\n", config)
+		fmt.Printf("dhcp4: config parameters changed old config=%+v\n", current)
 		return true
 	}
 	return false
