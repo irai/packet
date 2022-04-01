@@ -2,7 +2,7 @@ package dns
 
 import (
 	"fmt"
-	"net"
+	"net/netip"
 	"testing"
 
 	"github.com/irai/packet"
@@ -148,10 +148,10 @@ func TestMDNSHandler_Sonos(t *testing.T) {
 			wantIPv4Host: NameEntry{},
 		},
 		{name: "sonos2", frame: sonosResponse2, wantErr: false,
-			wantIPv4Host: NameEntry{Name: "sonosB8E937524E2C", Addr: packet.Addr{IP: net.IPv4(192, 168, 0, 101)}},
+			wantIPv4Host: NameEntry{Name: "sonosB8E937524E2C", Addr: packet.Addr{IP: netip.AddrFrom4([4]byte{192, 168, 0, 101})}},
 		},
 		{name: "sonos3", frame: sonosResponse3, wantErr: false,
-			wantIPv4Host: NameEntry{Name: "Sonos-B8E937524E2C", Addr: packet.Addr{IP: net.IPv4(192, 168, 0, 101)}},
+			wantIPv4Host: NameEntry{Name: "Sonos-B8E937524E2C", Addr: packet.Addr{IP: netip.AddrFrom4([4]byte{192, 168, 0, 101})}},
 		},
 	}
 
@@ -176,7 +176,7 @@ func TestMDNSHandler_Sonos(t *testing.T) {
 			if len(ipv4Host) > 0 && ipv4Host[0].NameEntry.Name != tt.wantIPv4Host.Name {
 				t.Errorf("%s: unexpected mdnsname=%s want=%s", tt.name, ipv4Host[0].NameEntry.Name, tt.wantIPv4Host.Name)
 			}
-			if len(ipv4Host) > 0 && !ipv4Host[0].Addr.IP.Equal(tt.wantIPv4Host.Addr.IP) {
+			if len(ipv4Host) > 0 && ipv4Host[0].Addr.IP != tt.wantIPv4Host.Addr.IP {
 				t.Errorf("%s: unexpected ip=%s want=%s", tt.name, ipv4Host[0].Addr.IP, tt.wantIPv4Host.Addr.IP)
 			}
 		})
@@ -316,16 +316,16 @@ func TestMDNSHandler_Apple(t *testing.T) {
 		wantErr      bool
 	}{
 		{name: "MacBook", frame: frameMacBook, wantErr: false,
-			wantIPv4Host: NameEntry{Name: "Goth", Addr: packet.Addr{IP: net.IPv4(192, 168, 0, 110)}, Model: "MacBookPro14,1"},
+			wantIPv4Host: NameEntry{Name: "Goth", Addr: packet.Addr{IP: netip.AddrFrom4([4]byte{192, 168, 0, 110})}, Model: "MacBookPro14,1"},
 		},
 		{name: "iPhoneIpv6Query", frame: frameIphoneIPv6Query, wantErr: false,
 			wantIPv4Host: NameEntry{Name: "", Addr: packet.Addr{}, Model: ""},
 		},
 		{name: "WindowsAnnouncement", frame: frameWindows10AnnouncementIP6, wantErr: false,
-			wantIPv4Host: NameEntry{Name: "DESKTOP-EQ0BFB7", Addr: packet.Addr{IP: net.IPv4(192, 168, 0, 103)}, Model: ""},
+			wantIPv4Host: NameEntry{Name: "DESKTOP-EQ0BFB7", Addr: packet.Addr{IP: netip.AddrFrom4([4]byte{192, 168, 0, 103})}, Model: ""},
 		},
 		{name: "WindowsAnnouncement", frame: frameWindows10AnnouncementiIP4, wantErr: false,
-			wantIPv4Host: NameEntry{Name: "", Addr: packet.Addr{IP: net.IPv4(192, 168, 0, 103)}, Model: ""},
+			wantIPv4Host: NameEntry{Name: "", Addr: packet.Addr{IP: netip.AddrFrom4([4]byte{192, 168, 0, 103})}, Model: ""},
 		},
 	}
 
@@ -356,7 +356,7 @@ func TestMDNSHandler_Apple(t *testing.T) {
 				if ipv4Host[0].NameEntry.Model != tt.wantIPv4Host.Model {
 					t.Errorf("%s: unexpected model=%s want=%s", tt.name, ipv4Host[0].NameEntry.Model, tt.wantIPv4Host.Model)
 				}
-				if !ipv4Host[0].Addr.IP.Equal(tt.wantIPv4Host.Addr.IP) {
+				if ipv4Host[0].Addr.IP != tt.wantIPv4Host.Addr.IP {
 					t.Errorf("%s: unexpected ip=%s want=%s", tt.name, ipv4Host[0].Addr.IP, tt.wantIPv4Host.Addr.IP)
 				}
 			}

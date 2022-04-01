@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"net"
+	"net/netip"
 	"os"
 	"testing"
 	"time"
@@ -223,7 +223,7 @@ func TestHandler_handleRequest(t *testing.T) {
 	defer tc.Close()
 
 	var offerXID []byte
-	var offerIP net.IP
+	var offerIP netip.Addr
 	buffer := make([]byte, 1500)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -241,9 +241,9 @@ func TestHandler_handleRequest(t *testing.T) {
 			}
 
 			// update request to offer IP if desired
-			if options := dhcp.ParseOptions(); tt.updateReqIP && bytes.Equal(dhcp.XId(), offerXID) && offerIP != nil {
+			if options := dhcp.ParseOptions(); tt.updateReqIP && bytes.Equal(dhcp.XId(), offerXID) && offerIP.Is4() {
 				fmt.Println("dhcp4 test updating IP", offerIP, offerXID, dhcp.ParseOptions())
-				options[OptionRequestedIPAddress] = offerIP
+				options[OptionRequestedIPAddress] = offerIP.AsSlice()
 				n := dhcp.appendOptions(options, options[OptionParameterRequestList])
 				dhcp = dhcp[:240+n]
 				if err := dhcp.IsValid(); err != nil {
@@ -276,7 +276,7 @@ func TestHandler_handleRequest(t *testing.T) {
 				}
 				if mt == Offer {
 					offerXID = packet.CopyBytes(dhcp.XId())
-					offerIP = packet.CopyIP(dhcp.YIAddr()).To4()
+					offerIP = dhcp.YIAddr()
 				}
 			case <-time.After(time.Millisecond * 10):
 				t.Fatal("failed to receive reply")

@@ -3,12 +3,12 @@ package icmp
 import (
 	"fmt"
 	"net"
+	"net/netip"
 	"sync"
 	"time"
 
 	"github.com/irai/packet"
 	"github.com/irai/packet/fastlog"
-	"inet.af/netaddr"
 
 	"golang.org/x/net/ipv6"
 )
@@ -20,7 +20,7 @@ const module4 = "icmp4"
 const module6 = "icmp6"
 
 type ICMP6Handler interface {
-	FindRouter(net.IP) Router
+	FindRouter(netip.Addr) Router
 	PingAll() error
 	Start() error
 	Close() error
@@ -48,7 +48,7 @@ func (p ICMP6NOOP) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
 }
 func (p ICMP6NOOP) Close() error                     { return nil }
 func (p ICMP6NOOP) MinuteTicker(now time.Time) error { return nil }
-func (p ICMP6NOOP) FindRouter(net.IP) Router         { return Router{} }
+func (p ICMP6NOOP) FindRouter(netip.Addr) Router     { return Router{} }
 
 var _ ICMP6Handler = &Handler6{}
 var _ ICMP6Handler = &ICMP6NOOP{}
@@ -57,7 +57,7 @@ var _ ICMP6Handler = &ICMP6NOOP{}
 // see: https://mdlayher.com/blog/network-protocol-breakdown-ndp-and-go/
 type Handler6 struct {
 	Router     *Router
-	LANRouters map[netaddr.IP]*Router
+	LANRouters map[netip.Addr]*Router
 	session    *packet.Session
 	huntList   packet.AddrList
 	closed     bool
@@ -72,7 +72,7 @@ func (h *Handler6) PrintTable() {
 		fmt.Printf("icmp6 hosts table len=%v\n", len(table))
 		for _, host := range table {
 			host.MACEntry.Row.RLock()
-			if packet.IsIP6(host.Addr.IP) {
+			if host.Addr.IP.Is6() {
 				fmt.Printf("mac=%s ip=%v online=%v \n", host.MACEntry.MAC, host.Addr.IP, host.Online)
 			}
 			host.MACEntry.Row.RUnlock()
@@ -104,7 +104,7 @@ type Config struct {
 // New creates an ICMP6 handler and attach to the engine
 func New6(session *packet.Session) (*Handler6, error) {
 
-	h := &Handler6{LANRouters: make(map[netaddr.IP]*Router), closeChan: make(chan bool)}
+	h := &Handler6{LANRouters: make(map[netip.Addr]*Router), closeChan: make(chan bool)}
 	h.session = session
 
 	return h, nil
@@ -132,25 +132,25 @@ func (h *Handler6) Start() error {
 }
 
 func (h *Handler6) PingAll() error {
-	if h.session.NICInfo.HostLLA.IP == nil {
+	if !h.session.NICInfo.HostLLA.Addr().IsValid() {
 		return packet.ErrInvalidIP6LLA
 	}
 	fmt.Println("icmp6 : ping all")
-	return h.session.ICMP6SendEchoRequest(packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: h.session.NICInfo.HostLLA.IP}, packet.IP6AllNodesAddr, 99, 1)
+	return h.session.ICMP6SendEchoRequest(packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: h.session.NICInfo.HostLLA.Addr()}, packet.IP6AllNodesAddr, 99, 1)
 }
 
 // MinuteTicker implements packet processor interface
 // Send echo request to all nodes
 func (h *Handler6) MinuteTicker(now time.Time) error {
-	return h.session.ICMP6SendEchoRequest(packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: h.session.NICInfo.HostLLA.IP}, packet.IP6AllNodesAddr, 199, 1)
+	return h.session.ICMP6SendEchoRequest(packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: h.session.NICInfo.HostLLA.Addr()}, packet.IP6AllNodesAddr, 199, 1)
 }
 
 // HuntStage implements PacketProcessor interface
 func (h *Handler6) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
-	if h.session.NICInfo.HostLLA.IP == nil { // in case host does not have IPv6
+	if !h.session.NICInfo.HostLLA.Addr().IsValid() { // in case host does not have IPv6
 		return packet.StageNoChange, nil
 	}
-	srcAddr := packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: h.session.NICInfo.HostLLA.IP}
+	srcAddr := packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: h.session.NICInfo.HostLLA.Addr()}
 
 	// Neigbour solicitation almost always result in a response from host if online unless
 	// host is on battery saving mode
@@ -243,7 +243,7 @@ func (h *Handler6) ProcessPacket(pkt packet.Frame) (err error) {
 		// If a host is looking up for a GUA on the lan, it is likely a valid IP6 GUA for a local host.
 		// So, send our own neighbour solicitation to discover the IP
 		if frame.TargetAddress().IsGlobalUnicast() {
-			srcAddr := packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: h.session.NICInfo.HostLLA.IP}
+			srcAddr := packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: h.session.NICInfo.HostLLA.Addr()}
 			dstAddr := packet.Addr{MAC: pkt.Ether().Dst(), IP: ip6Frame.Dst()}
 			h.session.ICMP6SendNeighbourSolicitation(srcAddr, dstAddr, frame.TargetAddress())
 		}

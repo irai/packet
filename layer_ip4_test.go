@@ -3,11 +3,10 @@ package packet
 import (
 	"fmt"
 	"net"
+	"net/netip"
 	"sync"
 	"syscall"
 	"testing"
-
-	"inet.af/netaddr"
 )
 
 func TestIP4Checksum(t *testing.T) {
@@ -53,32 +52,64 @@ func Benchmark_packetNoAlloc(b *testing.B) {
 }
 
 func Benchmark_StdIP(b *testing.B) {
-	count := 0
-	key := byte(0)
-	ip2 := net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}
-	for i := 0; i < b.N; i++ {
-		ip := net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, key}
-		if ip.To4() != nil {
-			count++
+	b.Run("stdipv4", func(b *testing.B) {
+		count := 0
+		key := byte(0)
+		ip1 := net.IPv4(192, 168, 0, 1)
+		for i := 0; i < b.N; i++ {
+			ip := net.IPv4(192, 168, 0, key)
+			if ip.To4() != nil {
+				count++
+			}
+			if ip.Equal(ip1) {
+				count--
+			}
 		}
-		if ip.Equal(ip2) {
-			count--
+		fmt.Println(count)
+	})
+	b.Run("ipaddrv4", func(b *testing.B) {
+		count := 0
+		key := byte(0)
+		ip2 := netip.AddrFrom4([4]byte{192, 168, 0, 1})
+		for i := 0; i < b.N; i++ {
+			ip := netip.AddrFrom4([4]byte{192, 168, 0, key})
+			if ip.Is4() {
+				count++
+			}
+			if ip == ip2 {
+				count--
+			}
 		}
-	}
-	fmt.Println(count)
-}
-func Benchmark_NewIP(b *testing.B) {
-	count := 0
-	key := byte(0)
-	ip2 := netaddr.IPv6Raw([16]byte{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1})
-	for i := 0; i < b.N; i++ {
-		ip := netaddr.IPv6Raw([16]byte{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, key})
-		if ip.Is4() {
-			count++
+		fmt.Println(count)
+	})
+	b.Run("stdipv6", func(b *testing.B) {
+		count := 0
+		key := byte(0)
+		ip1 := net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}
+		for i := 0; i < b.N; i++ {
+			ip := net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, key}
+			if ip.To4() != nil {
+				count++
+			}
+			if ip.Equal(ip1) {
+				count--
+			}
 		}
-		if ip == ip2 {
-			count--
+		fmt.Println(count)
+	})
+	b.Run("ipaddrv6", func(b *testing.B) {
+		count := 0
+		key := byte(0)
+		ip2 := netip.AddrFrom16([16]byte{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1})
+		for i := 0; i < b.N; i++ {
+			ip, _ := netip.AddrFromSlice([]byte{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, key})
+			if ip.Is4() {
+				count++
+			}
+			if ip == ip2 {
+				count--
+			}
 		}
-	}
-	fmt.Println(count)
+		fmt.Println(count)
+	})
 }

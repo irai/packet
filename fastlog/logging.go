@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/netip"
 	"os"
 	"reflect"
 	"strconv"
@@ -25,13 +26,14 @@ import (
 //  - assumes a max fixed memory buffer len of 2048k per message - ie. it will segfault if the caller passes longer data
 //  - pool of reusable buffers
 //
-// Results: Feb 2022
+// Results: Mar 2022 - go 1.18
 // cpu: 11th Gen Intel(R) Core(TM) i7-1165G7 @ 2.80GHz
-// Benchmark_Fastlog/printf_struct_reference-8         	 1662555	       708.9 ns/op	     344 B/op	       8 allocs/op
-// Benchmark_Fastlog/fastlog_struct_reference-8        	 7287508	       160.4 ns/op	     144 B/op	       1 allocs/op
-// Benchmark_Fastlog/some_alloc-8                      	 5657701	       215.1 ns/op	     152 B/op	       2 allocs/op
-// Benchmark_Fastlog/zero_alloc-8                      	 2952026	       406.2 ns/op	       0 B/op	       0 allocs/op
-// Benchmark_Fastlog/zero_alloc_initialised-8          	 3058251	       393.3 ns/op	       0 B/op	       0 allocs/op
+// Benchmark_Fastlog/printf_struct_reference-8         	 1950852	       589.7 ns/op	     344 B/op	       8 allocs/op
+// Benchmark_Fastlog/fastlog_struct_reference-8        	 7195605	       175.4 ns/op	     144 B/op	       1 allocs/op
+// Benchmark_Fastlog/some_alloc-8                      	 5487976	       218.2 ns/op	     152 B/op	       2 allocs/op
+// Benchmark_Fastlog/printf-8                          	  883114	      1309 ns/op	     368 B/op	      15 allocs/op
+// Benchmark_Fastlog/fastlog_zero_alloc-8              	 2326864	       515.2 ns/op	       0 B/op	       0 allocs/op
+// Benchmark_Fastlog/zero_alloc_initialised-8          	 2320393	       503.3 ns/op	       0 B/op	       0 allocs/op
 
 // bufSize sets the maximum len for a log entry
 const bufSize = 2048
@@ -119,7 +121,7 @@ func New(module string) *Logger {
 }
 
 func NewOut(out io.Writer, module string) *Logger {
-	l := &Logger{Out: out}
+	l := &Logger{Out: out, level: uint32(LevelInfo)}
 	copy(l.module[:], "      :")
 	if module != "" {
 		copy(l.module[:6], module)
@@ -341,19 +343,27 @@ func (l *Line) Sprintf(name string, value interface{}) *Line {
 	return l
 }
 
-// printUint32 copied from https://cs.opensource.google/go/x/net/+/master:dns/dnsmessage/message.go
-func (l *Line) printUint32(value uint32) *Line {
-	// Max value is 4294967295.
-	buf := make([]byte, 10)
-	for b, d := buf, uint32(1000000000); d > 0; d /= 10 {
-		b[0] = byte(value/d%10 + '0')
-		if b[0] == '0' && len(b) == len(buf) && len(buf) > 1 {
-			buf = buf[1:]
+// copied from time/time.go funcion fmtInt()
+func (l *Line) printInt(v uint32) *Line {
+	if v == 0 {
+		l.buffer[l.index] = '0'
+		l.index++
+	} else {
+		i := 0
+		n := v
+		for n > 0 { // how many characters?
+			i++
+			n /= 10
 		}
-		b = b[1:]
-		value %= d
+
+		l.index = l.index + i
+		i = l.index - 1
+		for v > 0 {
+			l.buffer[i] = byte(v%10) + '0'
+			i--
+			v /= 10
+		}
 	}
-	l.index = l.index + copy(l.buffer[l.index:], buf)
 	return l
 }
 
@@ -361,7 +371,8 @@ func (l *Line) Uint8(name string, value uint8) *Line {
 	l.appendByte(' ')
 	l.index = l.index + copy(l.buffer[l.index:], name)
 	l.appendByte('=')
-	l.index = l.index + copy(l.buffer[l.index:], byteAscii[value])
+	// l.index = l.index + copy(l.buffer[l.index:], byteAscii[value])
+	l.printInt(uint32(value))
 	return l
 }
 
@@ -380,7 +391,8 @@ func (l *Line) Uint16(name string, value uint16) *Line {
 	l.appendByte(' ')
 	l.index = l.index + copy(l.buffer[l.index:], name)
 	l.appendByte('=')
-	l.printUint32(uint32(value))
+	// l.printUint32(uint32(value))
+	l.printInt(uint32(value))
 	return l
 }
 
@@ -388,7 +400,8 @@ func (l *Line) Uint32(name string, value uint32) *Line {
 	l.appendByte(' ')
 	l.index = l.index + copy(l.buffer[l.index:], name)
 	l.appendByte('=')
-	l.printUint32(uint32(value))
+	// l.printUint32(uint32(value))
+	l.printInt(uint32(value))
 	return l
 }
 
@@ -470,7 +483,7 @@ func (l *Line) appendIP6(ip net.IP) {
 	}
 }
 
-func (l *Line) IP(name string, value net.IP) *Line {
+func (l *Line) IPSlice(name string, value net.IP) *Line {
 	l.appendByte(' ')
 	l.index = l.index + copy(l.buffer[l.index:], name)
 	l.appendByte('=')
@@ -486,6 +499,20 @@ func (l *Line) IP(name string, value net.IP) *Line {
 			return l
 		}
 		l.appendIP6(value)
+		return l
+	}
+	l.index = l.index + copy(l.buffer[l.index:], "nil")
+	return l
+}
+
+func (l *Line) IP(name string, value netip.Addr) *Line {
+	l.appendByte(' ')
+	l.index = l.index + copy(l.buffer[l.index:], name)
+	l.appendByte('=')
+	if value.IsValid() {
+		// CAUTION: there must be enough space in buffer to extend otherwise it will be reallocated.
+		b := value.AppendTo(l.buffer[l.index:l.index])
+		l.index = l.index + len(b)
 		return l
 	}
 	l.index = l.index + copy(l.buffer[l.index:], "nil")
@@ -545,8 +572,18 @@ func (l *Line) writeHexNoleadingZeros(value byte) {
 }
 
 func (l *Line) writeHex(value byte) {
-	l.appendByte(hexAscii[value>>4])
-	l.appendByte(hexAscii[value&0x0f])
+	if x := value >> 4; x < 10 {
+		l.appendByte(x + '0')
+	} else {
+		l.appendByte(x%10 + 'a')
+	}
+	if x := value & 0x0f; x < 10 {
+		l.appendByte(x + '0')
+	} else {
+		l.appendByte(x%10 + 'a')
+	}
+	// l.appendByte(hexAscii[value>>4])
+	// l.appendByte(hexAscii[value&0x0f])
 }
 
 // ByteArray log a []byte in hexadecimal

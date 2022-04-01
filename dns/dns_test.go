@@ -5,10 +5,10 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net"
+	"net/netip"
 	"testing"
 
 	"github.com/irai/packet"
-	"inet.af/netaddr"
 )
 
 func mustHex(b []byte) []byte {
@@ -21,11 +21,11 @@ func mustHex(b []byte) []byte {
 }
 
 func testSession() (*packet.Session, net.PacketConn) {
+	hostIP := netip.MustParseAddr("192.168.0.129")
+	homeLAN := netip.PrefixFrom(netip.AddrFrom4([4]byte{192, 168, 0, 0}), 24)
 	hostMAC := net.HardwareAddr{0x00, 0xff, 0x03, 0x04, 0x05, 0x01} // keep first byte zero for unicast mac
 	routerMAC := net.HardwareAddr{0x00, 0x66, 0x66, 0x66, 0x66, 0x66}
-	hostIP := net.ParseIP("192.168.0.129").To4()
-	homeLAN := net.IPNet{IP: net.IPv4(192, 168, 0, 0), Mask: net.IPv4Mask(255, 255, 255, 0)}
-	routerIP := net.ParseIP("192.168.0.11").To4()
+	routerIP := netip.MustParseAddr("192.168.0.11")
 	nicInfo := &packet.NICInfo{
 		HomeLAN4:    homeLAN,
 		HostAddr4:   packet.Addr{MAC: hostMAC, IP: hostIP},
@@ -374,17 +374,17 @@ func TestDNSHandler_ProcessDNS(t *testing.T) {
 		name        string
 		packet      []byte
 		wantName    string
-		wantIP4     netaddr.IP
+		wantIP4     netip.Addr
 		wantIP4Name string
 		wantPTRName string
-		wantPTRIP4  netaddr.IP
+		wantPTRIP4  netip.Addr
 		wantErr     bool
 	}{
-		{name: "www.facebook.com", wantErr: false, packet: testWwwFacebookComAnswer, wantName: "www.facebook.com", wantIP4: netaddr.IPv4(157, 240, 8, 35), wantIP4Name: "star-mini.c10r.facebook.com"},
-		{name: "www.youtube.com", wantErr: false, packet: testWwwYouTubeCom, wantName: "www.youtube.com", wantIP4: netaddr.IPv4(142, 250, 66, 206), wantIP4Name: "youtube-ui.l.google.com"},
-		{name: "youtube.com", wantErr: false, packet: testYouTubeCom, wantName: "youtube.com", wantIP4: netaddr.IPv4(142, 250, 66, 238), wantIP4Name: "youtube.com"},
-		{name: "www.blockthekids.com", wantErr: false, packet: testWwwBlockTheKidsCom, wantName: "www.blockthekids.com", wantIP4: netaddr.IPv4(35, 244, 67, 249), wantIP4Name: "td-balancer-ause1-67-249.wixdns.net"},
-		{name: "ptr", wantErr: false, packet: wwwPTRResponse, wantName: "203.67.253.17.in-addr.arpa", wantPTRIP4: netaddr.IPv4(17, 253, 67, 203), wantPTRName: "ausyd2-vip-bx-003.aaplimg.com"},
+		{name: "www.facebook.com", wantErr: false, packet: testWwwFacebookComAnswer, wantName: "www.facebook.com", wantIP4: netip.AddrFrom4([4]byte{157, 240, 8, 35}), wantIP4Name: "star-mini.c10r.facebook.com"},
+		{name: "www.youtube.com", wantErr: false, packet: testWwwYouTubeCom, wantName: "www.youtube.com", wantIP4: netip.AddrFrom4([4]byte{142, 250, 66, 206}), wantIP4Name: "youtube-ui.l.google.com"},
+		{name: "youtube.com", wantErr: false, packet: testYouTubeCom, wantName: "youtube.com", wantIP4: netip.AddrFrom4([4]byte{142, 250, 66, 238}), wantIP4Name: "youtube.com"},
+		{name: "www.blockthekids.com", wantErr: false, packet: testWwwBlockTheKidsCom, wantName: "www.blockthekids.com", wantIP4: netip.AddrFrom4([4]byte{35, 244, 67, 249}), wantIP4Name: "td-balancer-ause1-67-249.wixdns.net"},
+		{name: "ptr", wantErr: false, packet: wwwPTRResponse, wantName: "203.67.253.17.in-addr.arpa", wantPTRIP4: netip.AddrFrom4([4]byte{17, 253, 67, 203}), wantPTRName: "ausyd2-vip-bx-003.aaplimg.com"},
 	}
 
 	session, _ := testSession()
@@ -409,7 +409,7 @@ func TestDNSHandler_ProcessDNS(t *testing.T) {
 			if gotE.Name != tt.wantName {
 				t.Errorf("DNSHandler.ProcessDNS() invalid name= %+v, want=%v", gotE, tt.wantName)
 			}
-			if !tt.wantIP4.IsZero() {
+			if tt.wantIP4.IsValid() {
 				r, ok := gotE.IP4Records[tt.wantIP4]
 				if !ok || r.Name != tt.wantIP4Name {
 					t.Errorf("invalid record %+v ", r)
@@ -438,22 +438,22 @@ func TestDNS_reverseDNS(t *testing.T) {
 	dnsHandler, _ := New(session)
 	Debug = true
 
-	if err := ReverseDNS(netaddr.IPv4(172, 217, 167, 118)); err != nil {
+	if err := ReverseDNS(netip.AddrFrom4([4]byte{172, 217, 167, 118})); err != nil {
 		t.Fatal(err)
 	}
 	// =13.76.219.18
-	if found := dnsHandler.DNSExist(netaddr.IPv4(13, 76, 219, 18)); found {
+	if found := dnsHandler.DNSExist(netip.AddrFrom4([4]byte{13, 76, 219, 18})); found {
 		t.Fatal("invalid entry")
 	}
 
-	dnsHandler.DNSLookupPTR(netaddr.IPv4(13, 76, 219, 18))
+	dnsHandler.DNSLookupPTR(netip.AddrFrom4([4]byte{13, 76, 219, 18}))
 
-	if found := dnsHandler.DNSExist(netaddr.IPv4(13, 76, 219, 18)); !found {
+	if found := dnsHandler.DNSExist(netip.AddrFrom4([4]byte{13, 76, 219, 18})); !found {
 		dnsHandler.PrintDNSTable()
 		t.Fatal("invalid entry")
 	}
 
-	dnsHandler.DNSLookupPTR(netaddr.IPv4(13, 76, 219, 18))
+	dnsHandler.DNSLookupPTR(netip.AddrFrom4([4]byte{13, 76, 219, 18}))
 
 	entry, found := dnsHandler.DNSTable["ptrentryname"]
 	if !found || len(entry.IP4Records) != 1 {

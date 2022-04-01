@@ -3,6 +3,7 @@ package packet
 import (
 	"bytes"
 	"net"
+	"net/netip"
 
 	"github.com/irai/packet/fastlog"
 )
@@ -10,7 +11,7 @@ import (
 // Addr is a common type to hold the IP and MAC pair
 type Addr struct {
 	MAC  net.HardwareAddr
-	IP   net.IP
+	IP   netip.Addr
 	Port uint16
 }
 
@@ -35,6 +36,11 @@ func (a Addr) FastLog(l *fastlog.Line) *fastlog.Line {
 // Network returns the address's network name, "raw".
 func (a Addr) Network() string {
 	return "raw"
+}
+
+func (a Addr) Netip() netip.Addr {
+	// n, _ := netip.AddrFromSlice(a.IP)
+	return a.IP
 }
 
 // AddrList manages a goroutine safe set for adding and removing mac addresses

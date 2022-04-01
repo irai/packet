@@ -4,8 +4,8 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"net"
 	"net/http"
+	"net/netip"
 	"strings"
 	"syscall"
 
@@ -22,10 +22,10 @@ var ssdpLogger = fastlog.New("ssdp")
 //
 // Must be 239.255.255.250:1900. If the port number (“:1900”) is omitted,
 // the receiver should assume the default SSDP port number of 1900.
-var ssdpIPv4Addr = packet.Addr{MAC: packet.EthBroadcast, IP: net.IPv4(239, 255, 255, 250), Port: 1900}
+var ssdpIPv4Addr = packet.Addr{MAC: packet.EthBroadcast, IP: netip.AddrFrom4([4]byte{239, 255, 255, 250}), Port: 1900}
 
 // Web Discovery Protocol - WSD
-var wsd4IPv4Addr = packet.Addr{MAC: packet.EthBroadcast, IP: net.IPv4(239, 255, 255, 250), Port: 3702}
+var wsd4IPv4Addr = packet.Addr{MAC: packet.EthBroadcast, IP: netip.AddrFrom4([4]byte{239, 255, 255, 250}), Port: 3702}
 
 // processSSDPNotify process notify ssdp messages
 //

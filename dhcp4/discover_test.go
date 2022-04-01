@@ -2,6 +2,7 @@ package dhcp4
 
 import (
 	"net"
+	"net/netip"
 	"os"
 	"syscall"
 	"testing"
@@ -11,9 +12,9 @@ import (
 	"github.com/irai/packet/fastlog"
 )
 
-func testRequestPacket(mt MessageType, chAddr net.HardwareAddr, cIAddr net.IP, xId []byte, broadcast bool, options Options) DHCP4 {
+func testRequestPacket(mt MessageType, chAddr net.HardwareAddr, cIAddr netip.Addr, xId []byte, broadcast bool, options Options) DHCP4 {
 	p := make(DHCP4, 1024)
-	return Marshall(p, BootRequest, mt, chAddr, cIAddr, net.IPv4zero, xId, broadcast, options, options[OptionParameterRequestList])
+	return Marshall(p, BootRequest, mt, chAddr, cIAddr, packet.IPv4zero, xId, broadcast, options, options[OptionParameterRequestList])
 }
 
 func TestDHCPHandler_handleDiscover(t *testing.T) {
@@ -122,7 +123,7 @@ func TestDHCPHandler_handleDiscoverCaptured(t *testing.T) {
 			panic(err)
 		}
 		err = tc.h.ProcessPacket(frame)
-		if lease := tc.h.findByMAC(addr.MAC); lease == nil || !lease.IPOffer.Equal(net.IPv4(192, 168, 0, 1)) || lease.Name != hostName || lease.State != StateDiscover ||
+		if lease := tc.h.findByMAC(addr.MAC); lease == nil || lease.IPOffer != netip.MustParseAddr("192.168.0.1") || lease.Name != hostName || lease.State != StateDiscover ||
 			lease.subnet != tc.h.net1 {
 			tc.h.PrintTable()
 			t.Error("invalid discover state lease", lease)
@@ -139,7 +140,7 @@ func TestDHCPHandler_handleDiscoverCaptured(t *testing.T) {
 			panic(err)
 		}
 		err = tc.h.ProcessPacket(frame)
-		if lease := tc.h.findByMAC(addr.MAC); lease == nil || !lease.IPOffer.Equal(net.IPv4(192, 168, 0, 130)) || lease.Name != hostName || lease.State != StateDiscover ||
+		if lease := tc.h.findByMAC(addr.MAC); lease == nil || lease.IPOffer != netip.MustParseAddr("192.168.0.130") || lease.Name != hostName || lease.State != StateDiscover ||
 			lease.subnet != tc.h.net2 {
 			tc.h.PrintTable()
 			t.Error("invalid discover state lease", lease)
@@ -182,7 +183,7 @@ func TestDHCPHandler_exhaust(t *testing.T) {
 				ether = packet.EncodeEther(ether, syscall.ETH_P_IP, tt.srcAddr.MAC, tt.dstAddr.MAC)
 				ip4 := packet.EncodeIP4(ether.Payload(), 50, tt.srcAddr.IP, tt.dstAddr.IP)
 				udp := packet.EncodeUDP(ip4.Payload(), tt.srcAddr.Port, tt.dstAddr.Port)
-				dhcp := Marshall(udp.Payload(), BootRequest, Discover, mac, net.IPv4zero, net.IPv4zero, []byte{0x01}, false, options, options[OptionParameterRequestList])
+				dhcp := Marshall(udp.Payload(), BootRequest, Discover, mac, packet.IPv4zero, packet.IPv4zero, []byte{0x01}, false, options, options[OptionParameterRequestList])
 				udp = udp.SetPayload(dhcp)
 				ip4 = ip4.SetPayload(udp, syscall.IPPROTO_UDP)
 				if ether, err = ether.SetPayload(ip4); err != nil {

@@ -3,6 +3,7 @@ package dhcp4
 import (
 	"fmt"
 	"net"
+	"net/netip"
 	"os"
 	"testing"
 	"time"
@@ -18,7 +19,7 @@ func Test_declineSimple(t *testing.T) {
 	tc := setupTestHandler()
 	defer tc.Close()
 
-	srcAddr := packet.Addr{MAC: mac5, IP: net.IPv4zero, Port: DHCP4ClientPort}
+	srcAddr := packet.Addr{MAC: mac5, IP: packet.IPv4zero, Port: DHCP4ClientPort}
 	dstAddr := packet.Addr{MAC: hostMAC, IP: hostIP4, Port: DHCP4ServerPort}
 	xid := newDHCPHost(t, tc, srcAddr.MAC, "host1")
 	checkLeaseTable(t, tc, 1, 0, 0)
@@ -44,12 +45,12 @@ func Test_DeclineFromAnotherServer(t *testing.T) {
 	tc := setupTestHandler()
 	defer tc.Close()
 
-	tc.IPOffer = nil
+	tc.IPOffer = netip.Addr{}
 	tc.xid++
 	xid := []byte(fmt.Sprintf("%d", tc.xid))
 	mac5 = net.HardwareAddr{0x00, 0xff, 0xaa, 0xbb, 0x05, 0x05} // new mac
-	srcAddr := packet.Addr{MAC: mac5, IP: net.IPv4zero, Port: DHCP4ClientPort}
-	dstAddr := packet.Addr{MAC: packet.EthernetBroadcast, IP: net.IPv4zero, Port: DHCP4ServerPort}
+	srcAddr := packet.Addr{MAC: mac5, IP: packet.IPv4zero, Port: DHCP4ClientPort}
+	dstAddr := packet.Addr{MAC: packet.EthernetBroadcast, IP: packet.IPv4zero, Port: DHCP4ServerPort}
 
 	// discover packet
 	ether := newDHCP4DiscoverFrame(srcAddr, "name1", xid)

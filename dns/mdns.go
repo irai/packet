@@ -2,6 +2,7 @@ package dns
 
 import (
 	"net"
+	"net/netip"
 	"strings"
 	"syscall"
 	"time"
@@ -51,8 +52,8 @@ const moduleMDNS = "mdns"
 var (
 	// Any DNS query for a name ending with ".local." MUST be sent to the
 	// mDNS IPv4 link-local multicast address 224.0.0.251 (or its IPv6 equivalent FF02::FB).
-	mdnsIPv4Addr = packet.Addr{MAC: packet.EthBroadcast, IP: net.IPv4(224, 0, 0, 251), Port: 5353}
-	mdnsIPv6Addr = packet.Addr{MAC: packet.EthBroadcast, IP: net.ParseIP("ff02::fb"), Port: 5353}
+	mdnsIPv4Addr = packet.Addr{MAC: packet.EthBroadcast, IP: netip.AddrFrom4([4]byte{224, 0, 0, 251}), Port: 5353}
+	mdnsIPv6Addr = packet.Addr{MAC: packet.EthBroadcast, IP: netip.MustParseAddr("ff02::fb"), Port: 5353}
 
 	// TODO: do we need LLMNR? perhaps useful when a new windows machine is pluggedin?
 
@@ -67,8 +68,8 @@ var (
 	//
 	// Windows hosts will query a name on startup to prevent duplicates on the LAN
 	// https://docs.microsoft.com/en-us/previous-versions//bb878128(v=technet.10)
-	llmnrIPv4Addr = packet.Addr{MAC: packet.EthBroadcast, IP: net.IPv4(224, 0, 0, 251), Port: 5355}
-	llmnrIPv6Addr = packet.Addr{MAC: packet.EthBroadcast, IP: net.ParseIP("FF02:0:0:0:0:0:1:3"), Port: 5355}
+	llmnrIPv4Addr = packet.Addr{MAC: packet.EthBroadcast, IP: netip.AddrFrom4([4]byte{224, 0, 0, 251}), Port: 5355}
+	llmnrIPv6Addr = packet.Addr{MAC: packet.EthBroadcast, IP: netip.MustParseAddr("FF02:0:0:0:0:0:1:3"), Port: 5355}
 )
 
 // SendMDNSQuery send a multicast DNS query
@@ -127,7 +128,7 @@ func (h *DNSHandler) sendMDNS(buf []byte, srcAddr packet.Addr, dstAddr packet.Ad
 	//  unicast response
 
 	// IP4
-	if srcAddr.IP.To4() != nil {
+	if srcAddr.IP.Is4() {
 		ether = packet.EncodeEther(ether, syscall.ETH_P_IP, h.session.NICInfo.HostAddr4.MAC, dstAddr.MAC)
 		ip4 := packet.EncodeIP4(ether.Payload(), 255, srcAddr.IP, dstAddr.IP)
 		udp := packet.EncodeUDP(ip4.Payload(), dstAddr.Port, dstAddr.Port) // same port number for src and dst
@@ -173,7 +174,7 @@ func (h *DNSHandler) SendSleepProxyResponse(srcAddr packet.Addr, dstAddr packet.
 	// #<SPSType>-<SPSPortability>-<SPSMarginalPower>-<SPSTotalPower>.<SPSFeatureFlags> <nicelabel>
 	name = "10-34-10-70 SleepProxyServer._sleep-proxy._udp.local."
 	var ip4 [4]byte
-	copy(ip4[:], h.session.NICInfo.HostAddr4.IP)
+	copy(ip4[:], h.session.NICInfo.HostAddr4.IP.AsSlice())
 	msg := dnsmessage.Message{
 		Header: dnsmessage.Header{ID: id, Response: true},
 
@@ -425,7 +426,7 @@ func (h *DNSHandler) ProcessMDNS(frame packet.Frame) (ipv4 []packet.IPNameEntry,
 			entry.NameEntry.Type = moduleMDNS
 			entry.NameEntry.Name = strings.TrimSuffix(hdr.Name.String(), ".local.")
 			entry.Addr.MAC = packet.CopyMAC(frame.SrcAddr.MAC)
-			entry.Addr.IP = packet.CopyIP(r.A[:])
+			entry.Addr.IP = netip.AddrFrom4(r.A)
 			if Debug {
 				fastlog.NewLine(moduleMDNS, "A resource").String("name", entry.NameEntry.Name).Struct(entry.Addr).Write()
 			}
@@ -440,7 +441,7 @@ func (h *DNSHandler) ProcessMDNS(frame packet.Frame) (ipv4 []packet.IPNameEntry,
 			entry.NameEntry.Type = moduleMDNS
 			entry.NameEntry.Name = strings.TrimSuffix(hdr.Name.String(), ".local.")
 			entry.Addr.MAC = packet.CopyMAC(frame.SrcAddr.MAC)
-			entry.Addr.IP = packet.CopyIP(r.AAAA[:])
+			entry.Addr.IP = netip.AddrFrom16(r.AAAA)
 			if Debug {
 				fastlog.NewLine(moduleMDNS, "AAAA resource").String("name", entry.NameEntry.Name).Struct(entry.Addr).Write()
 			}

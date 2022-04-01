@@ -4,12 +4,12 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"net/netip"
 	"strconv"
 	"sync"
 	"syscall"
 
 	"github.com/irai/packet/fastlog"
-	"inet.af/netaddr"
 )
 
 const (
@@ -75,34 +75,36 @@ func (p Ether) Src() net.HardwareAddr { return net.HardwareAddr(p[6 : 6+6]) }
 func (p Ether) EtherType() uint16     { return binary.BigEndian.Uint16(p[12:14]) } // same pos as PayloadLen
 
 // SrcIP i a convenience function to return the source IP address. It returns nil if no IP packet is present.
-func (p Ether) SrcIP() net.IP {
+func (p Ether) SrcIP() netip.Addr {
 	switch p.EtherType() {
 	case syscall.ETH_P_IP:
 		return IP4(p.Payload()).Src()
 	case syscall.ETH_P_IPV6:
 		return IP6(p.Payload()).Src()
 	}
-	return nil
+	return netip.Addr{}
 }
 
 // SrcIP i a convenience function to return the destination IP address. It returns nil if no IP packet is present.
-func (p Ether) DstIP() net.IP {
+func (p Ether) DstIP() netip.Addr {
 	switch p.EtherType() {
 	case syscall.ETH_P_IP:
 		return IP4(p.Payload()).Dst()
 	case syscall.ETH_P_IPV6:
 		return IP6(p.Payload()).Dst()
 	}
-	return nil
+	return netip.Addr{}
 }
 
-// SrcIP i a convenience function to return the destination IP address in netaddr.IP format. It returns nil if no IP packet is present.
-func (p Ether) NetaddrDstIP() netaddr.IP {
-	if ip, ok := netaddr.FromStdIP(p.DstIP()); ok {
+/**
+// SrcIP i a convenience function to return the destination IP address in netip.Addr format. It returns nil if no IP packet is present.
+func (p Ether) NetaddrDstIP() netip.Addr {
+	if ip, ok := netip.AddrFromSlice(p.DstIP()); ok {
 		return ip
 	}
-	return netaddr.IP{}
+	return netip.Addr{}
 }
+*/
 
 // HeaderLen returns the header length.
 func (p Ether) HeaderLen() int {

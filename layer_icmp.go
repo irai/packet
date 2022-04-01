@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"net/netip"
 	"sync"
 	"syscall"
 	"time"
@@ -283,13 +284,15 @@ func (p ICMP6NeighborAdvertisement) IsValid() error {
 	}
 	return fmt.Errorf("icmp NA header too short len=%d: %w", len(p), ErrFrameLen)
 }
-func (p ICMP6NeighborAdvertisement) Type() uint8           { return uint8(p[0]) }
-func (p ICMP6NeighborAdvertisement) Code() byte            { return p[1] }
-func (p ICMP6NeighborAdvertisement) Checksum() int         { return int(binary.BigEndian.Uint16(p[2:4])) }
-func (p ICMP6NeighborAdvertisement) Router() bool          { return (p[4] & 0x80) != 0 }
-func (p ICMP6NeighborAdvertisement) Solicited() bool       { return (p[4] & 0x40) != 0 }
-func (p ICMP6NeighborAdvertisement) Override() bool        { return (p[4] & 0x20) != 0 }
-func (p ICMP6NeighborAdvertisement) TargetAddress() net.IP { return net.IP(p[8:24]) }
+func (p ICMP6NeighborAdvertisement) Type() uint8     { return uint8(p[0]) }
+func (p ICMP6NeighborAdvertisement) Code() byte      { return p[1] }
+func (p ICMP6NeighborAdvertisement) Checksum() int   { return int(binary.BigEndian.Uint16(p[2:4])) }
+func (p ICMP6NeighborAdvertisement) Router() bool    { return (p[4] & 0x80) != 0 }
+func (p ICMP6NeighborAdvertisement) Solicited() bool { return (p[4] & 0x40) != 0 }
+func (p ICMP6NeighborAdvertisement) Override() bool  { return (p[4] & 0x20) != 0 }
+func (p ICMP6NeighborAdvertisement) TargetAddress() netip.Addr {
+	return netip.AddrFrom16(*((*[16]byte)(net.IP(p[8:24]))))
+}
 func (p ICMP6NeighborAdvertisement) TargetLLA() net.HardwareAddr {
 	// TargetLLA option
 	if len(p) < 32 || p[24] != 2 || p[25] != 1 { // Option type TargetLLA, len 8 bytes
@@ -326,7 +329,8 @@ func ICMP6NeighborAdvertisementMarshal(router bool, solicited bool, override boo
 	if override {
 		b[4] |= (1 << 5)
 	}
-	copy(b[8:], targetAddr.IP)   // target ip address
+	s := targetAddr.IP.As16()
+	copy(b[8:], s[:])            // target ip address
 	b[24] = 2                    // option type 2 - target addr
 	b[25] = 1                    // len = 1 (8 bytes)
 	copy(b[26:], targetAddr.MAC) // target mac addr
@@ -341,10 +345,13 @@ func (p ICMP6NeighborSolicitation) IsValid() error {
 	}
 	return fmt.Errorf("icmp NS header too short len=%d: %w", len(p), ErrFrameLen)
 }
-func (p ICMP6NeighborSolicitation) Type() uint8           { return uint8(p[0]) }
-func (p ICMP6NeighborSolicitation) Code() byte            { return p[1] }
-func (p ICMP6NeighborSolicitation) Checksum() int         { return int(binary.BigEndian.Uint16(p[2:4])) }
-func (p ICMP6NeighborSolicitation) TargetAddress() net.IP { return net.IP(p[8:24]) }
+func (p ICMP6NeighborSolicitation) Type() uint8   { return uint8(p[0]) }
+func (p ICMP6NeighborSolicitation) Code() byte    { return p[1] }
+func (p ICMP6NeighborSolicitation) Checksum() int { return int(binary.BigEndian.Uint16(p[2:4])) }
+func (p ICMP6NeighborSolicitation) TargetAddress() netip.Addr {
+	ip, _ := netip.AddrFromSlice(p[8:24])
+	return ip
+}
 func (p ICMP6NeighborSolicitation) SourceLLA() net.HardwareAddr {
 	// SourceLLA option
 	if len(p) < 32 || p[24] != 1 || p[25] != 1 { // Option type TargetLLA, len 8 bytes
@@ -366,11 +373,11 @@ func (p ICMP6NeighborSolicitation) FastLog(line *fastlog.Line) *fastlog.Line {
 	return line
 }
 
-func ICMP6NeighborSolicitationMarshal(targetAddr net.IP, sourceLLA net.HardwareAddr) ([]byte, error) {
+func ICMP6NeighborSolicitationMarshal(targetAddr netip.Addr, sourceLLA net.HardwareAddr) ([]byte, error) {
 	b := make([]byte, 32)                          // 4 header + 28 bytes
 	b[0] = byte(ipv6.ICMPTypeNeighborSolicitation) // NS
 	// skip reserved 4 bytes
-	copy(b[8:], targetAddr)
+	copy(b[8:], targetAddr.AsSlice())
 
 	// single option: SourceLLA option
 	b[24] = 2 // Target option
@@ -406,7 +413,7 @@ func (p ICMP6Redirect) String() string {
 // ICMP4SendEchoRequest transmit an icmp echo request
 // Do not wait for response
 func (h *Session) ICMP4SendEchoRequest(srcAddr Addr, dstAddr Addr, id uint16, seq uint16) error {
-	if srcAddr.IP.To4() == nil || dstAddr.IP.To4() == nil {
+	if !srcAddr.IP.Is4() || !dstAddr.IP.Is4() {
 		return ErrInvalidIP
 	}
 	icmpMessage := icmp.Message{
@@ -450,7 +457,7 @@ func (h *Session) icmp4SendPacket(srcAddr Addr, dstAddr Addr, p ICMP) (err error
 
 // ICMP6SendEchoRequest transmit an icmp6 echo request and do not wait for response
 func (h *Session) ICMP6SendEchoRequest(srcAddr Addr, dstAddr Addr, id uint16, seq uint16) error {
-	if !IsIP6(srcAddr.IP) || !IsIP6(dstAddr.IP) {
+	if !srcAddr.IP.Is6() || !dstAddr.IP.Is6() {
 		return ErrInvalidIP
 	}
 	icmpMessage := icmp.Message{
@@ -500,8 +507,8 @@ func (h *Session) icmp6SendPacket(srcAddr Addr, dstAddr Addr, b []byte) error {
 	//   - 3 bytes zero
 	//   - 1 byte nextheader (so, 58 decimal)
 	psh := make([]byte, 40+len(b))
-	copy(psh[0:16], ip6.Src())
-	copy(psh[16:32], ip6.Dst())
+	copy(psh[0:16], ip6.Src().AsSlice())
+	copy(psh[16:32], ip6.Dst().AsSlice())
 	binary.BigEndian.PutUint32(psh[32:36], uint32(len(b)))
 	psh[39] = 58
 	copy(psh[40:], b)

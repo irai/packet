@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"net"
+	"net/netip"
 	"time"
 
 	"github.com/irai/packet"
@@ -35,10 +36,10 @@ type Lease struct {
 	ClientID    []byte `yaml:",omitempty"`
 	State       State
 	Addr        packet.Addr
-	IPOffer     net.IP    `yaml:",omitempty"`
-	OfferExpiry time.Time `yaml:",omitempty"`
-	XID         []byte    `yaml:",omitempty"`
-	Count       int       `yaml:"-"` // a counter to check for repeat packets
+	IPOffer     netip.Addr `yaml:",omitempty"`
+	OfferExpiry time.Time  `yaml:",omitempty"`
+	XID         []byte     `yaml:",omitempty"`
+	Count       int        `yaml:"-"` // a counter to check for repeat packets
 	Name        string
 	subnet      *dhcpSubnet `yaml:"-"` // yaml does not like private fields, it will not create the fields in ther unmarshal struct
 	DHCPExpiry  time.Time   `yaml:",omitempty"`
@@ -57,14 +58,14 @@ func (l Lease) FastLog(line *fastlog.Line) *fastlog.Line {
 	line.IP("offer", l.IPOffer)
 	line.String("capture", l.subnet.Stage.String())
 	line.IP("gw", l.subnet.DefaultGW)
-	line.String("mask", l.subnet.LAN.Mask.String())
-	line.String("subnet", l.subnet.ID)
+	line.String("subnet", l.subnet.LAN.String())
+	line.String("subnet_id", l.subnet.ID)
 	return line
 }
 
-func (h *Handler) findByIP(ip net.IP) *Lease {
+func (h *Handler) findByIP(ip netip.Addr) *Lease {
 	for _, v := range h.table {
-		if v.Addr.IP.Equal(ip) {
+		if v.Addr.IP == ip {
 			return v
 		}
 	}
@@ -92,7 +93,8 @@ func (h *Handler) findOrCreate(clientID []byte, mac net.HardwareAddr, name strin
 		if name != "" && lease.Name != name {
 			lease.Name = name
 		}
-		if lease.subnet.LAN.IP.Mask(lease.subnet.LAN.Mask).Equal(subnet.LAN.IP.Mask(subnet.LAN.Mask)) &&
+		// if lease.subnet.LAN.IP.Mask(lease.subnet.LAN.Mask).Equal(subnet.LAN.IP.Mask(subnet.LAN.Mask)) &&
+		if lease.subnet.LAN == subnet.LAN &&
 			bytes.Equal(lease.Addr.MAC, mac) {
 			return lease
 		}
@@ -103,9 +105,9 @@ func (h *Handler) findOrCreate(clientID []byte, mac net.HardwareAddr, name strin
 	lease = &Lease{}
 	lease.ClientID = packet.CopyBytes(clientID)
 	lease.State = StateFree
-	lease.IPOffer = nil
+	lease.IPOffer = netip.Addr{}
 	lease.Addr.MAC = packet.CopyMAC(mac)
-	lease.Addr.IP = nil
+	lease.Addr.IP = netip.Addr{}
 	lease.subnet = subnet
 	lease.Name = name
 	h.table[string(lease.ClientID)] = lease
@@ -121,11 +123,11 @@ func (h *Handler) delete(lease *Lease) {
 }
 
 // allocIPOffer allocates a free IP to the lease entry
-func (h *Handler) allocIPOffer(lease *Lease, reqIP net.IP) error {
-	if reqIP != nil {
+func (h *Handler) allocIPOffer(lease *Lease, reqIP netip.Addr) error {
+	if reqIP.Is4() {
 		if l := h.findByIP(reqIP); l == nil || l.State == StateFree || bytes.Equal(l.ClientID, lease.ClientID) {
 			if h.session.FindIP(reqIP) == nil {
-				lease.IPOffer = packet.CopyIP(reqIP).To4()
+				lease.IPOffer = reqIP
 				if Debug {
 					fastlog.NewLine(module, "offer").IP("ip", lease.IPOffer).Write()
 				}
@@ -133,39 +135,38 @@ func (h *Handler) allocIPOffer(lease *Lease, reqIP net.IP) error {
 			}
 		}
 	}
-	tmpIP := dupIP(lease.subnet.LAN.IP).To4() // copy to update array
-	end := uint(lease.subnet.LastIP[3])
 
-	// bottom half
-	var ip net.IP
-	for lease.subnet.nextIP <= end {
-		tmpIP[3] = byte(lease.subnet.nextIP)
-		lease.subnet.nextIP = lease.subnet.nextIP + 1
-		if l := h.findByIP(tmpIP); l == nil || l.State == StateFree {
-			if h.session.FindIP(tmpIP) == nil {
-				ip = tmpIP
+	// search in remaining space to deliver sequential addresses
+	var ip netip.Addr
+	for lease.subnet.nextIP.Less(lease.subnet.broadcast) {
+		// for tmpIP.IsValid() {
+		if l := h.findByIP(lease.subnet.nextIP); l == nil || l.State == StateFree {
+			if h.session.FindIP(lease.subnet.nextIP) == nil {
+				ip = lease.subnet.nextIP
+				lease.subnet.nextIP = lease.subnet.nextIP.Next()
 				break
 			}
 		}
+		lease.subnet.nextIP = lease.subnet.nextIP.Next()
 	}
-	if ip != nil {
+	if ip.IsValid() {
 		lease.IPOffer = ip
 		return nil
 	}
 
-	// full range in case other IPs were freed
-	lease.subnet.nextIP = uint(lease.subnet.FirstIP[3])
-	for lease.subnet.nextIP <= end {
-		tmpIP[3] = byte(lease.subnet.nextIP)
-		lease.subnet.nextIP = lease.subnet.nextIP + 1
-		if l := h.findByIP(tmpIP); l == nil || l.State == StateFree {
-			if h.session.FindIP(tmpIP) == nil {
-				ip = tmpIP
+	// search across full subnet in case other IPs were freed
+	lease.subnet.nextIP = lease.subnet.FirstIP
+	for lease.subnet.nextIP.Less(lease.subnet.broadcast) {
+		if l := h.findByIP(lease.subnet.nextIP); l == nil || l.State == StateFree {
+			if h.session.FindIP(lease.subnet.nextIP) == nil {
+				ip = lease.subnet.nextIP
+				lease.subnet.nextIP = lease.subnet.nextIP.Next()
 				break
 			}
 		}
+		lease.subnet.nextIP = lease.subnet.nextIP.Next()
 	}
-	if ip == nil {
+	if !ip.IsValid() {
 		return errors.New("exhausted all ips")
 	}
 	lease.IPOffer = ip

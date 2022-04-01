@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"net"
+	"net/netip"
 	"os"
 	"testing"
 	"time"
@@ -68,10 +69,10 @@ func Test_requestCaptured(t *testing.T) {
 	t.Run("host1", func(t *testing.T) {
 		hostName := "host1"
 		addr := packet.Addr{MAC: mac1}
-		ip := net.IPv4(192, 168, 0, 130)
+		ip := netip.MustParseAddr("192.168.0.130")
 		tc.session.Capture(addr.MAC)
 		newDHCPHost(t, tc, addr.MAC, hostName)
-		if lease := tc.h.findByMAC(addr.MAC); lease == nil || !lease.Addr.IP.Equal(ip) || lease.Name != hostName || lease.State != StateAllocated ||
+		if lease := tc.h.findByMAC(addr.MAC); lease == nil || lease.Addr.IP != ip || lease.Name != hostName || lease.State != StateAllocated ||
 			lease.subnet != tc.h.net2 {
 			tc.h.PrintTable()
 			t.Error("invalid lease", lease)
@@ -84,7 +85,7 @@ func Test_requestCaptured(t *testing.T) {
 		case <-time.After(time.Millisecond * 200):
 			t.Error("timeout")
 		case notification := <-tc.session.C:
-			if !notification.Addr.IP.Equal(ip) || !notification.Online {
+			if notification.Addr.IP != ip || !notification.Online {
 				t.Error("invalid online notification", notification)
 			}
 		}
@@ -94,10 +95,10 @@ func Test_requestCaptured(t *testing.T) {
 		hostName := "host2"
 		addr := packet.Addr{MAC: mac2}
 		newDHCPHost(t, tc, addr.MAC, hostName)
-		ip := net.IPv4(192, 168, 0, 131)
+		ip := netip.MustParseAddr("192.168.0.131")
 		tc.session.Capture(addr.MAC)
 		newDHCPHost(t, tc, addr.MAC, hostName)
-		if lease := tc.h.findByMAC(addr.MAC); lease == nil || !lease.Addr.IP.Equal(ip) || lease.Name != hostName || lease.State != StateAllocated ||
+		if lease := tc.h.findByMAC(addr.MAC); lease == nil || lease.Addr.IP != ip || lease.Name != hostName || lease.State != StateAllocated ||
 			lease.subnet != tc.h.net2 {
 			tc.h.PrintTable()
 			t.Error("invalid lease", lease)
@@ -112,7 +113,7 @@ func Test_requestCaptured(t *testing.T) {
 		case <-time.After(time.Millisecond * 200):
 			t.Error("timeout")
 		case notification := <-tc.session.C:
-			if !notification.Addr.IP.Equal(net.IPv4(192, 168, 0, 1)) || !notification.Online {
+			if notification.Addr.IP != netip.MustParseAddr("192.168.0.1") || !notification.Online {
 				t.Error("invalid online notification 1", notification)
 			}
 		}
@@ -120,7 +121,7 @@ func Test_requestCaptured(t *testing.T) {
 		case <-time.After(time.Millisecond * 200):
 			t.Fatal("timeout")
 		case notification := <-tc.session.C:
-			if !notification.Addr.IP.Equal(net.IPv4(192, 168, 0, 1)) || notification.Online {
+			if notification.Addr.IP != netip.MustParseAddr("192.168.0.1") || notification.Online {
 				t.Error("invalid offline notification", notification)
 			}
 		}
@@ -128,7 +129,7 @@ func Test_requestCaptured(t *testing.T) {
 		case <-time.After(time.Millisecond * 200):
 			t.Fatal("timeout")
 		case notification := <-tc.session.C:
-			if !notification.Addr.IP.Equal(net.IPv4(192, 168, 0, 131)) || !notification.Online {
+			if notification.Addr.IP != netip.MustParseAddr("192.168.0.131") || !notification.Online {
 				t.Error("invalid online notification 2", notification)
 			}
 		}
@@ -146,11 +147,11 @@ func Test_requestExhaust(t *testing.T) {
 	exhaustAllIPs(t, tc, mac1)
 
 	// send one last discover
-	tc.IPOffer = nil
+	tc.IPOffer = netip.Addr{}
 	tc.xid++
 	xid := []byte(fmt.Sprintf("%d", tc.xid))
 	mac5 = net.HardwareAddr{0x00, 0xff, 0xaa, 0xbb, 0x05, 0x05} // new mac
-	srcAddr := packet.Addr{MAC: mac5, IP: net.IPv4zero, Port: DHCP4ClientPort}
+	srcAddr := packet.Addr{MAC: mac5, IP: packet.IPv4zero, Port: DHCP4ClientPort}
 	// dstAddr := packet.Addr{MAC: packet.EthernetBroadcast, IP: net.IPv4zero, Port: DHCP4ServerPort}
 	ether := newDHCP4DiscoverFrame(srcAddr, "onelastname", xid)
 	frame, err := tc.session.Parse(ether)
@@ -163,7 +164,7 @@ func Test_requestExhaust(t *testing.T) {
 	}
 	time.Sleep(time.Millisecond * 10)
 
-	if tc.IPOffer != nil {
+	if tc.IPOffer.IsValid() {
 		t.Errorf("DHCPHandler.handleDiscover() unexpected IP offer ip=%s", tc.IPOffer)
 	}
 }
@@ -174,12 +175,12 @@ func Test_requestAnotherHost(t *testing.T) {
 	tc := setupTestHandler()
 	defer tc.Close()
 
-	tc.IPOffer = nil
+	tc.IPOffer = netip.Addr{}
 	tc.xid++
 	xid := []byte(fmt.Sprintf("%d", tc.xid))
 	mac5 = net.HardwareAddr{0x00, 0xff, 0xaa, 0xbb, 0x05, 0x05} // new mac
-	srcAddr := packet.Addr{MAC: mac5, IP: net.IPv4zero, Port: DHCP4ClientPort}
-	dstAddr := packet.Addr{MAC: packet.EthernetBroadcast, IP: net.IPv4zero, Port: DHCP4ServerPort}
+	srcAddr := packet.Addr{MAC: mac5, IP: packet.IPv4zero, Port: DHCP4ClientPort}
+	dstAddr := packet.Addr{MAC: packet.EthernetBroadcast, IP: packet.IPv4zero, Port: DHCP4ServerPort}
 
 	// first discover packet
 	ether := newDHCP4DiscoverFrame(srcAddr, "host name", xid)

@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/netip"
 	"strings"
 	"sync"
 
 	"github.com/irai/packet"
 	"github.com/irai/packet/fastlog"
-	"inet.af/netaddr"
 )
 
 var Debug bool
@@ -35,15 +35,15 @@ func New(session *packet.Session) (h *DNSHandler, err error) {
 	h.mdnsCache = make(map[string]cache)
 
 	// Resgiter for MDNS multicast
-	if h.mconn4, err = net.ListenMulticastUDP("udp4", nil, &net.UDPAddr{IP: mdnsIPv4Addr.IP, Port: int(mdnsIPv4Addr.Port)}); err != nil {
+	if h.mconn4, err = net.ListenMulticastUDP("udp4", nil, &net.UDPAddr{IP: mdnsIPv4Addr.IP.AsSlice(), Port: int(mdnsIPv4Addr.Port)}); err != nil {
 		return nil, fmt.Errorf("failed to bind to multicast udp4 port: %w", err)
 	}
-	if h.mconn6, err = net.ListenMulticastUDP("udp6", nil, &net.UDPAddr{IP: mdnsIPv6Addr.IP, Port: int(mdnsIPv6Addr.Port)}); err != nil {
+	if h.mconn6, err = net.ListenMulticastUDP("udp6", nil, &net.UDPAddr{IP: mdnsIPv6Addr.IP.AsSlice(), Port: int(mdnsIPv6Addr.Port)}); err != nil {
 		log.Printf("MDNS: Failed to bind to udp6 port: %v", err)
 	}
 
 	// Register for ssdp multicast
-	if h.ssdpconn4, err = net.ListenMulticastUDP("udp4", nil, &net.UDPAddr{IP: ssdpIPv4Addr.IP, Port: int(ssdpIPv4Addr.Port)}); err != nil {
+	if h.ssdpconn4, err = net.ListenMulticastUDP("udp4", nil, &net.UDPAddr{IP: ssdpIPv4Addr.IP.AsSlice(), Port: int(ssdpIPv4Addr.Port)}); err != nil {
 		return nil, fmt.Errorf("failed to bind to ssdp ipv4 port: %w", err)
 	}
 	return h, nil
@@ -70,13 +70,13 @@ type NameResourceRecord struct {
 
 type IPResourceRecord struct {
 	Name string
-	IP   netaddr.IP
+	IP   netip.Addr
 	TTL  uint32
 }
 type DNSEntry struct {
 	Name         string
-	IP4Records   map[netaddr.IP]IPResourceRecord
-	IP6Records   map[netaddr.IP]IPResourceRecord
+	IP4Records   map[netip.Addr]IPResourceRecord
+	IP6Records   map[netip.Addr]IPResourceRecord
 	CNameRecords map[string]NameResourceRecord
 	PTRRecords   map[string]IPResourceRecord
 }
@@ -100,8 +100,8 @@ func (n NameEntry) FastLog(l *fastlog.Line) *fastlog.Line {
 // copy returns a deep copy of DNSEntry
 func (d DNSEntry) copy() DNSEntry {
 	e := DNSEntry{Name: d.Name}
-	e.IP4Records = make(map[netaddr.IP]IPResourceRecord, len(d.IP4Records))
-	e.IP6Records = make(map[netaddr.IP]IPResourceRecord, len(d.IP6Records))
+	e.IP4Records = make(map[netip.Addr]IPResourceRecord, len(d.IP4Records))
+	e.IP6Records = make(map[netip.Addr]IPResourceRecord, len(d.IP6Records))
 	e.CNameRecords = make(map[string]NameResourceRecord, len(d.CNameRecords))
 	e.PTRRecords = make(map[string]IPResourceRecord, len(d.PTRRecords))
 	for k, v := range d.IP4Records {
@@ -119,16 +119,16 @@ func (d DNSEntry) copy() DNSEntry {
 	return e
 }
 
-func (d DNSEntry) IP4List() []netaddr.IP {
-	list := make([]netaddr.IP, 0, len(d.IP4Records))
+func (d DNSEntry) IP4List() []netip.Addr {
+	list := make([]netip.Addr, 0, len(d.IP4Records))
 	for _, v := range d.IP4Records {
 		list = append(list, v.IP)
 	}
 	return list
 }
 
-func (d DNSEntry) IP6List() []netaddr.IP {
-	list := make([]netaddr.IP, 0, len(d.IP6Records))
+func (d DNSEntry) IP6List() []netip.Addr {
+	list := make([]netip.Addr, 0, len(d.IP6Records))
 	for _, v := range d.IP6Records {
 		list = append(list, v.IP)
 	}
@@ -223,8 +223,8 @@ func (p DNS) NSCount() uint16       { return binary.BigEndian.Uint16(p[8:10]) } 
 func (p DNS) ARCount() uint16       { return binary.BigEndian.Uint16(p[10:12]) } // Additional information count
 
 func newDNSEntry() (entry DNSEntry) {
-	entry.IP4Records = make(map[netaddr.IP]IPResourceRecord)
-	entry.IP6Records = make(map[netaddr.IP]IPResourceRecord)
+	entry.IP4Records = make(map[netip.Addr]IPResourceRecord)
+	entry.IP6Records = make(map[netip.Addr]IPResourceRecord)
 	entry.CNameRecords = make(map[string]NameResourceRecord)
 	entry.PTRRecords = make(map[string]IPResourceRecord)
 	return entry
@@ -325,7 +325,7 @@ func (e *DNSEntry) decodeRRs(count int, p DNS, offset int, buffer []byte) (int, 
 			if dataLen != 4 {
 				return 0, false, fmt.Errorf("invalid A data len: %w", packet.ErrInvalidLen)
 			}
-			ip, _ := netaddr.FromStdIPRaw(net.IP(p[endq+10 : endq+10+4]))
+			ip, _ := netip.AddrFromSlice(net.IP(p[endq+10 : endq+10+4]))
 			if _, found := e.IP4Records[ip]; !found {
 				e.IP4Records[ip] = IPResourceRecord{Name: string(name), IP: ip, TTL: ttl}
 				updated = true
@@ -335,7 +335,7 @@ func (e *DNSEntry) decodeRRs(count int, p DNS, offset int, buffer []byte) (int, 
 			if dataLen != 16 {
 				return 0, false, fmt.Errorf("invalid AAAA data len: %w", packet.ErrInvalidLen)
 			}
-			ip, _ := netaddr.FromStdIPRaw(net.IP(p[endq+10 : endq+10+16]))
+			ip, _ := netip.AddrFromSlice(net.IP(p[endq+10 : endq+10+16]))
 			if _, found := e.IP6Records[ip]; !found {
 				e.IP6Records[ip] = IPResourceRecord{Name: string(name), IP: ip, TTL: ttl}
 				updated = true
@@ -369,7 +369,7 @@ func (e *DNSEntry) decodeRRs(count int, p DNS, offset int, buffer []byte) (int, 
 				fmt.Printf("dns   : ignoring ptr ip6=%s\n", tmp)
 				break
 			}
-			ip := netaddr.IPv4(tmp[3], tmp[2], tmp[1], tmp[0])
+			ip, _ := netip.AddrFromSlice([]byte{tmp[3], tmp[2], tmp[1], tmp[0]})
 			var ptr []byte
 			tmpBuf = buffer
 			ptr, _, err = decodeName(p, endq+10, &tmpBuf, 1)
@@ -520,7 +520,7 @@ func encodeName(name []byte, data []byte, offset int) int {
 
 // reverseDNS query the PTR record for ip
 // return ErrNotFound if there is no PTR record
-func ReverseDNS(ip netaddr.IP) error {
+func ReverseDNS(ip netip.Addr) error {
 	if Debug {
 		fmt.Printf("dns   : reverse lookup for ip=%s\n", ip)
 	}
@@ -578,8 +578,8 @@ func (h *DNSHandler) ProcessDNS(frame packet.Frame) (e DNSEntry, err error) {
 	if !found {
 		e = newDNSEntry()
 		e.Name = string(question.Name)
-		e.IP4Records = make(map[netaddr.IP]IPResourceRecord)
-		e.IP6Records = make(map[netaddr.IP]IPResourceRecord)
+		e.IP4Records = make(map[netip.Addr]IPResourceRecord)
+		e.IP6Records = make(map[netip.Addr]IPResourceRecord)
 		e.CNameRecords = make(map[string]NameResourceRecord)
 		e.PTRRecords = make(map[string]IPResourceRecord)
 	}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"net/netip"
 	"testing"
 	"time"
 )
@@ -30,7 +31,7 @@ type complexType struct {
 
 func (t complexType) FastLog(l *Line) *Line {
 	l.MAC("mac", t.mac)
-	l.IP("ip", t.ip)
+	l.IPSlice("ip", t.ip)
 	l.String("str", t.str)
 	l.ByteArray("buffer", t.buffer)
 	l.IPArray("iparray", t.ipArray)
@@ -43,6 +44,9 @@ func (t complexType) String() string {
 }
 
 func TestLine_PrintUint32(t *testing.T) {
+	l := &Line{buffer: [2048]byte{}}
+	l = l.printInt(10)
+	fmt.Println("value", l.buffer[l.index])
 	tests := []uint32{
 		4294967295,
 		65535,
@@ -64,7 +68,7 @@ func TestLine_PrintUint32(t *testing.T) {
 
 	for _, test := range tests {
 		l := &Line{buffer: [2048]byte{}}
-		l = l.printUint32(test)
+		l = l.printInt(test)
 		if want := fmt.Sprint(test); string(l.buffer[:l.index]) != want {
 			t.Errorf("got printUint32(%d) got=%s, want=%s", test, l.buffer[:l.index], want)
 		}
@@ -76,13 +80,13 @@ func TestLine_Write(t *testing.T) {
 	ip := net.IPv4(192, 168, 0, 1)
 	l := NewLine("ether", "")
 	l.MAC("mac", mac2)
-	l.IP("ip", ip)
+	l.IPSlice("ip", ip)
 	l.Int("int", 10)
 	l.Uint8("uint8", 'A')
 	// fmt.Printf("%s| len=%d\n", l.buffer[:l.index], l.index)
 	l.Module("ip", "test ip")
 	l.MAC("mac", mac2)
-	l.IP("ip", ip)
+	l.IPSlice("ip", ip)
 
 	if !bytes.Equal(l.buffer[:l.index],
 		[]byte("ether : mac=00:02:03:04:05:af ip=192.168.0.1 int=10 uint8=65\nip    : \"test ip\" mac=00:02:03:04:05:af ip=192.168.0.1")) {
@@ -206,6 +210,8 @@ func Benchmark_Fastlog(b *testing.B) {
 	// os.Stderr, _ = os.Open(os.DevNull)
 	now := time.Now()
 	mac := net.HardwareAddr{0x00, 0xff, 0xaa, 0xbb, 0x55, 0x55}
+	ipv4 := netip.AddrFrom4([4]byte{192, 168, 0, 1})
+	ipv6 := netip.AddrFrom16([16]byte{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x10, 0x10})
 
 	s := complexType{mac: mac, ip: net.IPv4zero, str: "my string"}
 
@@ -235,8 +241,17 @@ func Benchmark_Fastlog(b *testing.B) {
 		}
 	})
 
+	// printf
+	b.Run("printf", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			fmt.Fprintf(Std.Out, "test: message int=%d name=%s uint16=%d uint32=%d uint8=%d ip=%s ipv6=%s newip=%s newip6=%s mac=%s time=%s\n",
+				100, "my string", 1, 1, 111, net.IPv4zero, net.IPv6zero, ipv4, ipv6, mac, now)
+		}
+	})
+
 	// No allocation
-	b.Run("zero alloc", func(b *testing.B) {
+	b.Run("fastlog zero alloc", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
 			NewLine("test", "message").
@@ -245,8 +260,10 @@ func Benchmark_Fastlog(b *testing.B) {
 				Uint16("uint16", 1).
 				Uint32("uint32", 1).
 				Uint8("uint8", 111).
-				IP("ip", net.IPv4zero).
-				IP("ipv6", net.IPv6zero).
+				IPSlice("ip", net.IPv4zero).
+				IPSlice("ipv6", net.IPv6zero).
+				IP("newip", ipv4).
+				IP("newip6", ipv6).
 				MAC("mac", mac).
 				ByteArray("array", []byte{1, 2, 3, 4, 5, 6, 7, 8, 9}).
 				Time("time", now).
@@ -264,8 +281,10 @@ func Benchmark_Fastlog(b *testing.B) {
 				Uint16("uint16", 1).
 				Uint32("uint32", 1).
 				Uint8("uint8", 111).
-				IP("ip", net.IPv4zero).
-				IP("ipv6", net.IPv6zero).
+				IPSlice("ip", net.IPv4zero).
+				IPSlice("ipv6", net.IPv6zero).
+				IP("newip", ipv4).
+				IP("newip6", ipv6).
 				MAC("mac", mac).
 				ByteArray("array", []byte{1, 2, 3, 4, 5, 6, 7, 8, 9}).
 				Time("time", now).

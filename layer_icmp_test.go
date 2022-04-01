@@ -2,23 +2,14 @@ package packet
 
 import (
 	"fmt"
-	"net"
+	"net/netip"
 	"syscall"
 	"testing"
 	"time"
 
 	"github.com/irai/packet/fastlog"
 	"golang.org/x/net/ipv6"
-	"inet.af/netaddr"
 )
-
-func Test_IP6Lib(t *testing.T) {
-	// simple sanity test
-	_, err := netaddr.ParseIP("2001:4479:1d01:2401::")
-	if err != nil {
-		t.Error("invalid IP ", err)
-	}
-}
 
 func TestICMP4Redirect_IsValid(t *testing.T) {
 	tests := []struct {
@@ -188,23 +179,24 @@ func Benchmark_Ping256(b *testing.B) {
 }
 
 func ping256(s *Session) {
-	channel := make(chan net.IP, 20)
+	channel := make(chan netip.Addr, 20)
 	srcIP := hostIP4
-	for i := 1; i < 255; i++ {
-		ip := CopyIP(srcIP).To4() // new buffer, we are sending this in the channel
-		ip[3] = uint8(i)
-		go func(ip net.IP) {
+	for i := 0; i < 255; i++ {
+		// ip := CopyIP(srcIP).To4() // new buffer, we are sending this in the channel
+		// ip[3] = uint8(i)
+		srcIP = srcIP.Next()
+		go func(ip netip.Addr) {
 			if s.Ping6(hostAddr, Addr{IP: ip}, time.Second*2) != nil {
-				channel <- net.IPv4zero
+				channel <- IPv4zero
 				return
 			}
 			channel <- ip
-		}(ip)
+		}(srcIP)
 		time.Sleep(time.Millisecond * 5)
 	}
 	for i := 1; i < 255; i++ {
 		ip := <-channel
-		if !ip.Equal(net.IPv4zero) {
+		if ip != IPv4zero {
 			fmt.Printf("Found client ip=%s", ip)
 		}
 	}

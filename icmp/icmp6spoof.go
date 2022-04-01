@@ -17,7 +17,7 @@ func (h *Handler6) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
 	if Debug {
 		fmt.Printf("icmp6 : start neighbor hunt %s\n", addr)
 	}
-	if addr.IP != nil && !addr.IP.IsLinkLocalUnicast() {
+	if addr.IP.IsValid() && !addr.IP.IsLinkLocalUnicast() {
 		return packet.StageNoChange, nil
 	}
 	h.Lock()
@@ -38,7 +38,7 @@ func (h *Handler6) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
 	if Debug {
 		fmt.Printf("icmp6 : stop neighbor hunt %s\n", addr)
 	}
-	if addr.IP != nil && !addr.IP.IsLinkLocalUnicast() {
+	if addr.IP.IsValid() && !addr.IP.IsLinkLocalUnicast() {
 		return packet.StageNoChange, nil
 	}
 	h.Lock()
@@ -56,7 +56,7 @@ func (h *Handler6) spoofLoop(dstAddr packet.Addr) {
 	nTimes := 0
 
 	// if no IP, then use unicast Ether address and multicast IP to get packet to destination
-	if dstAddr.IP == nil {
+	if !dstAddr.IP.IsValid() {
 		dstAddr.IP = packet.IP6AllNodesMulticast
 	}
 	// fmt.Printf("icmp6 : na attack %s time=%v\n", dstAddr, startTime)
@@ -81,7 +81,7 @@ func (h *Handler6) spoofLoop(dstAddr packet.Addr) {
 			h.Unlock()
 
 			for _, routerAddr := range list {
-				hostAddr := packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: h.session.NICInfo.HostLLA.IP}
+				hostAddr := packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: h.session.NICInfo.HostLLA.Addr()}
 				targetAddr := packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: routerAddr.IP}
 				fakeRouter := packet.Addr{MAC: hostAddr.MAC, IP: routerAddr.IP}
 

@@ -29,10 +29,10 @@ func TestIP6MarshalBinary(t *testing.T) {
 	if header.NextHeader != 59 {
 		t.Fatal("invalid next header ", header.NextHeader)
 	}
-	if !header.Src.Equal(ip6LLAHost) {
+	if !header.Src.Equal(ip6LLAHost.AsSlice()) {
 		t.Fatal("invalid src ip ", header.Src)
 	}
-	if !header.Dst.Equal(ip6LLA4) {
+	if !header.Dst.Equal(ip6LLA4.AsSlice()) {
 		t.Fatal("invalid dst ip ", header.Src)
 	}
 
@@ -50,10 +50,10 @@ func TestIP6MarshalBinary(t *testing.T) {
 	if frame.NextHeader() != 59 {
 		t.Fatal("invalid next header ", frame.NextHeader())
 	}
-	if !frame.Src().Equal(ip6LLAHost) {
+	if frame.Src() != ip6LLAHost {
 		t.Fatal("invalid src ip ", frame.Src())
 	}
-	if !frame.Dst().Equal(ip6LLA4) {
+	if frame.Dst() != ip6LLA4 {
 		t.Fatal("invalid dst ip ", frame.Dst())
 	}
 }
@@ -94,10 +94,10 @@ func TestIP6Payload(t *testing.T) {
 	if header.Version != 0x06 {
 		t.Fatalf("invalid version %v %+v", header.Version, header)
 	}
-	if !header.Src.Equal(ip6LLAHost) {
+	if !header.Src.Equal(ip6LLAHost.AsSlice()) {
 		t.Fatal("invalid src ip ", header.Src)
 	}
-	if !header.Dst.Equal(ip6LLA2) {
+	if !header.Dst.Equal(ip6LLA2.AsSlice()) {
 		t.Fatal("invalid dst ip ", header.Src)
 	}
 

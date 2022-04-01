@@ -44,17 +44,17 @@ func TestHandler_ManyStartHunt(t *testing.T) {
 	h, _ := New6(tc.session)
 	h.Router = &Router{Addr: routerLLAAddr}
 
-	addr1 := packet.Addr{MAC: mac1, IP: ip61}
+	addr1 := packet.Addr{MAC: mac1, IP: ip6LLA1}
 	h.StartHunt(addr1)
 
-	addr2 := packet.Addr{MAC: mac1, IP: ip62}
+	addr2 := packet.Addr{MAC: mac1, IP: ip6LLA2}
 	h.StartHunt(addr2)
 
-	addr3 := packet.Addr{MAC: mac1, IP: ip63}
+	addr3 := packet.Addr{MAC: mac1, IP: ip6LLA3}
 	h.StartHunt(addr3)
 
 	h.Mutex.Lock()
-	if h.huntList.Len() != 0 {
+	if h.huntList.Len() != 1 {
 		t.Fatal("invalid number of ip in capture ", h.huntList.Len())
 	}
 	h.Mutex.Unlock()
@@ -68,14 +68,14 @@ func TestHandler_ManyStartHunt(t *testing.T) {
 	// Lock and unlock to ensure no deadlock in test
 	h.StopHunt(addr3)
 	h.Mutex.Lock()
-	if h.huntList.Len() != 1 {
+	if h.huntList.Len() != 0 {
 		t.Fatal("invalid number of ip in capture ", h.huntList.Len())
 	}
 	h.Mutex.Unlock()
 
 	h.StopHunt(addr1)
 	h.Mutex.Lock()
-	if h.huntList.Len() != 1 {
+	if h.huntList.Len() != 0 {
 		t.Fatal("invalid number of ip in capture ", h.huntList.Len())
 	}
 	h.Mutex.Unlock()

@@ -8,6 +8,7 @@ package dhcp4
 import (
 	"fmt"
 	"net"
+	"net/netip"
 	"os"
 	"sync"
 	"time"
@@ -41,8 +42,8 @@ const (
 type Config struct {
 	// ClientConn    net.PacketConn
 	Mode          Mode
-	NetfilterIP   net.IPNet
-	DNSServer     net.IP
+	NetfilterIP   netip.Prefix
+	DNSServer     netip.Addr
 	LeaseFilename string
 }
 
@@ -100,11 +101,11 @@ func (config Config) New(session *packet.Session) (h *Handler, err error) {
 	h.closeChan = make(chan bool)
 
 	// validate netfilter subnet
-	if config.NetfilterIP.IP == nil {
-		config.NetfilterIP = net.IPNet{IP: session.NICInfo.HostAddr4.IP, Mask: session.NICInfo.HomeLAN4.Mask} // using single subnet: same as home subnet
+	if !config.NetfilterIP.Addr().IsValid() {
+		config.NetfilterIP = netip.PrefixFrom(session.NICInfo.HostAddr4.IP, session.NICInfo.HomeLAN4.Bits()) // using single subnet: same as home subnet
 	}
-	if !session.NICInfo.HomeLAN4.Contains(config.NetfilterIP.IP) {
-		return nil, fmt.Errorf("netfilter ip=%s does not exist in home net=%s: %w", config.NetfilterIP, session.NICInfo.HomeLAN4.IP, packet.ErrInvalidIP)
+	if !session.NICInfo.HomeLAN4.Contains(config.NetfilterIP.Addr()) {
+		return nil, fmt.Errorf("netfilter ip=%s does not exist in home net=%s: %w", config.NetfilterIP, session.NICInfo.HomeLAN4, packet.ErrInvalidIP)
 	}
 
 	// validate mode - default to SecondaryServerNice
@@ -114,24 +115,25 @@ func (config Config) New(session *packet.Session) (h *Handler, err error) {
 	h.mode = config.Mode
 
 	// validate dns server : default to router if not given
-	if config.DNSServer == nil {
+	if !config.DNSServer.IsValid() {
 		config.DNSServer = session.NICInfo.RouterAddr4.IP
 	}
 
 	// Segment network - home subnet includes the whole home LAN
 	homeSubnet := SubnetConfig{
 		LAN:        session.NICInfo.HomeLAN4,
-		DefaultGW:  session.NICInfo.RouterAddr4.IP.To4(),
-		DHCPServer: session.NICInfo.HostAddr4.IP.To4(),
-		DNSServer:  config.DNSServer.To4(),
+		DefaultGW:  session.NICInfo.RouterAddr4.IP,
+		DHCPServer: session.NICInfo.HostAddr4.IP,
+		DNSServer:  config.DNSServer,
 		Stage:      packet.StageNormal,
 		// FirstIP:    net.ParseIP("192.168.0.10"),
 		// LastIP:     net.ParseIP("192.168.0.127"),
 	}
 	// Segment network - netfilter subnet includes netfilter subnet only
 	netfilterSubnet := SubnetConfig{
-		LAN:        net.IPNet{IP: config.NetfilterIP.IP.Mask(config.NetfilterIP.Mask), Mask: config.NetfilterIP.Mask},
-		DefaultGW:  config.NetfilterIP.IP.To4(),
+		// LAN:        netip.PrefixFrom({IP: config.NetfilterIP.IP.Mask(config.NetfilterIP.Mask), Mask: config.NetfilterIP.Mask},
+		LAN:        config.NetfilterIP.Masked(),
+		DefaultGW:  config.NetfilterIP.Addr(),
 		DHCPServer: session.NICInfo.HostAddr4.IP,
 		DNSServer:  packet.DNSv4CloudFlareFamily1,
 		Stage:      packet.StageRedirected,
@@ -164,7 +166,7 @@ func (config Config) New(session *packet.Session) (h *Handler, err error) {
 	h.net2.ID = "net2"
 
 	// Add static and classless route options
-	h.net2.appendRouteOptions(h.net1.DefaultGW, h.net1.LAN.Mask, h.net2.DefaultGW)
+	h.net2.appendRouteOptions(h.net1.DefaultGW, net.CIDRMask(h.net1.LAN.Bits(), 32-h.net1.LAN.Bits()), h.net2.DefaultGW)
 	h.saveConfig(h.filename)
 	return h, nil
 }
@@ -197,13 +199,12 @@ func (h *Handler) MinuteTicker(now time.Time) error {
 }
 
 func configChanged(config SubnetConfig, current SubnetConfig) bool {
-	if !config.LAN.IP.Equal(current.LAN.IP) ||
-		!config.DefaultGW.Equal(current.DefaultGW) ||
-		!config.DNSServer.Equal(current.DNSServer) ||
-		!config.DHCPServer.Equal(current.DHCPServer) ||
+	if config.LAN.Addr() != current.LAN.Addr() ||
+		config.DefaultGW != current.DefaultGW ||
+		config.DNSServer != current.DNSServer ||
+		config.DHCPServer != current.DHCPServer ||
 		(config.Duration != 0 && config.Duration != current.Duration) ||
-		(config.FirstIP != nil && !config.FirstIP.Equal(current.FirstIP)) ||
-		(config.LastIP != nil && !config.LastIP.Equal(current.LastIP)) {
+		(config.FirstIP.Is4() && config.FirstIP != current.FirstIP) {
 		fmt.Printf("dhcp4: config parameters changed new config=%+v\n", config)
 		fmt.Printf("dhcp4: config parameters changed old config=%+v\n", current)
 		return true
@@ -335,8 +336,8 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 	if response != nil {
 		var dstAddr packet.Addr
 		// If IP not available, broadcast
-		if frame.SrcAddr.IP.Equal(net.IPv4zero) || dhcpFrame.Broadcast() {
-			dstAddr = packet.Addr{MAC: packet.EthBroadcast, IP: net.IPv4bcast, Port: DHCP4ClientPort}
+		if frame.SrcAddr.IP == packet.IPv4zero || dhcpFrame.Broadcast() {
+			dstAddr = packet.Addr{MAC: packet.EthBroadcast, IP: packet.IPv4bcast, Port: DHCP4ClientPort}
 		} else {
 			dstAddr = packet.Addr{MAC: frame.SrcAddr.MAC, IP: frame.SrcAddr.IP, Port: DHCP4ClientPort}
 		}

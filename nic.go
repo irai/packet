@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/netip"
 	"os"
 	"os/exec"
 	"strconv"
@@ -21,14 +22,14 @@ import (
 // NICInfo stores the network interface info
 type NICInfo struct {
 	IFI          *net.Interface
-	HomeLAN4     net.IPNet // IPv4: home LAN netmask
-	HostAddr4    Addr      // IPv4: host MAC and IPv4
-	RouterAddr4  Addr      // IPv4: router MAC and IPv4
-	HostLLA      net.IPNet // IPv6: host LLA
-	HostGUA      net.IPNet // IPv6: host GUA
-	RouterLLA    net.IPNet // IPv6: router LLA
-	RouterGUA    net.IPNet // IPv6: router GUA
-	RouterPrefix net.IP    // IPv6: router prefix
+	HomeLAN4     netip.Prefix // IPv4: home LAN netmask
+	HostAddr4    Addr         // IPv4: host MAC and IPv4
+	RouterAddr4  Addr         // IPv4: router MAC and IPv4
+	HostLLA      netip.Prefix // IPv6: host LLA
+	HostGUA      netip.Prefix // IPv6: host GUA
+	RouterLLA    netip.Prefix // IPv6: router LLA
+	RouterGUA    netip.Prefix // IPv6: router GUA
+	RouterPrefix net.IP       // IPv6: router prefix
 }
 
 func (e NICInfo) String() string {
@@ -78,27 +79,28 @@ func GetNICInfo(nic string) (info *NICInfo, err error) {
 	}
 
 	for i := range addrs {
-		ip, ipNet, err := net.ParseCIDR(addrs[i].String())
+		// ip, ipNet, err := net.ParseCIDR(addrs[i].String())
+		ip, err := netip.ParsePrefix(addrs[i].String())
 		if err != nil {
 			log.Printf("NIC cannot parse IP %s error %s ", addrs[i].String(), err)
 			continue
 		}
 
-		if ip.To4() != nil && ip.IsGlobalUnicast() {
-			info.HostAddr4.IP = ip.To4()
-			info.HomeLAN4 = net.IPNet{IP: info.HostAddr4.IP.Mask(ipNet.Mask).To4(), Mask: ipNet.Mask}
+		if ip.Addr().Is4() && ip.Addr().IsGlobalUnicast() {
+			info.HostAddr4.IP = ip.Addr()
+			info.HomeLAN4 = ip
 		}
-		if ip.To16() != nil && ip.To4() == nil {
-			if ip.IsLinkLocalUnicast() {
-				info.HostLLA = net.IPNet{IP: ip, Mask: ipNet.Mask}
+		if ip.Addr().Is6() {
+			if ip.Addr().IsLinkLocalUnicast() {
+				info.HostLLA = ip
 			}
-			if ip.IsGlobalUnicast() {
-				info.HostGUA = net.IPNet{IP: ip, Mask: ipNet.Mask}
+			if ip.Addr().IsGlobalUnicast() {
+				info.HostGUA = ip
 			}
 		}
 	}
 
-	if info.HostAddr4.IP == nil || info.HostAddr4.IP.IsUnspecified() {
+	if !info.HostAddr4.IP.IsValid() || info.HostAddr4.IP.IsUnspecified() {
 		return nil, fmt.Errorf("ipv4 not found on interface")
 	}
 
@@ -112,7 +114,7 @@ func GetNICInfo(nic string) (info *NICInfo, err error) {
 	//      valid_lft 86208sec preferred_lft 86208sec
 	//   inet 192.168.0.129/24 brd 192.168.0.255 scope global secondary eth0
 	//      valid_lft forever preferred_lft forever
-	if defaultIP := defaultOutboundIP(); !info.HostAddr4.IP.Equal(defaultIP) {
+	if defaultIP := defaultOutboundIP(); info.HostAddr4.IP != defaultIP {
 		fastlog.NewLine(module, "warning host IP is different than default outbound IP").IP("hostIP", info.HostAddr4.IP).IP("defaultIP", defaultIP).Write()
 	}
 
@@ -120,22 +122,23 @@ func GetNICInfo(nic string) (info *NICInfo, err error) {
 	if err != nil {
 		return nil, err
 	}
-	info.RouterAddr4 = Addr{MAC: defaultGW.MAC, IP: defaultGW.IP.To4()}
+	info.RouterAddr4 = Addr{MAC: defaultGW.MAC, IP: defaultGW.IP}
 	info.HostAddr4 = Addr{MAC: info.IFI.HardwareAddr, IP: info.HostAddr4.IP}
 	return info, nil
 }
 
 // defaultOutboundIP return the preferred outbound ip
-func defaultOutboundIP() net.IP {
+func defaultOutboundIP() netip.Addr {
 	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err != nil {
-		return nil
+		return netip.Addr{}
 	}
 	defer conn.Close()
 
 	localAddr := conn.LocalAddr().(*net.UDPAddr)
+	ip, _ := netip.AddrFromSlice(localAddr.IP)
 
-	return localAddr.IP
+	return ip
 }
 
 const (
@@ -151,10 +154,10 @@ const (
 //   eth0    00000000    C900A8C0    0003    0   0   100 00000000    0   00
 //   eth0    0000A8C0    00000000    0001    0   0   100 00FFFFFF    0   00
 //
-func GetLinuxDefaultGateway() (gw net.IP, err error) {
+func GetLinuxDefaultGateway() (gw netip.Addr, err error) {
 	file, err := os.Open(file)
 	if err != nil {
-		return net.IPv4zero, err
+		return netip.Addr{}, err
 	}
 	defer file.Close()
 
@@ -171,10 +174,11 @@ func GetLinuxDefaultGateway() (gw net.IP, err error) {
 
 		d, _ := strconv.ParseInt(gatewayHex, 0, 64)
 		d32 := uint32(d)
-		gw = make(net.IP, 4)
-		binary.LittleEndian.PutUint32(gw, d32)
+		var buf [4]byte
+		binary.LittleEndian.PutUint32(buf[:], d32)
+		gw = netip.AddrFrom4(buf)
 		if gw.IsUnspecified() {
-			return nil, ErrInvalidIP
+			return netip.Addr{}, ErrInvalidIP
 		}
 	}
 	return gw, nil
@@ -209,9 +213,9 @@ func LoadLinuxARPTable(nic string) (list []Addr, err error) {
 		if tokens[5] != nic {
 			continue
 		}
-		ip := net.ParseIP(tokens[0]).To4()
-		if ip == nil || ip.IsUnspecified() {
-			fmt.Println("raw: error in loadARPProcTable - invalid IP", tokens)
+		ip, err := netip.ParseAddr(tokens[0])
+		if err != nil || ip.IsUnspecified() {
+			fmt.Println("raw: error in loadARPProcTable - invalid IP", tokens, err)
 			continue
 		}
 		mac, err := net.ParseMAC(tokens[3])
@@ -232,7 +236,6 @@ func GetIP4DefaultGatewayAddr(nic string) (addr Addr, err error) {
 		fmt.Println("error getting router ", err)
 		return Addr{}, ErrInvalidIP
 	}
-	addr.IP = addr.IP.To4()
 
 	// Try 3 times to read arp table
 	// This is required if we just reset the interface and the arp table is nil
@@ -244,7 +247,7 @@ func GetIP4DefaultGatewayAddr(nic string) (addr Addr, err error) {
 		if err == nil {
 			// search in table; if the arp entry is not yeet complete, the mac will be zero or wont exist
 			for _, v := range arpList {
-				if v.IP.Equal(addr.IP) {
+				if v.IP == addr.IP {
 					addr.MAC = v.MAC
 					break
 				}
@@ -279,8 +282,11 @@ func ExecPing(ip string) (err error) {
 	return err
 }
 
-func LinuxConfigureInterface(nic string, hostIP *net.IPNet, newIP *net.IPNet, gw *net.IPNet) error {
-	if hostIP.IP.Equal(newIP.IP) {
+func LinuxConfigureInterface(nic string, hostIP netip.Prefix, newIP netip.Prefix, gw netip.Prefix) error {
+	if !hostIP.IsValid() || !newIP.IsValid() || !gw.IsValid() {
+		return fmt.Errorf("invalid ip prefix")
+	}
+	if hostIP.Addr() == newIP.Addr() {
 		return fmt.Errorf("host ip cannot be the same as new ip")
 	}
 
@@ -291,19 +297,18 @@ func LinuxConfigureInterface(nic string, hostIP *net.IPNet, newIP *net.IPNet, gw
 	}
 
 	// set new IP and mask - this will automatically set lifetime to forever.
-	ipConfig := &netlink.Addr{IPNet: newIP}
+	ipConfig := &netlink.Addr{IPNet: &net.IPNet{IP: newIP.Addr().AsSlice(), Mask: net.CIDRMask(newIP.Bits(), 32)}}
 	if err = netlink.AddrAdd(localInterface, ipConfig); err != nil {
 		return fmt.Errorf("netlink failed to set new host ip=%s: %w", newIP, err)
 	}
 
-	if gw != nil {
+	if gw.Addr().Is4() {
 		// Setup the default route, so traffic that doesn't hit
 		// 192.168.1.(1-255) can be routed.
 		if err = netlink.RouteAdd(&netlink.Route{
 			Scope:     netlink.SCOPE_UNIVERSE,
 			LinkIndex: localInterface.Attrs().Index,
-			// Dst:       &net.IPNet{IP: gatewayIP, Mask: net.CIDRMask(32, 32)},
-			Dst: gw,
+			Dst:       &net.IPNet{IP: gw.Addr().AsSlice(), Mask: net.CIDRMask(gw.Bits(), 32)},
 		}); err != nil {
 			return err
 		}
@@ -315,7 +320,7 @@ func LinuxConfigureInterface(nic string, hostIP *net.IPNet, newIP *net.IPNet, gw
 	}
 
 	// delete previous IP
-	ipConfig = &netlink.Addr{IPNet: hostIP}
+	ipConfig = &netlink.Addr{IPNet: &net.IPNet{IP: hostIP.Addr().AsSlice(), Mask: net.CIDRMask(hostIP.Bits(), 32)}}
 	if err = netlink.AddrDel(localInterface, ipConfig); err != nil {
 		return fmt.Errorf("netlink failed to delete host ip=%s: %w", hostIP, err)
 	}

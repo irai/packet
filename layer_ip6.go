@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"net/netip"
 
 	"github.com/irai/packet/fastlog"
 	"github.com/mdlayher/netx/rfc4193"
@@ -38,8 +39,8 @@ func (p IP6) FlowLabel() int     { return int(p[1]&0x0f)<<16 | int(p[2])<<8 | in
 func (p IP6) PayloadLen() uint16 { return binary.BigEndian.Uint16(p[4:6]) }               // payload length
 func (p IP6) NextHeader() uint8  { return p[6] }                                          // next header
 func (p IP6) HopLimit() uint8    { return p[7] }                                          // hop limit
-func (p IP6) Src() net.IP        { return net.IP(p[8:24]) }                               // source address
-func (p IP6) Dst() net.IP        { return net.IP(p[24:40]) }                              // destination address
+func (p IP6) Src() netip.Addr    { return netip.AddrFrom16(*(*[16]byte)(p[8:24])) }       // source address
+func (p IP6) Dst() netip.Addr    { return netip.AddrFrom16(*(*[16]byte)(p[24:40])) }      // destination address
 func (p IP6) Payload() []byte    { return p[40:] }
 func (p IP6) HeaderLen() int     { return 40 }
 func (p IP6) String() string {
@@ -58,7 +59,7 @@ func (p IP6) FastLog(line *fastlog.Line) *fastlog.Line {
 	return line
 }
 
-func EncodeIP6(p []byte, hopLimit uint8, srcIP net.IP, dstIP net.IP) IP6 {
+func EncodeIP6(p []byte, hopLimit uint8, srcIP netip.Addr, dstIP netip.Addr) IP6 {
 	if p == nil || cap(p) < IP6HeaderLen {
 		p = make([]byte, IP6HeaderLen) // enough capacity for a max IP6 frame
 	}
@@ -73,8 +74,10 @@ func EncodeIP6(p []byte, hopLimit uint8, srcIP net.IP, dstIP net.IP) IP6 {
 	binary.BigEndian.PutUint16(p[4:6], 0)
 	p[6] = 59 // 59 indicates there is no payload
 	p[7] = hopLimit
-	copy(p[8:24], srcIP)
-	copy(p[24:40], dstIP)
+	s := srcIP.As16()
+	copy(p[8:24], s[:])
+	s = dstIP.As16()
+	copy(p[24:40], s[:])
 	return IP6(p)
 }
 
@@ -181,11 +184,14 @@ func IsIP6(ip net.IP) bool {
 	return false
 }
 
-func IPv6SolicitedNode(lla net.IP) Addr {
-	lla = lla.To16()
+func IPv6SolicitedNode(lla netip.Addr) Addr {
+	if !lla.Is6() {
+		return Addr{}
+	}
+	l := lla.As16()
 	return Addr{
-		IP:  net.IP{0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01, 0xff, lla[13], lla[14], lla[15]}, // prefix: 0xff, 0x02::0x01,0xff + last 3 bytes of mac address
-		MAC: net.HardwareAddr{0x33, 0x33, 0xff, lla[13], lla[14], lla[15]},                        // prefix: 0x33, 0x33 + last 4 bytes of IP address
+		IP:  netip.AddrFrom16([16]byte{0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01, 0xff, l[13], l[14], l[15]}), // prefix: 0xff, 0x02::0x01,0xff + last 3 bytes of mac address
+		MAC: net.HardwareAddr{0x33, 0x33, 0xff, l[13], l[14], l[15]},                                            // prefix: 0x33, 0x33 + last 4 bytes of IP address
 	}
 }
 

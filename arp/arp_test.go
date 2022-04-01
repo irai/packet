@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/netip"
 	"sync"
 	"syscall"
 	"testing"
@@ -17,22 +18,24 @@ var (
 	zeroMAC = net.HardwareAddr{0, 0, 0, 0, 0, 0}
 
 	hostMAC   = net.HardwareAddr{0x00, 0xff, 0x03, 0x04, 0x05, 0x01} // keep first byte zero for unicast mac
-	hostIP    = net.ParseIP("192.168.0.129").To4()
-	homeLAN   = net.IPNet{IP: net.IPv4(192, 168, 0, 0), Mask: net.IPv4Mask(255, 255, 255, 0)}
+	hostIP4   = netip.MustParseAddr("192.168.0.129")
+	homeLAN   = netip.PrefixFrom(netip.AddrFrom4([4]byte{192, 168, 0, 0}), 24)
 	routerMAC = net.HardwareAddr{0x00, 0xff, 0x03, 0x04, 0x05, 0x11} // key first byte zero for unicast mac
-	routerIP  = net.ParseIP("192.168.0.11").To4()
-	ip1       = net.ParseIP("192.168.0.1").To4()
-	ip2       = net.ParseIP("192.168.0.2").To4()
-	ip3       = net.ParseIP("192.168.0.3").To4()
-	ip4       = net.ParseIP("192.168.0.4").To4()
-	ip5       = net.ParseIP("192.168.0.5").To4()
-	mac1      = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x01}
-	mac2      = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x02}
-	mac3      = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x03}
-	mac4      = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x04}
-	mac5      = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x05}
-	localIP   = net.IPv4(169, 254, 0, 10).To4()
-	localIP2  = net.IPv4(169, 254, 0, 11).To4()
+	routerIP4 = netip.MustParseAddr("192.168.0.11")
+	ip1       = netip.MustParseAddr("192.168.0.1")
+	ip2       = netip.MustParseAddr("192.168.0.2")
+	ip3       = netip.MustParseAddr("192.168.0.3")
+	ip4       = netip.MustParseAddr("192.168.0.4")
+	ip5       = netip.MustParseAddr("192.168.0.5")
+
+	localIP  = netip.MustParseAddr("169.254.0.10")
+	localIP2 = netip.MustParseAddr("169.254.0.11")
+
+	mac1 = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x01}
+	mac2 = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x02}
+	mac3 = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x03}
+	mac4 = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x04}
+	mac5 = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x05}
 
 	addr1 = packet.Addr{MAC: mac1, IP: ip1}
 	addr2 = packet.Addr{MAC: mac2, IP: ip2}
@@ -40,8 +43,8 @@ var (
 	addr4 = packet.Addr{MAC: mac4, IP: ip4}
 	addr5 = packet.Addr{MAC: mac5, IP: ip5}
 
-	routerAddr = packet.Addr{MAC: routerMAC, IP: routerIP}
-	hostAddr   = packet.Addr{MAC: hostMAC, IP: hostIP}
+	routerAddr = packet.Addr{MAC: routerMAC, IP: routerIP4}
+	hostAddr   = packet.Addr{MAC: hostMAC, IP: hostIP4}
 )
 
 func newEtherPacket(hType uint16, srcMAC net.HardwareAddr, dstMAC net.HardwareAddr) packet.Ether {
@@ -84,8 +87,8 @@ func setupTestHandler(t *testing.T) *testContext {
 	// fake nicinfo
 	nicInfo := &packet.NICInfo{
 		HomeLAN4:    homeLAN,
-		HostAddr4:   packet.Addr{MAC: hostMAC, IP: hostIP},
-		RouterAddr4: packet.Addr{MAC: routerMAC, IP: routerIP},
+		HostAddr4:   packet.Addr{MAC: hostMAC, IP: hostIP4},
+		RouterAddr4: packet.Addr{MAC: routerMAC, IP: routerIP4},
 	}
 
 	tc.session, err = packet.Config{Conn: tc.inConn, NICInfo: nicInfo}.NewSession("")

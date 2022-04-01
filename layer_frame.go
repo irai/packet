@@ -2,7 +2,6 @@ package packet
 
 import (
 	"bytes"
-	"net"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -62,8 +61,8 @@ type Frame struct {
 	flags         uint      // processing flags : online_transition (0x01), offline_transition (0x02)
 }
 
-func (frame Frame) onlineTransition() bool    { return frame.flags&0x01 == 0x01 }
-func (frame Frame) setOnlineTransition() uint { return frame.flags | 0b01 }
+func (frame Frame) onlineTransition() bool     { return frame.flags&0x01 == 0x01 }
+func (frame Frame) markOnlineTransition() uint { return frame.flags | 0b01 }
 
 func (frame Frame) offlineTransition() bool    { return frame.flags&0x02 == 0x02 }
 func (frame Frame) setOfflineTransition() uint { return frame.flags | 0b10 }
@@ -203,7 +202,7 @@ func (h *Session) Parse(p []byte) (frame Frame, err error) {
 			frame.Host, _ = frame.Session.findOrCreateHostWithLock(frame.SrcAddr) // will lock/unlock
 			if !frame.Host.Online {
 				frame.Session.onlineTransition(frame.Host)
-				frame.flags = frame.setOnlineTransition()
+				frame.flags = frame.markOnlineTransition()
 			}
 		}
 	case syscall.ETH_P_IPV6:
@@ -236,26 +235,29 @@ func (h *Session) Parse(p []byte) (frame Frame, err error) {
 			frame.Host, _ = frame.Session.findOrCreateHostWithLock(frame.SrcAddr) // will lock/unlock
 			if !frame.Host.Online {
 				frame.Session.onlineTransition(frame.Host)
-				frame.flags = frame.setOnlineTransition()
+				frame.flags = frame.markOnlineTransition()
 			}
 		}
 	case syscall.ETH_P_ARP:
 		frame.PayloadID = PayloadARP
+		arp := ARP(frame.Payload())
+		if err := arp.IsValid(); err != nil {
+			return frame, err
+		}
 		h.Statistics[PayloadARP].Count++
-		// create host if new IP appers in arp packet
+
+		// create host if new IP appears in arp packet
 		// don't create host if packets sent via our interface.
 		// If we don't have this, then we received all sent and forwarded packets with client IPs containing our host mac
 		// Validates arp len and that hardware len is 6 for mac address
-		if arp := frame.Payload(); len(arp) >= 28 && arp[4] == 6 {
-			srcIP := net.IP(arp[14:18])
-			if !bytes.Equal(frame.SrcAddr.MAC, h.NICInfo.HostAddr4.MAC) &&
-				frame.Session.NICInfo.HomeLAN4.Contains(srcIP) {
-				addr := Addr{MAC: net.HardwareAddr(arp[8:14]), IP: srcIP}    // src mac and src ip
-				frame.Host, _ = frame.Session.findOrCreateHostWithLock(addr) // will lock/unlock
-				if !frame.Host.Online {
-					frame.Session.onlineTransition(frame.Host)
-					frame.flags = frame.setOnlineTransition()
-				}
+		srcIP := arp.SrcIP()
+		if !bytes.Equal(frame.SrcAddr.MAC, h.NICInfo.HostAddr4.MAC) &&
+			frame.Session.NICInfo.HomeLAN4.Contains(srcIP) {
+			addr := Addr{MAC: arp.SrcMAC(), IP: srcIP}                   // use arp src mac and ip in lookup
+			frame.Host, _ = frame.Session.findOrCreateHostWithLock(addr) // will lock/unlock
+			if !frame.Host.Online {
+				frame.Session.onlineTransition(frame.Host)
+				frame.flags = frame.markOnlineTransition()
 			}
 		}
 		return frame, nil
@@ -318,6 +320,8 @@ func (h *Session) Parse(p []byte) (frame Frame, err error) {
 		frame.SrcAddr.Port = udp.SrcPort()
 		frame.DstAddr.Port = udp.DstPort()
 		switch {
+		default:
+			return frame, nil
 		case frame.SrcAddr.Port == 443 || frame.DstAddr.Port == 443: // SSL
 			frame.PayloadID = PayloadSSL
 			h.Statistics[PayloadSSL].Count++
@@ -354,10 +358,8 @@ func (h *Session) Parse(p []byte) (frame Frame, err error) {
 		case frame.SrcAddr.Port == 10001 || frame.DstAddr.Port == 10001: // Ubiquiti device discovery protocol
 			frame.PayloadID = PayloadUbiquiti
 			h.Statistics[PayloadUbiquiti].Count++
-		default:
-			return frame, nil
 		}
-		frame.offsetPayload = frame.offsetPayload + udp.HeaderLen() // update offset if known header
+		frame.offsetPayload = frame.offsetPayload + udp.HeaderLen() // only update offset if known header
 		return frame, nil
 
 	case syscall.IPPROTO_TCP:
@@ -415,9 +417,6 @@ func (h *Session) Parse(p []byte) (frame Frame, err error) {
 }
 
 func (h *Session) onlineTransition(host *Host) {
-	now := time.Now()
-	host.MACEntry.LastSeen = now
-	host.LastSeen = now
 	if host.Online {
 		return
 	}
@@ -426,40 +425,45 @@ func (h *Session) onlineTransition(host *Host) {
 	host.Online = true
 	host.dirty = true
 
-	if host.Addr.IP.To4() != nil {
-		if !host.Addr.IP.Equal(host.MACEntry.IP4) { // changed IP4
-			if Logger.IsDebug() {
-				Logger.Msg("host changed ip4").MAC("mac", host.MACEntry.MAC).IP("from", host.MACEntry.IP4).IP("to", host.Addr.IP).Write()
+	var line *fastlog.Line
+	if Logger.IsInfo() {
+		line = Logger.Msg("IP is online").Struct(host.Addr)
+	}
+
+	if host.Addr.IP.Is4() {
+		if host.Addr.IP != host.MACEntry.IP4 { // changed IP4
+			if line != nil {
+				line.IP("previous", host.MACEntry.IP4)
 			}
-		}
-		host.MACEntry.IP4 = host.Addr.IP
-		for _, v := range host.MACEntry.HostList {
-			if ip := v.Addr.IP.To4(); ip != nil && !ip.Equal(host.Addr.IP) {
-				if v.Online {
-					if Logger.IsDebug() {
-						Logger.Msg("IP is offline").Struct(v.Addr).Write()
+			host.MACEntry.IP4 = host.Addr.IP
+			for _, v := range host.MACEntry.HostList {
+				if v.Addr.IP.Is4() && v.Addr.IP != host.Addr.IP {
+					if v.Online {
+						if Logger.IsInfo() {
+							Logger.Msg("IP is offline").Struct(v.Addr).Write()
+						}
+						v.Online = false
+						v.dirty = true
 					}
-					v.Online = false
-					v.dirty = true
 				}
 			}
 		}
 	} else {
-		if host.Addr.IP.IsGlobalUnicast() && !host.Addr.IP.Equal(host.MACEntry.IP6GUA) { // changed IP6 global unique address
-			if Logger.IsDebug() {
-				Logger.Msg("host changed ip6").MAC("mac", host.MACEntry.MAC).IP("from", host.MACEntry.IP6GUA).IP("to", host.Addr.IP).Write()
+		if host.Addr.IP.IsGlobalUnicast() && host.Addr.IP != host.MACEntry.IP6GUA { // changed IP6 global unique address
+			if line != nil {
+				line.IP("previous", host.MACEntry.IP6GUA)
 			}
 			host.MACEntry.IP6GUA = host.Addr.IP
 		}
-		if host.Addr.IP.IsLinkLocalUnicast() && !host.Addr.IP.Equal(host.MACEntry.IP6LLA) { // changed IP6 link local address
-			if Logger.IsDebug() {
-				Logger.Msg("host changed ip6LLA").MAC("mac", host.MACEntry.MAC).IP("from", host.MACEntry.IP6LLA).IP("to", host.Addr.IP).Write()
+		if host.Addr.IP.IsLinkLocalUnicast() && host.Addr.IP != host.MACEntry.IP6LLA { // changed IP6 link local address
+			if line != nil {
+				line.IP("previous", host.MACEntry.IP6LLA)
 			}
 			host.MACEntry.IP6LLA = host.Addr.IP
 			// don't set offline IP as we don't target LLA
 		}
 	}
-	if Logger.IsInfo() {
-		Logger.Msg("IP is online").Struct(host.Addr).Write()
+	if line != nil {
+		line.Write()
 	}
 }

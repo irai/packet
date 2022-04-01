@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"net"
+	"net/netip"
 	"syscall"
 	"time"
 
@@ -49,9 +50,9 @@ func (b ARP) HLen() uint8              { return b[4] }
 func (b ARP) PLen() uint8              { return b[5] }
 func (b ARP) Operation() uint16        { return binary.BigEndian.Uint16(b[6:8]) }
 func (b ARP) SrcMAC() net.HardwareAddr { return net.HardwareAddr(b[8:14]) }
-func (b ARP) SrcIP() net.IP            { return net.IP(b[14:18]) }
+func (b ARP) SrcIP() netip.Addr        { return netip.AddrFrom4(*(*[4]byte)(b[14:18])) }
 func (b ARP) DstMAC() net.HardwareAddr { return net.HardwareAddr(b[18:24]) }
-func (b ARP) DstIP() net.IP            { return net.IP(b[24:28]) }
+func (b ARP) DstIP() netip.Addr        { return netip.AddrFrom4(*(*[4]byte)(b[24:28])) }
 func (b ARP) String() string           { return fastlog.NewLine("", "").Struct(b).ToString() }
 
 func (b ARP) FastLog(line *fastlog.Line) *fastlog.Line {
@@ -78,15 +79,14 @@ func EncodeARP(b []byte, operation uint16, srcAddr Addr, dstAddr Addr) ARP {
 	b[5] = 4                                             // ipv4 len - fixed
 	binary.BigEndian.PutUint16(b[6:8], operation)        // operation - 1 request, 2 reply
 	copy(b[8:8+6], srcAddr.MAC[:6])
-	copy(b[14:14+4], srcAddr.IP.To4()[:4])
+	copy(b[14:14+4], srcAddr.IP.AsSlice())
 	copy(b[18:18+6], dstAddr.MAC[:6])
-	copy(b[24:24+4], dstAddr.IP.To4()[:4])
+	copy(b[24:24+4], dstAddr.IP.AsSlice())
 	return b
 }
 
-func (h *Session) ARPRequestTo(dst net.HardwareAddr, targetIP net.IP) error {
-	targetIP = targetIP.To4()
-	if targetIP == nil {
+func (h *Session) ARPRequestTo(dst net.HardwareAddr, targetIP netip.Addr) error {
+	if !targetIP.Is4() {
 		return ErrInvalidIP
 	}
 	if Logger.IsDebug() {
@@ -96,9 +96,8 @@ func (h *Session) ARPRequestTo(dst net.HardwareAddr, targetIP net.IP) error {
 }
 
 // ARPRequest send ARP request from host to targetIP
-func (h *Session) ARPRequest(targetIP net.IP) error {
-	targetIP = targetIP.To4()
-	if targetIP == nil {
+func (h *Session) ARPRequest(targetIP netip.Addr) error {
+	if !targetIP.Is4() {
 		return ErrInvalidIP
 	}
 	if Logger.IsDebug() {
@@ -116,8 +115,8 @@ func (h *Session) ARPRequest(targetIP net.IP) error {
 // to be already in use by another host. The 'target IP address' field MUST be set to the address being probed.
 // An ARP ARPProbe conveys both a question ("Is anyone using this address?") and an
 // implied statement ("This is the address I hope to use.").
-func (h *Session) ARPProbe(ip net.IP) error {
-	return h.ARPRequestRaw(EthernetBroadcast, Addr{MAC: h.NICInfo.HostAddr4.MAC, IP: net.IPv4zero}, Addr{MAC: EthernetZero, IP: ip})
+func (h *Session) ARPProbe(ip netip.Addr) error {
+	return h.ARPRequestRaw(EthernetBroadcast, Addr{MAC: h.NICInfo.HostAddr4.MAC, IP: IPv4zero}, Addr{MAC: EthernetZero, IP: ip})
 }
 
 // ARPAnnounceTo send an arp announcement on the local link.
@@ -134,7 +133,7 @@ func (h *Session) ARPProbe(ip net.IP) error {
 // previously have been using the same address.  The host may begin
 // legitimately using the IP address immediately after sending the first
 // of the two ARP Announcements;
-func (h *Session) ARPAnnounceTo(dst net.HardwareAddr, targetIP net.IP) (err error) {
+func (h *Session) ARPAnnounceTo(dst net.HardwareAddr, targetIP netip.Addr) (err error) {
 	if Logger.IsDebug() {
 		if bytes.Equal(dst, EthernetBroadcast) {
 			Logger.Msg("send announcement broadcast - I am").IP("ip", targetIP).Write()
@@ -216,7 +215,7 @@ func (h *Session) reply(dst net.HardwareAddr, sender Addr, target Addr) (err err
 
 // ARPWhoIs will send a request packet to get the MAC address for the IP. Retry 3 times.
 //
-func (h *Session) ARPWhoIs(ip net.IP) (Addr, error) {
+func (h *Session) ARPWhoIs(ip netip.Addr) (Addr, error) {
 
 	for i := 0; i < 3; i++ {
 		if host := h.FindIP(ip); host != nil {
@@ -239,17 +238,14 @@ func (h *Session) ARPWhoIs(ip net.IP) (Addr, error) {
 func (h *Session) ARPScan() error {
 
 	// Copy underneath array so we can modify value.
-	ip := CopyIP(h.NICInfo.HomeLAN4.IP)
-	ip = ip.To4()
-	if ip == nil {
-		return ErrInvalidIP
-	}
+	ip := h.NICInfo.HomeLAN4.Addr()
 
 	for host := 1; host < 255; host++ {
-		ip[3] = byte(host)
+		// ip[3] = byte(host)
+		ip = ip.Next()
 
 		// Don't scan router and host
-		if ip.Equal(h.NICInfo.RouterAddr4.IP) || ip.Equal(h.NICInfo.HostAddr4.IP) {
+		if ip == h.NICInfo.RouterAddr4.IP || ip == h.NICInfo.HostAddr4.IP {
 			continue
 		}
 
@@ -272,6 +268,5 @@ func (h *Session) ARPScan() error {
 		}
 		time.Sleep(time.Millisecond * 8)
 	}
-
 	return nil
 }

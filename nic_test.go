@@ -47,9 +47,10 @@ func BenchmarkIPv6Allocation(t *testing.B) {
 }
 
 func TestGetLinuxDefaultGateway(t *testing.T) {
-	_, err := GetLinuxDefaultGateway()
+	ip, err := GetLinuxDefaultGateway()
 	if err != nil {
 		t.Errorf("GetLinuxDefaultGateway() error = %v", err)
 		return
 	}
+	fmt.Println("defaul gw", ip)
 }

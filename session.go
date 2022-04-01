@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -19,26 +20,30 @@ const module = "packet"
 var (
 	Logger = fastlog.New(module)
 
-	IP4Broadcast     = net.IPv4(255, 255, 255, 255)
+	IPv4bcast = netip.MustParseAddr("255.255.255.255") // limited broadcast
+	IPv4zero  = netip.MustParseAddr("0.0.0.0")
+	IPv6zero  = netip.MustParseAddr("::")
+
+	IP4Broadcast     = netip.MustParseAddr("255.255.255.255")
 	IP4BroadcastAddr = Addr{MAC: EthBroadcast, IP: IP4Broadcast}
 
 	EthBroadcast          = net.HardwareAddr{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
-	IP4AllNodesMulticast  = net.IPv4(224, 0, 0, 1)
+	IP4AllNodesMulticast  = netip.MustParseAddr("224.0.0.1")
 	Eth4AllNodesMulticast = net.HardwareAddr{0x01, 0x00, 0x5e, 0, 0, 0x01} // Ethernet multicast 01-00-5E plus low-order 23-bits of the IP address.
 	IP4AllNodesAddr       = Addr{MAC: Eth4AllNodesMulticast, IP: IP4AllNodesMulticast}
 
-	IP4AllRoutersMulticast = net.IPv4(224, 0, 0, 2)
+	IP4AllRoutersMulticast = netip.MustParseAddr("224.0.0.2")
 	Eth4RoutersMulticast   = net.HardwareAddr{0x01, 0x00, 0x5e, 0, 0, 0x02}
 
 	Eth6AllNodesMulticast = net.HardwareAddr{0x33, 0x33, 0, 0, 0, 0x01}
-	IP6AllNodesMulticast  = net.IP{0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}
+	IP6AllNodesMulticast  = netip.AddrFrom16([16]byte{0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01})
 	IP6AllNodesAddr       = Addr{MAC: Eth6AllNodesMulticast, IP: IP6AllNodesMulticast}
 
 	Eth6AllRoutersMulticast = net.HardwareAddr{0x33, 0x33, 0, 0, 0, 0x02}
-	IP6AllRoutersMulticast  = net.IP{0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}
+	IP6AllRoutersMulticast  = netip.AddrFrom16([16]byte{0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01})
 	IP6AllRoutersAddr       = Addr{MAC: Eth6AllRoutersMulticast, IP: IP6AllRoutersMulticast}
 
-	IP6DefaultRouter = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}
+	IP6DefaultRouter = netip.AddrFrom16([16]byte{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01})
 )
 
 // Sentinel errors
@@ -64,16 +69,16 @@ var (
 // CLoudFlare family
 // https://developers.cloudflare.com/1.1.1.1/1.1.1.1-for-families
 var (
-	DNSv4CloudFlare1       = net.IPv4(1, 1, 1, 2) // malware
-	DNSv6Cloudflare1       = net.IP{0x26, 0x06, 0x47, 0x00, 0x47, 0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0x11, 0x11}
-	DNSv4CloudFlare2       = net.IPv4(1, 0, 0, 2) // malware
-	DNSv6Cloudflare2       = net.IP{0x26, 0x06, 0x47, 0x00, 0x47, 0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0x10, 0x01}
-	DNSv4CloudFlareFamily1 = net.IPv4(1, 1, 1, 3) // malware and adult sites
-	DNSv4CloudFlareFamily2 = net.IPv4(1, 0, 0, 3) // malware and adult sites
+	DNSv4CloudFlare1       = netip.MustParseAddr("1.1.1.2") // malware
+	DNSv6Cloudflare1       = netip.AddrFrom16([16]byte{0x26, 0x06, 0x47, 0x00, 0x47, 0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0x11, 0x11})
+	DNSv4CloudFlare2       = netip.MustParseAddr("1.0.0.2") // malware
+	DNSv6Cloudflare2       = netip.AddrFrom16([16]byte{0x26, 0x06, 0x47, 0x00, 0x47, 0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0x10, 0x01})
+	DNSv4CloudFlareFamily1 = netip.MustParseAddr("1.1.1.3") // malware and adult sites
+	DNSv4CloudFlareFamily2 = netip.MustParseAddr("1.0.0.3") // malware and adult sites
 
 	// OpenDNS
-	OpenDNS1 = net.IPv4(208, 67, 222, 123)
-	OpenDNS2 = net.IPv4(208, 67, 220, 123)
+	OpenDNS1 = netip.MustParseAddr("208.67.222.123")
+	OpenDNS2 = netip.MustParseAddr("208.67.220.123")
 )
 
 // Session holds the session context for a given network interface.
@@ -148,8 +153,8 @@ func (config Config) NewSession(nic string) (session *Session, err error) {
 
 	if config.ProbeDeadline == 0 || config.OfflineDeadline == 0 || config.PurgeDeadline == 0 {
 		config.ProbeDeadline = DefaultProbeDeadline
-		config.PurgeDeadline = DefaultPurgeDeadline
 		config.OfflineDeadline = DefaultOfflineDeadline
+		config.PurgeDeadline = DefaultPurgeDeadline
 	}
 
 	if session.ProbeDeadline = config.ProbeDeadline; session.ProbeDeadline <= 0 || session.ProbeDeadline > time.Minute*30 {
@@ -208,7 +213,7 @@ func (config Config) NewSession(nic string) (session *Session, err error) {
 	host.LastSeen = time.Now().Add(time.Hour * 24 * 365) // never expire
 	host.MACEntry.LastSeen = host.LastSeen
 	host.MACEntry.IP4 = host.Addr.IP
-	host.MACEntry.IP6LLA = session.NICInfo.HostLLA.IP
+	host.MACEntry.IP6LLA = session.NICInfo.HostLLA.Addr()
 	host.Online = true
 	host.MACEntry.Online = true
 
@@ -269,7 +274,7 @@ func (h *Session) purge(now time.Time) error {
 	offlineCutoff := now.Add(h.OfflineDeadline * -1) // Mark offline entries last updated before this time
 	deleteCutoff := now.Add(h.PurgeDeadline * -1)    // Delete entries that have not responded in last hour
 
-	purge := make([]net.IP, 0, 16)
+	purge := make([]netip.Addr, 0, 16)
 	probe := make([]Addr, 0, 16)
 	offline := make([]*Host, 0, 16)
 
@@ -300,16 +305,16 @@ func (h *Session) purge(now time.Time) error {
 	if len(probe) > 0 {
 		go func() {
 			for _, addr := range probe {
-				if ip := addr.IP.To4(); ip != nil {
+				if addr.IP.Is4() {
 					if err := h.ARPRequest(addr.IP); err != nil {
 						fastlog.NewLine(module, "failed to probe ipv4").IP("ip", addr.IP).Error(err).Write()
 					}
 				} else {
-					if h.NICInfo.HostLLA.IP == nil { // in case host does not have IPv6 - this should never happen
-						fastlog.NewLine(module, "failed to probe ipv6 missing host ipv6").IP("ip", h.NICInfo.HostLLA.IP).Write()
+					if !h.NICInfo.HostLLA.Addr().Is6() { // in case host does not have IPv6 - this should never happen
+						fastlog.NewLine(module, "failed to probe ipv6 missing host ipv6").IP("ip", h.NICInfo.HostLLA.Addr()).Write()
 						continue
 					}
-					srcAddr := Addr{MAC: h.NICInfo.HostAddr4.MAC, IP: h.NICInfo.HostLLA.IP}
+					srcAddr := Addr{MAC: h.NICInfo.HostAddr4.MAC, IP: h.NICInfo.HostLLA.Addr()}
 					if addr.IP.IsLinkLocalUnicast() {
 						// Use Neigbour solicitation if link local address as NS almost always result in a response from host if online unless
 						// host is on battery saving mode.
@@ -354,7 +359,7 @@ func (h *Session) Notify(frame Frame) {
 		}
 		// Attempt to find a dhcp host entry with saved IP from UpdateDHCP
 		frame.SrcAddr.IP = h.DHCPv4IPOffer(frame.SrcAddr.MAC)
-		if frame.SrcAddr.IP == nil {
+		if !frame.SrcAddr.IP.IsValid() {
 			return
 		}
 		frame.Host = h.findIP(frame.SrcAddr.IP)
@@ -362,7 +367,7 @@ func (h *Session) Notify(frame Frame) {
 			return
 		}
 		// frame.Session.onlineTransition(frame.Host)
-		frame.flags = frame.setOnlineTransition()
+		frame.flags = frame.markOnlineTransition()
 	}
 	h.notify(frame)
 }
@@ -377,7 +382,7 @@ func (h *Session) notify(frame Frame) {
 	// if transitioning to online, test if we need to notify previous IP is offline
 	offline := []*Host{}
 	if frame.onlineTransition() {
-		if frame.Host.Addr.IP.To4() != nil {
+		if frame.Host.Addr.IP.Is4() {
 			for _, v := range frame.Host.MACEntry.HostList {
 				if !v.Online && v.dirty {
 					offline = append(offline, v)
@@ -402,6 +407,9 @@ func (h *Session) notify(frame Frame) {
 }
 
 func (h *Session) makeOffline(host *Host) {
+	if Logger.IsInfo() {
+		Logger.Msg("IP is offline").Struct(host.Addr).Write()
+	}
 	host.MACEntry.Row.Lock()
 	host.Online = false
 	host.dirty = false
@@ -429,8 +437,8 @@ func (h *Session) makeOffline(host *Host) {
 //
 // A host using DHCP cannot use an IP address until it is confirmed by a dhcp server. Therefore various DHCP messages are
 // transmitted with a zero IP and in particular the DHCP discover does not have a srcIP.
-func (h *Session) DHCPv4Update(mac net.HardwareAddr, ip net.IP, name NameEntry) error {
-	if ip == nil || ip.IsUnspecified() {
+func (h *Session) DHCPv4Update(mac net.HardwareAddr, ip netip.Addr, name NameEntry) error {
+	if !ip.IsValid() || ip.IsUnspecified() {
 		return ErrInvalidIP
 	}
 	host, _ := h.findOrCreateHostWithLock(Addr{MAC: mac, IP: ip})
@@ -448,23 +456,23 @@ func (h *Session) DHCPv4Update(mac net.HardwareAddr, ip net.IP, name NameEntry) 
 
 // SetDHCPv4IPOffer set an IPv4 offer for the mac.
 // A DCP processing module should call this when it wants to record the IP it has offered for a given mac.
-func (h *Session) SetDHCPv4IPOffer(mac net.HardwareAddr, ip net.IP, name NameEntry) {
+func (h *Session) SetDHCPv4IPOffer(mac net.HardwareAddr, ip netip.Addr, name NameEntry) {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 	macEntry := h.MACTable.findOrCreate(mac)
-	macEntry.IP4Offer = CopyIP(ip)
+	macEntry.IP4Offer = ip
 	macEntry.DHCP4Name = name
 }
 
 // DHCPv4Offer returns the dhcp v4 ip offer if one is available.
 // This is used in the arp spoof module to reject announcements that conflict with the offered dhcp ip.
-func (h *Session) DHCPv4IPOffer(mac net.HardwareAddr) net.IP {
+func (h *Session) DHCPv4IPOffer(mac net.HardwareAddr) netip.Addr {
 	h.mutex.RLock()
 	defer h.mutex.RUnlock()
 	if entry, _ := h.MACTable.findMAC(mac); entry != nil {
 		return entry.IP4Offer
 	}
-	return nil
+	return netip.Addr{}
 }
 
 // FindMACEntry returns pointer to macEntry or nil if not found

@@ -4,27 +4,27 @@ import (
 	"bytes"
 	"fmt"
 	"net"
+	"net/netip"
 	"syscall"
 	"testing"
 	"time"
 )
 
 var (
-	// zeroMAC = net.HardwareAddr{0, 0, 0, 0, 0, 0}
-	ip1 = net.IPv4(192, 168, 0, 1)
-	ip2 = net.IPv4(192, 168, 0, 2)
-	ip3 = net.IPv4(192, 168, 0, 3)
-	ip4 = net.IPv4(192, 168, 0, 4)
-	ip5 = net.IPv4(192, 168, 0, 5)
+	ip1 = netip.MustParseAddr("192.168.0.1")
+	ip2 = netip.MustParseAddr("192.168.0.2")
+	ip3 = netip.MustParseAddr("192.168.0.3")
+	ip4 = netip.MustParseAddr("192.168.0.4")
+	ip5 = netip.MustParseAddr("192.168.0.5")
 
-	localIP  = net.IPv4(169, 254, 0, 10).To4()
-	localIP2 = net.IPv4(169, 254, 0, 11).To4()
+	localIP  = netip.MustParseAddr("169.254.0.10")
+	localIP2 = netip.MustParseAddr("169.254.0.11")
 
 	hostMAC   = net.HardwareAddr{0x00, 0x55, 0x55, 0x55, 0x55, 0x55}
-	hostIP4   = net.IPv4(192, 168, 0, 129).To4()
+	hostIP4   = netip.MustParseAddr("192.168.0.129")
 	routerMAC = net.HardwareAddr{0x00, 0x66, 0x66, 0x66, 0x66, 0x66}
-	routerIP4 = net.IPv4(192, 168, 0, 11).To4()
-	homeLAN   = net.IPNet{IP: net.IPv4(192, 168, 0, 0), Mask: net.IPv4Mask(255, 255, 255, 0)}
+	routerIP4 = netip.MustParseAddr("192.168.0.11")
+	homeLAN   = netip.PrefixFrom(netip.AddrFrom4([4]byte{192, 168, 0, 0}), 24)
 
 	mac1 = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x01}
 	mac2 = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x02}
@@ -38,11 +38,11 @@ var (
 	addr4 = Addr{MAC: mac4, IP: ip4}
 
 	// ip6LLARouter = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}
-	ip6LLAHost = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x10, 0x10}
+	ip6LLAHost = netip.AddrFrom16([16]byte{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x10, 0x10})
 	// ip6LLA1      = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}
-	ip6LLA2 = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02}
+	ip6LLA2 = netip.AddrFrom16([16]byte{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02})
 	// ip6LLA3      = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x03}
-	ip6LLA4 = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x04}
+	ip6LLA4 = netip.AddrFrom16([16]byte{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x04})
 	// ip6LLA5      = net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x05}
 
 	hostAddr   = Addr{MAC: hostMAC, IP: hostIP4}
@@ -55,7 +55,7 @@ func newTestHost(session *Session, srcAddr Addr) Frame {
 	// create an arp reply packet
 	p := make([]byte, EthMaxSize)
 	ether := EncodeEther(p, syscall.ETH_P_IP, srcAddr.MAC, EthBroadcast)
-	if ip := srcAddr.IP.To4(); ip != nil {
+	if srcAddr.IP.Is4() {
 		ip4 := EncodeIP4(ether.Payload(), 255, srcAddr.IP, IP4Broadcast)
 		ether, _ = ether.SetPayload(ip4)
 	} else {
@@ -67,25 +67,41 @@ func newTestHost(session *Session, srcAddr Addr) Frame {
 	if err != nil {
 		panic(err)
 	}
-	if !srcAddr.IP.Equal(net.IPv4zero) && frame.Host == nil {
+	if srcAddr.IP != IPv4zero && frame.Host == nil {
 		panic("invalid nil test host")
 	}
 	return frame
 }
 
+func TestHandler_CreateDelete(t *testing.T) {
+	engine, _ := testSession()
+	newTestHost(engine, addr1)
+	if n := len(engine.MACTable.Table); n != 3 {
+		t.Error("invalid mac table len", n)
+	}
+	if n := len(engine.HostTable.Table); n != 3 {
+		t.Error("invalid host table len", n)
+	}
+	engine.deleteHost(addr1.IP)
+	if n := len(engine.MACTable.Table); n != 2 {
+		t.Error("invalid mac table len", n)
+	}
+	if n := len(engine.HostTable.Table); n != 2 {
+		t.Error("invalid host table delete len", n)
+	}
+}
+
 func TestHandler_findOrCreateHostTestCopyIPMAC(t *testing.T) {
-	bufIP := []byte{192, 168, 1, 1}
-	ip := CopyIP(net.IP(bufIP).To4())
+	bufIP := netip.AddrFrom4([4]byte{192, 168, 1, 1})
 
 	bufMAC := []byte{1, 1, 1, 2, 2, 2}
 	mac := net.HardwareAddr{1, 1, 1, 2, 2, 2}
 
 	session, _ := testSession()
 
-	host, _ := session.findOrCreateHostWithLock(Addr{MAC: net.HardwareAddr(bufMAC), IP: net.IP(bufIP)})
-	bufIP[0] = 0xff
+	host, _ := session.findOrCreateHostWithLock(Addr{MAC: net.HardwareAddr(bufMAC), IP: bufIP})
 	bufMAC[0] = 0x00
-	if !host.Addr.IP.Equal(ip) {
+	if host.Addr.IP != bufIP {
 		session.printHostTable()
 		t.Error("findOrCreateHost wrong IP", host, host.MACEntry)
 	}
@@ -94,13 +110,11 @@ func TestHandler_findOrCreateHostTestCopyIPMAC(t *testing.T) {
 	}
 
 	bufMAC = []byte{1, 1, 1, 2, 2, 2}
-	bufIP6 := []byte{0x20, 0x01, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}
-	ip6 := CopyIP(net.IP(bufIP6))
+	bufIP6 := netip.AddrFrom16([16]byte{0x20, 0x01, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01})
 
-	host, _ = session.findOrCreateHostWithLock(Addr{MAC: net.HardwareAddr(bufMAC), IP: net.IP(bufIP6)})
-	bufIP6[8] = 0xff
+	host, _ = session.findOrCreateHostWithLock(Addr{MAC: net.HardwareAddr(bufMAC), IP: bufIP6})
 	bufMAC[0] = 0x00
-	if !host.Addr.IP.Equal(ip6) {
+	if host.Addr.IP != bufIP6 {
 		t.Error("findOrCreateHost wrong IP", host, host.MACEntry)
 	}
 	if !bytes.Equal(mac, host.MACEntry.MAC) {
@@ -119,15 +133,35 @@ func Benchmark_findOrCreateHost(b *testing.B) {
 	// March 2021 - running benchmark on WSL 2 - 64 hosts
 	// Benchmark_findOrCreateHost-8   	 7318504	       145 ns/op	       0 B/op	       0 allocs/op
 	// Benchmark_findOrCreateHost-8   	 7555534	       141 ns/op	       0 B/op	       0 allocs/op
-	ip := CopyIP(hostIP4).To4()
+	// ip := CopyIP(hostIP4).To4()
 	mac := net.HardwareAddr{0x00, 0xff, 0xaa, 0xbb, 0x55, 0x55}
 	for i := 0; i < b.N; i++ {
-		ip[3] = byte(i % 64)
+		ip := netip.AddrFrom4([4]byte{192, 168, 0, byte(i % 64)})
 		mac[5] = byte(i % 64)
 		host, _ := engine.findOrCreateHostWithLock(Addr{MAC: mac, IP: ip})
-		if host.Addr.IP.Equal(net.IPv4zero) {
-			fmt.Println("invalid host")
+		if host.Addr.IP == IPv4zero || !host.Addr.IP.IsValid() {
+			fmt.Println("invalid host", host.Addr)
 		}
+	}
+}
+func TestSession_findOrCreateHostWithLock(t *testing.T) {
+	engine, _ := testSession()
+	h1, _ := engine.Parse(mustHex(testARPRequest))
+	h2, _ := engine.Parse(testicmp6RourterSolicitation)
+	future := time.Now().Add(time.Minute * 40)
+	h1.Host.LastSeen = future
+	h1.Host.MACEntry.LastSeen = future
+	h2.Host.LastSeen = future
+	h2.Host.MACEntry.LastSeen = future
+
+	// ensure last seen is updated
+	h1, _ = engine.Parse(mustHex(testARPRequest))
+	if !h1.Host.LastSeen.Before(future) || h1.Host.MACEntry.LastSeen != h1.Host.LastSeen {
+		t.Error("invalid host1 last seen time")
+	}
+	h2, _ = engine.Parse(testicmp6RourterSolicitation)
+	if !h2.Host.LastSeen.Before(future) || h2.Host.MACEntry.LastSeen != h2.Host.LastSeen {
+		t.Error("invalid host2 last seen time")
 	}
 }
 

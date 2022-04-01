@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"net/netip"
 
 	"github.com/irai/packet"
 )
@@ -25,14 +26,14 @@ func filterByMAC(mac net.HardwareAddr) func(packet.Frame) bool {
 	}
 }
 
-func filterByIP(ip net.IP) func(packet.Frame) bool {
-	if ip = ip.To4(); ip != nil {
+func filterByIP(ip netip.Addr) func(packet.Frame) bool {
+	if ip.Is4() {
 		return func(frame packet.Frame) bool {
 			ip4 := frame.IP4()
 			if ip4 == nil { // skip if not IPv4 packet
 				return true
 			}
-			if ip.Equal(ip4.Src()) || ip.Equal(ip4.Dst()) {
+			if ip == ip4.Src() || ip == ip4.Dst() {
 				return false
 			}
 			return true
@@ -44,7 +45,7 @@ func filterByIP(ip net.IP) func(packet.Frame) bool {
 		if ip6 == nil { // skip if not IPv6 packet
 			return true
 		}
-		if ip.Equal(ip6.Src()) || ip.Equal(ip6.Dst()) {
+		if ip == ip6.Src() || ip == ip6.Dst() {
 			return false
 		}
 		return true
@@ -80,7 +81,7 @@ func main() {
 
 	// add ip filter
 	if *ipStr != "" {
-		if ip := net.ParseIP(*ipStr); ip != nil {
+		if ip, err := netip.ParseAddr(*ipStr); err != nil {
 			filters = append(filters, filterByIP(ip))
 		} else {
 			fmt.Println("invalid ip", *ipStr, err)

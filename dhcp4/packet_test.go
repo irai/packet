@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"net"
+	"net/netip"
 	"testing"
 	"time"
 )
@@ -14,18 +15,18 @@ func TestMarshall(t *testing.T) {
 		opcode    OpCode
 		mt        MessageType
 		chAddr    net.HardwareAddr
-		ciAddr    net.IP
-		yiAddr    net.IP
+		ciAddr    netip.Addr
+		yiAddr    netip.Addr
 		xid       []byte
 		broadcast bool
 		options   Options
 		wantErr   bool
 	}{
-		{name: "simple", opcode: BootRequest, mt: Request, chAddr: mac0, ciAddr: ip1, yiAddr: nil, xid: []byte{1, 1, 1, 1}, broadcast: true, wantErr: false,
+		{name: "simple", opcode: BootRequest, mt: Request, chAddr: mac0, ciAddr: ip1, yiAddr: netip.Addr{}, xid: []byte{1, 1, 1, 1}, broadcast: true, wantErr: false,
 			options: Options{
 				OptionSubnetMask:       []byte{255, 255, 255, 0}, // must occur before router
-				OptionRouter:           ip5.To4(),
-				OptionDomainNameServer: ip4.To4(),
+				OptionRouter:           ip5.AsSlice(),
+				OptionDomainNameServer: ip4.AsSlice(),
 				OptionDHCPMessageType:  []byte{byte(Request)},
 			},
 		},
@@ -49,10 +50,10 @@ func TestMarshall(t *testing.T) {
 			if v := dhcp.CHAddr(); !bytes.Equal(v, tt.chAddr) {
 				t.Errorf("%s: Marshall() = invalid chaddr got=%v, want=%v", tt.name, v, tt.chAddr)
 			}
-			if v := dhcp.CIAddr(); tt.ciAddr != nil && !v.Equal(tt.ciAddr) {
+			if v := dhcp.CIAddr(); tt.ciAddr.IsValid() && v != tt.ciAddr {
 				t.Errorf("%s: Marshall() = invalid ciaddr got=%v, want=%v", tt.name, v, tt.ciAddr)
 			}
-			if v := dhcp.YIAddr(); tt.yiAddr != nil && !v.Equal(tt.yiAddr) {
+			if v := dhcp.YIAddr(); tt.yiAddr.IsValid() && v != tt.yiAddr {
 				t.Errorf("%s: Marshall() = invalid yiaddr got=%v, want=%v", tt.name, v, tt.yiAddr)
 			}
 			if v := dhcp.Broadcast(); v != tt.broadcast {
@@ -69,15 +70,15 @@ func TestMarshallChangeToReply(t *testing.T) {
 		opcode    OpCode
 		mt        MessageType
 		chAddr    net.HardwareAddr
-		ciAddr    net.IP
-		yiAddr    net.IP
+		ciAddr    netip.Addr
+		yiAddr    netip.Addr
 		xid       []byte
 		broadcast bool
 		options   Options
 		wantErr   bool
 	}
 	buf := make([]byte, 1500)
-	tt := ts{name: "changetoreply", opcode: BootRequest, mt: Discover, chAddr: mac1, ciAddr: nil, yiAddr: nil, xid: []byte{1, 1, 1, 1}, broadcast: true, wantErr: false, options: nil}
+	tt := ts{name: "changetoreply", opcode: BootRequest, mt: Discover, chAddr: mac1, ciAddr: netip.Addr{}, yiAddr: netip.Addr{}, xid: []byte{1, 1, 1, 1}, broadcast: true, wantErr: false, options: nil}
 	dhcp := Marshall(buf, tt.opcode, tt.mt, tt.chAddr, tt.ciAddr, tt.yiAddr, tt.xid, tt.broadcast, tt.options, tt.options[OptionParameterRequestList])
 	if err := dhcp.IsValid(); err != nil {
 		t.Errorf("Marshall() = invalid dhcp error %v", err)
@@ -88,10 +89,10 @@ func TestMarshallChangeToReply(t *testing.T) {
 	if v := dhcp.CHAddr(); !bytes.Equal(v, tt.chAddr) {
 		t.Errorf("%s: Marshall() = invalid chaddr got=%v, want=%v", tt.name, v, tt.chAddr)
 	}
-	if v := dhcp.CIAddr(); tt.ciAddr != nil && !v.Equal(tt.ciAddr) {
+	if v := dhcp.CIAddr(); tt.ciAddr.IsValid() && v != tt.ciAddr {
 		t.Errorf("%s: Marshall() = invalid ciaddr got=%v, want=%v", tt.name, v, tt.ciAddr)
 	}
-	if v := dhcp.YIAddr(); tt.yiAddr != nil && !v.Equal(tt.yiAddr) {
+	if v := dhcp.YIAddr(); tt.yiAddr.IsValid() && v != tt.yiAddr {
 		t.Errorf("%s: Marshall() = invalid yiaddr got=%v, want=%v", tt.name, v, tt.yiAddr)
 	}
 	if v := dhcp.Broadcast(); v != tt.broadcast {
@@ -100,13 +101,13 @@ func TestMarshallChangeToReply(t *testing.T) {
 
 	options := Options{
 		OptionSubnetMask:         []byte{255, 255, 255, 0}, // must occur before router
-		OptionRouter:             ip5.To4(),
-		OptionDomainNameServer:   ip4.To4(),
-		OptionServerIdentifier:   hostIP4,
+		OptionRouter:             ip5.AsSlice(),
+		OptionDomainNameServer:   ip4.AsSlice(),
+		OptionServerIdentifier:   hostIP4.AsSlice(),
 		OptionDHCPMessageType:    []byte{byte(Request)},
 		OptionIPAddressLeaseTime: optionsLeaseTime(time.Second * 10),
 	}
-	dhcp = Marshall(dhcp, BootReply, Offer, nil, nil, ip3, nil, false, options, options[OptionParameterRequestList])
+	dhcp = Marshall(dhcp, BootReply, Offer, nil, netip.Addr{}, ip3, nil, false, options, options[OptionParameterRequestList])
 	if err := dhcp.IsValid(); err != nil {
 		t.Errorf("Marshall() = invalid dhcp error %v", err)
 	}
@@ -116,10 +117,10 @@ func TestMarshallChangeToReply(t *testing.T) {
 	if v := dhcp.CHAddr(); !bytes.Equal(v, tt.chAddr) {
 		t.Errorf("%s: Marshall() = invalid chaddr got=%v, want=%v", tt.name, v, tt.chAddr)
 	}
-	if v := dhcp.CIAddr(); tt.ciAddr != nil && !v.Equal(tt.ciAddr) {
+	if v := dhcp.CIAddr(); tt.ciAddr.IsValid() && v != tt.ciAddr {
 		t.Errorf("%s: Marshall() = invalid ciaddr got=%v, want=%v", tt.name, v, tt.ciAddr)
 	}
-	if v := dhcp.YIAddr(); !v.Equal(ip3) {
+	if v := dhcp.YIAddr(); v != ip3 {
 		t.Errorf("%s: Marshall() = invalid yiaddr got=%v, want=%v", tt.name, v, tt.yiAddr)
 	}
 	if v := dhcp.Broadcast(); v != false {
@@ -128,7 +129,9 @@ func TestMarshallChangeToReply(t *testing.T) {
 
 	// must receive three options at least
 	options = dhcp.ParseOptions()
-	if !bytes.Equal(options[OptionDHCPMessageType], []byte{byte(Offer)}) || !bytes.Equal(options[OptionIPAddressLeaseTime], []byte{0, 0, 0, 10}) || !bytes.Equal(options[OptionServerIdentifier], hostIP4) {
+	if !bytes.Equal(options[OptionDHCPMessageType], []byte{byte(Offer)}) ||
+		!bytes.Equal(options[OptionIPAddressLeaseTime], []byte{0, 0, 0, 10}) ||
+		!bytes.Equal(options[OptionServerIdentifier], hostIP4.AsSlice()) {
 		t.Errorf("%s: Marshall() = invalid options got=%v", tt.name, options)
 	}
 

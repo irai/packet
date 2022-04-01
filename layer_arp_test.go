@@ -3,6 +3,7 @@ package packet
 import (
 	"bytes"
 	"net"
+	"net/netip"
 	"syscall"
 	"testing"
 )
@@ -58,9 +59,9 @@ func TestMarshalBinary(t *testing.T) {
 		proto     uint16
 		operation uint16
 		srcMAC    net.HardwareAddr
-		srcIP     net.IP
+		srcIP     netip.Addr
 		dstMAC    net.HardwareAddr
-		dstIP     net.IP
+		dstIP     netip.Addr
 	}{
 		{name: "reply", wantErr: false, proto: syscall.ETH_P_ARP, operation: OperationReply, srcMAC: mac1, srcIP: ip1, dstMAC: mac2, dstIP: ip2},
 	}
@@ -78,7 +79,7 @@ func TestMarshalBinary(t *testing.T) {
 			if !bytes.Equal(p.SrcMAC(), tt.srcMAC) || !bytes.Equal(p.DstMAC(), tt.dstMAC) {
 				t.Errorf("%s: invalid srcMAC=%s wantSrcMAC=%s dstMAC=%s wantDstMAC=%s", tt.name, p.SrcMAC(), tt.srcMAC, p.DstMAC(), tt.dstMAC)
 			}
-			if !p.SrcIP().Equal(tt.srcIP) || !p.DstIP().Equal(tt.dstIP) {
+			if p.SrcIP() != tt.srcIP || p.DstIP() != tt.dstIP {
 				t.Errorf("%s: invalid srcIP=%s wantSrcIP=%s dstIP=%s wantDstIP=%s", tt.name, p.SrcIP(), tt.srcIP, p.DstIP(), tt.dstIP)
 			}
 		})
@@ -129,7 +130,7 @@ func Test_Handler_ARPRequests(t *testing.T) {
 			wantErr: nil, wantLen: 5, wantIPs: 0},
 		{name: "probe", // probe does not add host but will send a probe reject if IP is not our DHCP IP
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac5, EthernetBroadcast),
-			arp:     newARPPacket(OperationRequest, Addr{MAC: mac5, IP: net.IPv4zero.To4()}, Addr{MAC: EthernetZero, IP: ip5}),
+			arp:     newARPPacket(OperationRequest, Addr{MAC: mac5, IP: IPv4zero}, Addr{MAC: EthernetZero, IP: ip5}),
 			wantErr: nil, wantLen: 5, wantIPs: 0, wantCountResponse: 1},
 		{name: "localink", // local link IP does not add host
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac2, EthernetBroadcast),

@@ -3,6 +3,7 @@ package dhcp4
 import (
 	"encoding/binary"
 	"net"
+	"net/netip"
 	"time"
 
 	"github.com/irai/packet"
@@ -57,10 +58,10 @@ func (p DHCP4) Hops() byte               { return p[3] }
 func (p DHCP4) XId() []byte              { return p[4:8] }
 func (p DHCP4) Secs() uint16             { return binary.BigEndian.Uint16(p[8:10]) }
 func (p DHCP4) Flags() uint16            { return binary.BigEndian.Uint16(p[10:12]) }
-func (p DHCP4) CIAddr() net.IP           { return net.IP(p[12:16]) }
-func (p DHCP4) YIAddr() net.IP           { return net.IP(p[16:20]) }
-func (p DHCP4) SIAddr() net.IP           { return net.IP(p[20:24]) }
-func (p DHCP4) GIAddr() net.IP           { return net.IP(p[24:28]) }
+func (p DHCP4) CIAddr() netip.Addr       { return netip.AddrFrom4(*(*[4]byte)(p[12:16])) }
+func (p DHCP4) YIAddr() netip.Addr       { return netip.AddrFrom4(*(*[4]byte)(p[16:20])) }
+func (p DHCP4) SIAddr() netip.Addr       { return netip.AddrFrom4(*(*[4]byte)(p[20:24])) }
+func (p DHCP4) GIAddr() netip.Addr       { return netip.AddrFrom4(*(*[4]byte)(p[24:28])) }
 func (p DHCP4) CHAddr() net.HardwareAddr { return net.HardwareAddr(p[28 : 28+6]) }
 func (p DHCP4) SName() []byte            { return trimNull(p[44 : 44+64]) }    // BOOTP legacy
 func (p DHCP4) File() []byte             { return trimNull(p[108 : 108+128]) } // BOOTP legacy
@@ -132,10 +133,10 @@ func (p DHCP4) SetHops(hops byte)       { p[3] = hops }
 func (p DHCP4) SetXId(xId []byte)       { copy(p.XId(), xId) }
 func (p DHCP4) SetSecs(secs uint16)     { binary.BigEndian.PutUint16(p[8:10], secs) }
 func (p DHCP4) SetFlags(flags uint16)   { binary.BigEndian.PutUint16(p[10:12], flags) }
-func (p DHCP4) SetCIAddr(ip net.IP)     { copy(p.CIAddr(), ip.To4()) }
-func (p DHCP4) SetYIAddr(ip net.IP)     { copy(p.YIAddr(), ip.To4()) }
-func (p DHCP4) SetSIAddr(ip net.IP)     { copy(p.SIAddr(), ip.To4()) }
-func (p DHCP4) SetGIAddr(ip net.IP)     { copy(p.GIAddr(), ip.To4()) }
+func (p DHCP4) SetCIAddr(ip netip.Addr) { copy(p[12:16], ip.AsSlice()) }
+func (p DHCP4) SetYIAddr(ip netip.Addr) { copy(p[16:20], ip.AsSlice()) }
+func (p DHCP4) SetSIAddr(ip netip.Addr) { copy(p[20:24], ip.AsSlice()) }
+func (p DHCP4) SetGIAddr(ip netip.Addr) { copy(p[24:28], ip.AsSlice()) }
 
 // BOOTP legacy
 func (p DHCP4) SetSName(sName []byte) {
@@ -167,11 +168,13 @@ func (o Options) RequestedIPAddress() net.IP {
 	return nil
 }
 
-func (o Options) ServerID() net.IP {
+func (o Options) ServerID() netip.Addr {
 	if tmp, ok := o[OptionServerIdentifier]; ok {
-		return net.IP(tmp).To4()
+		if ip, ok := netip.AddrFromSlice(tmp); ok && ip.Is4() && !ip.IsUnspecified() {
+			return ip
+		}
 	}
-	return nil
+	return netip.Addr{}
 }
 
 func (p DHCP4) validateOptions() error {
@@ -264,7 +267,7 @@ func zeroes(b []byte) {
 
 // Marshal returns the underlying slice as a DHCP4 frame. The returned slice is adjusted to the length of the DHCP frame.
 // When replying to a DHCP request, you can pass nil to chaddr, ciaddr, yiadd, and xid to keep the underlying values.
-func Marshall(b []byte, opcode OpCode, mt MessageType, chaddr net.HardwareAddr, ciaddr net.IP, yiaddr net.IP, xid []byte, broadcast bool, options Options, order []byte) DHCP4 {
+func Marshall(b []byte, opcode OpCode, mt MessageType, chaddr net.HardwareAddr, ciaddr netip.Addr, yiaddr netip.Addr, xid []byte, broadcast bool, options Options, order []byte) DHCP4 {
 	if cap(b) < 300 { // minimum packet size
 		return nil
 	}
@@ -280,14 +283,14 @@ func Marshall(b []byte, opcode OpCode, mt MessageType, chaddr net.HardwareAddr, 
 	p.SetSecs(0)
 	p.SetFlags(0)
 	p.SetCookie([]byte{99, 130, 83, 99})
-	if ciaddr != nil {
+	if ciaddr.Is4() {
 		p.SetCIAddr(ciaddr)
 	}
-	if yiaddr != nil {
+	if yiaddr.Is4() {
 		p.SetYIAddr(yiaddr)
 	}
-	p.SetSIAddr(net.IPv4zero)
-	p.SetGIAddr(net.IPv4zero)
+	p.SetSIAddr(packet.IPv4zero)
+	p.SetGIAddr(packet.IPv4zero)
 	if chaddr != nil {
 		p.SetCHAddr(chaddr)
 	}
@@ -316,7 +319,7 @@ func nakPacket(req DHCP4, serverID, clientID []byte) DHCP4 {
 	if clientID != nil {
 		options[OptionClientIdentifier] = clientID
 	}
-	return Marshall(req, BootReply, NAK, nil, net.IPv4zero, net.IPv4zero, nil, false, options, nil)
+	return Marshall(req, BootReply, NAK, nil, packet.IPv4zero, packet.IPv4zero, nil, false, options, nil)
 }
 
 type OpCode byte

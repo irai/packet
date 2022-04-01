@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"net"
+	"net/netip"
 	"os"
 	"os/signal"
 	"syscall"
@@ -23,7 +23,7 @@ var (
 	debug = flag.String("d", "info", "set to info or debug to show debug messages")
 )
 
-func processNotification(s *packet.Session, targetIP net.IP) {
+func processNotification(s *packet.Session, targetIP netip.Addr) {
 	for {
 		notification, ok := <-s.C
 		if !ok { // terminate when channel closed
@@ -31,7 +31,7 @@ func processNotification(s *packet.Session, targetIP net.IP) {
 		}
 		switch notification.Online {
 		case true:
-			if !notification.Addr.IP.Equal(targetIP) {
+			if notification.Addr.IP != targetIP {
 				fmt.Printf("host is online: %s\n", notification)
 				continue
 			}
@@ -42,7 +42,7 @@ func processNotification(s *packet.Session, targetIP net.IP) {
 			}
 
 		default:
-			if !notification.Addr.IP.Equal(targetIP) {
+			if notification.Addr.IP != targetIP {
 				fmt.Printf("host is offline: %s\n", notification)
 				continue
 			}
@@ -63,7 +63,7 @@ var (
 
 func main() {
 	var err error
-	var targetIP net.IP
+	var targetIP netip.Addr
 	var exiting bool
 
 	flag.Parse()
@@ -97,7 +97,11 @@ func main() {
 	defer icmp6Spoofer.Close()
 
 	// start goroutine to process notifications
-	targetIP = net.ParseIP(*ipstr)
+	targetIP, err = netip.ParseAddr(*ipstr)
+	if err != nil {
+		fmt.Println("ignoring invalid ip address", ipstr, err)
+		targetIP = netip.Addr{}
+	}
 	go processNotification(s, targetIP)
 
 	// start packet processing goroutine
@@ -141,7 +145,7 @@ func main() {
 	}()
 
 	// if not ip given, just listen...
-	if targetIP == nil {
+	if !targetIP.IsValid() {
 		fmt.Println("missing or invalid target ip address...listening only", err)
 		time.Sleep(time.Hour * 24) // wait forever!!!
 	}
@@ -199,11 +203,11 @@ func main() {
 
 			case "start":
 				ip := getIP(tokens, 1)
-				if ip == nil {
+				if !ip.IsValid() {
 					continue
 				}
 				if host := s.FindIP(ip); host != nil {
-					if host.Addr.IP.To4() != nil {
+					if host.Addr.IP.Is4() {
 						_, err = arpSpoofer.StartHunt(host.Addr)
 					} else {
 						_, err = icmp6Spoofer.StartHunt(host.Addr)
@@ -212,11 +216,11 @@ func main() {
 
 			case "stop":
 				ip := getIP(tokens, 1)
-				if ip == nil {
+				if !ip.IsValid() {
 					continue
 				}
 				if host := s.FindIP(ip); host != nil {
-					if host.Addr.IP.To4() != nil {
+					if host.Addr.IP.Is4() {
 						_, err = arpSpoofer.StopHunt(host.Addr)
 					} else {
 						_, err = icmp6Spoofer.StopHunt(host.Addr)

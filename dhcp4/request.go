@@ -2,7 +2,7 @@ package dhcp4
 
 import (
 	"bytes"
-	"net"
+	"net/netip"
 	"time"
 
 	"github.com/irai/packet"
@@ -50,16 +50,22 @@ import (
 //  indicating clearly that it presently owns that address. It then broadcasts the request on the local network.
 //
 
-func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, senderIP net.IP) DHCP4 {
+func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, senderIP netip.Addr) DHCP4 {
 
-	reqIP, serverIP := net.IPv4zero, net.IPv4zero
+	reqIP, serverIP := packet.IPv4zero, packet.IPv4zero
 
 	clientID := getClientID(p, options)
 	if tmp, ok := options[OptionRequestedIPAddress]; ok {
-		reqIP = net.IP(tmp).To4()
+		reqIP, ok = netip.AddrFromSlice(tmp)
+		if !ok || !reqIP.Is4() {
+			reqIP = packet.IPv4zero
+		}
 	}
 	if tmp, ok := options[OptionServerIdentifier]; ok {
-		serverIP = net.IP(tmp).To4()
+		serverIP, ok = netip.AddrFromSlice(tmp)
+		if !ok || !serverIP.Is4() {
+			serverIP = packet.IPv4zero
+		}
 	}
 	nameEntry := packet.NameEntry{Type: module, Name: string(options[OptionHostName])}
 
@@ -76,16 +82,16 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 	switch {
 
 	//  select as result of a discover msg?
-	case !serverIP.Equal(net.IPv4zero):
+	case serverIP != packet.IPv4zero:
 		operation = selecting
 
 	// renewal packet? discover packet not sent
-	case reqIP.Equal(net.IPv4zero) && !senderIP.Equal(net.IPv4bcast):
+	case reqIP == packet.IPv4zero && senderIP != packet.IPv4bcast:
 		reqIP = p.CIAddr()
 		operation = renewing
 
 	// rebinding? discover packet not sent
-	case reqIP.Equal(net.IPv4zero) && senderIP.Equal(net.IPv4bcast):
+	case reqIP == packet.IPv4zero && senderIP == packet.IPv4bcast:
 		reqIP = p.CIAddr()
 		operation = rebinding
 
@@ -102,7 +108,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 	}
 
 	// reqIP must always be filled in
-	if reqIP.Equal(net.IPv4zero) {
+	if !reqIP.IsValid() || reqIP.IsUnspecified() {
 		fastlog.NewLine(module, "invalid request IP").ByteArray("xid", p.XId()).String("optionIP", string(options[OptionRequestedIPAddress])).IP("ciaddr", p.CIAddr()).Write()
 		return nil
 	}
@@ -119,28 +125,19 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 	switch operation {
 	case selecting:
 		// selecting for another server
-		if !serverIP.Equal(subnet.DHCPServer) {
+		if serverIP != subnet.DHCPServer {
 			// Keep state discover in case we get a second request
 			// Free all other states - the host is trying to get an IP from the other server
 			if lease.State != StateDiscover {
 				lease.State = StateFree
-				lease.Addr.IP = nil
+				lease.Addr.IP = netip.Addr{}
 			}
-
-			/****
-			// almost always a new host IP
-			result.Update = true
-			result.IsRouter = true                                   // hack to mark result as a new host
-			result.SrcAddr = packet.Addr{MAC: p.CHAddr(), IP: reqIP} // ok to pass frame addr
-			result.NameEntry.Name = name
-			result.HuntStage = packet.StageNoChange
-			***/
 
 			if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && captured) {
 				// The client is attempting to confirm an offer with another server
 				// Send a nack to client
 				fastlog.NewLine(module, "request NACK - select is for another server").ByteArray("xid", p.XId()).IP("serverIP", serverIP).Uint16("secs", p.Secs()).Write()
-				return nakPacket(p, subnet.DHCPServer, clientID)
+				return nakPacket(p, subnet.DHCPServer.AsSlice(), clientID)
 			}
 
 			// almost always a new host IP
@@ -150,11 +147,11 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 		}
 
 		if !bytes.Equal(lease.Addr.MAC, p.CHAddr()) || // invalid hardware
-			(lease.State == StateDiscover && (!bytes.Equal(lease.XID, p.XId()) || !lease.IPOffer.Equal(reqIP))) || // invalid discover request
-			(lease.State == StateAllocated && !lease.Addr.IP.Equal(reqIP)) { // invalid request - iphone send duplicate select packets - let it pass
+			(lease.State == StateDiscover && (!bytes.Equal(lease.XID, p.XId()) || lease.IPOffer != reqIP)) || // invalid discover request
+			(lease.State == StateAllocated && lease.Addr.IP != reqIP) { // invalid request - iphone send duplicate select packets - let it pass
 			// fmt.Printf("dhcp4 : request NACK - select invalid parameters %s lxid=%v leaseIP=%s\n", fields, lease.XID, lease.Addr.IP)
 			fastlog.NewLine(module, "request NACK - select invalid parameters").ByteArray("xid", p.XId()).ByteArray("lxid", lease.XID).IP("leaseIP", lease.Addr.IP).Write()
-			return nakPacket(p, subnet.DHCPServer, clientID)
+			return nakPacket(p, subnet.DHCPServer.AsSlice(), clientID)
 		}
 		fastlog.NewLine(module, "request ACK - select").ByteArray("xid", p.XId()).ByteArray("clientid", clientID).IP("ip", reqIP).String("subnet", lease.subnet.ID).Write()
 
@@ -162,11 +159,11 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 		// If renewing then this packet was unicast to us and the client
 		// previously acquired an address from us.
 		if lease.State != StateAllocated ||
-			!lease.Addr.IP.Equal(reqIP) || !bytes.Equal(lease.Addr.MAC, p.CHAddr()) ||
+			lease.Addr.IP != reqIP || !bytes.Equal(lease.Addr.MAC, p.CHAddr()) ||
 			lease.DHCPExpiry.Before(time.Now()) {
 			fastlog.NewLine(module, "request NACK - renew invalid or expired lease").ByteArray("xid", p.XId()).IP("gw", subnet.DefaultGW).Write()
 
-			return nakPacket(p, subnet.DHCPServer, clientID)
+			return nakPacket(p, subnet.DHCPServer.AsSlice(), clientID)
 		}
 		fastlog.NewLine(module, "request ACK - renewing").ByteArray("xid", p.XId()).IP("ip", reqIP).Write()
 
@@ -195,17 +192,17 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 				// Attempt to force other dhcp server to release the IP
 				// Send a DECLINE packet to home router in case server responded with ACK
 				// Do not use RELEASE as the server can still reuse the parameters and does not issue a NAK later
-				go h.forceDecline(dupBytes(clientID), h.net1.DefaultGW, dupMAC(p.CHAddr()), dupIP(reqIP), dupBytes(p.XId()))
+				go h.forceDecline(dupBytes(clientID), h.net1.DefaultGW, dupMAC(p.CHAddr()), reqIP, dupBytes(p.XId()))
 
 				// always NACK so next attempt may trigger discover
 				// also, it must return nack if moving form net2 to net1
 				// in the iPhone case, this causes the iPhone to retry discover
-				return nakPacket(p, h.net1.DefaultGW, clientID)
+				return nakPacket(p, h.net1.DefaultGW.AsSlice(), clientID)
 			}
 		}
 
 		if lease.State != StateAllocated ||
-			!lease.Addr.IP.Equal(reqIP) || !bytes.Equal(lease.Addr.MAC, p.CHAddr()) ||
+			lease.Addr.IP != reqIP || !bytes.Equal(lease.Addr.MAC, p.CHAddr()) ||
 			!subnet.LAN.Contains(lease.Addr.IP) {
 			fastlog.NewLine(module, "request NACK - rebooting").ByteArray("xid", p.XId()).IP("ip", reqIP).Write()
 
@@ -213,12 +210,12 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 				// Attempt to force other dhcp server to release the IP
 				// Send a DECLINE packet to home router in case server responded with ACK
 				// Do not use RELEASE as the server can still reuse the parameters and does not issue a NAK later
-				go h.forceDecline(dupBytes(clientID), h.net1.DefaultGW, dupMAC(p.CHAddr()), dupIP(reqIP), dupBytes(p.XId()))
+				go h.forceDecline(dupBytes(clientID), h.net1.DefaultGW, dupMAC(p.CHAddr()), reqIP, dupBytes(p.XId()))
 			}
 
 			// We have the lease but the IP or MAC don't match
 			// Send NACK
-			return nakPacket(p, subnet.DHCPServer, clientID)
+			return nakPacket(p, subnet.DHCPServer.AsSlice(), clientID)
 		}
 
 		if operation == rebooting {
@@ -236,7 +233,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 	lease.Name = nameEntry.Name
 	if lease.State == StateDiscover {
 		lease.Addr.IP = lease.IPOffer
-		lease.IPOffer = nil
+		lease.IPOffer = netip.Addr{}
 	}
 	lease.State = StateAllocated
 	lease.DHCPExpiry = time.Now().Add(lease.subnet.Duration)
@@ -249,7 +246,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 	// Ack Options - same as offer options
 	opts := lease.subnet.CopyOptions()
 	opts[OptionIPAddressLeaseTime] = optionsLeaseTime(lease.subnet.Duration) // rfc: must include
-	ret := Marshall(p, BootReply, ACK, nil, nil, lease.Addr.IP, nil, false, opts, options[OptionParameterRequestList])
+	ret := Marshall(p, BootReply, ACK, nil, netip.Addr{}, lease.Addr.IP, nil, false, opts, options[OptionParameterRequestList])
 
 	if Debug {
 		l := fastlog.NewLine(module, "request ack options recv").ByteArray("xid", p.XId()).Sprintf("options", options[OptionParameterRequestList])

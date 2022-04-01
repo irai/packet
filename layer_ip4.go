@@ -3,11 +3,10 @@ package packet
 import (
 	"encoding/binary"
 	"fmt"
-	"net"
+	"net/netip"
 
 	"github.com/irai/packet/fastlog"
 	"golang.org/x/net/ipv4"
-	"inet.af/netaddr"
 )
 
 // IP4 provide access to IP fields without copying data.
@@ -25,11 +24,14 @@ func (p IP4) FlagMoreFragments() bool { return (uint8(p[6]) & 0b00100000) != 0 }
 func (p IP4) Fragment() uint16        { return ((uint16(p[6]) & 0b00011111) << 8) & uint16(p[7]) }
 func (p IP4) TTL() int                { return int(p[8]) }
 func (p IP4) Checksum() int           { return int(binary.BigEndian.Uint16(p[10:12])) }
-func (p IP4) Src() net.IP             { return net.IP(p[12:16]) } // must use IP type to avoid allocation
-func (p IP4) Dst() net.IP             { return net.IP(p[16:20]) } // must use IP type to avoid allocation
-func (p IP4) NetaddrDst() netaddr.IP  { return netaddr.IPv4(p[16], p[17], p[18], p[19]) }
-func (p IP4) TotalLen() int           { return int(binary.BigEndian.Uint16(p[2:4])) } // total packet size including header and payload
-func (p IP4) Payload() []byte         { return p[p.IHL():p.TotalLen()] }
+func (p IP4) Src() netip.Addr         { return netip.AddrFrom4(*((*[4]byte)(p[12:16]))) } // must use IP type to avoid allocation
+// func (p IP4) Src() net.IP             { return net.IP(p[12:16]) } // must use IP type to avoid allocation
+func (p IP4) Dst() netip.Addr        { return netip.AddrFrom4(*((*[4]byte)(p[16:20]))) } // must use IP type to avoid allocation
+func (p IP4) NetaddrDst() netip.Addr { return netip.AddrFrom4(*((*[4]byte)(p[16:19]))) }
+
+// func (p IP4) NetaddrDst() netip.Addr  { return netip.AddrFrom4(p[16], p[17], p[18], p[19]) }
+func (p IP4) TotalLen() int   { return int(binary.BigEndian.Uint16(p[2:4])) } // total packet size including header and payload
+func (p IP4) Payload() []byte { return p[p.IHL():p.TotalLen()] }
 func (p IP4) String() string {
 	return fastlog.NewLine("", "").Struct(p).ToString()
 }
@@ -60,7 +62,7 @@ func (p IP4) FastLog(line *fastlog.Line) *fastlog.Line {
 	return line
 }
 
-func EncodeIP4(p []byte, ttl byte, src net.IP, dst net.IP) IP4 {
+func EncodeIP4(p []byte, ttl byte, src netip.Addr, dst netip.Addr) IP4 {
 	options := []byte{}
 	var hdrLen = ipv4.HeaderLen + len(options) // len includes options
 	const fragOffset = 0
@@ -71,11 +73,11 @@ func EncodeIP4(p []byte, ttl byte, src net.IP, dst net.IP) IP4 {
 	const checksum = 0
 
 	flagsAndFragOff := (fragOffset & 0x1fff) | int(flags<<13)
-	if src = src.To4(); src == nil {
-		src = net.IPv4zero
+	if !src.Is4() {
+		src = IPv4zero
 	}
-	if dst = dst.To4(); dst == nil {
-		dst = net.IPv4zero
+	if !dst.Is4() {
+		dst = IPv4zero
 	}
 
 	p[0] = byte(ipv4.Version<<4 | (hdrLen >> 2 & 0x0f))
@@ -86,8 +88,10 @@ func EncodeIP4(p []byte, ttl byte, src net.IP, dst net.IP) IP4 {
 	p[8] = byte(ttl)
 	p[9] = byte(protocol)
 	binary.BigEndian.PutUint16(p[10:12], uint16(checksum))
-	copy(p[12:16], src[:net.IPv4len])
-	copy(p[16:20], dst[:net.IPv4len])
+	s := src.As4()
+	copy(p[12:16], s[:])
+	s = dst.As4()
+	copy(p[16:20], s[:])
 	return p[:ipv4.HeaderLen]
 }
 

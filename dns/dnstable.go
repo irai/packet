@@ -3,10 +3,10 @@ package dns
 import (
 	"errors"
 	"fmt"
+	"net/netip"
 
 	"github.com/irai/packet"
 	"github.com/irai/packet/fastlog"
-	"inet.af/netaddr"
 )
 
 func (h *DNSHandler) PrintDNSTable() {
@@ -18,7 +18,7 @@ func (h *DNSHandler) PrintDNSTable() {
 	}
 }
 
-func (h *DNSHandler) DNSExist(ip netaddr.IP) bool {
+func (h *DNSHandler) DNSExist(ip netip.Addr) bool {
 	h.mutex.RLock()
 	defer h.mutex.RUnlock()
 
@@ -39,7 +39,7 @@ func (h *DNSHandler) DNSFind(name string) DNSEntry {
 	return DNSEntry{}
 }
 
-func (h *DNSHandler) DNSLookupPTR(ip netaddr.IP) {
+func (h *DNSHandler) DNSLookupPTR(ip netip.Addr) {
 	if err := ReverseDNS(ip); errors.Is(err, packet.ErrNotFound) {
 		h.mutex.Lock()
 		defer h.mutex.Unlock()

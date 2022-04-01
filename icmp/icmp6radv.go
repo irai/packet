@@ -3,16 +3,16 @@ package icmp
 import (
 	"fmt"
 	"net"
+	"net/netip"
 	"time"
 
 	"github.com/irai/packet"
-	"inet.af/netaddr"
 )
 
 var (
 	RDNSSCLoudflare = &packet.RecursiveDNSServer{
 		Lifetime: time.Minute * 10,
-		Servers:  []net.IP{packet.DNSv6Cloudflare1, packet.DNSv6Cloudflare2},
+		Servers:  []net.IP{packet.DNSv6Cloudflare1.AsSlice(), packet.DNSv6Cloudflare2.AsSlice()},
 	}
 )
 
@@ -40,24 +40,21 @@ func (r *Router) String() string {
 // findOrCreateRouter return an existing router that matches ip or create a new one if not found.
 //
 // The function will copy mac and ip if required. It is safe to call this using a frame buffer.
-func (h *Handler6) findOrCreateRouter(mac net.HardwareAddr, ip net.IP) (router *Router, found bool) {
-	// use netaddr IP in hash
-	ipNew, _ := netaddr.FromStdIP(ip)
-	r, found := h.LANRouters[ipNew]
+func (h *Handler6) findOrCreateRouter(mac net.HardwareAddr, ip netip.Addr) (router *Router, found bool) {
+	r, found := h.LANRouters[ip]
 	if found {
 		return r, true
 	}
-	router = &Router{Addr: packet.Addr{MAC: packet.CopyMAC(mac), IP: packet.CopyIP(ip)}}
-	h.LANRouters[ipNew] = router
+	router = &Router{Addr: packet.Addr{MAC: packet.CopyMAC(mac), IP: ip}}
+	h.LANRouters[ip] = router
 	h.Router = router // make this the default ipv6 router - used in na attack
 	fmt.Printf("icmp6 : create new ipv6 router %s\n", router)
 	return router, false
 }
 
-func (h *Handler6) FindRouter(ip net.IP) Router {
+func (h *Handler6) FindRouter(ip netip.Addr) Router {
 	h.Mutex.Lock()
-	ipNew, _ := netaddr.FromStdIP(ip)
-	r := h.LANRouters[ipNew]
+	r := h.LANRouters[ip]
 	h.Mutex.Unlock()
 	if r != nil {
 		return *r
@@ -77,7 +74,7 @@ func (h *Handler6) StartRADVS(managed bool, other bool, prefixes []packet.Prefix
 
 func (h *Handler6) startRADVS(managed bool, other bool, prefixes []packet.PrefixInformation, rdnss *packet.RecursiveDNSServer) (radvs *RADVS, err error) {
 	radvs = &RADVS{stopChannel: make(chan bool, 1)}
-	radvs.Router, _ = h.findOrCreateRouter(h.session.NICInfo.HostAddr4.MAC, h.session.NICInfo.HostLLA.IP)
+	radvs.Router, _ = h.findOrCreateRouter(h.session.NICInfo.HostAddr4.MAC, h.session.NICInfo.HostLLA.Addr())
 	radvs.Router.enableRADVS = true
 	radvs.Router.ManagedFlag = managed
 	radvs.Router.OtherCondigFlag = other

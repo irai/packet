@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"time"
 
 	"github.com/irai/packet/fastlog"
@@ -268,7 +269,7 @@ func (h *Session) ICMP6SendRouterAdvertisement(prefixes []PrefixInformation, rdn
 		return err
 	}
 
-	return h.icmp6SendPacket(Addr{MAC: h.NICInfo.HostAddr4.MAC, IP: h.NICInfo.HostLLA.IP}, dstAddr, mb)
+	return h.icmp6SendPacket(Addr{MAC: h.NICInfo.HostAddr4.MAC, IP: h.NICInfo.HostLLA.Addr()}, dstAddr, mb)
 }
 
 func (h *Session) ICMP6SendRouterSolicitation() error {
@@ -285,7 +286,7 @@ func (h *Session) ICMP6SendRouterSolicitation() error {
 		return err
 	}
 
-	return h.icmp6SendPacket(Addr{MAC: h.NICInfo.HostAddr4.MAC, IP: h.NICInfo.HostLLA.IP}, IP6AllRoutersAddr, mb)
+	return h.icmp6SendPacket(Addr{MAC: h.NICInfo.HostAddr4.MAC, IP: h.NICInfo.HostLLA.Addr()}, IP6AllRoutersAddr, mb)
 }
 
 func (h *Session) ICMP6SendNeighborAdvertisement(srcAddr Addr, dstAddr Addr, targetAddr Addr) error {
@@ -295,9 +296,11 @@ func (h *Session) ICMP6SendNeighborAdvertisement(srcAddr Addr, dstAddr Addr, tar
 }
 
 // SendNeighbourSolicitation send an ICMP6 NS
-func (h *Session) ICMP6SendNeighbourSolicitation(srcAddr Addr, dstAddr Addr, targetIP net.IP) error {
+func (h *Session) ICMP6SendNeighbourSolicitation(srcAddr Addr, dstAddr Addr, targetIP netip.Addr) error {
 	p, _ := ICMP6NeighborSolicitationMarshal(targetIP, h.NICInfo.HostAddr4.MAC)
 
-	fastlog.NewLine(module, "sending NS src").Struct(srcAddr).Label("dst").Struct(dstAddr).IP("targetip", targetIP).Write()
+	if Logger.IsDebug() {
+		fastlog.NewLine(module, "send NS request - src").Struct(srcAddr).Label("dst").Struct(dstAddr).IP("targetip", targetIP).Write()
+	}
 	return h.icmp6SendPacket(srcAddr, dstAddr, p)
 }

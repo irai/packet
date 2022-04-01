@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"net"
+	"net/netip"
 	"sync"
 	"time"
 
@@ -15,11 +16,11 @@ import (
 type MACEntry struct {
 	MAC          net.HardwareAddr // unique mac address
 	Captured     bool             // true if mac is in capture mode
-	IP4          net.IP           // keep current IP4 to detect ip changes
-	IP4Offer     net.IP           // keep dhcp4 IP offer
-	IP6GUA       net.IP           // keep current ip6 global unique address
-	IP6LLA       net.IP           // keep current ip6 local link address
-	IP6Offer     net.IP           // keep ip6 GUA offer
+	IP4          netip.Addr       // keep current IP4 to detect ip changes
+	IP4Offer     netip.Addr       // keep dhcp4 IP offer
+	IP6GUA       netip.Addr       // keep current ip6 global unique address
+	IP6LLA       netip.Addr       // keep current ip6 local link address
+	IP6Offer     netip.Addr       // keep ip6 GUA offer
 	Online       bool             // true is mac is online
 	IsRouter     bool             // Set to true if this is a router
 	HostList     []*Host          // IPs associated with this mac
@@ -71,7 +72,7 @@ func (e *MACEntry) link(host *Host) {
 // unlink removes the Host from the macEntry
 func (e *MACEntry) unlink(host *Host) {
 	for i := range e.HostList {
-		if e.HostList[i].Addr.IP.Equal(host.Addr.IP) {
+		if e.HostList[i].Addr.IP == host.Addr.IP {
 			if i+1 == len(e.HostList) { // last element?
 				e.HostList = e.HostList[:i]
 				return
@@ -104,7 +105,7 @@ func (s *MACTable) findOrCreate(mac net.HardwareAddr) *MACEntry {
 	if e, _ := s.findMAC(mac); e != nil {
 		return e
 	}
-	e := &MACEntry{MAC: mac, IP4: net.IPv4zero, IP6GUA: net.IPv6zero, IP6LLA: net.IPv6zero, IP4Offer: net.IPv4zero}
+	e := &MACEntry{MAC: CopyMAC(mac), IP4: IPv4zero, IP6GUA: IPv6zero, IP6LLA: IPv6zero, IP4Offer: IPv4zero}
 	s.Table = append(s.Table, e)
 	return e
 }

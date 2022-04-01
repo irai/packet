@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"net"
+	"net/netip"
 	"os"
 	"os/signal"
 	"testing"
@@ -16,7 +17,7 @@ func testSession() (*Session, net.PacketConn) {
 	// fake nicinfo
 	// hostMAC := net.HardwareAddr{0x00, 0xff, 0x03, 0x04, 0x05, 0x01} // keep first byte zero for unicast mac
 	// hostIP := net.ParseIP("192.168.0.129").To4()
-	homeLAN := net.IPNet{IP: net.IPv4(192, 168, 0, 0), Mask: net.IPv4Mask(255, 255, 255, 0)}
+	homeLAN := netip.PrefixFrom(ip1, 24)
 	// routerIP := net.ParseIP("192.168.0.11").To4()
 	nicInfo := &NICInfo{
 		HomeLAN4:    homeLAN,
@@ -44,7 +45,7 @@ func TestSession_Notify(t *testing.T) {
 	case <-time.After(time.Millisecond * 10):
 		t.Fatal("notification timeout")
 	case notification := <-session.C:
-		if !notification.Addr.IP.Equal(frame1.Host.Addr.IP) || !notification.Online {
+		if notification.Addr.IP != frame1.Host.Addr.IP || !notification.Online {
 			t.Error("invalid online notification 1", notification)
 		}
 	}
@@ -58,7 +59,7 @@ func TestSession_Notify(t *testing.T) {
 	case <-time.After(time.Millisecond * 10):
 		t.Error("notification timeout")
 	case notification := <-session.C:
-		if !notification.Addr.IP.Equal(frame1.Host.Addr.IP) || notification.Online {
+		if notification.Addr.IP != frame1.Host.Addr.IP || notification.Online {
 			t.Error("invalid offline notification 1", notification)
 		}
 	}
@@ -67,13 +68,13 @@ func TestSession_Notify(t *testing.T) {
 	case <-time.After(time.Millisecond * 10):
 		t.Error("notification timeout")
 	case notification := <-session.C:
-		if !notification.Addr.IP.Equal(frame2.Host.Addr.IP) || !notification.Online {
+		if notification.Addr.IP != frame2.Host.Addr.IP || !notification.Online {
 			t.Error("invalid online notification 2", notification)
 		}
 	}
 
 	// Third host - dhcp - host is nil when zero IP in dhcp packet
-	frame3 := newTestHost(session, Addr{MAC: mac1, IP: net.IPv4zero})
+	frame3 := newTestHost(session, Addr{MAC: mac1, IP: IPv4zero})
 	session.DHCPv4Update(frame3.SrcAddr.MAC, ip3, NameEntry{Type: "dhcp", Name: "new name"})
 	frame3.PayloadID = PayloadDHCP4 // force to setup dhcp notify
 	session.Notify(frame3)
@@ -83,7 +84,7 @@ func TestSession_Notify(t *testing.T) {
 	case <-time.After(time.Millisecond * 10):
 		t.Error("notification timeout")
 	case notification := <-session.C:
-		if !notification.Addr.IP.Equal(frame2.Host.Addr.IP) || notification.Online {
+		if notification.Addr.IP != frame2.Host.Addr.IP || notification.Online {
 			session.PrintTable()
 			t.Error("invalid offline notification 2", notification)
 		}
@@ -93,7 +94,7 @@ func TestSession_Notify(t *testing.T) {
 	case <-time.After(time.Millisecond * 10):
 		t.Error("notification timeout")
 	case notification := <-session.C:
-		if !notification.Addr.IP.Equal(ip3) || !notification.Online {
+		if notification.Addr.IP != ip3 || !notification.Online {
 			t.Error("invalid online notification 2", notification)
 		}
 	}
@@ -139,10 +140,10 @@ func TestHandler_SignalNICStopped(t *testing.T) {
 }
 
 func TestHandler_purge(t *testing.T) {
-	ip6LLA1 := net.IP{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}
-	ip6GUA1 := net.IP{0x20, 0x01, 0x44, 0x79, 0x1d, 0x01, 0x24, 0x01, 0x7c, 0xf2, 0x4f, 0x73, 0xf8, 0xc1, 0x00, 0x01}
-	ip6GUA2 := net.IP{0x20, 0x01, 0x44, 0x79, 0x1d, 0x01, 0x24, 0x01, 0x7c, 0xf2, 0x4f, 0x73, 0xf8, 0xc1, 0x00, 0x02}
-	ip6GUA3 := net.IP{0x20, 0x01, 0x44, 0x79, 0x1d, 0x01, 0x24, 0x01, 0x7c, 0xf2, 0x4f, 0x73, 0xf8, 0xc1, 0x00, 0x03}
+	ip6LLA1 := netip.AddrFrom16([16]byte{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01})
+	ip6GUA1 := netip.AddrFrom16([16]byte{0x20, 0x01, 0x44, 0x79, 0x1d, 0x01, 0x24, 0x01, 0x7c, 0xf2, 0x4f, 0x73, 0xf8, 0xc1, 0x00, 0x01})
+	ip6GUA2 := netip.AddrFrom16([16]byte{0x20, 0x01, 0x44, 0x79, 0x1d, 0x01, 0x24, 0x01, 0x7c, 0xf2, 0x4f, 0x73, 0xf8, 0xc1, 0x00, 0x02})
+	ip6GUA3 := netip.AddrFrom16([16]byte{0x20, 0x01, 0x44, 0x79, 0x1d, 0x01, 0x24, 0x01, 0x7c, 0xf2, 0x4f, 0x73, 0xf8, 0xc1, 0x00, 0x03})
 
 	session, _ := testSession()
 	Logger.SetLevel(fastlog.LevelDebug)

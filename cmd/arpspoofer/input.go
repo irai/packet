@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"net"
+	"net/netip"
 	"os"
 	"strings"
 
@@ -32,15 +33,15 @@ func getString(tokens []string, pos int) string {
 	return tokens[pos]
 }
 
-func getIP(tokens []string, pos int) net.IP {
+func getIP(tokens []string, pos int) netip.Addr {
 	if len(tokens) < pos+1 {
 		fmt.Println("missing ip", tokens)
-		return nil
+		return netip.Addr{}
 	}
-	ip := net.ParseIP(tokens[pos])
-	if ip == nil || ip.IsUnspecified() {
-		fmt.Println("invalid ip=", tokens[pos])
-		return nil
+	ip, err := netip.ParseAddr(tokens[pos])
+	if err != nil {
+		fmt.Println("invalid ip=", tokens[pos], err)
+		return netip.Addr{}
 	}
 	return ip
 }

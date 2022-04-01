@@ -1,7 +1,7 @@
 package arp
 
 import (
-	"net"
+	"net/netip"
 	"time"
 
 	"github.com/irai/packet"
@@ -9,14 +9,14 @@ import (
 )
 
 // IsHunting returns true if the ip is activelly hunted via a goroutine
-func (h *Handler) IsHunting(ip net.IP) bool {
+func (h *Handler) IsHunting(ip netip.Addr) bool {
 	_, b := h.findHuntByIP(ip)
 	return b
 }
 
-func (h *Handler) findHuntByIP(ip net.IP) (packet.Addr, bool) {
+func (h *Handler) findHuntByIP(ip netip.Addr) (packet.Addr, bool) {
 	for _, v := range h.huntList {
-		if v.IP.Equal(ip) {
+		if v.IP == ip {
 			return v, true
 		}
 	}
@@ -30,7 +30,7 @@ func (h *Handler) findHuntByIP(ip net.IP) (packet.Addr, bool) {
 //  2. start spoof goroutine to which will continuously spoof the client ARP table
 //
 func (h *Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
-	if addr.MAC == nil || addr.IP.To4() == nil {
+	if addr.MAC == nil || !addr.IP.Is4() {
 		return packet.StageNoChange, packet.ErrInvalidIP
 	}
 

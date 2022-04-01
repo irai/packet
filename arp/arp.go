@@ -1,7 +1,6 @@
 package arp
 
 import (
-	"net"
 	"sync"
 	"time"
 
@@ -72,11 +71,11 @@ func New(session *packet.Session) (h *Handler, err error) {
 
 func (config Config) New(session *packet.Session) (h *Handler, err error) {
 	h = &Handler{session: session, huntList: make(map[string]packet.Addr, 6), closeChan: make(chan bool)}
-	if h.session.NICInfo.HostAddr4.IP.To4() == nil {
+	if !h.session.NICInfo.HostAddr4.IP.Is4() {
 		return nil, packet.ErrInvalidIP
 	}
 
-	if h.session.NICInfo.HomeLAN4.IP.To4() == nil || h.session.NICInfo.HomeLAN4.IP.IsUnspecified() {
+	if !h.session.NICInfo.HomeLAN4.Addr().Is4() || h.session.NICInfo.HomeLAN4.Addr().IsUnspecified() {
 		return nil, packet.ErrInvalidIP
 	}
 	h.probeInterval = config.ProbeInterval
@@ -140,9 +139,9 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 		operation = reply
 	case arpFrame.Operation() == packet.OperationRequest:
 		switch {
-		case arpFrame.SrcIP().Equal(arpFrame.DstIP()):
+		case arpFrame.SrcIP() == arpFrame.DstIP():
 			operation = announcement
-		case arpFrame.SrcIP().Equal(net.IPv4zero):
+		case arpFrame.SrcIP() == packet.IPv4zero:
 			operation = probe
 		default:
 			operation = request
@@ -167,7 +166,7 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 		h.arpMutex.Lock()
 		_, hunting := h.huntList[string(arpFrame.SrcMAC())]
 		h.arpMutex.Unlock()
-		if hunting && arpFrame.DstIP().Equal(h.session.NICInfo.RouterAddr4.IP) {
+		if hunting && arpFrame.DstIP() == h.session.NICInfo.RouterAddr4.IP {
 			if Logger.IsDebug() {
 				Logger.Msg("router spoofing - send reply I am").IP("ip", arpFrame.DstIP()).MAC("dstmac", arpFrame.SrcMAC()).Write()
 			}
@@ -191,13 +190,13 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 		}
 
 		// if dhcpv4 spoofing then reject any other ip that is not the spoofed IP on offer
-		if offer := h.session.DHCPv4IPOffer(arpFrame.SrcMAC()); offer != nil && !offer.Equal(arpFrame.DstIP()) {
+		if offer := h.session.DHCPv4IPOffer(arpFrame.SrcMAC()); offer.IsValid() && offer != arpFrame.DstIP() {
 			// Note: detected one situation where android probed external DNS IP. Not sure if this occur in other clients.
 			//     arp  : probe reject for ip=8.8.8.8 from mac=84:11:9e:03:89:c0 (android phone) - 10 March 2021
 			if h.session.NICInfo.HomeLAN4.Contains(arpFrame.DstIP()) {
 				Logger.Msg("probe reject for").IP("ip", arpFrame.DstIP()).MAC("fromMAC", arpFrame.SrcMAC()).IP("offer", offer).Write()
 				// unicast reply to srcMAC
-				h.session.ARPReply(arpFrame.SrcMAC(), packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: arpFrame.DstIP()}, packet.Addr{MAC: arpFrame.SrcMAC(), IP: net.IP(packet.IP4Broadcast)})
+				h.session.ARPReply(arpFrame.SrcMAC(), packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: arpFrame.DstIP()}, packet.Addr{MAC: arpFrame.SrcMAC(), IP: packet.IP4Broadcast})
 			}
 		}
 		return nil

@@ -6,13 +6,14 @@ import (
 	"net"
 	"time"
 
+	"net/netip"
+
 	"github.com/irai/packet/fastlog"
-	"inet.af/netaddr"
 )
 
 // HostTable manages host entries
 type HostTable struct {
-	Table map[netaddr.IP]*Host
+	Table map[netip.Addr]*Host
 }
 
 // Host holds a pointer to the host record. The pointer is always valid and will be garbage collected
@@ -81,7 +82,7 @@ func (s HuntStage) String() string {
 
 // newHostTable returns a HostTable Session
 func newHostTable() HostTable {
-	return HostTable{Table: make(map[netaddr.IP]*Host, 64)}
+	return HostTable{Table: make(map[netip.Addr]*Host, 64)}
 }
 
 // PrintTable print table to standard out
@@ -103,15 +104,17 @@ func (host *Host) Dirty() bool {
 	return host.dirty
 }
 
-// findOrCreateHostWithLock will create a new host entry or return existing
+// findOrCreateHostWithLock will create a new host entry or return existing and
+// it will update the LastSeen time
 //
-// The funcion copies both the mac and the ip; it is safe to call this with a frame.IP(), frame.MAC()
+// The funcion copies both the mac and it iss safe to call this with a packet buffer slice.
 func (h *Session) findOrCreateHostWithLock(addr Addr) (host *Host, found bool) {
-
+	now := time.Now()
 	//optimise the common path
-	ipNew, _ := netaddr.FromStdIP(addr.IP)
 	h.mutex.RLock()
-	if host, ok := h.HostTable.Table[ipNew]; ok && bytes.Equal(host.MACEntry.MAC, addr.MAC) {
+	if host, found = h.HostTable.Table[addr.IP]; found && bytes.Equal(host.MACEntry.MAC, addr.MAC) {
+		host.LastSeen = now
+		host.MACEntry.LastSeen = now
 		h.mutex.RUnlock()
 		return host, true
 	}
@@ -121,26 +124,20 @@ func (h *Session) findOrCreateHostWithLock(addr Addr) (host *Host, found bool) {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 
-	now := time.Now()
-	if host, ok := h.HostTable.Table[ipNew]; ok {
-		deleteHost := false
-		host.MACEntry.Row.Lock() // lock the row
-		if !bytes.Equal(host.MACEntry.MAC, addr.MAC) {
-			deleteHost = true
-		}
-		host.MACEntry.Row.Unlock() // lock the row
-
-		if deleteHost {
-			Logger.Msg("error mac address differ - duplicated IP?").Struct(addr).Struct(host).String("iplookup", ipNew.String()).Write()
-			h.printHostTable()
-			h.deleteHost(addr.IP)
-			// TODO: previous host is offline then???
-			//       should we send notification?
-		}
+	// if host exist in table but has different mac address,
+	// we need to remove the existing link host->mac and create a fresh link.
+	if host != nil {
+		Logger.Msg("error mac address differ - duplicated IP?").Struct(addr).Struct(host).IP("iplookup", addr.IP).Write()
+		h.printHostTable()
+		h.deleteHost(addr.IP)
+		// TODO: previous host is offline then???
+		//       should we send notification?
 	}
 
-	macEntry := h.MACTable.findOrCreate(CopyMAC(addr.MAC))
-	host = &Host{Addr: Addr{IP: CopyIP(addr.IP), MAC: macEntry.MAC}, MACEntry: macEntry, Online: false} // set to false to trigger Online transition
+	// this is new IP,
+	// create a new host and link to mac entry
+	macEntry := h.MACTable.findOrCreate(addr.MAC)
+	host = &Host{Addr: Addr{IP: addr.IP, MAC: macEntry.MAC}, MACEntry: macEntry, Online: false} // set to false to trigger Online transition
 	host.dirty = true
 	host.Manufacturer = FindManufacturer(macEntry.MAC)
 	if host.Manufacturer != "" && host.Manufacturer != host.MACEntry.Manufacturer {
@@ -149,21 +146,21 @@ func (h *Session) findOrCreateHostWithLock(addr Addr) (host *Host, found bool) {
 	host.HuntStage = StageNormal
 	host.LastSeen = now
 	host.MACEntry.LastSeen = now
-	h.HostTable.Table[ipNew] = host
+	h.HostTable.Table[addr.IP] = host
 
 	// link host to macEntry
 	macEntry.HostList = append(macEntry.HostList, host)
 	return host, false
 }
 
-func (h *Session) deleteHost(ip net.IP) {
+func (h *Session) deleteHost(ip netip.Addr) {
+	// newIP, _ := netip.AddrFromSlice(ip)
 	if host := h.findIP(ip); host != nil {
 		if Logger.IsDebug() {
 			Logger.Msg("delete host").IP("ip", ip).Struct(host).Write()
 		}
 		host.MACEntry.unlink(host)
-		newIP, _ := netaddr.FromStdIP(ip)
-		delete(h.HostTable.Table, newIP)
+		delete(h.HostTable.Table, ip)
 		if len(host.MACEntry.HostList) == 0 { // delete if last host
 			h.MACTable.delete(host.MACEntry.MAC)
 		}
@@ -175,19 +172,23 @@ func (h *Session) deleteHost(ip net.IP) {
 }
 
 // FindIP returns the host entry for IP or nil othewise
-func (h *Session) FindIP(ip net.IP) *Host {
+func (h *Session) FindIP(ip netip.Addr) *Host {
 	h.mutex.RLock()
 	defer h.mutex.RUnlock()
 
-	newIP, _ := netaddr.FromStdIP(ip)
-	return h.HostTable.Table[newIP]
+	// newIP, _ := netip.AddrFromSlice(ip)
+	return h.HostTable.Table[ip]
 }
 
 // findIP finds the host for IP wihout locking the engine
 // Engine must be locked prior to calling this function
-func (h *Session) findIP(ip net.IP) *Host {
-	newIP, _ := netaddr.FromStdIP(ip)
-	return h.HostTable.Table[newIP]
+func (h *Session) findIP(ip netip.Addr) *Host {
+	// newIP, ok := netip.AddrFromSlice(ip)
+	// fmt.Println("TRACE ", newIP)
+	// if !ok {
+	// panic(fmt.Sprintf("invalid ip %v", ip))
+	// }
+	return h.HostTable.Table[ip]
 }
 
 // FindByMAC returns a list of IP addresses for mac

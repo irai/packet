@@ -3,7 +3,7 @@ package dhcp4
 import (
 	"bytes"
 	"fmt"
-	"net"
+	"net/netip"
 	"time"
 
 	"github.com/irai/packet"
@@ -39,7 +39,7 @@ import (
 func (h *Handler) handleDiscover(p DHCP4, options Options) (d DHCP4) {
 
 	clientID := getClientID(p, options)
-	reqIP := net.IP(options[OptionRequestedIPAddress]).To4()
+	reqIP, _ := netip.AddrFromSlice(options[OptionRequestedIPAddress])
 	name := string(options[OptionHostName])
 
 	fastlog.NewLine(module, "discover rcvd").ByteArray("xid", p.XId()).ByteArray("clientid", clientID).IP("ip", reqIP).String("name", name).Uint16("secs", p.Secs()).Write()
@@ -64,7 +64,7 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (d DHCP4) {
 	case StateAllocated:
 		lease.IPOffer = lease.Addr.IP
 		if lease.DHCPExpiry.Before(now) { // expired
-			lease.IPOffer = nil
+			lease.IPOffer = netip.Addr{}
 		}
 
 	// more than one discover packet
@@ -72,11 +72,11 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (d DHCP4) {
 	// If another discover within the allowed time, return the previous offer
 	case StateDiscover:
 		if !bytes.Equal(lease.XID, p.XId()) { // new discover packet
-			lease.IPOffer = nil
+			lease.IPOffer = netip.Addr{}
 		}
 	}
 
-	if lease.IPOffer == nil {
+	if !lease.IPOffer.IsValid() {
 		if err := h.allocIPOffer(lease, reqIP); err != nil {
 			fastlog.NewLine(module, "all ips allocated, failing silently").Error(err).Write()
 			h.delete(lease)
@@ -84,7 +84,7 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (d DHCP4) {
 		}
 	}
 
-	if bytes.Equal(lease.IPOffer.To4(), h.session.NICInfo.HostAddr4.IP) || bytes.Equal(lease.IPOffer.To4(), h.session.NICInfo.RouterAddr4.IP) {
+	if lease.IPOffer == h.session.NICInfo.HostAddr4.IP || lease.IPOffer == h.session.NICInfo.RouterAddr4.IP {
 		fmt.Println(module, "TRACE  ip allocation same as host ip or router ip", lease.IPOffer, h.session.NICInfo.HostAddr4.IP, h.session.NICInfo.RouterAddr4.IP)
 	}
 
@@ -99,7 +99,7 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (d DHCP4) {
 	opts[OptionIPAddressLeaseTime] = optionsLeaseTime(lease.subnet.Duration) // rfc: must include
 
 	// keep chAddr, ciAddr, xid
-	ret := Marshall(p, BootReply, Offer, nil, nil, lease.IPOffer, nil, false, opts, options[OptionParameterRequestList])
+	ret := Marshall(p, BootReply, Offer, nil, netip.Addr{}, lease.IPOffer, nil, false, opts, options[OptionParameterRequestList])
 	if Debug {
 		fastlog.NewLine(module, "offer options").Sprintf("optrecv", options).Sprintf("optsent", ret.ParseOptions()).Write()
 	}
@@ -109,7 +109,7 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (d DHCP4) {
 	//  assuming the other server offered the requested IP - guess
 	//
 	if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && lease.subnet.Stage == packet.StageRedirected) {
-		if reqIP != nil && !reqIP.IsUnspecified() {
+		if reqIP.IsValid() && !reqIP.IsUnspecified() {
 			h.forceDecline(lease.ClientID, h.net1.DefaultGW, lease.Addr.MAC, reqIP, p.XId())
 		}
 	}

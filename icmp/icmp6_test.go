@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"net"
+	"net/netip"
 	"testing"
 
 	"github.com/irai/packet"
@@ -105,9 +106,9 @@ func TestHandler_Spoof(t *testing.T) {
 		wantDirty   bool
 		wantSrcAddr packet.Addr
 	}{
-		{name: "na_override", frame: testicmp6NAOverride, wantErr: false, wantDirty: true, wantSrcAddr: packet.Addr{MAC: mac, IP: net.ParseIP("fe80::ce32:e5ff:fe0e:67f4")}},
-		{name: "na_solicited", frame: testicmp6NASolicited, wantErr: false, wantDirty: true, wantSrcAddr: packet.Addr{MAC: mac2, IP: net.ParseIP("fe80::fad0:27ff:fe3c:9f86")}},
-		{name: "rs_nopayload", frame: testicmp6RourterSolicitation, wantErr: false, wantDirty: false, wantSrcAddr: packet.Addr{MAC: mac2, IP: net.ParseIP("fe80::fad0:27ff:fe3c:9f86")}},
+		{name: "na_override", frame: testicmp6NAOverride, wantErr: false, wantDirty: true, wantSrcAddr: packet.Addr{MAC: mac, IP: netip.MustParseAddr("fe80::ce32:e5ff:fe0e:67f4")}},
+		{name: "na_solicited", frame: testicmp6NASolicited, wantErr: false, wantDirty: true, wantSrcAddr: packet.Addr{MAC: mac2, IP: netip.MustParseAddr("fe80::fad0:27ff:fe3c:9f86")}},
+		{name: "rs_nopayload", frame: testicmp6RourterSolicitation, wantErr: false, wantDirty: false, wantSrcAddr: packet.Addr{MAC: mac2, IP: netip.MustParseAddr("fe80::fad0:27ff:fe3c:9f86")}},
 	}
 
 	for _, tt := range tests {
@@ -126,7 +127,7 @@ func TestHandler_Spoof(t *testing.T) {
 			if frame.Host.Dirty() != tt.wantDirty {
 				t.Errorf("Handler.ProcessPacket() invalid result update=%v, want=%v", frame.Host.Dirty(), tt.wantDirty)
 			}
-			if !frame.SrcAddr.IP.Equal(tt.wantSrcAddr.IP) ||
+			if frame.SrcAddr.IP != tt.wantSrcAddr.IP ||
 				!bytes.Equal(frame.SrcAddr.MAC, tt.wantSrcAddr.MAC) {
 				t.Errorf("Handler.ProcessPacket() invalid addr %v, want %v", frame.SrcAddr, tt.wantSrcAddr)
 				return

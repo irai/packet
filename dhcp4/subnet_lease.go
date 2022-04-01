@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"net/netip"
 	"os"
 	"time"
 
@@ -17,12 +18,11 @@ import (
 // example: lan 192.168.0.0/24, gw 192.168.0.1
 //          lan 192.168.0.128/25, gw 192.168.0.129
 type SubnetConfig struct {
-	LAN        net.IPNet        // lan address & netmask
-	DefaultGW  net.IP           // Default Gateway for subnet
-	DHCPServer net.IP           // DHCP server ID
-	DNSServer  net.IP           // DNS server IP
-	FirstIP    net.IP           // First IP in range
-	LastIP     net.IP           // Last IP in range
+	LAN        netip.Prefix     // lan address & netmask
+	DefaultGW  netip.Addr       // Default Gateway for subnet
+	DHCPServer netip.Addr       // DHCP server ID
+	DNSServer  netip.Addr       // DNS server IP
+	FirstIP    netip.Addr       // First IP in range
 	Duration   time.Duration    // lease duration
 	Stage      packet.HuntStage // Default stage for subnet
 	ID         string           // Used for logging
@@ -31,38 +31,41 @@ type SubnetConfig struct {
 // dhcpSubnet hold the 256 lease array for subnet
 // We use the last byte in IPv4 as the index.
 type dhcpSubnet struct {
-	SubnetConfig         // anonymous struct
-	broadcast    net.IP  // hold the net broadcast IP
-	options      Options // Options to send to DHCP Clients
-	nextIP       uint
+	SubnetConfig            // anonymous struct
+	broadcast    netip.Addr // hold the net broadcast IP
+	options      Options    // Options to send to DHCP Clients
+	nextIP       netip.Addr
 }
 
 // newSubnet create a subnet structure to track lease allocation.
 func newSubnet(config SubnetConfig) (*dhcpSubnet, error) {
 
-	config.LAN.IP = config.LAN.IP.Mask(config.LAN.Mask) // ensure this is a network address
-
+	if !config.LAN.IsValid() {
+		return nil, fmt.Errorf("invalid subnet %s", config.LAN)
+	}
 	subnet := dhcpSubnet{}
-	subnet.LAN = net.IPNet{IP: config.LAN.IP.Mask(config.LAN.Mask).To4(), Mask: config.LAN.Mask}
+	subnet.LAN = config.LAN.Masked() // ensure this is a network address
 	subnet.ID = config.ID
 
 	// get broadcast addr
-	subnet.broadcast = packet.CopyIP(subnet.LAN.IP).To4()
-	for i := range subnet.broadcast { // range over the 4 bytes
-		subnet.broadcast[i] = subnet.broadcast[i] | ^subnet.LAN.Mask[i]
+	a4 := subnet.LAN.Addr().As4()
+	for i := range a4 {
+		a4[i] = a4[i] | ^net.CIDRMask(subnet.LAN.Bits(), 32)[i]
 	}
+	subnet.broadcast = netip.AddrFrom4(a4)
 
 	// default values for first and last IPs
-	config.FirstIP = packet.CopyIP(config.FirstIP).To4() // must copy, we are updating the array
-	if config.FirstIP == nil || config.FirstIP.Equal(net.IPv4zero) || config.FirstIP[3] <= subnet.LAN.IP[3] {
-		config.FirstIP = packet.CopyIP(subnet.LAN.IP).To4()
-		config.FirstIP[3] = config.FirstIP[3] + 1
+	// config.FirstIP = packet.CopyIP(config.FirstIP).To4() // must copy, we are updating the array
+	if !config.FirstIP.Is4() || config.FirstIP.IsUnspecified() || !subnet.LAN.Contains(config.FirstIP) {
+		config.FirstIP = subnet.LAN.Addr().Next()
 	}
+	/**
 	config.LastIP = packet.CopyIP(config.LastIP).To4() // must copy, we are updating the array
 	if config.LastIP == nil || config.LastIP.Equal(net.IPv4zero) || config.LastIP[3] > subnet.broadcast[3] {
 		config.LastIP = packet.CopyIP(subnet.broadcast).To4()
 		config.LastIP[3] = config.LastIP[3] - 1
 	}
+	*/
 	subnet.Duration = config.Duration
 	if subnet.Duration == 0 {
 		subnet.Duration = 4 * time.Hour
@@ -73,11 +76,10 @@ func newSubnet(config SubnetConfig) (*dhcpSubnet, error) {
 	}
 
 	// convert all to IPv4
-	subnet.DHCPServer = config.DHCPServer.To4()
-	subnet.DefaultGW = config.DefaultGW.To4()
-	subnet.FirstIP = config.FirstIP.To4()
-	subnet.LastIP = config.LastIP.To4()
-	subnet.DNSServer = config.DNSServer.To4()
+	subnet.DHCPServer = config.DHCPServer
+	subnet.DefaultGW = config.DefaultGW
+	subnet.FirstIP = config.FirstIP
+	subnet.DNSServer = config.DNSServer
 
 	if !config.LAN.Contains(config.DefaultGW) {
 		return nil, fmt.Errorf("DefaultGW not in subnet")
@@ -85,17 +87,16 @@ func newSubnet(config SubnetConfig) (*dhcpSubnet, error) {
 	if !config.LAN.Contains(config.FirstIP) {
 		return nil, fmt.Errorf("FirstIP not in subnet")
 	}
-	if !config.LAN.Contains(config.LastIP) {
-		return nil, fmt.Errorf("LastIP not in subnet")
-	}
-	if subnet.FirstIP[3] >= subnet.LastIP[3] {
-		return nil, fmt.Errorf("firstIP after lastIP IPs")
-	}
+	/*
+		if subnet.FirstIP[3] >= subnet.LastIP[3] {
+			return nil, fmt.Errorf("firstIP after lastIP IPs")
+		}
+	*/
 	if subnet.DNSServer.IsUnspecified() {
 		return nil, fmt.Errorf("invalid DNSServer")
 	}
 
-	subnet.nextIP = uint(subnet.FirstIP[3])
+	// subnet.nextIP = uint(subnet.FirstIP[3])
 
 	if Debug {
 		fmt.Printf("dhcp4: createSubnet %+v", config)
@@ -110,10 +111,10 @@ func newSubnet(config SubnetConfig) (*dhcpSubnet, error) {
 	// 43-Vendor specific;44-Netbios name; 47-Netbios scope;51-Lease time;58-Renewal time (t1); 59-rebind time(t2)
 	// 121-classless route option(takes precedence to 33)
 	subnet.options = Options{
-		OptionServerIdentifier: []byte(subnet.DHCPServer),
-		OptionSubnetMask:       []byte(subnet.LAN.Mask), // must occur before router - need to sort the map
-		OptionRouter:           []byte(subnet.DefaultGW.To4()),
-		OptionDomainNameServer: []byte(subnet.DNSServer.To4()),
+		OptionServerIdentifier: subnet.DHCPServer.AsSlice(),
+		OptionSubnetMask:       subnet.LAN.Masked().Addr().AsSlice(), // must occur before router - need to sort the map
+		OptionRouter:           subnet.DefaultGW.AsSlice(),
+		OptionDomainNameServer: subnet.DNSServer.AsSlice(),
 	}
 
 	if Debug {
@@ -133,10 +134,10 @@ func (h *dhcpSubnet) CopyOptions() Options {
 	return opts
 }
 
-func (h *dhcpSubnet) appendRouteOptions(ip net.IP, mask net.IPMask, routeTo net.IP) {
+func (h *dhcpSubnet) appendRouteOptions(ip netip.Addr, mask net.IPMask, routeTo netip.Addr) {
 
 	h.options[OptionPerformRouterDiscovery] = []byte{0} // don't perform router discovery
-	h.options[OptionStaticRoute] = append([]byte(ip.To4()), []byte(routeTo.To4())...)
+	h.options[OptionStaticRoute] = append([]byte(ip.AsSlice()), []byte(routeTo.AsSlice())...)
 
 	// Classless Route Option Format (override Static Route if requested)
 	// The code for this option is 121, and its minimum length is 5 bytes.
@@ -160,7 +161,7 @@ func (h *dhcpSubnet) appendRouteOptions(ip net.IP, mask net.IPMask, routeTo net.
 	buf := make([]byte, octects+4+1)
 	buf[0] = uint8(ones)
 	copy(buf[1:], mask[:octects])
-	copy(buf[1+octects:], routeTo.To4())
+	copy(buf[1+octects:], routeTo.AsSlice())
 	h.options[OptionClasslessRouteFormat] = buf
 }
 
@@ -198,7 +199,7 @@ func loadByteArray(source []byte) (net1 *dhcpSubnet, net2 *dhcpSubnet, t leaseTa
 			Duration:   table.Net1.Duration,
 			Stage:      table.Net1.Stage,
 			FirstIP:    table.Net1.FirstIP,
-			LastIP:     table.Net1.LastIP})
+		})
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("fail to load net1 : %w", err)
 		}
@@ -213,7 +214,7 @@ func loadByteArray(source []byte) (net1 *dhcpSubnet, net2 *dhcpSubnet, t leaseTa
 			Duration:   table.Net2.Duration,
 			Stage:      table.Net2.Stage,
 			FirstIP:    table.Net2.FirstIP,
-			LastIP:     table.Net2.LastIP})
+		})
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("fail to load net1 : %w", err)
 		}
@@ -234,7 +235,7 @@ func loadByteArray(source []byte) (net1 *dhcpSubnet, net2 *dhcpSubnet, t leaseTa
 				continue
 			}
 
-			if v.Addr.IP == nil || !net1.LAN.Contains(v.Addr.IP) {
+			if !v.Addr.IP.IsValid() || !net1.LAN.Contains(v.Addr.IP) {
 				fmt.Printf("dhcp4: load config invalid LAN %v \n", v)
 				continue
 			}
