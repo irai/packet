@@ -20,7 +20,8 @@ const (
 	EthMaxSize = 14 + 1500 + 8
 
 	// Length of a link-layer address for Ethernet networks.
-	EthAddrLen = 6
+	EthAddrLen   = 6
+	EthHeaderLen = 14
 )
 
 // EtherBufferPool implemts a simple buffer pool for Ethernet packets
@@ -64,7 +65,7 @@ type Ether []byte
 
 func (p Ether) IsValid() error {
 	// Minimum len to contain two hardware address and EtherType (2 bytes) + 1 byte payload
-	if len(p) >= 14 {
+	if len(p) >= EthHeaderLen {
 		return nil
 	}
 	return fmt.Errorf("ethernet frame too short len=%d: %w", len(p), ErrFrameLen)

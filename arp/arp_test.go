@@ -47,21 +47,6 @@ var (
 	hostAddr   = packet.Addr{MAC: hostMAC, IP: hostIP4}
 )
 
-func newEtherPacket(hType uint16, srcMAC net.HardwareAddr, dstMAC net.HardwareAddr) packet.Ether {
-	buf := make([]byte, packet.EthMaxSize)
-	p := packet.EncodeEther(buf, hType, srcMAC, dstMAC)
-	return p
-}
-
-func newARPPacket(op uint16, srcAddr packet.Addr, dstAddr packet.Addr) packet.ARP {
-	b := make([]byte, 128)
-	p := packet.EncodeARP(b, op, srcAddr, dstAddr)
-	if p == nil {
-		panic("invalid arp packet")
-	}
-	return p
-}
-
 type testContext struct {
 	inConn        net.PacketConn
 	outConn       net.PacketConn
@@ -137,7 +122,7 @@ func readResponse(ctx context.Context, tc *testContext) error {
 			panic("invalid ether type")
 		}
 
-		arpFrame := packet.ARP(ether.Payload())
+		arpFrame := ARP(ether.Payload())
 		if arpFrame.IsValid() != nil {
 			panic("invalid arp packet")
 		}
@@ -166,26 +151,26 @@ func Test_Handler_BasicTest(t *testing.T) {
 	tests := []struct {
 		name       string
 		ether      packet.Ether
-		arp        packet.ARP
+		arp        ARP
 		wantErr    error
 		wantLen    int
 		wantResult bool
 	}{
 		{name: "replymac2",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac2, routerMAC),
-			arp:     newARPPacket(packet.OperationReply, addr2, routerAddr),
+			arp:     newARPPacket(OperationReply, addr2, routerAddr),
 			wantErr: nil, wantLen: 3, wantResult: true},
 		{name: "replymac3",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac3, routerMAC),
-			arp:     newARPPacket(packet.OperationReply, addr3, routerAddr),
+			arp:     newARPPacket(OperationReply, addr3, routerAddr),
 			wantErr: nil, wantLen: 4, wantResult: true},
 		{name: "replymac4",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac4, routerMAC),
-			arp:     newARPPacket(packet.OperationReply, addr4, routerAddr),
+			arp:     newARPPacket(OperationReply, addr4, routerAddr),
 			wantErr: nil, wantLen: 5, wantResult: true},
 		{name: "request",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac4, routerMAC),
-			arp:     newARPPacket(packet.OperationRequest, addr4, routerAddr),
+			arp:     newARPPacket(OperationRequest, addr4, routerAddr),
 			wantErr: nil, wantLen: 5, wantResult: true},
 	}
 

@@ -151,7 +151,7 @@ func main() {
 	}
 
 	// send arp scan
-	s.ARPScan()
+	arpSpoofer.Scan()
 
 	// Start icmpv6 spoofer module
 	icmp6Spoofer.Start()

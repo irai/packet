@@ -83,9 +83,6 @@ func main() {
 		}
 	}()
 
-	// send arp scan
-	s.ARPScan()
-
 	// start goroutine to read command line
 	inputChan := make(chan []string)
 	go func() {

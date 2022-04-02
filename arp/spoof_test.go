@@ -19,7 +19,7 @@ func Test_Probe_Reject(t *testing.T) {
 	tests := []struct {
 		name              string
 		ether             packet.Ether
-		arp               packet.ARP
+		arp               ARP
 		hunt              bool
 		wantErr           error
 		wantLen           int
@@ -28,19 +28,19 @@ func Test_Probe_Reject(t *testing.T) {
 	}{
 		{name: "replyMAC2",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac2, routerMAC),
-			arp:     newARPPacket(packet.OperationReply, addr2, routerAddr),
+			arp:     newARPPacket(OperationReply, addr2, routerAddr),
 			wantErr: nil, wantLen: 3, wantIPs: 1, wantCountResponse: 0, hunt: true},
 		{name: "replyMAC3",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac3, hostMAC),
-			arp:     newARPPacket(packet.OperationReply, addr3, hostAddr),
+			arp:     newARPPacket(OperationReply, addr3, hostAddr),
 			wantErr: nil, wantLen: 4, wantIPs: 2, wantCountResponse: 1, hunt: true}, // MAC2 will start hunt and send single response
 		{name: "probeMAC2", // probe does not add host but will send a probe reject if IP is not our DHCP IP
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac2, packet.EthernetBroadcast),
-			arp:     newARPPacket(packet.OperationRequest, packet.Addr{MAC: mac2, IP: packet.IPv4zero}, packet.Addr{MAC: zeroMAC, IP: ip2}),
+			arp:     newARPPacket(OperationRequest, packet.Addr{MAC: mac2, IP: packet.IPv4zero}, packet.Addr{MAC: zeroMAC, IP: ip2}),
 			wantErr: nil, wantLen: 4, wantIPs: 2, wantCountResponse: 3, hunt: false},
 		{name: "probeMAC3", // probe does not add host but will send a probe reject if IP is not our DHCP IP
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac3, packet.EthernetBroadcast),
-			arp:     newARPPacket(packet.OperationRequest, packet.Addr{MAC: mac3, IP: packet.IPv4zero}, packet.Addr{MAC: zeroMAC, IP: ip3}),
+			arp:     newARPPacket(OperationRequest, packet.Addr{MAC: mac3, IP: packet.IPv4zero}, packet.Addr{MAC: zeroMAC, IP: ip3}),
 			wantErr: nil, wantLen: 4, wantIPs: 2, wantCountResponse: 4, hunt: false},
 	}
 	for _, tt := range tests {

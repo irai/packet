@@ -117,10 +117,10 @@ func (h *Handler) PrintTable() {
 // | ACD announ | 1 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  clientIP |
 // +============+===+===========+===========+============+============+===================+===========+
 func (h *Handler) ProcessPacket(frame packet.Frame) error {
-	arpFrame := frame.ARP()
-	if arpFrame == nil {
-		return nil
+	if frame.PayloadID != packet.PayloadARP {
+		return packet.ErrParseFrame
 	}
+	arpFrame := ARP(frame.Payload())
 	if err := arpFrame.IsValid(); err != nil {
 		return err
 	}
@@ -135,9 +135,9 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 
 	var operation int
 	switch {
-	case arpFrame.Operation() == packet.OperationReply:
+	case arpFrame.Operation() == OperationReply:
 		operation = reply
-	case arpFrame.Operation() == packet.OperationRequest:
+	case arpFrame.Operation() == OperationRequest:
 		switch {
 		case arpFrame.SrcIP() == arpFrame.DstIP():
 			operation = announcement
@@ -159,7 +159,7 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 		// | request    | 1 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  targetIP |
 		// +============+===+===========+===========+============+============+===================+===========+
 		if Logger.IsDebug() {
-			Logger.Msg("ether").Struct(frame.Ether()).Module(module, "request received").IP("ip", arpFrame.DstIP()).Struct(arpFrame).Write()
+			Logger.NewLine(module, "request rcvd").MAC("ethSrc", frame.SrcAddr.MAC).MAC("ethDst", frame.DstAddr.MAC).Struct(arpFrame).Write()
 		}
 		// if we are spoofing the src host and the src host is trying to discover the router IP,
 		// reply on behalf of the router
@@ -170,7 +170,7 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 			if Logger.IsDebug() {
 				Logger.Msg("router spoofing - send reply I am").IP("ip", arpFrame.DstIP()).MAC("dstmac", arpFrame.SrcMAC()).Write()
 			}
-			if err := h.session.ARPReply(arpFrame.SrcMAC(), packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: arpFrame.DstIP()}, packet.Addr{MAC: arpFrame.SrcMAC(), IP: arpFrame.SrcIP()}); err != nil {
+			if err := h.Reply(arpFrame.SrcMAC(), packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: arpFrame.DstIP()}, packet.Addr{MAC: arpFrame.SrcMAC(), IP: arpFrame.SrcIP()}); err != nil {
 				Logger.Msg("failed to send spoofing reply").MAC("mac", arpFrame.SrcMAC()).Error(err).Write()
 			}
 			return nil
@@ -186,7 +186,7 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 		// | ACD probe  | 1 | broadcast | clientMAC | clientMAC  | 0x00       | 0x00              |  targetIP |
 		// +============+===+===========+===========+============+============+===================+===========+
 		if Logger.IsDebug() {
-			Logger.Msg("ether").Struct(frame.Ether()).Module(module, "probe recvd").Struct(arpFrame).Write()
+			Logger.NewLine(module, "probe rcvd").MAC("ethSrc", frame.SrcAddr.MAC).MAC("ethDst", frame.DstAddr.MAC).Struct(arpFrame).Write()
 		}
 
 		// if dhcpv4 spoofing then reject any other ip that is not the spoofed IP on offer
@@ -196,7 +196,7 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 			if h.session.NICInfo.HomeLAN4.Contains(arpFrame.DstIP()) {
 				Logger.Msg("probe reject for").IP("ip", arpFrame.DstIP()).MAC("fromMAC", arpFrame.SrcMAC()).IP("offer", offer).Write()
 				// unicast reply to srcMAC
-				h.session.ARPReply(arpFrame.SrcMAC(), packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: arpFrame.DstIP()}, packet.Addr{MAC: arpFrame.SrcMAC(), IP: packet.IP4Broadcast})
+				h.Reply(arpFrame.SrcMAC(), packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: arpFrame.DstIP()}, packet.Addr{MAC: arpFrame.SrcMAC(), IP: packet.IP4Broadcast})
 			}
 		}
 		return nil
@@ -208,7 +208,7 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 		// | ACD announ | 1 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  clientIP |
 		// +============+===+===========+===========+============+============+===================+===========+
 		if Logger.IsDebug() {
-			Logger.Msg("ether").Struct(frame.Ether()).Module(module, "announcement recvd").Struct(arpFrame).Write()
+			Logger.NewLine(module, "announcement rcvd").MAC("ethSrc", frame.SrcAddr.MAC).MAC("ethDst", frame.DstAddr.MAC).Struct(arpFrame).Write()
 		}
 
 	default:
@@ -219,7 +219,7 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 		// | gratuitous | 2 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  clientIP |
 		// +============+===+===========+===========+============+============+===================+===========+
 		if Logger.IsDebug() {
-			Logger.Msg("ether").Struct(frame.Ether()).Module(module, "reply recvd").Struct(arpFrame).Write()
+			Logger.NewLine(module, "reply rcvd").MAC("ethSrc", frame.SrcAddr.MAC).MAC("ethDst", frame.DstAddr.MAC).Struct(arpFrame).Write()
 		}
 	}
 	return nil

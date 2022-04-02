@@ -1,4 +1,4 @@
-package packet
+package arp
 
 import (
 	"bytes"
@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/irai/packet"
 	"github.com/irai/packet/fastlog"
 )
 
@@ -26,19 +27,19 @@ const arpLen = 8 + 2*6 + 2*4
 
 func (b ARP) IsValid() error {
 	if len(b) < arpLen {
-		return ErrFrameLen
+		return packet.ErrFrameLen
 	}
 	if b.HType() != 1 {
-		return ErrParseFrame
+		return packet.ErrParseFrame
 	}
 	if b.Proto() != syscall.ETH_P_IP {
-		return ErrParseProtocol
+		return packet.ErrParseProtocol
 	}
 	if b.HLen() != 6 {
-		return ErrInvalidLen
+		return packet.ErrInvalidLen
 	}
 	if b.PLen() != 4 {
-		return ErrInvalidLen
+		return packet.ErrInvalidLen
 	}
 
 	return nil
@@ -57,7 +58,6 @@ func (b ARP) String() string           { return fastlog.NewLine("", "").Struct(b
 
 func (b ARP) FastLog(line *fastlog.Line) *fastlog.Line {
 	line.Uint16("operation", b.Operation())
-	line.Uint16("proto", b.Proto())
 	line.MAC("srcMAC", b.SrcMAC())
 	line.IP("srcIP", b.SrcIP())
 	line.MAC("dstMAC", b.DstMAC())
@@ -67,7 +67,7 @@ func (b ARP) FastLog(line *fastlog.Line) *fastlog.Line {
 
 // EncodeARP creates a wire ARP frame ready for transmission
 // see format: https://en.wikipedia.org/wiki/Address_Resolution_Protocol
-func EncodeARP(b []byte, operation uint16, srcAddr Addr, dstAddr Addr) ARP {
+func EncodeARP(b []byte, operation uint16, srcAddr packet.Addr, dstAddr packet.Addr) ARP {
 	if cap(b) < arpLen {
 		panic("invalid arp buffer")
 	}
@@ -85,41 +85,41 @@ func EncodeARP(b []byte, operation uint16, srcAddr Addr, dstAddr Addr) ARP {
 	return b
 }
 
-func (h *Session) ARPRequestTo(dst net.HardwareAddr, targetIP netip.Addr) error {
+func (h *Handler) RequestTo(dst net.HardwareAddr, targetIP netip.Addr) error {
 	if !targetIP.Is4() {
-		return ErrInvalidIP
+		return packet.ErrInvalidIP
 	}
 	if Logger.IsDebug() {
-		Logger.Msg("send request - who is").IP("ip", targetIP).IP("tell", h.NICInfo.HostAddr4.IP).MAC("dst", dst).Write()
+		Logger.Msg("send request - who is").IP("ip", targetIP).IP("tell", h.session.NICInfo.HostAddr4.IP).MAC("dst", dst).Write()
 	}
-	return h.ARPRequestRaw(dst, h.NICInfo.HostAddr4, Addr{MAC: EthernetBroadcast, IP: targetIP})
+	return h.RequestRaw(dst, h.session.NICInfo.HostAddr4, packet.Addr{MAC: packet.EthernetBroadcast, IP: targetIP})
 }
 
-// ARPRequest send ARP request from host to targetIP
-func (h *Session) ARPRequest(targetIP netip.Addr) error {
+// Request send ARP request from host to targetIP
+func (h *Handler) Request(targetIP netip.Addr) error {
 	if !targetIP.Is4() {
-		return ErrInvalidIP
+		return packet.ErrInvalidIP
 	}
 	if Logger.IsDebug() {
-		Logger.Msg("send request - who is").IP("ip", targetIP).IP("tell", h.NICInfo.HostAddr4.IP).Write()
+		Logger.Msg("send request - who is").IP("ip", targetIP).IP("tell", h.session.NICInfo.HostAddr4.IP).Write()
 	}
-	return h.ARPRequestRaw(EthernetBroadcast, h.NICInfo.HostAddr4, Addr{MAC: EthernetBroadcast, IP: targetIP})
+	return h.RequestRaw(packet.EthernetBroadcast, h.session.NICInfo.HostAddr4, packet.Addr{MAC: packet.EthernetBroadcast, IP: targetIP})
 }
 
-// ARPProbe send an arp probe broadcast on the local link.
+// Probe send an arp probe broadcast on the local link.
 //
-// The term 'ARP ARPProbe' is used to refer to an ARP Request packet, broadcast on the local link,
+// The term 'ARP Probe' is used to refer to an ARP Request packet, broadcast on the local link,
 // with an all-zero 'sender IP address'. The 'sender hardware address' MUST contain the hardware address of the
 // interface sending the  The 'sender IP address' field MUST be set to all zeroes,
 // to avoid polluting ARP caches in other hosts on the same link in the case where the address turns out
 // to be already in use by another host. The 'target IP address' field MUST be set to the address being probed.
-// An ARP ARPProbe conveys both a question ("Is anyone using this address?") and an
+// An ARP Probe conveys both a question ("Is anyone using this address?") and an
 // implied statement ("This is the address I hope to use.").
-func (h *Session) ARPProbe(ip netip.Addr) error {
-	return h.ARPRequestRaw(EthernetBroadcast, Addr{MAC: h.NICInfo.HostAddr4.MAC, IP: IPv4zero}, Addr{MAC: EthernetZero, IP: ip})
+func (h *Handler) Probe(ip netip.Addr) error {
+	return h.RequestRaw(packet.EthernetBroadcast, packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: packet.IPv4zero}, packet.Addr{MAC: packet.EthernetZero, IP: ip})
 }
 
-// ARPAnnounceTo send an arp announcement on the local link.
+// AnnounceTo send an arp announcement on the local link.
 //
 // Having probed to determine that a desired address may be used safely,
 // a host implementing this specification MUST then announce that it
@@ -133,22 +133,22 @@ func (h *Session) ARPProbe(ip netip.Addr) error {
 // previously have been using the same address.  The host may begin
 // legitimately using the IP address immediately after sending the first
 // of the two ARP Announcements;
-func (h *Session) ARPAnnounceTo(dst net.HardwareAddr, targetIP netip.Addr) (err error) {
+func (h *Handler) AnnounceTo(dst net.HardwareAddr, targetIP netip.Addr) (err error) {
 	if Logger.IsDebug() {
-		if bytes.Equal(dst, EthernetBroadcast) {
+		if bytes.Equal(dst, packet.EthernetBroadcast) {
 			Logger.Msg("send announcement broadcast - I am").IP("ip", targetIP).Write()
 		} else {
 			Logger.Msg("send announcement unicast - I am").IP("ip", targetIP).MAC("dst", dst).Write()
 		}
 	}
-	err = h.ARPRequestRaw(dst,
-		Addr{MAC: h.NICInfo.HostAddr4.MAC, IP: targetIP},
-		Addr{MAC: EthernetBroadcast, IP: targetIP})
+	err = h.RequestRaw(dst,
+		packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: targetIP},
+		packet.Addr{MAC: packet.EthernetBroadcast, IP: targetIP})
 	return err
 }
 
-// ARPRequestRaw send an ARP Request packet
-// multiple goroutines can call ARPRequestRaw simultaneously.
+// RequestRaw send an ARP Request packet
+// multiple goroutines can call RequestRaw simultaneously.
 //
 // Request is almost always broadcast but unicast can be used to maintain ARP table;
 // i.e. unicast polling check for stale ARP entries; useful to test online/offline state
@@ -165,27 +165,26 @@ func (h *Session) ARPAnnounceTo(dst net.HardwareAddr, targetIP netip.Addr) (err 
 // | ACD announ | 1 | broadcast | hostMAC   | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  clientIP |
 // +============+===+===========+===========+============+============+===================+===========+
 //
-func (h *Session) ARPRequestRaw(dst net.HardwareAddr, sender Addr, target Addr) (err error) {
-	b := EtherBufferPool.Get().(*[EthMaxSize]byte)
-	defer EtherBufferPool.Put(b)
-	ether := Ether(b[0:])
+func (h *Handler) RequestRaw(dst net.HardwareAddr, sender packet.Addr, target packet.Addr) (err error) {
+	b := packet.EtherBufferPool.Get().(*[packet.EthMaxSize]byte)
+	defer packet.EtherBufferPool.Put(b)
+	ether := packet.Ether(b[0:])
 
 	// Send packet with ether src set to host but arp packet set to target
-	ether = EncodeEther(ether, syscall.ETH_P_ARP, h.NICInfo.HostAddr4.MAC, dst)
+	ether = packet.EncodeEther(ether, syscall.ETH_P_ARP, h.session.NICInfo.HostAddr4.MAC, dst)
 	arp := EncodeARP(ether.Payload(), OperationRequest, sender, target)
 	if ether, err = ether.SetPayload(arp); err != nil {
 		return err
 	}
 
-	_, err = h.Conn.WriteTo(ether, &Addr{MAC: dst})
+	_, err = h.session.Conn.WriteTo(ether, &packet.Addr{MAC: dst})
 	return err
 }
 
-// ARPReply send ARP reply from the src to the dst
+// Reply send ARP reply from the src to the dst
 //
 // Call with dstHwAddr = ethernet.Broadcast to reply to all
-// func (h *Session) ARPReply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
-func (h *Session) ARPReply(dst net.HardwareAddr, sender Addr, target Addr) error {
+func (h *Handler) Reply(dst net.HardwareAddr, sender packet.Addr, target packet.Addr) error {
 	if Logger.IsDebug() {
 		Logger.Msg("send reply ip is at").IP("ip", sender.IP).MAC("mac", sender.MAC).Write()
 		// fmt.Printf("arp   : send reply - ip=%s is at mac=%s\n", sender.IP, sender.MAC)
@@ -196,33 +195,32 @@ func (h *Session) ARPReply(dst net.HardwareAddr, sender Addr, target Addr) error
 // reply sends an ARP reply packet from src to dst.
 //
 // dstEther identifies the target for the Ethernet packet : i.e. use EthernetBroadcast for gratuitous ARP
-// func (h *Session) reply(dstEther net.HardwareAddr, srcHwAddr net.HardwareAddr, srcIP net.IP, dstHwAddr net.HardwareAddr, dstIP net.IP) error {
-func (h *Session) reply(dst net.HardwareAddr, sender Addr, target Addr) (err error) {
-	b := EtherBufferPool.Get().(*[EthMaxSize]byte)
-	defer EtherBufferPool.Put(b)
-	ether := Ether(b[0:])
+func (h *Handler) reply(dst net.HardwareAddr, sender packet.Addr, target packet.Addr) (err error) {
+	b := packet.EtherBufferPool.Get().(*[packet.EthMaxSize]byte)
+	defer packet.EtherBufferPool.Put(b)
+	ether := packet.Ether(b[0:])
 
 	// Send packet with ether src set to host but arp packet set to target
-	ether = EncodeEther(ether, syscall.ETH_P_ARP, h.NICInfo.HostAddr4.MAC, dst)
+	ether = packet.EncodeEther(ether, syscall.ETH_P_ARP, h.session.NICInfo.HostAddr4.MAC, dst)
 	arp := EncodeARP(ether.Payload(), OperationReply, sender, target)
 	if ether, err = ether.SetPayload(arp); err != nil {
 		return err
 	}
 
-	_, err = h.Conn.WriteTo(ether, &Addr{MAC: dst})
+	_, err = h.session.Conn.WriteTo(ether, &packet.Addr{MAC: dst})
 	return err
 }
 
-// ARPWhoIs will send a request packet to get the MAC address for the IP. Retry 3 times.
+// WhoIs will send a request packet to get the MAC address for the IP. Retry 3 times.
 //
-func (h *Session) ARPWhoIs(ip netip.Addr) (Addr, error) {
+func (h *Handler) WhoIs(ip netip.Addr) (packet.Addr, error) {
 
 	for i := 0; i < 3; i++ {
-		if host := h.FindIP(ip); host != nil {
-			return Addr{IP: host.Addr.IP, MAC: host.MACEntry.MAC}, nil
+		if host := h.session.FindIP(ip); host != nil {
+			return packet.Addr{IP: host.Addr.IP, MAC: host.MACEntry.MAC}, nil
 		}
-		if err := h.ARPRequest(ip); err != nil {
-			return Addr{}, err
+		if err := h.Request(ip); err != nil {
+			return packet.Addr{}, err
 		}
 		time.Sleep(time.Millisecond * 50 * time.Duration(i+1))
 	}
@@ -231,28 +229,28 @@ func (h *Session) ARPWhoIs(ip netip.Addr) (Addr, error) {
 		Logger.Msg("whois not found").IP("ip", ip).Write()
 		h.PrintTable()
 	}
-	return Addr{}, ErrNotFound
+	return packet.Addr{}, packet.ErrNotFound
 }
 
 // ScanNetwork sends 256 arp requests to identify IPs on the lan
-func (h *Session) ARPScan() error {
+func (h *Handler) Scan() error {
 
 	// Copy underneath array so we can modify value.
-	ip := h.NICInfo.HomeLAN4.Addr()
+	ip := h.session.NICInfo.HomeLAN4.Addr()
 
 	for host := 1; host < 255; host++ {
 		// ip[3] = byte(host)
 		ip = ip.Next()
 
 		// Don't scan router and host
-		if ip == h.NICInfo.RouterAddr4.IP || ip == h.NICInfo.HostAddr4.IP {
+		if ip == h.session.NICInfo.RouterAddr4.IP || ip == h.session.NICInfo.HostAddr4.IP {
 			continue
 		}
 
 		if h.closed { // return if Close() is called when we are in the loop
 			return nil
 		}
-		err := h.ARPRequest(ip)
+		err := h.Request(ip)
 		if err != nil {
 			if err1, ok := err.(net.Error); ok && err1.Temporary() {
 				if Logger.IsDebug() {

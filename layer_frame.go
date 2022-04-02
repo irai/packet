@@ -2,6 +2,8 @@ package packet
 
 import (
 	"bytes"
+	"net"
+	"net/netip"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -82,14 +84,6 @@ func (frame Frame) Log(line *fastlog.Line) *fastlog.Line {
 
 func (f Frame) Ether() Ether {
 	return f.ether
-}
-
-// ARP returns a reference to the ARP packet or nil if this is not an ARP packet.
-func (f Frame) ARP() ARP {
-	if f.PayloadID == PayloadARP {
-		return ARP(f.ether[f.offsetPayload:])
-	}
-	return nil
 }
 
 // HasIP returns true if the packet contains either an IPv4 or IPv6 frame.
@@ -240,9 +234,11 @@ func (h *Session) Parse(p []byte) (frame Frame, err error) {
 		}
 	case syscall.ETH_P_ARP:
 		frame.PayloadID = PayloadARP
-		arp := ARP(frame.Payload())
-		if err := arp.IsValid(); err != nil {
-			return frame, err
+		var arp []byte
+
+		// hard code arp validation; we don't have access to ARP frame in this package
+		if arp = frame.Payload(); len(arp) < 28 && arp[4] != 6 {
+			return frame, ErrParseFrame
 		}
 		h.Statistics[PayloadARP].Count++
 
@@ -250,10 +246,10 @@ func (h *Session) Parse(p []byte) (frame Frame, err error) {
 		// don't create host if packets sent via our interface.
 		// If we don't have this, then we received all sent and forwarded packets with client IPs containing our host mac
 		// Validates arp len and that hardware len is 6 for mac address
-		srcIP := arp.SrcIP()
+		srcIP := netip.AddrFrom4(*((*[4]byte)(arp[14:18])))
 		if !bytes.Equal(frame.SrcAddr.MAC, h.NICInfo.HostAddr4.MAC) &&
 			frame.Session.NICInfo.HomeLAN4.Contains(srcIP) {
-			addr := Addr{MAC: arp.SrcMAC(), IP: srcIP}                   // use arp src mac and ip in lookup
+			addr := Addr{MAC: net.HardwareAddr(arp[8:14]), IP: srcIP}    // use arp src mac and ip for lookup
 			frame.Host, _ = frame.Session.findOrCreateHostWithLock(addr) // will lock/unlock
 			if !frame.Host.Online {
 				frame.Session.onlineTransition(frame.Host)

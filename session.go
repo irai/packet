@@ -1,6 +1,7 @@
 package packet
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"net"
@@ -306,7 +307,10 @@ func (h *Session) purge(now time.Time) error {
 		go func() {
 			for _, addr := range probe {
 				if addr.IP.Is4() {
-					if err := h.ARPRequest(addr.IP); err != nil {
+					if Logger.IsDebug() {
+						fastlog.NewLine(module, "send arp request - who is").IP("ip", addr.IP).Write()
+					}
+					if err := h.arpRequest(EthernetBroadcast, h.NICInfo.HostAddr4, Addr{MAC: EthernetBroadcast, IP: addr.IP}); err != nil {
 						fastlog.NewLine(module, "failed to probe ipv4").IP("ip", addr.IP).Error(err).Write()
 					}
 				} else {
@@ -344,6 +348,27 @@ func (h *Session) purge(now time.Time) error {
 		h.mutex.Unlock()
 	}
 	return nil
+}
+
+// arpRequest is an internal funcion to send an ARP request packet
+func (h *Session) arpRequest(dst net.HardwareAddr, sender Addr, target Addr) (err error) {
+	b := EtherBufferPool.Get().(*[EthMaxSize]byte)
+	defer EtherBufferPool.Put(b)
+	ether := Ether(b[0 : EthHeaderLen+28])                                      // arp length - 28 bytes
+	ether = EncodeEther(ether, syscall.ETH_P_ARP, h.NICInfo.HostAddr4.MAC, dst) // ether src set to host but arp packet set to target
+
+	arp := ether.Payload()
+	binary.BigEndian.PutUint16(arp[0:2], 1)                // Hardware Type - Ethernet is 1
+	binary.BigEndian.PutUint16(arp[2:4], syscall.ETH_P_IP) // Protocol type - IPv4 0x0800
+	b[4] = 6                                               // mac len - fixed
+	b[5] = 4                                               // ipv4 len - fixed
+	binary.BigEndian.PutUint16(arp[6:8], 0x01)             // operation - 1 request, 2 reply
+	copy(arp[8:8+6], sender.MAC[:6])
+	copy(arp[14:14+4], sender.IP.AsSlice())
+	copy(arp[18:18+6], target.MAC[:6])
+	copy(arp[24:24+4], target.IP.AsSlice())
+	_, err = h.Conn.WriteTo(ether[:EthHeaderLen+28], &Addr{MAC: dst})
+	return err
 }
 
 // Notify generates the notification for host offline and online if required. The function
