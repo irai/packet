@@ -189,7 +189,7 @@ func (h *Session) Parse(p []byte) (frame Frame, err error) {
 		proto = ip4.Protocol()
 		frame.SrcAddr.IP = ip4.Src()
 		frame.DstAddr.IP = ip4.Dst()
-		// create host if ip is local lan IP
+		// create host if ip is local lan IP (note that we may receive multicast and broadcast packets and should not create hosts for these)
 		// don't create host if packets sent via our interface.
 		// If we don't have this, then we received all sent and forwarded packets with client IPs containing our host mac
 		if !bytes.Equal(frame.SrcAddr.MAC, h.NICInfo.HostAddr4.MAC) && frame.Session.NICInfo.HomeLAN4.Contains(frame.SrcAddr.IP) {

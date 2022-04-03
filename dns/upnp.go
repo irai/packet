@@ -80,7 +80,6 @@ func getUPNPServiceDescription(location string) ([]byte, error) {
 }
 
 func (h *DNSHandler) UPNPServiceDiscovery(addr packet.Addr, location string) (name packet.NameEntry, err error) {
-
 	desc, err := getUPNPServiceDescription(location)
 	if err != nil {
 		return packet.NameEntry{}, err
@@ -89,7 +88,7 @@ func (h *DNSHandler) UPNPServiceDiscovery(addr packet.Addr, location string) (na
 	if err != nil {
 		return packet.NameEntry{}, err
 	}
-	if packet.Logger.IsDebug() {
+	if ssdpLogger.IsDebug() {
 		fmt.Printf("engine: retrieved upnp name=%s model=%s manufacturer=%s\n", service.Device.Name, service.Device.Model, service.Device.Manufacturer)
 	}
 
@@ -97,6 +96,6 @@ func (h *DNSHandler) UPNPServiceDiscovery(addr packet.Addr, location string) (na
 	name.Name = service.Device.Name
 	name.Model = service.Device.Model
 	name.Manufacturer = service.Device.Manufacturer
-	name.Expire = time.Now().Add(time.Minute * 10) // cache this entry for a period
+	name.Expire = time.Now().Add(defaultExpiryTime)
 	return name, nil
 }

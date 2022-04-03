@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"net/http"
 	"net/netip"
+	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/irai/packet"
 	"github.com/irai/packet/fastlog"
@@ -26,6 +28,8 @@ var ssdpIPv4Addr = packet.Addr{MAC: packet.EthBroadcast, IP: netip.AddrFrom4([4]
 
 // Web Discovery Protocol - WSD
 var wsd4IPv4Addr = packet.Addr{MAC: packet.EthBroadcast, IP: netip.AddrFrom4([4]byte{239, 255, 255, 250}), Port: 3702}
+
+const defaultExpiryTime = time.Second * 300
 
 // processSSDPNotify process notify ssdp messages
 //
@@ -59,11 +63,30 @@ func processSSDPNotify(raw []byte) (name packet.NameEntry, location string, err 
 		if req.Method != "NOTIFY" {
 			return packet.NameEntry{}, location, packet.ErrParseFrame
 		}
+		seconds := 0
 		location = req.Header.Get("LOCATION")
+		cacheControl := req.Header.Get("CACHE-CONTROL")
+		options := strings.Split(cacheControl, "=")
+		if len(options)^2 == 0 { // make sure it is pairs of key / value
+			for i := range options {
+				if strings.ToLower(options[i]) == "max-age" {
+					seconds, _ = strconv.Atoi(options[i+1])
+					break
+				}
+			}
+		}
+		var expire time.Time
+		now := time.Now()
+		if seconds > 0 {
+			expire = now.Add(time.Second * time.Duration(seconds))
+		} else {
+			expire = now.Add(defaultExpiryTime)
+		}
+
 		if ssdpLogger.IsDebug() {
 			ssdpLogger.Msg("ssdp:alive recv").String("location", location).Write()
 		}
-		return packet.NameEntry{}, location, nil
+		return packet.NameEntry{Expire: expire}, location, nil
 	case "ssdp:byebye":
 		// When a device is about to be removed from the network, it should explicitly revoke its discovery messages by sending one
 		// multicast request for each ssdp:alive message it sent. Each multicast request must have method NOTIFY and ssdp:byebye in the
@@ -112,6 +135,7 @@ func processSSDPSearchRequest(raw []byte) (name packet.NameEntry, location strin
 	if ssdpLogger.IsDebug() {
 		ssdpLogger.Msg("ssdp:discover recv").String("user-agent", ua).Struct(name).Write()
 	}
+	name.Expire = time.Now().Add(defaultExpiryTime)
 	return name, "", nil
 }
 
@@ -193,27 +217,17 @@ func (h *DNSHandler) SendSSDPSearch() (err error) {
 }
 
 func (h *DNSHandler) ProcessSSDP(host *packet.Host, ether packet.Ether, payload []byte) (name packet.NameEntry, location string, err error) {
-
-	// TODO: test ssdp packet without endline
-	/*
-				// Add newline to workaround buggy SSDP responses
-		var endOfHeader = []byte{'\r', '\n', '\r', '\n'}
-				if !bytes.HasSuffix(payload, endOfHeader) {
-					raw = bytes.Join([][]byte{raw, endOfHeader}, nil)
-				}
-	*/
-
-	if bytes.HasPrefix(payload, []byte("M-SEARCH ")) {
-		if ssdpLogger.IsDebug() {
-			ssdpLogger.Msg("m-search rcvd").MAC("mac", ether.Src()).IP("ip", ether.SrcIP()).Write()
-		}
-		return processSSDPSearchRequest(payload)
-	}
 	if bytes.HasPrefix(payload, []byte("NOTIFY ")) {
 		if ssdpLogger.IsDebug() {
 			ssdpLogger.Msg("notify rcvd").MAC("mac", ether.Src()).IP("ip", ether.SrcIP()).Write()
 		}
 		return processSSDPNotify(payload)
+	}
+	if bytes.HasPrefix(payload, []byte("M-SEARCH ")) {
+		if ssdpLogger.IsDebug() {
+			ssdpLogger.Msg("m-search rcvd").MAC("mac", ether.Src()).IP("ip", ether.SrcIP()).Write()
+		}
+		return processSSDPSearchRequest(payload)
 	}
 	if ssdpLogger.IsDebug() {
 		ssdpLogger.Msg("response rcvd").MAC("mac", ether.Src()).IP("ip", ether.SrcIP()).Write()
