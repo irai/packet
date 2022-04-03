@@ -66,7 +66,6 @@ func CopyBytes(b []byte) []byte {
 // TODO: use routing package to identify default router
 // https://github.com/google/gopacket/tree/v1.1.19/routing
 func GetNICInfo(nic string) (info *NICInfo, err error) {
-
 	info = &NICInfo{}
 	info.IFI, err = net.InterfaceByName(nic)
 	if err != nil {
@@ -88,7 +87,7 @@ func GetNICInfo(nic string) (info *NICInfo, err error) {
 
 		if ip.Addr().Is4() && ip.Addr().IsGlobalUnicast() {
 			info.HostAddr4.IP = ip.Addr()
-			info.HomeLAN4 = ip
+			info.HomeLAN4 = ip.Masked()
 		}
 		if ip.Addr().Is6() {
 			if ip.Addr().IsLinkLocalUnicast() {
