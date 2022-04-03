@@ -237,9 +237,9 @@ func (h *Handler) Scan() error {
 
 	// Copy underneath array so we can modify value.
 	ip := h.session.NICInfo.HomeLAN4.Addr()
+	n := (uint32(0xffffffff) << uint32(h.session.NICInfo.HomeLAN4.Bits())) >> h.session.NICInfo.HomeLAN4.Bits()
 
-	for host := 1; host < 255; host++ {
-		// ip[3] = byte(host)
+	for host := uint32(1); host < n; host++ {
 		ip = ip.Next()
 
 		// Don't scan router and host
