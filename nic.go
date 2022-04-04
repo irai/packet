@@ -219,7 +219,10 @@ func LoadLinuxARPTable(nic string) (list []Addr, err error) {
 		}
 		mac, err := net.ParseMAC(tokens[3])
 		if err != nil || bytes.Equal(mac, net.HardwareAddr{0, 0, 0, 0, 0, 0}) || bytes.Equal(mac, net.HardwareAddr{}) {
-			fmt.Println("raw: error in loadARPProcTable - invalid MAC", tokens)
+			// local IP has entry "192.168.0.129 0x1 0x0 00:00:00:00:00:00 * eth0"
+			if Logger.IsDebug() {
+				fmt.Println("raw: error in loadARPProcTable - invalid MAC", tokens)
+			}
 			continue
 		}
 		list = append(list, Addr{MAC: mac, IP: ip})
