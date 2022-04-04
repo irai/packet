@@ -10,14 +10,14 @@ import (
 	"time"
 
 	"github.com/irai/packet/fastlog"
-	"golang.org/x/net/icmp"
-	"golang.org/x/net/ipv4"
 	"golang.org/x/net/ipv6"
 )
 
 const (
-	ICMP4TypeEchoReply = 0   // Echo Reply
-	ICMP6TypeEchoReply = 129 // Echo Reply
+	ICMP4TypeEchoReply   = 0   // Echo Request
+	ICMP4TypeEchoRequest = 8   // Echo Reply
+	ICMP6TypeEchoRequest = 128 // Echo Request
+	ICMP6TypeEchoReply   = 129 // Echo Reply
 )
 
 // ICMP enable access to ICMP frame without copying
@@ -416,20 +416,10 @@ func (h *Session) ICMP4SendEchoRequest(srcAddr Addr, dstAddr Addr, id uint16, se
 	if !srcAddr.IP.Is4() || !dstAddr.IP.Is4() {
 		return ErrInvalidIP
 	}
-	icmpMessage := icmp.Message{
-		Type: ipv4.ICMPTypeEcho,
-		Code: 0,
-		Body: &icmp.Echo{
-			ID:   int(id),
-			Seq:  int(seq),
-			Data: []byte("HELLO-R-U-THERE"),
-		},
-	}
 
-	p, err := icmpMessage.Marshal(nil)
-	if err != nil {
-		return err
-	}
+	const hello = "HELLO-NETFILTER"
+	p := make([]byte, 8+len(hello))
+	EncodeICMPEcho(p, ICMP4TypeEchoRequest, 0, id, seq, []byte(hello))
 
 	if Logger.IsDebug() {
 		Logger.Msg("send echo4 request").IP("srcIP", srcAddr.IP).IP("dstIP", dstAddr.IP).Struct(ICMPEcho(p)).Write()
@@ -443,6 +433,7 @@ func (h *Session) icmp4SendPacket(srcAddr Addr, dstAddr Addr, p ICMP) (err error
 	ether := Ether(buf[:])
 	ether = EncodeEther(ether, syscall.ETH_P_IP, h.NICInfo.HostAddr4.MAC, dstAddr.MAC)
 	ip4 := EncodeIP4(ether.Payload(), 50, srcAddr.IP, dstAddr.IP)
+	ICMP(p).SetChecksum(Checksum(p))
 	if ip4, err = ip4.AppendPayload(p, syscall.IPPROTO_ICMP); err != nil {
 		return err
 	}
@@ -460,20 +451,9 @@ func (h *Session) ICMP6SendEchoRequest(srcAddr Addr, dstAddr Addr, id uint16, se
 	if !srcAddr.IP.Is6() || !dstAddr.IP.Is6() {
 		return ErrInvalidIP
 	}
-	icmpMessage := icmp.Message{
-		Type: ipv6.ICMPTypeEchoRequest,
-		Code: 0,
-		Body: &icmp.Echo{
-			ID:   int(id),
-			Seq:  int(seq),
-			Data: []byte("HELLO-R-U-THERE"),
-		},
-	}
-
-	p, err := icmpMessage.Marshal(nil)
-	if err != nil {
-		return err
-	}
+	const hello = "HELLO-NETFILTER"
+	p := make([]byte, 8+len(hello))
+	EncodeICMPEcho(p, ICMP6TypeEchoRequest, 0, id, seq, []byte(hello))
 
 	if Logger.IsDebug() {
 		Logger.Msg("send echo6 request").IP("srcIP", srcAddr.IP).IP("dstIP", dstAddr.IP).Struct(ICMPEcho(p)).Write()
