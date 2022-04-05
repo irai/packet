@@ -16,34 +16,6 @@ const (
 	probe
 )
 
-type ARPHandler interface {
-	Close() error
-	ProcessPacket(frame packet.Frame) error
-	StartHunt(packet.Addr) (packet.HuntStage, error)
-	StopHunt(packet.Addr) (packet.HuntStage, error)
-	// CheckAddr(packet.Addr) (packet.HuntStage, error)
-	// MinuteTicker(time.Time) error
-}
-
-// must implement interface
-var _ ARPHandler = &Handler{}
-var _ ARPHandler = &ARPNOOP{}
-
-type ARPNOOP struct {
-}
-
-func (p ARPNOOP) Start() error { return nil }
-func (p ARPNOOP) Close() error { return nil }
-func (p ARPNOOP) ProcessPacket(frame packet.Frame) error {
-	return nil
-}
-func (p ARPNOOP) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
-	return packet.StageNoChange, nil
-}
-func (p ARPNOOP) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
-	return packet.StageNoChange, nil
-}
-
 // Handler stores instance variables
 type Handler struct {
 	arpMutex      sync.RWMutex
@@ -60,9 +32,7 @@ type Config struct {
 
 const module = "arp"
 
-var (
-	Logger = fastlog.New(module)
-)
+var Logger = fastlog.New(module)
 
 // New creates the ARP handler
 func New(session *packet.Session) (h *Handler, err error) {
