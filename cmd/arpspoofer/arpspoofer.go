@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"net/netip"
 	"os"
 	"os/signal"
 	"syscall"
@@ -19,42 +18,8 @@ import (
 // Simple utility to demonstrate use of ARP spoofing
 var (
 	nic   = flag.String("i", "eth0", "nic interface")
-	ipstr = flag.String("ip", "", "target ip address as in 192.168.0.30")
 	debug = flag.String("d", "info", "set to info or debug to show debug messages")
 )
-
-func processNotification(s *packet.Session, targetIP netip.Addr) {
-	for {
-		notification, ok := <-s.C
-		if !ok { // terminate when channel closed
-			return
-		}
-		switch notification.Online {
-		case true:
-			if notification.Addr.IP != targetIP {
-				fmt.Printf("host is online: %s\n", notification)
-				continue
-			}
-			fmt.Println("target ip is online", targetIP)
-			if _, err := arpSpoofer.StartHunt(notification.Addr); err != nil {
-				fmt.Println("error in start arp hunt", err)
-				return
-			}
-
-		default:
-			if notification.Addr.IP != targetIP {
-				fmt.Printf("host is offline: %s\n", notification)
-				continue
-			}
-			fmt.Println("target ip is offline", targetIP)
-			if _, err := arpSpoofer.StopHunt(notification.Addr); err != nil {
-				fmt.Println("error in stop arp hunt", err)
-				return
-			}
-		}
-		s.PrintTable()
-	}
-}
 
 var (
 	arpSpoofer   *arp.Handler
@@ -63,7 +28,6 @@ var (
 
 func main() {
 	var err error
-	var targetIP netip.Addr
 	var exiting bool
 
 	flag.Parse()
@@ -80,7 +44,7 @@ func main() {
 	// icmp.Debug = *debug
 	packet.Logger.SetLevel(fastlog.Str2LogLevel(*debug))
 
-	// instanciate the arp spoofer
+	// instanciate the arp spoofer for IPv4
 	arpSpoofer, err = arp.New(s)
 	if err != nil {
 		fmt.Println("error creating arp spoofer", err)
@@ -88,21 +52,13 @@ func main() {
 	}
 	defer arpSpoofer.Close()
 
-	// instanciate the icmp6 spoofer
+	// instanciate the icmp6 spoofer for IPv6
 	icmp6Spoofer, err = icmp.New6(s)
 	if err != nil {
 		fmt.Println("error creating arp spoofer", err)
 		return
 	}
 	defer icmp6Spoofer.Close()
-
-	// start goroutine to process notifications
-	targetIP, err = netip.ParseAddr(*ipstr)
-	if err != nil {
-		fmt.Println("ignoring invalid ip address", ipstr, err)
-		targetIP = netip.Addr{}
-	}
-	go processNotification(s, targetIP)
 
 	// start packet processing goroutine
 	go func() {
@@ -121,6 +77,7 @@ func main() {
 				continue
 			}
 
+			// memory map packet so we can access all fields
 			frame, err := s.Parse(buffer[:n])
 			if err != nil {
 				fmt.Println("parse error", err)
@@ -128,48 +85,44 @@ func main() {
 			}
 
 			switch frame.PayloadID {
-			case packet.PayloadARP:
-				// Process arp packets
+			case packet.PayloadARP: // Process arp packets
 				if err := arpSpoofer.ProcessPacket(frame); err != nil {
 					fmt.Println("error processing arp packet", err)
 				}
-			case packet.PayloadICMP6:
-				// Process icmpv6 packets
+			case packet.PayloadICMP6: // Process icmpv6 packets
 				if err := icmp6Spoofer.ProcessPacket(frame); err != nil {
 					fmt.Println("error processing icmp6 packet", err)
 				}
 			}
-
-			s.Notify(frame)
 		}
 	}()
 
-	// if not ip given, just listen...
-	if !targetIP.IsValid() {
-		fmt.Println("missing or invalid target ip address...listening only", err)
-		time.Sleep(time.Hour * 24) // wait forever!!!
-	}
-
-	// send arp scan
+	// send arp scan and icmp6 echo to quickly populate host table
 	arpSpoofer.Scan()
-
-	// Start icmpv6 spoofer module
-	icmp6Spoofer.Start()
+	icmp6Spoofer.PingAll()
 
 	// start goroutine to read command line
 	inputChan := make(chan []string)
 	go func() {
 		for {
-			fmt.Println("\n----")
-			fmt.Print("Enter command: ")
 			inputChan <- readInput()
+			fmt.Println("")
 		}
 	}()
 
-	// terminate cleanly when we get ctrl-C or sigterm
+	// channel to terminate cleanly when we get ctrl-C or sigterm
 	c := make(chan os.Signal, 2)
 	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
+
+	// process commands
 	for {
+		fmt.Println("\n-------\nIPv4 and IPv6 Spoofer")
+		fmt.Println("  log <module> error|info|debug   : change debug level for module packet|arp|icmp")
+		fmt.Println("  list                            : list hosts")
+		fmt.Println("  spoof <ip>                      : spoof target ip - all IPv4 trafic will be redirect to us")
+		fmt.Println("  stop <ip>                       : stop spoofing ip")
+		fmt.Println("  q                               : quit")
+		fmt.Print("Enter command: ")
 
 		select {
 		case sig := <-c:
@@ -177,7 +130,6 @@ func main() {
 			case syscall.SIGINT, syscall.SIGTERM:
 				exiting = true
 				arpSpoofer.Close()
-				icmp6Spoofer.Close()
 				s.Close()
 				time.Sleep(time.Second)
 				return
@@ -185,6 +137,8 @@ func main() {
 
 		case tokens := <-inputChan:
 			switch tokens[0] {
+			case "q":
+				c <- syscall.SIGINT // force sigint exit
 			case "l", "list":
 				fmt.Println("hosts table ---")
 				s.PrintTable()
@@ -201,17 +155,22 @@ func main() {
 					icmp.Debug = !icmp.Debug
 				}
 
-			case "start":
+			case "spoof":
 				ip := getIP(tokens, 1)
 				if !ip.IsValid() {
 					continue
 				}
-				if host := s.FindIP(ip); host != nil {
-					if host.Addr.IP.Is4() {
-						_, err = arpSpoofer.StartHunt(host.Addr)
-					} else {
-						_, err = icmp6Spoofer.StartHunt(host.Addr)
-					}
+
+				host := s.FindIP(ip)
+				if host == nil {
+					fmt.Printf("host %s does not exist. use `list` to view all available hosts.\n", ip)
+					continue
+				}
+				if host.Addr.IP.Is4() {
+					_, err = arpSpoofer.StartHunt(host.Addr)
+				} else {
+					_, err = icmp6Spoofer.StartHunt(host.Addr)
+					time.Sleep(time.Millisecond * 100) // time to print messages in order
 				}
 
 			case "stop":
@@ -225,16 +184,10 @@ func main() {
 					} else {
 						_, err = icmp6Spoofer.StopHunt(host.Addr)
 					}
+					time.Sleep(time.Millisecond * 100) // time to print messages in order
 				}
 
-			case "q":
-				c <- syscall.SIGINT
-
 			default:
-				fmt.Println("")
-				fmt.Println("change log level:   log packet|arp|icmp")
-				fmt.Println("list hosts      :   l|list")
-				fmt.Println("quit            :   q")
 			}
 			if err != nil {
 				fmt.Printf("error in operation %s: %v\n", tokens[0], err)
