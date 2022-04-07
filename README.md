@@ -9,6 +9,23 @@ mechanism to notify the caller when a host is online and offline.
 The package uses memory mapped slices that provides convenient functions to read and write
 network packets.
 
+## Features
+
+* fast parsing of network packets without allocation
+
+* auto tracking of LAN hosts and host IP changes
+
+* notification of host online and offline
+
+* host naming via various protocols dhcp, mdns, ssdp, nbns
+
+* arp module to spoof arp mac table
+
+* dhcp module to spoof DHCP traffic on LAN
+
+
+## Packet parsing
+
 For example, given a network packet b that contains a udp frame inside an ip4 and ethernet frame, you can 
 map and access all fields in the packet via:
 ```
@@ -23,6 +40,8 @@ map and access all fields in the packet via:
   fmt.Println("udp", udp.SrcPort(), udp.DstPort())
   fmt.Printf("payloadID=%s payload=[%x]\n", frame.PayloadID, payload)
 ```
+
+## IPv4 and IPv6 parsing
 
 Working with IPv4, IPv6, UDP frames is fairly straight forward. For example:
 ```
@@ -46,7 +65,7 @@ Working with IPv4, IPv6, UDP frames is fairly straight forward. For example:
   }
 ```
 
-Capturing network packets on linux:
+## Capturing network packets on linux:
 ```
 	s, err := packet.NewSession(*nic)
     buffer := make([]byte, packet.EthMaxSize)
@@ -58,6 +77,12 @@ Capturing network packets on linux:
         // work on the packet...
     }
 ```
+
+## IPv4 and IPv6 spoofing
+
+The package contains an arp spoofer module and a icmpv6 spoofer module.
+Also included is a sample application to demonstrate usage.
+
 
 Credits
 Thanks to the following individuals for making their outstanding source code available to all to learn and re-use.
