@@ -160,7 +160,7 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 		}
 
 		// if dhcpv4 spoofing then reject any other ip that is not the spoofed IP on offer
-		if offer := h.session.DHCPv4IPOffer(arpFrame.SrcMAC()); offer.IsValid() && offer != arpFrame.DstIP() {
+		if offer := h.session.DHCPv4IPOffer(arpFrame.SrcMAC()); offer.Is4() && offer != arpFrame.DstIP() {
 			// Note: detected one situation where android probed external DNS IP. Not sure if this occur in other clients.
 			//     arp  : probe reject for ip=8.8.8.8 from mac=84:11:9e:03:89:c0 (android phone) - 10 March 2021
 			if h.session.NICInfo.HomeLAN4.Contains(arpFrame.DstIP()) {

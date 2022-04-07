@@ -50,7 +50,9 @@ func (e *MACEntry) FastLog(l *fastlog.Line) *fastlog.Line {
 	l.IP("ip", e.IP4)
 	l.IP("ip6", e.IP6GUA)
 	l.IP("lla", e.IP6LLA)
-	l.IP("ip4offer", e.IP4Offer)
+	if e.IP4Offer.IsValid() {
+		l.IP("ip4offer", e.IP4Offer)
+	}
 	l.Int("hosts", len(e.HostList))
 	l.String("lastSeen", time.Since(e.LastSeen).String())
 	if e.Manufacturer != "" {
@@ -105,7 +107,7 @@ func (s *MACTable) findOrCreate(mac net.HardwareAddr) *MACEntry {
 	if e, _ := s.findMAC(mac); e != nil {
 		return e
 	}
-	e := &MACEntry{MAC: CopyMAC(mac), IP4: IPv4zero, IP6GUA: IPv6zero, IP6LLA: IPv6zero, IP4Offer: IPv4zero}
+	e := &MACEntry{MAC: CopyMAC(mac), IP4: IPv4zero, IP6GUA: IPv6zero, IP6LLA: IPv6zero, IP4Offer: netip.Addr{}}
 	s.Table = append(s.Table, e)
 	return e
 }

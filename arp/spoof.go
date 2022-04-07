@@ -41,7 +41,9 @@ func (h *Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
 	}
 	h.huntList[string(addr.MAC)] = addr
 
-	fastlog.NewLine(module, "start hunt").Struct(addr).Write()
+	if Logger.IsInfo() {
+		fastlog.NewLine(module, "start hunt").Struct(addr).Write()
+	}
 	// fmt.Printf("arp   : start hunt %s\n", addr)
 	go h.spoofLoop(addr)
 	return packet.StageHunt, nil
@@ -60,7 +62,9 @@ func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
 		fastlog.NewLine(module, "error stop hunt failed - not in hunt stage").Struct(addr).Write()
 		// fmt.Println("arp   : hunt stop failed - not in hunt stage", addr)
 	}
-	fastlog.NewLine(module, "stop hunt").Struct(addr).Write()
+	if Logger.IsInfo() {
+		fastlog.NewLine(module, "stop hunt").Struct(addr).Write()
+	}
 	// fmt.Println("arp   : stop hunt", addr)
 	return packet.StageNormal, nil
 }
@@ -85,7 +89,9 @@ func (h *Handler) spoofLoop(addr packet.Addr) {
 		h.arpMutex.Unlock()
 
 		if !hunting || h.closed {
-			fastlog.NewLine(module, "hunt loop stop").Struct(addr).Int("repeat", nTimes).String("duration", time.Since(startTime).String()).Write()
+			if Logger.IsInfo() {
+				fastlog.NewLine(module, "hunt loop stop").Struct(addr).Int("repeat", nTimes).String("duration", time.Since(startTime).String()).Write()
+			}
 
 			// When hunt terminate normally, clear the arp table with announcement to real router mac.
 			if !h.closed {
@@ -104,13 +110,13 @@ func (h *Handler) spoofLoop(addr packet.Addr) {
 		err := h.AnnounceTo(targetAddr.MAC, h.session.NICInfo.RouterAddr4.IP)
 		if err != nil {
 			fastlog.NewLine(module, "error send announcement packet").Struct(targetAddr).Error(err).Write()
-			// fmt.Printf("arp   : error send announcement packet %s: %s\n", targetAddr, err)
 			return
 		}
 
 		if nTimes%16 == 0 {
-			fastlog.NewLine(module, "hunt loop attack").Struct(targetAddr).Int("repeat", nTimes).String("duration", time.Since(startTime).String()).Write()
-			// fmt.Printf("arp   : hunt loop attack %s repeat=%v duration=%s\n", targetAddr, nTimes, time.Since(startTime))
+			if Logger.IsInfo() {
+				fastlog.NewLine(module, "hunt loop attack").Struct(targetAddr).Int("repeat", nTimes).String("duration", time.Since(startTime).String()).Write()
+			}
 		}
 		nTimes++
 
