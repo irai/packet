@@ -109,7 +109,7 @@ func setupTestHandler() *testContext {
 
 func (tc *testContext) Close() {
 	time.Sleep(time.Millisecond * 20) // wait for all packets to finish
-	if Debug {
+	if Logger4.IsDebug() {
 		fmt.Println("teminating context")
 	}
 	tc.cancel()

@@ -2,7 +2,6 @@ package icmp
 
 import (
 	"fmt"
-	"net"
 	"net/netip"
 	"sync"
 	"time"
@@ -13,45 +12,8 @@ import (
 	"golang.org/x/net/ipv6"
 )
 
-// Debug turn on logging
-var Debug bool
-
-const module4 = "icmp4"
-const module6 = "icmp6"
-
-type ICMP6Handler interface {
-	FindRouter(netip.Addr) Router
-	PingAll() error
-	Start() error
-	Close() error
-	ProcessPacket(frame packet.Frame) error
-	StartHunt(packet.Addr) (packet.HuntStage, error)
-	StopHunt(packet.Addr) (packet.HuntStage, error)
-	CheckAddr(packet.Addr) (packet.HuntStage, error)
-	MinuteTicker(time.Time) error
-}
-type ICMP6NOOP struct{}
-
-func (p ICMP6NOOP) Start() error   { return nil }
-func (p ICMP6NOOP) PingAll() error { return nil }
-func (p ICMP6NOOP) ProcessPacket(packet.Frame) error {
-	return nil
-}
-func (p ICMP6NOOP) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
-	return packet.StageNoChange, nil
-}
-func (p ICMP6NOOP) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
-	return packet.StageNoChange, nil
-}
-func (p ICMP6NOOP) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
-	return packet.StageNoChange, nil
-}
-func (p ICMP6NOOP) Close() error                     { return nil }
-func (p ICMP6NOOP) MinuteTicker(now time.Time) error { return nil }
-func (p ICMP6NOOP) FindRouter(netip.Addr) Router     { return Router{} }
-
-var _ ICMP6Handler = &Handler6{}
-var _ ICMP6Handler = &ICMP6NOOP{}
+var Logger4 = fastlog.New("icmp4")
+var Logger6 = fastlog.New("icmp4")
 
 // Handler implements ICMPv6 Neighbor Discovery Protocol
 // see: https://mdlayher.com/blog/network-protocol-breakdown-ndp-and-go/
@@ -94,23 +56,15 @@ func (h *Handler6) PrintTable() {
 	}
 }
 
-// Config define server configuration values
-type Config struct {
-	GlobalUnicastAddress net.IPNet
-	LocalLinkAddress     net.IPNet
-	UniqueLocalAddress   net.IPNet
-}
-
-// New creates an ICMP6 handler and attach to the engine
+// New creates an ICMP6 handler
 func New6(session *packet.Session) (*Handler6, error) {
-
 	h := &Handler6{LANRouters: make(map[netip.Addr]*Router), closeChan: make(chan bool)}
 	h.session = session
-
 	return h, nil
 }
 
-// Close removes the plugin from the engine
+// Close releases underlying resources.
+// The handler is not longer usable after calling Close().
 func (h *Handler6) Close() error {
 	if h.closed {
 		return nil
@@ -120,53 +74,22 @@ func (h *Handler6) Close() error {
 	return nil
 }
 
-// Start prepares to accept packets
-func (h *Handler6) Start() error {
-	if err := h.session.ICMP6SendRouterSolicitation(); err != nil {
-		return err
-	}
-	if err := packet.ExecPing(packet.IP6AllNodesMulticast.String() + "%" + h.session.NICInfo.IFI.Name); err != nil { // ping with external cmd tool
-		fmt.Printf("icmp6 : error in initial ping all nodes multicast - ignoring : %s\n", err)
-	}
-	return nil
-}
-
+// PingAll sends an echo request to the IPv6 multicast address to
+// encourage hosts to reply.
 func (h *Handler6) PingAll() error {
 	if !h.session.NICInfo.HostLLA.Addr().IsValid() {
 		return packet.ErrInvalidIP6LLA
 	}
-	fmt.Println("icmp6 : ping all")
+	if Logger6.IsInfo() {
+		Logger6.Msg("sending icmp6 ping all")
+	}
+	if err := h.session.ICMP6SendRouterSolicitation(); err != nil {
+		return err
+	}
+	// if err := packet.ExecPing(packet.IP6AllNodesMulticast.String() + "%" + h.session.NICInfo.IFI.Name); err != nil { // ping with external cmd tool
+	// fmt.Printf("icmp6 : error in initial ping all nodes multicast - ignoring : %s\n", err)
+	// }
 	return h.session.ICMP6SendEchoRequest(packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: h.session.NICInfo.HostLLA.Addr()}, packet.IP6AllNodesAddr, 99, 1)
-}
-
-// MinuteTicker implements packet processor interface
-// Send echo request to all nodes
-func (h *Handler6) MinuteTicker(now time.Time) error {
-	return h.session.ICMP6SendEchoRequest(packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: h.session.NICInfo.HostLLA.Addr()}, packet.IP6AllNodesAddr, 199, 1)
-}
-
-// HuntStage implements PacketProcessor interface
-func (h *Handler6) CheckAddr(addr packet.Addr) (packet.HuntStage, error) {
-	if !h.session.NICInfo.HostLLA.Addr().IsValid() { // in case host does not have IPv6
-		return packet.StageNoChange, nil
-	}
-	srcAddr := packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: h.session.NICInfo.HostLLA.Addr()}
-
-	// Neigbour solicitation almost always result in a response from host if online unless
-	// host is on battery saving mode
-	if addr.IP.IsLinkLocalUnicast() {
-		if err := h.session.ICMP6SendNeighbourSolicitation(srcAddr, packet.IPv6SolicitedNode(addr.IP), addr.IP); err != nil {
-			fmt.Printf("icmp6 : error checking address %s error=\"%s\"", addr, err)
-		}
-		return packet.StageNoChange, nil
-	}
-
-	// ping response is optional and could be disabled on a given host
-	if err := h.session.Ping6(srcAddr, addr, time.Second*2); err != nil {
-		return packet.StageNoChange, packet.ErrTimeout
-	}
-
-	return packet.StageNormal, nil
 }
 
 var repeat int = -1
@@ -177,12 +100,12 @@ func (h *Handler6) ProcessPacket(pkt packet.Frame) (err error) {
 	icmp6Frame := packet.ICMP(pkt.Payload())
 
 	if err := icmp6Frame.IsValid(); err != nil {
-		fastlog.NewLine(module6, "error invalid icmp frame").ByteArray("frame", pkt.Payload()).Error(err).Write()
+		Logger6.Msg("error invalid icmp frame").ByteArray("frame", pkt.Payload()).Error(err).Write()
 		return err
 	}
 
 	t := ipv6.ICMPType(icmp6Frame.Type())
-	if Debug && t != ipv6.ICMPTypeRouterAdvertisement {
+	if Logger6.IsDebug() && t != ipv6.ICMPTypeRouterAdvertisement {
 		fastlog.NewLine("icmp6", "ether").Struct(pkt.Ether()).Module("icmp6", "ip6").Struct(ip6Frame).Module("icmp6", "icmp").Struct(icmp6Frame).Write()
 	}
 
@@ -193,9 +116,8 @@ func (h *Handler6) ProcessPacket(pkt packet.Frame) (err error) {
 			fmt.Println("icmp6 : invalid NS msg", err)
 			return err
 		}
-		if Debug {
-			fastlog.NewLine("icmp6", "neighbor advertisement").IP("ip", ip6Frame.Src()).Struct(frame).Write()
-			// fastlog.Strings("icmp6 : neighbor advertisement from ip=", ip6Frame.Src().String(), " ", frame.String())
+		if Logger6.IsDebug() {
+			fastlog.NewLine("icmp6", "neighbor advertisement rcvd").IP("ip", ip6Frame.Src()).Struct(frame).Write()
 		}
 
 		// When a device gets an IPv6 address, it will join a solicited-node multicast group
@@ -203,13 +125,13 @@ func (h *Handler6) ProcessPacket(pkt packet.Frame) (err error) {
 		// source IP is sometimes ff02::1 multicast, which means the host is nil.
 		// If unsolicited and Override, it is an indication the IPv6 that corresponds to a link layer address has changed.
 		if frame.Override() && !frame.Solicited() {
-			fastlog.NewLine(module6, "neighbor advertisement overrid IP").Struct(ip6Frame).Module(module6, "neighbour advertisement").Struct(frame).Write()
+			if Logger6.IsDebug() {
+				Logger6.Msg("neighbor advertisement overrid IP").Struct(ip6Frame).Module("icmp6", "neighbour advertisement").Struct(frame).Write()
+			}
 			if frame.TargetLLA() == nil {
-				fastlog.NewLine(module6, "error na override with nil targetLLA").Error(packet.ErrInvalidMAC).Write()
+				Logger6.Msg("error NA override with nil targetLLA").Error(packet.ErrInvalidMAC).Write()
 				return packet.ErrInvalidMAC
 			}
-			// result.Update = true
-			// result.SrcAddr = packet.Addr{MAC: frame.TargetLLA(), IP: frame.TargetAddress()
 		}
 
 	case ipv6.ICMPTypeNeighborSolicitation: // 0x87
@@ -217,8 +139,8 @@ func (h *Handler6) ProcessPacket(pkt packet.Frame) (err error) {
 		if err := frame.IsValid(); err != nil {
 			return err
 		}
-		if Debug {
-			fastlog.NewLine("icmp6", "neighbor solicitation").IP("ip", ip6Frame.Src()).Struct(frame).Write()
+		if Logger6.IsDebug() {
+			fastlog.NewLine("icmp6", "neighbor solicitation rcvd").IP("ip", ip6Frame.Src()).Struct(frame).Write()
 		}
 
 		// Source address:
@@ -232,11 +154,9 @@ func (h *Handler6) ProcessPacket(pkt packet.Frame) (err error) {
 		// IP6 src=0x00 dst=solicited-node address (multicast)
 		//
 		if ip6Frame.Src().IsUnspecified() {
-			if Debug {
+			if Logger6.IsDebug() {
 				fmt.Printf("icmp6 : dad probe for target=%s srcip=%s srcmac=%s dstip=%s dstmac=%s\n", frame.TargetAddress(), ip6Frame.Src(), pkt.Ether().Src(), ip6Frame.Dst(), pkt.Ether().Dst())
 			}
-			// result.Update = true
-			// result.SrcAddr = packet.Addr{MAC: ether.Src(), IP: frame.TargetAddress()} // ok to pass frame addr
 			return nil
 		}
 
@@ -256,7 +176,7 @@ func (h *Handler6) ProcessPacket(pkt packet.Frame) (err error) {
 		}
 
 		// wakeup all pending spoof goroutines
-		// we want to immediately spoof hosts after a RA
+		// we want to immediately spoof hosts after an RA
 		if h.huntList.Len() > 0 {
 			ch := h.closeChan
 			h.closeChan = make(chan bool)
@@ -299,17 +219,11 @@ func (h *Handler6) ProcessPacket(pkt packet.Frame) (err error) {
 		router.Prefixes = options.Prefixes
 		h.Unlock()
 
-		if Debug {
+		if Logger6.IsDebug() {
 			l := fastlog.NewLine("icmp6", "ether").Struct(pkt.Ether()).Module("icmp6", "ip6").Struct(ip6Frame)
 			l.Module("icmp6", "router advertisement").Struct(icmp6Frame).Sprintf("options", router.Options)
 			l.Write()
 		}
-
-		// result := packet.Result{}
-		//notify if first time or if prefix changed
-		// if !found || !curPrefix.Equal(router.Options.FirstPrefix) {
-		// result = packet.Result{Update: true, IsRouter: true}
-		// }
 		return nil
 
 	case ipv6.ICMPTypeRouterSolicitation:
@@ -317,7 +231,7 @@ func (h *Handler6) ProcessPacket(pkt packet.Frame) (err error) {
 		if err := frame.IsValid(); err != nil {
 			return err
 		}
-		if Debug {
+		if Logger6.IsDebug() {
 			fastlog.NewLine("icmp6", "router solicitation").IP("ip", ip6Frame.Src()).Struct(frame).Write()
 		}
 
@@ -327,34 +241,40 @@ func (h *Handler6) ProcessPacket(pkt packet.Frame) (err error) {
 		// Destination address:
 		//    - the all-routers multicast address (FF02::2) with the link-local scope.
 		return nil
+
 	case ipv6.ICMPTypeEchoReply: // 0x81
 		echo := packet.ICMPEcho(icmp6Frame)
 		if err := echo.IsValid(); err != nil {
 			return err
 		}
-		if Debug {
-			fmt.Printf("icmp6 : echo reply from ip=%s %s\n", ip6Frame.Src(), echo)
+		if Logger6.IsDebug() {
+			fmt.Printf("icmp6 : echo reply recvd from ip=%s %s\n", ip6Frame.Src(), echo)
 		}
 		return nil
 
 	case ipv6.ICMPTypeEchoRequest: // 0x80
 		echo := packet.ICMPEcho(icmp6Frame)
-		if Debug {
-			// fmt.Printf("icmp6 : echo request from ip=%s %s\n", ip6Frame.Src(), echo)
-			fastlog.NewLine(module6, "echo recvd").IP("srcIP", ip6Frame.Src()).IP("dstIP", ip6Frame.Dst()).Struct(echo).Write()
+		if Logger6.IsDebug() {
+			Logger6.Msg("echo req recvd").IP("srcIP", ip6Frame.Src()).IP("dstIP", ip6Frame.Dst()).Struct(echo).Write()
 		}
 		return nil
 
 	case ipv6.ICMPTypeMulticastListenerReport:
-		fastlog.NewLine(module6, "multicast listener report recv").IP("ip", ip6Frame.Src()).Write()
+		if Logger6.IsDebug() {
+			Logger6.Msg("multicast listener report recv").IP("ip", ip6Frame.Src()).Write()
+		}
 		return nil
 
 	case ipv6.ICMPTypeVersion2MulticastListenerReport:
-		fastlog.NewLine(module6, "multicast listener report V2 recv").IP("ip", ip6Frame.Src()).Write()
+		if Logger6.IsDebug() {
+			Logger6.Msg("multicast listener report V2 recv").IP("ip", ip6Frame.Src()).Write()
+		}
 		return nil
 
 	case ipv6.ICMPTypeMulticastListenerQuery:
-		fastlog.NewLine(module6, "multicast listener query recv").IP("ip", ip6Frame.Src()).Write()
+		if Logger6.IsDebug() {
+			Logger6.Msg("multicast listener query recv").IP("ip", ip6Frame.Src()).Write()
+		}
 		return nil
 
 	case ipv6.ICMPTypeRedirect:
@@ -362,14 +282,15 @@ func (h *Handler6) ProcessPacket(pkt packet.Frame) (err error) {
 		if err := redirect.IsValid(); err != nil {
 			return err
 		}
-		// fmt.Printf("icmp6 : redirect from ip=%s %s \n", ip6Frame.Src(), redirect)
-		fastlog.NewLine(module6, "redirect recv").IP("fromIP", ip6Frame.Src()).Stringer(redirect).Write()
+		if Logger6.IsDebug() {
+			Logger6.Msg("redirect recv").IP("fromIP", ip6Frame.Src()).Stringer(redirect).Write()
+		}
 
 		return nil
 
 	case ipv6.ICMPTypeDestinationUnreachable:
-		if Debug {
-			fastlog.NewLine(module6, "destination unreachable").Struct(ip6Frame).Struct(icmp6Frame).Write()
+		if Logger6.IsDebug() {
+			Logger6.Msg("destination unreachable").Struct(ip6Frame).Struct(icmp6Frame).Write()
 		}
 		return nil
 

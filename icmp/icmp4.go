@@ -5,7 +5,6 @@ import (
 	"syscall"
 
 	"github.com/irai/packet"
-	"github.com/irai/packet/fastlog"
 	"golang.org/x/net/ipv4"
 )
 
@@ -51,18 +50,18 @@ func (h *Handler4) ProcessPacket(frame packet.Frame) error {
 		if err := echo.IsValid(); err != nil {
 			return err
 		}
-		if Debug {
-			fastlog.NewLine(module4, "echo reply recvd").IP("srcIP", ip4Frame.Src()).Struct(echo).Write()
+		if Logger4.IsDebug() {
+			Logger4.Msg("echo reply recvd").IP("srcIP", ip4Frame.Src()).Struct(echo).Write()
 		}
 
 	case uint8(ipv4.ICMPTypeEcho):
 		echo := packet.ICMPEcho(icmpFrame)
-		if Debug {
-			fastlog.NewLine(module4, "echo request recvd").IP("srcIP", ip4Frame.Src()).Struct(echo).Write()
+		if Logger4.IsDebug() {
+			Logger4.Msg("echo request recvd").IP("srcIP", ip4Frame.Src()).Struct(echo).Write()
 		}
 
 	case uint8(ipv4.ICMPTypeRedirect):
-		fastlog.NewLine(module4, "icmp4 redirect recv").Struct(ether).IP("srcIP", ether.SrcIP()).IP("dstIP", ether.DstIP()).ByteArray("payload", frame.Payload()).Write()
+		Logger4.Msg("icmp4 redirect recv").Struct(ether).IP("srcIP", ether.SrcIP()).IP("dstIP", ether.DstIP()).ByteArray("payload", frame.Payload()).Write()
 
 	case uint8(ipv4.ICMPTypeDestinationUnreachable):
 		switch icmpFrame.Code() {
@@ -97,8 +96,10 @@ func (h *Handler4) ProcessPacket(frame packet.Frame) error {
 			}
 			port = tcp.DstPort()
 		}
-		fastlog.NewLine(module4, "destination unreacheable").MAC("srcMAC", ether.Src()).MAC("dstMAC", ether.Dst()).IP("srcIP", ether.SrcIP()).IP("dstIP", ether.DstIP()).
-			Uint8("code", icmpFrame.Code()).IP("origIP", originalIP4Frame.Dst()).Uint16Hex("origPort", port).Write()
+		if Logger4.IsInfo() {
+			Logger4.Msg("destination unreacheable").MAC("srcMAC", ether.Src()).MAC("dstMAC", ether.Dst()).IP("srcIP", ether.SrcIP()).IP("dstIP", ether.DstIP()).
+				Uint8("code", icmpFrame.Code()).IP("origIP", originalIP4Frame.Dst()).Uint16Hex("origPort", port).Write()
+		}
 
 	default:
 		fmt.Printf("icmp4 not implemented type=%d: frame:0x[% x]\n", icmpFrame.Type(), icmpFrame)

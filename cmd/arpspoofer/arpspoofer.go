@@ -152,7 +152,8 @@ func main() {
 				case "arp":
 					arp.Logger.SetLevel(fastlog.Str2LogLevel(level))
 				case "icmp":
-					icmp.Debug = !icmp.Debug
+					icmp.Logger4.SetLevel(fastlog.Str2LogLevel(level))
+					icmp.Logger6.SetLevel(fastlog.Str2LogLevel(level))
 				}
 
 			case "spoof":

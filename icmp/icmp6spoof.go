@@ -6,18 +6,21 @@ import (
 	"time"
 
 	"github.com/irai/packet"
-	"github.com/irai/packet/fastlog"
 )
 
-// StartHunt implements packet processor interface
+// StartHunt will actively poison the target IP with fake icmp6 NA to redirect
+// all traffic to us. Poisoning will continue until StopHunt() is called.
 //
-// Hunt IPv6 LLA only; return error if IP is not IP6 Local Link Address
-// If IP is nil, we use unicast ethernet address but multicast ip address to get the packet to the target
+// The target IP must be a IPv6 LLA or nil.  If IP is nil, we use unicast
+// ethernet address but the multicast ip address to get the packet to the target host.
 func (h *Handler6) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
-	if Debug {
-		fmt.Printf("icmp6 : start neighbor hunt %s\n", addr)
+	if Logger6.IsInfo() {
+		Logger6.Msg("start neighbor hunt").Struct(addr).Write()
 	}
-	if addr.IP.IsValid() && !addr.IP.IsLinkLocalUnicast() {
+	if addr.IP.Is4() {
+		return packet.StageNoChange, packet.ErrInvalidIP
+	}
+	if addr.IP.Is6() && !addr.IP.IsLinkLocalUnicast() {
 		return packet.StageNoChange, nil
 	}
 	h.Lock()
@@ -33,10 +36,10 @@ func (h *Handler6) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
 	return packet.StageHunt, nil
 }
 
-// StopHunt implements PacketProcessor interface
+// StopHunt stop poisoning attack for target IP.
 func (h *Handler6) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
-	if Debug {
-		fmt.Printf("icmp6 : stop neighbor hunt %s\n", addr)
+	if Logger6.IsInfo() {
+		Logger6.Msg("stop neighbor hunt").Struct(addr).Write()
 	}
 	if addr.IP.IsValid() && !addr.IP.IsLinkLocalUnicast() {
 		return packet.StageNoChange, nil
@@ -59,15 +62,16 @@ func (h *Handler6) spoofLoop(dstAddr packet.Addr) {
 	if !dstAddr.IP.IsValid() {
 		dstAddr.IP = packet.IP6AllNodesMulticast
 	}
-	// fmt.Printf("icmp6 : na attack %s time=%v\n", dstAddr, startTime)
-	fastlog.NewLine(module6, "NA attack start").Struct(dstAddr).Time("time", startTime).Write()
+
+	if Logger6.IsDebug() {
+		Logger6.Msg("NA attack start").Struct(dstAddr).Time("time", startTime).Write()
+	}
 	for {
 		h.Lock()
 
 		if h.huntList.Index(dstAddr.MAC) == -1 || h.closed {
 			h.Unlock()
-			// fmt.Printf("icmp6 : attack end %s repeat=%v duration=%v\n", dstAddr, nTimes, time.Since(startTime))
-			fastlog.NewLine(module6, "NA attack end").Struct(dstAddr).Int("repeat", nTimes).Duration("duration", time.Since(startTime)).Write()
+			Logger6.Msg("NA attack end").Struct(dstAddr).Int("repeat", nTimes).Duration("duration", time.Since(startTime)).Write()
 			return
 		}
 
@@ -96,9 +100,10 @@ func (h *Handler6) spoofLoop(dstAddr packet.Addr) {
 				*/
 
 				if nTimes%16 == 0 {
-					// fmt.Printf("icmp6 : attack src %s dst %s target %s repeat=%v duration=%v\n", hostAddr, dstAddr, targetAddr, nTimes, time.Since(startTime))
-					fastlog.NewLine(module6, "NA attack src").Struct(hostAddr).Label("dst").Struct(dstAddr).Label("target").Struct(targetAddr).
-						Int("repeat", nTimes).Duration("duration", time.Since(startTime)).Write()
+					if Logger6.IsDebug() {
+						Logger6.Msg("NA attack src").Struct(hostAddr).Label("dst").Struct(dstAddr).Label("target").Struct(targetAddr).
+							Int("repeat", nTimes).Duration("duration", time.Since(startTime)).Write()
+					}
 				}
 				nTimes++
 
@@ -122,9 +127,14 @@ func (h *Handler6) spoofLoop(dstAddr packet.Addr) {
 
 		select {
 		case <-h.closeChan:
-			// Tplink home router send RA every 3 seconds
-			// Note: when processing a RA message, we close the channel to wakeup all go routines and
-			//       closeChan will be set to a new channel.
+			// icmp6 spoof goroutines wait on this channel to receive
+			// notifications of new Router Advertisements send by the lan router.
+			//
+			// In ProcessPacket(), upon receiving an RA, the processor will close this channel to wakeup waiting
+			// goroutines as we want to re-spoof the target immediately after the RA message.
+			// For example:
+			//   Tplink home router sends RA every 3 seconds and we wakeup immediately after to
+			//   send a spoofed NA. In turn, the target keep routing to us :-).
 
 		case <-time.After(time.Millisecond*2000 + time.Duration(rand.Int31n(800))):
 			// 2 second spoof seem to be adequate to keep cache poisoned
