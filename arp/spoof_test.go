@@ -50,12 +50,17 @@ func Test_Probe_Reject(t *testing.T) {
 				panic(err)
 			}
 			frame, _ := tc.session.Parse(ether)
+
+			// if probe frame, set a different DHCP IP to trigger probe reject
+			if ARP(frame.Payload()).SrcIP() == packet.IPv4zero {
+				tc.session.SetDHCPv4IPOffer(frame.SrcAddr.MAC, ip5, packet.NameEntry{})
+			}
 			if err := tc.arp.ProcessPacket(frame); err != tt.wantErr {
 				t.Errorf("Test_Requests:%s error = %v, wantErr %v", tt.name, err, tt.wantErr)
 			}
 			time.Sleep(time.Millisecond * 50) // there is a delay of 10 msec for each packet in arp hunt - need 30msec to get all three
 
-			tc.arp.arpMutex.Lock() // lock to test no dead locks
+			tc.arp.arpMutex.Lock() // lock to test no dead locks remain - sanity check
 			if len(tc.session.HostTable.Table) != tt.wantLen {
 				tc.arp.arpMutex.Unlock()
 				t.Errorf("Test_Requests:%s table len = %v, wantLen %v", tt.name, len(tc.session.HostTable.Table), tt.wantLen)
