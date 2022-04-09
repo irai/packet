@@ -28,12 +28,12 @@ import (
 //
 // Results: Mar 2022 - go 1.18
 // cpu: 11th Gen Intel(R) Core(TM) i7-1165G7 @ 2.80GHz
-// Benchmark_Fastlog/printf_struct_reference-8         	 1950852	       589.7 ns/op	     344 B/op	       8 allocs/op
-// Benchmark_Fastlog/fastlog_struct_reference-8        	 7195605	       175.4 ns/op	     144 B/op	       1 allocs/op
-// Benchmark_Fastlog/some_alloc-8                      	 5487976	       218.2 ns/op	     152 B/op	       2 allocs/op
-// Benchmark_Fastlog/printf-8                          	  883114	      1309 ns/op	     368 B/op	      15 allocs/op
-// Benchmark_Fastlog/fastlog_zero_alloc-8              	 2326864	       515.2 ns/op	       0 B/op	       0 allocs/op
-// Benchmark_Fastlog/zero_alloc_initialised-8          	 2320393	       503.3 ns/op	       0 B/op	       0 allocs/op
+// Benchmark_Fastlog/printf_struct_reference-8         	 2124115	       578.4 ns/op	     344 B/op	       8 allocs/op
+// Benchmark_Fastlog/fastlog_struct_reference-8        	 7347739	       164.8 ns/op	     144 B/op	       1 allocs/op
+// Benchmark_Fastlog/some_alloc-8                      	 5565591	       218.0 ns/op	     152 B/op	       2 allocs/op
+// Benchmark_Fastlog/printf-8                          	  899502	      1315 ns/op	     368 B/op	      15 allocs/op
+// Benchmark_Fastlog/fastlog_new_logger-8              	 2369990	       505.5 ns/op	       0 B/op	       0 allocs/op
+// Benchmark_Fastlog/fastlog_zero_alloc-8              	 2354322	       506.3 ns/op	       0 B/op	       0 allocs/op
 
 // bufSize sets the maximum len for a log entry
 const bufSize = 2048

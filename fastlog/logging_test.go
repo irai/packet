@@ -254,10 +254,10 @@ func Benchmark_Fastlog(b *testing.B) {
 	})
 
 	// No allocation
-	b.Run("fastlog zero alloc", func(b *testing.B) {
+	b.Run("fastlog new logger", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			logger.Msg("message").
+			New("test").Msg("message").
 				Int("int", 100).
 				String("name", "my string").
 				Uint16("uint16", 1).
@@ -274,7 +274,7 @@ func Benchmark_Fastlog(b *testing.B) {
 		}
 	})
 
-	b.Run("zero_alloc_initialised", func(b *testing.B) {
+	b.Run("fastlog zero alloc", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
 			logger.Msg("message").
