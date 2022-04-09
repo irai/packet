@@ -3,8 +3,6 @@ package dhcp4
 import (
 	"bytes"
 	"net/netip"
-
-	"github.com/irai/packet/fastlog"
 )
 
 // handleDecline will process a DHCP decline message from a client and free up the
@@ -30,7 +28,7 @@ func (h *Handler) handleDecline(p DHCP4, options Options) (d DHCP4) {
 	lease := h.findOrCreate(clientID, p.CHAddr(), "")
 
 	if lease.subnet.DHCPServer != serverIP {
-		fastlog.NewLine("dhcp4", "decline for another server - ignore").ByteArray("clientid", clientID).IP("ip", reqIP).IP("serverIP", serverIP).Write()
+		Logger.Msg("decline for another server - ignore").ByteArray("clientid", clientID).IP("ip", reqIP).IP("serverIP", serverIP).Write()
 		return nil
 	}
 
@@ -39,11 +37,11 @@ func (h *Handler) handleDecline(p DHCP4, options Options) (d DHCP4) {
 		if lease != nil {
 			lxid = lease.XID
 		}
-		fastlog.NewLine("dhcp4", "decline for invalid lease - gnore").ByteArray("clientid", clientID).IP("ip", reqIP).IP("serverIP", serverIP).ByteArray("lxid", lxid).Write()
+		Logger.Msg("decline for invalid lease - gnore").ByteArray("clientid", clientID).IP("ip", reqIP).IP("serverIP", serverIP).ByteArray("lxid", lxid).Write()
 		return nil
 	}
 
-	fastlog.NewLine("dhcp4", "decline").ByteArray("clientid", clientID).IP("serverIP", serverIP).IP("ip", lease.Addr.IP).Write()
+	Logger.Msg("decline").ByteArray("clientid", clientID).IP("serverIP", serverIP).IP("ip", lease.Addr.IP).Write()
 	lease.State = StateFree
 	lease.Addr.IP = netip.Addr{}
 	lease.IPOffer = netip.Addr{}
@@ -66,9 +64,9 @@ func (h *Handler) handleRelease(p DHCP4, options Options) (d DHCP4) {
 
 	lease := h.findOrCreate(clientID, p.CHAddr(), "")
 	if lease.subnet.DHCPServer != serverIP || lease == nil || lease.Addr.IP != reqIP {
-		fastlog.NewLine("dhcp4", "release - discard invalid packet").ByteArray("clientid", clientID).IP("serverIP", serverIP).IP("reqip", reqIP).Write()
+		Logger.Msg("release - discard invalid packet").ByteArray("clientid", clientID).IP("serverIP", serverIP).IP("reqip", reqIP).Write()
 		return nil
 	}
-	fastlog.NewLine("dhcp4", "release").ByteArray("clientid", clientID).IP("ip", lease.Addr.IP).MAC("mac", lease.Addr.MAC).ByteArray("xid", p.XId()).Write()
+	Logger.Msg("release").ByteArray("clientid", clientID).IP("ip", lease.Addr.IP).MAC("mac", lease.Addr.MAC).ByteArray("xid", p.XId()).Write()
 	return nil
 }

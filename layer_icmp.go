@@ -47,7 +47,7 @@ func (p ICMP) Payload() []byte {
 }
 
 func (p ICMP) String() string {
-	return fastlog.NewLine("", "").Struct(p).ToString()
+	return Logger.Msg("").Struct(p).ToString()
 }
 
 // FastLog implements fastlog interface
@@ -95,7 +95,7 @@ func EncodeICMPEcho(b []byte, t uint8, code uint8, id uint16, seq uint16, data [
 }
 
 func (p ICMPEcho) String() string {
-	return fastlog.NewLine("", "").Struct(p).ToString()
+	return Logger.Msg("").Struct(p).ToString()
 }
 
 func (p ICMPEcho) FastLog(line *fastlog.Line) *fastlog.Line {
@@ -163,7 +163,7 @@ func (p ICMP4Redirect) Addrs() []net.IP {
 }
 
 func (p ICMP4Redirect) String() string {
-	return fastlog.NewLine("", "").Struct(p).ToString()
+	return Logger.Msg("").Struct(p).ToString()
 }
 
 func (p ICMP4Redirect) FastLog(line *fastlog.Line) *fastlog.Line {
@@ -218,7 +218,7 @@ func (p ICMP6RouterSolicitation) Options() (NewOptions, error) {
 }
 
 func (p ICMP6RouterSolicitation) String() string {
-	return fastlog.NewLine("", "").Struct(p).ToString()
+	return Logger.Msg("").Struct(p).ToString()
 }
 
 func (p ICMP6RouterSolicitation) FastLog(line *fastlog.Line) *fastlog.Line {
@@ -260,7 +260,7 @@ func (p ICMP6RouterAdvertisement) Options() (NewOptions, error) {
 	return newParseOptions(p[16:])
 }
 func (p ICMP6RouterAdvertisement) String() string {
-	return fastlog.NewLine("", "").Struct(p).ToString()
+	return Logger.Msg("").Struct(p).ToString()
 }
 func (p ICMP6RouterAdvertisement) FastLog(l *fastlog.Line) *fastlog.Line {
 	l.String("type", "ra")
@@ -302,7 +302,7 @@ func (p ICMP6NeighborAdvertisement) TargetLLA() net.HardwareAddr {
 }
 
 func (p ICMP6NeighborAdvertisement) String() string {
-	return fastlog.NewLine("", "").Struct(p).ToString()
+	return Logger.Msg("").Struct(p).ToString()
 }
 
 // Print implements fastlog interface
@@ -361,7 +361,7 @@ func (p ICMP6NeighborSolicitation) SourceLLA() net.HardwareAddr {
 }
 
 func (p ICMP6NeighborSolicitation) String() string {
-	return fastlog.NewLine("", "").Struct(p).ToString()
+	return Logger.Msg("").Struct(p).ToString()
 }
 
 // FastLog implements fastlog interface

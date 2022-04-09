@@ -14,9 +14,10 @@ import (
 	"github.com/irai/packet/fastlog"
 )
 
-var Debug bool
-
 const module = "dns"
+
+var Debug bool
+var Logger = fastlog.New(module)
 
 type DNSHandler struct {
 	session   *packet.Session
@@ -545,7 +546,7 @@ func ReverseDNS(ip netip.Addr) error {
 		return err
 	}
 	if Debug {
-		fastlog.NewLine(module, "reverse dns ok").String("ip", ip.String()).StringArray("names", names).Write()
+		Logger.Msg("reverse dns ok").String("ip", ip.String()).StringArray("names", names).Write()
 	}
 	return nil
 }
@@ -590,7 +591,7 @@ func (h *DNSHandler) ProcessDNS(frame packet.Frame) (e DNSEntry, err error) {
 	}
 	if updated {
 		if Debug {
-			fastlog.NewLine(module, "entry").Struct(e).Write()
+			Logger.Msg("entry").Struct(e).Write()
 		}
 		h.DNSTable[e.Name] = e
 		return e.copy(), nil // return a copy to avoid race on maps

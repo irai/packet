@@ -177,7 +177,7 @@ func (config Config) NewSession(nic string) (session *Session, err error) {
 			select {
 			case <-ticker.C:
 				if atomic.LoadUint32(&h.ipHeartBeat) == 0 {
-					fastlog.NewLine(module, "fatal failure to receive ip packets").Duration("duration", monitorNICFrequency).Time("time", time.Now()).Write()
+					Logger.Msg("fatal failure to receive ip packets").Duration("duration", monitorNICFrequency).Time("time", time.Now()).Write()
 					// Send sigterm to terminate process
 					syscall.Kill(os.Getpid(), syscall.SIGTERM)
 				}
@@ -203,7 +203,7 @@ func (config Config) NewSession(nic string) (session *Session, err error) {
 				go h.purge(time.Now())
 
 			case <-h.closeChan:
-				fastlog.NewLine(module, "session minute loop goroutine ended").Write()
+				Logger.Msg("session minute loop goroutine ended").Write()
 				return
 			}
 		}
@@ -308,14 +308,14 @@ func (h *Session) purge(now time.Time) error {
 			for _, addr := range probe {
 				if addr.IP.Is4() {
 					if Logger.IsDebug() {
-						fastlog.NewLine(module, "send arp request - who is").IP("ip", addr.IP).Write()
+						Logger.Msg("send arp request - who is").IP("ip", addr.IP).Write()
 					}
 					if err := h.arpRequest(EthernetBroadcast, h.NICInfo.HostAddr4, Addr{MAC: EthernetBroadcast, IP: addr.IP}); err != nil {
-						fastlog.NewLine(module, "failed to probe ipv4").IP("ip", addr.IP).Error(err).Write()
+						Logger.Msg("failed to probe ipv4").IP("ip", addr.IP).Error(err).Write()
 					}
 				} else {
 					if !h.NICInfo.HostLLA.Addr().Is6() { // in case host does not have IPv6 - this should never happen
-						fastlog.NewLine(module, "failed to probe ipv6 missing host ipv6").IP("ip", h.NICInfo.HostLLA.Addr()).Write()
+						Logger.Msg("failed to probe ipv6 missing host ipv6").IP("ip", h.NICInfo.HostLLA.Addr()).Write()
 						continue
 					}
 					srcAddr := Addr{MAC: h.NICInfo.HostAddr4.MAC, IP: h.NICInfo.HostLLA.Addr()}
@@ -323,12 +323,12 @@ func (h *Session) purge(now time.Time) error {
 						// Use Neigbour solicitation if link local address as NS almost always result in a response from host if online unless
 						// host is on battery saving mode.
 						if err := h.ICMP6SendNeighbourSolicitation(srcAddr, IPv6SolicitedNode(addr.IP), addr.IP); err != nil {
-							fastlog.NewLine(module, "failed to probe ipv6 LLA").IP("ip", addr.IP).Error(err).Write()
+							Logger.Msg("failed to probe ipv6 LLA").IP("ip", addr.IP).Error(err).Write()
 						}
 						return
 					}
 					if err := h.ICMP6SendEchoRequest(srcAddr, addr, uint16(now.Nanosecond()), 0); err != nil {
-						fastlog.NewLine(module, "failed to probe ipv6").IP("ip", addr.IP).Error(err).Write()
+						Logger.Msg("failed to probe ipv6").IP("ip", addr.IP).Error(err).Write()
 					}
 				}
 			}
@@ -532,7 +532,7 @@ func (h *Session) Capture(mac net.HardwareAddr) error {
 		return ErrIsRouter
 	}
 	if Logger.IsInfo() {
-		Logger.NewLine(module, "captured").MAC("mac", mac).Write()
+		Logger.Msg("captured").MAC("mac", mac).Write()
 	}
 	macEntry.Captured = true
 	return nil
@@ -546,7 +546,7 @@ func (h *Session) Release(mac net.HardwareAddr) error {
 	if macEntry != nil {
 		macEntry.Captured = false
 		if Logger.IsInfo() {
-			Logger.NewLine(module, "release").MAC("mac", mac).Write()
+			Logger.Msg("release").MAC("mac", mac).Write()
 		}
 	}
 	return nil

@@ -35,7 +35,7 @@ type MACEntry struct {
 }
 
 func (e *MACEntry) String() string {
-	l := fastlog.NewLine("", "")
+	l := Logger.Msg("")
 	return e.FastLog(l).ToString()
 }
 

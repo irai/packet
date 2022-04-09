@@ -78,7 +78,8 @@ func TestLine_PrintUint32(t *testing.T) {
 func TestLine_Write(t *testing.T) {
 	mac2 := net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0xaf}
 	ip := net.IPv4(192, 168, 0, 1)
-	l := NewLine("ether", "")
+	logger := New("ether")
+	l := logger.Msg("")
 	l.MAC("mac", mac2)
 	l.IPSlice("ip", ip)
 	l.Int("int", 10)
@@ -96,7 +97,7 @@ func TestLine_Write(t *testing.T) {
 }
 
 func TestLine_ByteArray(t *testing.T) {
-	Std.Out = ioutil.Discard
+	DefaultIOWriter = ioutil.Discard
 	tests := []struct {
 		name          string
 		module        string
@@ -112,7 +113,8 @@ func TestLine_ByteArray(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			l := NewLine(tt.module, tt.msg)
+			logger := New(tt.module)
+			l := logger.Msg(tt.msg)
 			tt.payload[0] = 0xaa                 // just a marker
 			tt.payload[len(tt.payload)-1] = 0xff // just a marker
 			l = l.ByteArray("payload", tt.payload)
@@ -157,7 +159,7 @@ func TestLine_appendIP6(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			l := NewLine("test", "")
+			l := New("test").Msg("")
 			ip := net.ParseIP(tt.wantIP)
 			l.appendIP6(ip)
 
@@ -172,7 +174,7 @@ func TestLine_appendIP6(t *testing.T) {
 }
 
 func TestLine_Nil(t *testing.T) {
-	l := NewLine("test", "")
+	l := New("test").Msg("")
 	var line simpleType
 	var ptr *simpleType
 	l.Struct(nil)
@@ -215,18 +217,19 @@ func Benchmark_Fastlog(b *testing.B) {
 
 	s := complexType{mac: mac, ip: net.IPv4zero, str: "my string"}
 
-	Std.Out = ioutil.Discard
+	logger := New("test")
+	DefaultIOWriter = ioutil.Discard
 	b.Run("printf struct reference", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			fmt.Fprintf(Std.Out, "struct: %v\n", s)
+			fmt.Fprintf(DefaultIOWriter, "struct: %v\n", s)
 		}
 	})
 
 	b.Run("fastlog struct reference", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			NewLine("test", "message").Struct(s).Write()
+			logger.Msg("message").Struct(s).Write()
 		}
 	})
 
@@ -234,7 +237,7 @@ func Benchmark_Fastlog(b *testing.B) {
 	b.Run("some alloc", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			NewLine("test", "message").
+			logger.Msg("message").
 				Duration("duration", time.Hour).
 				Struct(s).
 				Write()
@@ -245,7 +248,7 @@ func Benchmark_Fastlog(b *testing.B) {
 	b.Run("printf", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			fmt.Fprintf(Std.Out, "test: message int=%d name=%s uint16=%d uint32=%d uint8=%d ip=%s ipv6=%s newip=%s newip6=%s mac=%s time=%s\n",
+			fmt.Fprintf(DefaultIOWriter, "test: message int=%d name=%s uint16=%d uint32=%d uint8=%d ip=%s ipv6=%s newip=%s newip6=%s mac=%s time=%s\n",
 				100, "my string", 1, 1, 111, net.IPv4zero, net.IPv6zero, ipv4, ipv6, mac, now)
 		}
 	})
@@ -254,7 +257,7 @@ func Benchmark_Fastlog(b *testing.B) {
 	b.Run("fastlog zero alloc", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			NewLine("test", "message").
+			logger.Msg("message").
 				Int("int", 100).
 				String("name", "my string").
 				Uint16("uint16", 1).
@@ -271,7 +274,6 @@ func Benchmark_Fastlog(b *testing.B) {
 		}
 	})
 
-	logger := New("test")
 	b.Run("zero_alloc_initialised", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {

@@ -17,7 +17,7 @@ type Notification struct {
 }
 
 func (n Notification) String() string {
-	line := fastlog.NewLine("", "")
+	line := Logger.Msg("")
 	n.FastLog(line)
 	return line.ToString()
 }
@@ -50,5 +50,5 @@ func (h *Session) sendNotification(notification Notification) {
 		h.C <- notification
 		return
 	}
-	fastlog.NewLine(module, "notification channel is full").Int("len", len(h.C)).Struct(notification).Write()
+	Logger.Msg("notification channel is full").Int("len", len(h.C)).Struct(notification).Write()
 }

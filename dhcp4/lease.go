@@ -46,7 +46,7 @@ type Lease struct {
 }
 
 func (l Lease) String() string {
-	line := fastlog.NewLine("", "")
+	line := Logger.Msg("")
 	return l.FastLog(line).ToString()
 }
 
@@ -98,7 +98,7 @@ func (h *Handler) findOrCreate(clientID []byte, mac net.HardwareAddr, name strin
 			bytes.Equal(lease.Addr.MAC, mac) {
 			return lease
 		}
-		fastlog.NewLine(module, "client changed subnet").ByteArray("clientID", lease.ClientID).
+		Logger.Msg("client changed subnet").ByteArray("clientID", lease.ClientID).
 			String("from", lease.subnet.LAN.String()).String("to", subnet.LAN.String()).Write()
 	}
 
@@ -113,7 +113,7 @@ func (h *Handler) findOrCreate(clientID []byte, mac net.HardwareAddr, name strin
 	h.table[string(lease.ClientID)] = lease
 	if Debug {
 		// fmt.Printf("dhcp4 : new lease allocated %s\n", lease)
-		fastlog.NewLine(module, "new lease allocated").Struct(lease).Write()
+		Logger.Msg("new lease allocated").Struct(lease).Write()
 	}
 	return lease
 }
@@ -129,7 +129,7 @@ func (h *Handler) allocIPOffer(lease *Lease, reqIP netip.Addr) error {
 			if h.session.FindIP(reqIP) == nil {
 				lease.IPOffer = reqIP
 				if Debug {
-					fastlog.NewLine(module, "offer").IP("ip", lease.IPOffer).Write()
+					Logger.Msg("offer").IP("ip", lease.IPOffer).Write()
 				}
 				return nil
 			}
@@ -171,7 +171,7 @@ func (h *Handler) allocIPOffer(lease *Lease, reqIP netip.Addr) error {
 	}
 	lease.IPOffer = ip
 	if Debug {
-		fastlog.NewLine(module, "offer").IP("ip", lease.IPOffer).Write()
+		Logger.Msg("offer").IP("ip", lease.IPOffer).Write()
 	}
 	return nil
 }
@@ -180,7 +180,7 @@ func (h *Handler) freeLeases(now time.Time) error {
 	for _, lease := range h.table {
 		if lease.State != StateFree && lease.DHCPExpiry.Before(now) {
 			if Debug {
-				fastlog.NewLine(module, "freeing lease").Struct(lease).Write()
+				Logger.Msg("freeing lease").Struct(lease).Write()
 			}
 			lease.State = StateFree
 		}

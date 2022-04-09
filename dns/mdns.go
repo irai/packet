@@ -50,6 +50,8 @@ const MDNSServiceDiscovery = "_services._dns-sd._udp.local."
 const moduleMDNS = "mdns"
 
 var (
+	LoggerMDNS = fastlog.New(moduleMDNS)
+
 	// Any DNS query for a name ending with ".local." MUST be sent to the
 	// mDNS IPv4 link-local multicast address 224.0.0.251 (or its IPv6 equivalent FF02::FB).
 	mdnsIPv4Addr = packet.Addr{MAC: packet.EthBroadcast, IP: netip.AddrFrom4([4]byte{224, 0, 0, 251}), Port: 5353}
@@ -140,7 +142,7 @@ func (h *DNSHandler) sendMDNS(buf []byte, srcAddr packet.Addr, dstAddr packet.Ad
 			return err
 		}
 		if _, err := h.session.Conn.WriteTo(ether, &dstAddr); err != nil {
-			fastlog.NewLine(moduleMDNS, "failed to write").Error(err).Write()
+			LoggerMDNS.Msg("failed to write").Error(err).Write()
 		}
 		return err
 	}
@@ -155,14 +157,14 @@ func (h *DNSHandler) sendMDNS(buf []byte, srcAddr packet.Addr, dstAddr packet.Ad
 	ip6 = ip6.SetPayload(udp, syscall.IPPROTO_UDP)
 	ether, _ = ether.SetPayload(ip6)
 	if _, err := h.session.Conn.WriteTo(ether, &dstAddr); err != nil {
-		fastlog.NewLine(moduleMDNS, "failed to write").Error(err).Write()
+		LoggerMDNS.Msg("failed to write").Error(err).Write()
 	}
 	return nil
 }
 
 func (h *DNSHandler) SendSleepProxyResponse(srcAddr packet.Addr, dstAddr packet.Addr, id uint16, name string) (err error) {
 	if Debug {
-		fastlog.NewLine(moduleMDNS, "send sleep proxy announcement").Struct(dstAddr).Write()
+		LoggerMDNS.Msg("send sleep proxy announcement").Struct(dstAddr).Write()
 	}
 
 	// Server response format: See https://datatracker.ietf.org/doc/html/rfc6763
@@ -268,7 +270,7 @@ func (h *DNSHandler) getMDNSCache(mac net.HardwareAddr, id uint16) (c cache, fou
 	if c, found := h.mdnsCache[string(key)]; found {
 		if c.expiry.After(time.Now()) {
 			if Debug {
-				l := fastlog.NewLine(moduleMDNS, "found in mdns chache").MAC("mac", mac).Uint16("id", id)
+				l := LoggerMDNS.Msg("found in mdns chache").MAC("mac", mac).Uint16("id", id)
 				for _, v := range c.ipv4 {
 					l.Struct(v)
 				}
@@ -281,7 +283,7 @@ func (h *DNSHandler) getMDNSCache(mac net.HardwareAddr, id uint16) (c cache, fou
 		}
 		delete(h.mdnsCache, string(key))
 		if Debug {
-			fastlog.NewLine(moduleMDNS, "delete from mdns chache").MAC("mac", mac).Uint16("id", id).Write()
+			LoggerMDNS.Msg("delete from mdns chache").MAC("mac", mac).Uint16("id", id).Write()
 		}
 	}
 	return cache{}, false
@@ -289,7 +291,7 @@ func (h *DNSHandler) getMDNSCache(mac net.HardwareAddr, id uint16) (c cache, fou
 
 func (h *DNSHandler) putMDNSCache(mac net.HardwareAddr, id uint16, ipv4 []packet.IPNameEntry, ipv6 []packet.IPNameEntry) {
 	if Debug {
-		l := fastlog.NewLine(moduleMDNS, "add to mdns chache").MAC("mac", mac).Uint16("id", id)
+		l := LoggerMDNS.Msg("add to mdns chache").MAC("mac", mac).Uint16("id", id)
 		for _, v := range ipv4 {
 			l.Struct(v)
 		}
@@ -325,7 +327,7 @@ func (h *DNSHandler) ProcessMDNS(frame packet.Frame) (ipv4 []packet.IPNameEntry,
 	if !dnsHeader.Response {
 		var line *fastlog.Line
 		if Debug {
-			line = fastlog.NewLine(moduleMDNS, "query rcvd").Struct(addr).Struct(DNS(frame.Payload()))
+			line = LoggerMDNS.Msg("query rcvd").Struct(addr).Struct(DNS(frame.Payload()))
 		}
 		if questions, err := p.AllQuestions(); err == nil {
 			entry := packet.IPNameEntry{}
@@ -358,7 +360,7 @@ func (h *DNSHandler) ProcessMDNS(frame packet.Frame) (ipv4 []packet.IPNameEntry,
 	}
 
 	if Debug {
-		fastlog.NewLine(moduleMDNS, "response rcvd").Struct(addr).Struct(DNS(frame.Payload())).Write()
+		LoggerMDNS.Msg("response rcvd").Struct(addr).Struct(DNS(frame.Payload())).Write()
 	}
 
 	if _, found := h.getMDNSCache(frame.SrcAddr.MAC, dnsHeader.ID); found {
@@ -428,7 +430,7 @@ func (h *DNSHandler) ProcessMDNS(frame packet.Frame) (ipv4 []packet.IPNameEntry,
 			entry.Addr.MAC = packet.CopyMAC(frame.SrcAddr.MAC)
 			entry.Addr.IP = netip.AddrFrom4(r.A)
 			if Debug {
-				fastlog.NewLine(moduleMDNS, "A resource").String("name", entry.NameEntry.Name).Struct(entry.Addr).Write()
+				LoggerMDNS.Msg("A resource").String("name", entry.NameEntry.Name).Struct(entry.Addr).Write()
 			}
 			ipv4 = append(ipv4, entry)
 
@@ -443,19 +445,19 @@ func (h *DNSHandler) ProcessMDNS(frame packet.Frame) (ipv4 []packet.IPNameEntry,
 			entry.Addr.MAC = packet.CopyMAC(frame.SrcAddr.MAC)
 			entry.Addr.IP = netip.AddrFrom16(r.AAAA)
 			if Debug {
-				fastlog.NewLine(moduleMDNS, "AAAA resource").String("name", entry.NameEntry.Name).Struct(entry.Addr).Write()
+				LoggerMDNS.Msg("AAAA resource").String("name", entry.NameEntry.Name).Struct(entry.Addr).Write()
 			}
 			ipv6 = append(ipv6, entry)
 
 		case dnsmessage.TypePTR:
 			r, err := p.PTRResource()
 			if err != nil {
-				fastlog.NewLine(moduleMDNS, "invalid PTR resource").String("name", hdr.Name.String()).Error(err).Write()
+				LoggerMDNS.Msg("invalid PTR resource").String("name", hdr.Name.String()).Error(err).Write()
 				p.SkipAnswer()
 				continue
 			}
 			if Debug {
-				fastlog.NewLine(moduleMDNS, "PTR resource").String("name", hdr.Name.String()).String("ptr", r.PTR.String()).Write()
+				LoggerMDNS.Msg("PTR resource").String("name", hdr.Name.String()).String("ptr", r.PTR.String()).Write()
 			}
 
 		case dnsmessage.TypeSRV:
@@ -471,22 +473,22 @@ func (h *DNSHandler) ProcessMDNS(frame packet.Frame) (ipv4 []packet.IPNameEntry,
 				// https://github.com/golang/go/issues/24870
 				if strings.Contains(err.Error(), "compressed name in SRV resource data") {
 					if Debug {
-						fastlog.NewLine(moduleMDNS, "ignore compressed name in SRV resource").String("name", hdr.Name.String()).String("message", err.Error()).Write()
+						LoggerMDNS.Msg("ignore compressed name in SRV resource").String("name", hdr.Name.String()).String("message", err.Error()).Write()
 					}
 				} else {
-					fastlog.NewLine(moduleMDNS, "invalid SRV resource").String("name", hdr.Name.String()).Error(err).Write()
+					LoggerMDNS.Msg("invalid SRV resource").String("name", hdr.Name.String()).Error(err).Write()
 				}
 				p.SkipAnswer()
 				continue
 			}
 			if Debug {
-				fastlog.NewLine(moduleMDNS, "SRV resource").String("name", hdr.Name.String()).String("target", r.Target.String()).Uint16("port", r.Port).Write()
+				LoggerMDNS.Msg("SRV resource").String("name", hdr.Name.String()).String("target", r.Target.String()).Uint16("port", r.Port).Write()
 			}
 
 		case dnsmessage.TypeTXT:
 			r, err := p.TXTResource()
 			if err != nil {
-				fastlog.NewLine(moduleMDNS, "invalid TXT resource").String("name", hdr.Name.String()).Error(err).Write()
+				LoggerMDNS.Msg("invalid TXT resource").String("name", hdr.Name.String()).Error(err).Write()
 				p.SkipAnswer()
 				continue
 			}
@@ -494,31 +496,31 @@ func (h *DNSHandler) ProcessMDNS(frame packet.Frame) (ipv4 []packet.IPNameEntry,
 				model = m
 			}
 			if Debug {
-				fastlog.NewLine(moduleMDNS, "TXT resource").String("name", hdr.Name.String()).Sprintf("txt", r.TXT).String("model", model).Write()
+				LoggerMDNS.Msg("TXT resource").String("name", hdr.Name.String()).Sprintf("txt", r.TXT).String("model", model).Write()
 			}
 
 		case dnsmessage.TypeOPT:
 			r, err := p.OPTResource()
 			if err != nil {
 				// fmt.Printf("mdns  : error invalid OPT resource name=%s error=[%s]\n", hdr.Name, err)
-				fastlog.NewLine(moduleMDNS, "invalid OPT resource").String("name", hdr.Name.String()).Error(err).Write()
+				LoggerMDNS.Msg("invalid OPT resource").String("name", hdr.Name.String()).Error(err).Write()
 				p.SkipAnswer()
 				continue
 			}
 			if Debug {
 				// fmt.Printf("mdns  : OPT name=%s options=%v\n", hdr.Name, r.Options)
-				fastlog.NewLine(moduleMDNS, "OPT resource").String("name", hdr.Name.String()).Sprintf("options", r.Options).Write()
+				LoggerMDNS.Msg("OPT resource").String("name", hdr.Name.String()).Sprintf("options", r.Options).Write()
 			}
 		case 47:
 			if Debug {
 				// fmt.Printf("mdns  : NSEC resource type not implemented %+v\n", hdr)
-				fastlog.NewLine(moduleMDNS, "NSEC resource not implemented").String("name", hdr.Name.String()).Sprintf("hdr", hdr).Write()
+				LoggerMDNS.Msg("NSEC resource not implemented").String("name", hdr.Name.String()).Sprintf("hdr", hdr).Write()
 			}
 			p.SkipAnswer()
 
 		default:
 			// fmt.Printf("mdns  : error unexpected resource type %+v\n", hdr)
-			fastlog.NewLine(moduleMDNS, "ignoring unexpected resource type").String("name", hdr.Name.String()).Sprintf("hdr", hdr).Write()
+			LoggerMDNS.Msg("ignoring unexpected resource type").String("name", hdr.Name.String()).Sprintf("hdr", hdr).Write()
 			p.SkipAnswer()
 		}
 	}

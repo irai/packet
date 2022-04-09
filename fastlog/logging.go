@@ -38,9 +38,10 @@ import (
 // bufSize sets the maximum len for a log entry
 const bufSize = 2048
 
-// type LogLevel struct {
-// l int32
-// }
+// lines is a pool of buffer to avoid allocations
+var lines = sync.Pool{New: func() interface{} { return new(Line) }}
+
+// LogLevel is type to hold the log level
 type LogLevel uint32
 
 const (
@@ -59,25 +60,37 @@ func (l LogLevel) String() string {
 	return "debug"
 }
 
-var lines = sync.Pool{New: func() interface{} { return new(Line) }}
-
+// Logger is a handler to access logging functions.
+// The typical way is to instantiate a Logger variable for the package and log
+// messages via Msg().
+// Example:
+//    var Logger = New("package")
+//
+//    func test() {
+//	    Logger.Msg("hello world").Write()
+//    }
 type Logger struct {
-	Out    io.Writer
 	module [7]byte
 	level  uint32 // atomic int32
 }
 
+// DefaultIOWriter keep package io writer to msg output
+var DefaultIOWriter io.Writer = os.Stderr
+
+// FastLog is an interface to extensible struct logging.
 type FastLog interface {
 	FastLog(*Line) *Line
 }
 
+// Line contains the internal buffer to be written to the input socket.
 type Line struct {
 	buffer [bufSize]byte
 	index  int
 }
 
-var Std = New("logger")
-
+// Str2LogLevel converts a string to a LogLevel.
+// Valid strings are:  error, info, debug
+// If the string is invalid, the function returns LevelError
 func Str2LogLevel(level string) LogLevel {
 	switch strings.ToLower(level) {
 	case "info":
@@ -116,12 +129,13 @@ func (l *Logger) IsDebug() bool {
 	return atomic.LoadUint32(&l.level) >= uint32(LevelDebug)
 }
 
+// New creates a new logger
 func New(module string) *Logger {
-	return NewOut(os.Stderr, module)
+	return newLogger(module)
 }
 
-func NewOut(out io.Writer, module string) *Logger {
-	l := &Logger{Out: out, level: uint32(LevelInfo)}
+func newLogger(module string) *Logger {
+	l := &Logger{level: uint32(LevelInfo)}
 	copy(l.module[:], "      :")
 	if module != "" {
 		copy(l.module[:6], module)
@@ -129,10 +143,16 @@ func NewOut(out io.Writer, module string) *Logger {
 	return l
 }
 
-func NewLine(module string, msg string) *Line {
-	return Std.NewLine(module, msg)
-}
-
+// Msg allocates a new line and appends msg to it.
+//
+// Msg() allocates an underlying buffer from the buffer pool and appends the msg to it.
+// Msg() does not write the buffer. The caller must call Write() or ToString() to
+// write the line and free the underlying buffer to the buffer pool.
+// for example:
+//    l := New("mypackage").Msg("Hello world").Int("mynumber", 1)
+//    l.Write()
+//  or
+//    l.ToString()
 func (logger *Logger) Msg(msg string) *Line {
 	l := lines.Get().(*Line)
 	copy(l.buffer[0:7], logger.module[:])
@@ -146,12 +166,7 @@ func (logger *Logger) Msg(msg string) *Line {
 	return l
 }
 
-func (logger *Logger) NewLine(module string, msg string) *Line {
-	l := lines.Get().(*Line)
-	l.index = 0
-	return l.newModule(module, msg)
-}
-
+// Module creates a new line with a different module name
 func (l *Line) Module(name string, msg string) *Line {
 	l.appendByte('\n')
 	return l.newModule(name, msg)
@@ -164,7 +179,6 @@ func (l *Line) newModule(module string, msg string) *Line {
 		l.index = l.index + 7
 	}
 	if msg != "" {
-		// l.index = l.index + copy(l.buffer[l.index:], " msg=\"")
 		l.appendByte(' ')
 		l.appendByte('"')
 		l.index = l.index + copy(l.buffer[l.index:], msg)
@@ -196,12 +210,13 @@ func (l *Line) Write() error {
 		l.index--
 	}
 	l.buffer[l.index] = '\n'
-	_, err := Std.Out.Write(l.buffer[:l.index+1])
+	_, err := DefaultIOWriter.Write(l.buffer[:l.index+1])
 	l.index = copy(l.buffer[:], "invalid buffer freed via Write()") // guarding against reuse by caller
 	lines.Put(l)
 	return err
 }
 
+// String appends the string to the line
 func (l *Line) String(name string, value string) *Line {
 	l.appendByte(' ')
 	l.index = l.index + copy(l.buffer[l.index:], name)
@@ -215,6 +230,7 @@ func (l *Line) String(name string, value string) *Line {
 	return l
 }
 
+// StringArray appends an array of strings to the line
 func (l *Line) StringArray(name string, value []string) *Line {
 	if l.index+len(name)+4 > cap(l.buffer) {
 		return l
@@ -252,13 +268,14 @@ func (l *Line) Bytes(name string, value []byte) *Line {
 	return l
 }
 
-// Label adds a static string to the line
+// Label appends a static string to the line
 func (l *Line) Label(name string) *Line {
 	l.appendByte(' ')
 	l.index = l.index + copy(l.buffer[l.index:], name)
 	return l
 }
 
+// Error appends an error field to the line
 func (l *Line) Error(value error) *Line {
 	l.index = l.index + copy(l.buffer[l.index:], " error=[")
 	l.index = l.index + copy(l.buffer[l.index:], value.Error())
@@ -266,6 +283,7 @@ func (l *Line) Error(value error) *Line {
 	return l
 }
 
+// Bool appends a boolean field to the line
 func (l *Line) Bool(name string, value bool) *Line {
 	l.appendByte(' ')
 	l.index = l.index + copy(l.buffer[l.index:], name)
@@ -278,6 +296,7 @@ func (l *Line) Bool(name string, value bool) *Line {
 	return l
 }
 
+// MAC appends a mac address to the line
 func (l *Line) MAC(name string, value net.HardwareAddr) *Line {
 	l.appendByte(' ')
 	l.index = l.index + copy(l.buffer[l.index:], name)
@@ -300,6 +319,8 @@ func (l *Line) MAC(name string, value net.HardwareAddr) *Line {
 	return l
 }
 
+// Struct appends a struct to the line. the struct must implement
+// the FasLog interface
 func (l *Line) Struct(value FastLog) *Line {
 	if value == nil || (reflect.ValueOf(value).Kind() == reflect.Ptr && reflect.ValueOf(value).IsNil()) {
 		return l
@@ -307,6 +328,8 @@ func (l *Line) Struct(value FastLog) *Line {
 	return value.FastLog(l)
 }
 
+// Stringer appends a string to the line. This requires introspection and should seldome be used.
+// It is a convenient function to log unknown data types that implemt the Stringer interface.
 func (l *Line) Stringer(value fmt.Stringer) *Line {
 	if value == nil || (reflect.ValueOf(value).Kind() == reflect.Ptr && reflect.ValueOf(value).IsNil()) {
 		return l
@@ -316,6 +339,7 @@ func (l *Line) Stringer(value fmt.Stringer) *Line {
 	return l
 }
 
+// Duration appends a duration field to the line
 func (l *Line) Duration(name string, duration time.Duration) *Line {
 	l.appendByte(' ')
 	l.index = l.index + copy(l.buffer[l.index:], name)
@@ -324,6 +348,7 @@ func (l *Line) Duration(name string, duration time.Duration) *Line {
 	return l
 }
 
+// Time appends a time field to the line
 func (l *Line) Time(name string, t time.Time) *Line {
 	l.appendByte(' ')
 	l.index = l.index + copy(l.buffer[l.index:], name)
@@ -335,6 +360,7 @@ func (l *Line) Time(name string, t time.Time) *Line {
 	return l
 }
 
+// Sprintf appends the result of the sprintf function to the line
 func (l *Line) Sprintf(name string, value interface{}) *Line {
 	l.appendByte(' ')
 	l.index = l.index + copy(l.buffer[l.index:], name)
@@ -343,6 +369,7 @@ func (l *Line) Sprintf(name string, value interface{}) *Line {
 	return l
 }
 
+// printInt is a fast interger to string conversion function
 // copied from time/time.go funcion fmtInt()
 func (l *Line) printInt(v uint32) *Line {
 	if v == 0 {
@@ -367,6 +394,7 @@ func (l *Line) printInt(v uint32) *Line {
 	return l
 }
 
+// Uint8 appends a uint8 field to the line
 func (l *Line) Uint8(name string, value uint8) *Line {
 	l.appendByte(' ')
 	l.index = l.index + copy(l.buffer[l.index:], name)
@@ -376,6 +404,7 @@ func (l *Line) Uint8(name string, value uint8) *Line {
 	return l
 }
 
+// Uint8Hex appends a uint8 field in hexadecimal
 func (l *Line) Uint8Hex(name string, value uint8) *Line {
 	l.appendByte(' ')
 	l.index = l.index + copy(l.buffer[l.index:], name)
@@ -387,6 +416,7 @@ func (l *Line) Uint8Hex(name string, value uint8) *Line {
 	return l
 }
 
+// Uint16 appends a uint16 field to the line
 func (l *Line) Uint16(name string, value uint16) *Line {
 	l.appendByte(' ')
 	l.index = l.index + copy(l.buffer[l.index:], name)
@@ -396,6 +426,7 @@ func (l *Line) Uint16(name string, value uint16) *Line {
 	return l
 }
 
+// Uint32 appends a uint32 field to the line
 func (l *Line) Uint32(name string, value uint32) *Line {
 	l.appendByte(' ')
 	l.index = l.index + copy(l.buffer[l.index:], name)
@@ -405,6 +436,7 @@ func (l *Line) Uint32(name string, value uint32) *Line {
 	return l
 }
 
+// Uint16Hex appends a uint16 in hexadecimal format
 func (l *Line) Uint16Hex(name string, value uint16) *Line {
 	l.appendByte(' ')
 	l.index = l.index + copy(l.buffer[l.index:], name)
@@ -418,6 +450,7 @@ func (l *Line) Uint16Hex(name string, value uint16) *Line {
 	return l
 }
 
+// Int appends a int to the line
 func (l *Line) Int(name string, value int) *Line {
 	l.buffer[l.index] = ' '
 	l.index++
@@ -483,6 +516,7 @@ func (l *Line) appendIP6(ip net.IP) {
 	}
 }
 
+// IPSlice appends a net.IP field to the line
 func (l *Line) IPSlice(name string, value net.IP) *Line {
 	l.appendByte(' ')
 	l.index = l.index + copy(l.buffer[l.index:], name)
@@ -505,6 +539,7 @@ func (l *Line) IPSlice(name string, value net.IP) *Line {
 	return l
 }
 
+// IP appends a netip.Addr field to the line
 func (l *Line) IP(name string, value netip.Addr) *Line {
 	l.appendByte(' ')
 	l.index = l.index + copy(l.buffer[l.index:], name)
@@ -519,6 +554,7 @@ func (l *Line) IP(name string, value netip.Addr) *Line {
 	return l
 }
 
+// IPArray appends a array of IPs to the line
 func (l *Line) IPArray(name string, value []net.IP) *Line {
 	if l.index+len(name)+4 > cap(l.buffer) {
 		return l
@@ -582,8 +618,6 @@ func (l *Line) writeHex(value byte) {
 	} else {
 		l.appendByte(x%10 + 'a')
 	}
-	// l.appendByte(hexAscii[value>>4])
-	// l.appendByte(hexAscii[value&0x0f])
 }
 
 // ByteArray log a []byte in hexadecimal
@@ -612,44 +646,3 @@ func (l *Line) ByteArray(name string, value []byte) *Line {
 	}
 	return l
 }
-
-/**
-[]interface() does not compile - this is a go design
-...Fastlog does not work either
-
-func (l *Line) FastLogArray(name string, value []interface{}) *Line {
-	if l.index+len(name)+4 > cap(l.buffer) {
-		return l
-	}
-	l.appendByte(' ')
-	l.index = l.index + copy(l.buffer[l.index:], name)
-	l.appendByte('=')
-	l.appendByte('[')
-	if len(value) <= 0 {
-		l.appendByte(']')
-		return l
-	}
-
-	tmp := Line{}
-	for _, v := range value {
-		tmp.index = 0
-		if fl, ok := v.(FastLog); ok {
-			fl.FastLog(&tmp)
-		} else {
-			tmp.index = tmp.index + copy(tmp.buffer[tmp.index:], "invalid fastlog interface")
-		}
-		if l.index+tmp.index+4 > cap(l.buffer) {
-			break
-		}
-		l.appendByte('{')
-		l.index = l.index + copy(l.buffer[l.index:], tmp.buffer[:tmp.index])
-		l.appendByte('}')
-		l.appendByte(',')
-		l.appendByte(' ')
-	}
-	l.index--
-	l.appendByte(']')
-	return l
-}
-
-**/

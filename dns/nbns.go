@@ -9,7 +9,6 @@ import (
 	"syscall"
 
 	"github.com/irai/packet"
-	"github.com/irai/packet/fastlog"
 	"golang.org/x/net/dns/dnsmessage"
 )
 
@@ -229,7 +228,7 @@ func (h *DNSHandler) ProcessNBNS(host *packet.Host, ether packet.Ether, payload 
 		return name, err
 	}
 	if Debug {
-		fastlog.NewLine(moduleNBNS, "new nbns packet").Stringer(host).Struct(dns).Write()
+		Logger.Msg("new nbns packet").Stringer(host).Struct(dns).Write()
 	}
 	var p dnsmessage.Parser
 	dnsHeader, err := p.Start(payload)
@@ -266,7 +265,7 @@ func (h *DNSHandler) ProcessNBNS(host *packet.Host, ether packet.Ether, payload 
 			table, err := processNBNSNodeStatusResponse(r.Data)
 			if err == nil && len(table) > 0 {
 				name.Name = table[0]
-				fastlog.NewLine("dns", "nbns new entry").String("name", name.Name).Write()
+				Logger.Msg("nbns new entry").String("name", name.Name).Write()
 				return name, nil
 			}
 		default:

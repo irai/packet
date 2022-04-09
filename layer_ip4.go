@@ -33,7 +33,7 @@ func (p IP4) NetaddrDst() netip.Addr { return netip.AddrFrom4(*((*[4]byte)(p[16:
 func (p IP4) TotalLen() int   { return int(binary.BigEndian.Uint16(p[2:4])) } // total packet size including header and payload
 func (p IP4) Payload() []byte { return p[p.IHL():p.TotalLen()] }
 func (p IP4) String() string {
-	return fastlog.NewLine("", "").Struct(p).ToString()
+	return Logger.Msg("").Struct(p).ToString()
 }
 
 func (p IP4) IsValid() error {
@@ -150,7 +150,7 @@ const UDPHeaderLen = 8
 type UDP []byte
 
 func (p UDP) String() string {
-	return fastlog.NewLine("", "").Struct(p).ToString()
+	return Logger.Msg("").Struct(p).ToString()
 }
 
 // FastLog implements fastlog interface

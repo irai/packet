@@ -8,8 +8,6 @@ import (
 	"encoding/hex"
 	"net"
 	"strings"
-
-	"github.com/irai/packet/fastlog"
 )
 
 // Gzip commpressed file containing mac OUI and manufacturer name.
@@ -55,11 +53,11 @@ func init() {
 		manufacturersMap[string(d)] = strings.Join(s[1:], " ")
 	}
 	if err := scanner.Err(); err != nil {
-		fastlog.NewLine(module, "error reading manufacturing file").Int("count", countErrors).Write()
+		Logger.Msg("error reading manufacturing file").Int("count", countErrors).Write()
 		panic(err)
 	}
 	if countErrors != 0 {
-		fastlog.NewLine(module, "error in manufacturing file").Int("count", countErrors).Write()
+		Logger.Msg("error in manufacturing file").Int("count", countErrors).Write()
 		panic(err)
 	}
 }

@@ -8,7 +8,6 @@ import (
 	"net/netip"
 	"time"
 
-	"github.com/irai/packet/fastlog"
 	"golang.org/x/net/ipv6"
 )
 
@@ -223,7 +222,7 @@ func (h *Session) ICMP6SendRouterAdvertisement(prefixes []PrefixInformation, rdn
 	if len(prefixes) == 0 {
 		return nil
 	}
-	fastlog.NewLine(module, "send router advertisement").Struct(dstAddr).Write()
+	Logger.Msg("send router advertisement").Struct(dstAddr).Write()
 
 	var options []Option
 	if rdnss != nil {
@@ -300,7 +299,7 @@ func (h *Session) ICMP6SendNeighbourSolicitation(srcAddr Addr, dstAddr Addr, tar
 	p, _ := ICMP6NeighborSolicitationMarshal(targetIP, h.NICInfo.HostAddr4.MAC)
 
 	if Logger.IsDebug() {
-		fastlog.NewLine(module, "send NS request - src").Struct(srcAddr).Label("dst").Struct(dstAddr).IP("targetip", targetIP).Write()
+		Logger.Msg("send NS request - src").Struct(srcAddr).Label("dst").Struct(dstAddr).IP("targetip", targetIP).Write()
 	}
 	return h.icmp6SendPacket(srcAddr, dstAddr, p)
 }

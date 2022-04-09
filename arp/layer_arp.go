@@ -54,7 +54,7 @@ func (b ARP) SrcMAC() net.HardwareAddr { return net.HardwareAddr(b[8:14]) }
 func (b ARP) SrcIP() netip.Addr        { return netip.AddrFrom4(*(*[4]byte)(b[14:18])) }
 func (b ARP) DstMAC() net.HardwareAddr { return net.HardwareAddr(b[18:24]) }
 func (b ARP) DstIP() netip.Addr        { return netip.AddrFrom4(*(*[4]byte)(b[24:28])) }
-func (b ARP) String() string           { return fastlog.NewLine("", "").Struct(b).ToString() }
+func (b ARP) String() string           { return Logger.Msg("").Struct(b).ToString() }
 
 func (b ARP) FastLog(line *fastlog.Line) *fastlog.Line {
 	line.Uint16("operation", b.Operation())

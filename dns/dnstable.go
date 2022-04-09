@@ -6,7 +6,6 @@ import (
 	"net/netip"
 
 	"github.com/irai/packet"
-	"github.com/irai/packet/fastlog"
 )
 
 func (h *DNSHandler) PrintDNSTable() {
@@ -14,7 +13,7 @@ func (h *DNSHandler) PrintDNSTable() {
 	defer h.mutex.RUnlock()
 	fmt.Printf("dns table len=%d\n", len(h.DNSTable))
 	for _, v := range h.DNSTable {
-		fastlog.NewLine(module, "entry").Struct(v).Write()
+		Logger.Msg("entry").Struct(v).Write()
 	}
 }
 

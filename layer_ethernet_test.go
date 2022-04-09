@@ -3,8 +3,6 @@ package packet
 import (
 	"syscall"
 	"testing"
-
-	"github.com/irai/packet/fastlog"
 )
 
 func DONTestPadding(t *testing.T) {
@@ -63,7 +61,7 @@ func TestIEEE1905_IsValid(t *testing.T) {
 			if tt.wantErr == true {
 				return
 			}
-			fastlog.NewLine("test", "ieee test packet").Struct(p).Write()
+			Logger.Msg("test" + "ieee test packet").Struct(p).Write()
 		})
 	}
 }
@@ -103,7 +101,7 @@ func TestEthernetPauseFrame_IsValid(t *testing.T) {
 			if tt.wantErr == true {
 				return
 			}
-			fastlog.NewLine("test", "ethernet pause test packet").Struct(p).Write()
+			Logger.Msg("test" + "ethernet pause test packet").Struct(p).Write()
 		})
 	}
 }
@@ -134,7 +132,7 @@ func TestLLPDFrame_IsValid(t *testing.T) {
 			if tt.wantErr == true {
 				return
 			}
-			fastlog.NewLine("test", "LLDP packet").Struct(p).Write()
+			Logger.Msg("test" + "LLDP packet").Struct(p).Write()
 		})
 	}
 }

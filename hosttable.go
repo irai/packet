@@ -38,7 +38,7 @@ type Host struct {
 }
 
 func (e *Host) String() string {
-	return fastlog.NewLine("", "").Struct(e).ToString()
+	return Logger.Msg("").Struct(e).ToString()
 }
 
 func (e Host) FastLog(l *fastlog.Line) *fastlog.Line {
@@ -90,7 +90,7 @@ func (h *Session) printHostTable() {
 	count := 0
 	for _, v := range h.MACTable.Table {
 		for _, host := range v.HostList {
-			fastlog.NewLine("packet", "host").Struct(host).Write()
+			Logger.Msg("host").Struct(host).Write()
 			count++
 		}
 	}

@@ -15,7 +15,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/irai/packet/fastlog"
 	"github.com/vishvananda/netlink"
 )
 
@@ -114,7 +113,7 @@ func GetNICInfo(nic string) (info *NICInfo, err error) {
 	//   inet 192.168.0.129/24 brd 192.168.0.255 scope global secondary eth0
 	//      valid_lft forever preferred_lft forever
 	if defaultIP := defaultOutboundIP(); info.HostAddr4.IP != defaultIP {
-		fastlog.NewLine(module, "warning host IP is different than default outbound IP").IP("hostIP", info.HostAddr4.IP).IP("defaultIP", defaultIP).Write()
+		Logger.Msg("warning host IP is different than default outbound IP").IP("hostIP", info.HostAddr4.IP).IP("defaultIP", defaultIP).Write()
 	}
 
 	defaultGW, err := GetIP4DefaultGatewayAddr(nic)

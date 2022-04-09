@@ -20,7 +20,7 @@ var _ net.Addr = &Addr{}
 
 // String returns the address's hardware address.
 func (a Addr) String() string {
-	return fastlog.NewLine("", "").Struct(a).ToString()
+	return Logger.Msg("").Struct(a).ToString()
 }
 
 // FastLog implements fastlog interface.

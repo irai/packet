@@ -129,7 +129,7 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 		// | request    | 1 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  targetIP |
 		// +============+===+===========+===========+============+============+===================+===========+
 		if Logger.IsDebug() {
-			Logger.NewLine(module, "request rcvd").MAC("ethSrc", frame.SrcAddr.MAC).MAC("ethDst", frame.DstAddr.MAC).Struct(arpFrame).Write()
+			Logger.Msg("request rcvd").MAC("ethSrc", frame.SrcAddr.MAC).MAC("ethDst", frame.DstAddr.MAC).Struct(arpFrame).Write()
 		}
 		// if we are spoofing the src host and the src host is trying to discover the router IP,
 		// reply on behalf of the router
@@ -156,7 +156,7 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 		// | ACD probe  | 1 | broadcast | clientMAC | clientMAC  | 0x00       | 0x00              |  targetIP |
 		// +============+===+===========+===========+============+============+===================+===========+
 		if Logger.IsDebug() {
-			Logger.NewLine(module, "probe rcvd").MAC("ethSrc", frame.SrcAddr.MAC).MAC("ethDst", frame.DstAddr.MAC).Struct(arpFrame).Write()
+			Logger.Msg("probe rcvd").MAC("ethSrc", frame.SrcAddr.MAC).MAC("ethDst", frame.DstAddr.MAC).Struct(arpFrame).Write()
 		}
 
 		// if dhcpv4 spoofing then reject any other ip that is not the spoofed IP on offer
@@ -179,7 +179,7 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 		// | ACD announ | 1 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  clientIP |
 		// +============+===+===========+===========+============+============+===================+===========+
 		if Logger.IsDebug() {
-			Logger.NewLine(module, "announcement rcvd").MAC("ethSrc", frame.SrcAddr.MAC).MAC("ethDst", frame.DstAddr.MAC).Struct(arpFrame).Write()
+			Logger.Msg("announcement rcvd").MAC("ethSrc", frame.SrcAddr.MAC).MAC("ethDst", frame.DstAddr.MAC).Struct(arpFrame).Write()
 		}
 
 	default:
@@ -190,7 +190,7 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 		// | gratuitous | 2 | broadcast | clientMAC | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  clientIP |
 		// +============+===+===========+===========+============+============+===================+===========+
 		if Logger.IsDebug() {
-			Logger.NewLine(module, "reply rcvd").MAC("ethSrc", frame.SrcAddr.MAC).MAC("ethDst", frame.DstAddr.MAC).Struct(arpFrame).Write()
+			Logger.Msg("reply rcvd").MAC("ethSrc", frame.SrcAddr.MAC).MAC("ethDst", frame.DstAddr.MAC).Struct(arpFrame).Write()
 		}
 	}
 	return nil

@@ -13,14 +13,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/irai/packet"
 	"github.com/irai/packet/fastlog"
+
+	"github.com/irai/packet"
 )
 
-// Debug enable/disable debug messages
-var Debug bool
-
 const module = "dhcp4"
+
+var Debug bool
+var Logger = fastlog.New(module)
 
 type Mode int32
 
@@ -273,7 +274,7 @@ func (h *Handler) CheckAddr(addr packet.Addr) error {
 	if lease != nil && lease.State == StateAllocated {
 		return nil
 	}
-	fastlog.NewLine(module, "failed to get dhcp hunt status").Struct(addr).Error(packet.ErrNotFound).Write()
+	Logger.Msg( "failed to get dhcp hunt status").Struct(addr).Error(packet.ErrNotFound).Write()
 	return packet.ErrNotFound
 }
 ***/
@@ -291,14 +292,14 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 	// if udp.DstPort() == DHCP4ClientPort {
 	if frame.DstAddr.Port == DHCP4ClientPort {
 		if Debug {
-			fastlog.NewLine(module, "dhcp client packet").Struct(dhcpFrame).Write()
+			Logger.Msg("dhcp client packet").Struct(dhcpFrame).Write()
 		}
 		err := h.processClientPacket(frame.Host, dhcpFrame)
 		return err
 	}
 
 	if Debug {
-		fastlog.NewLine(module, "process packet").Label("src").Struct(frame.SrcAddr).Label("dst").Struct(frame.DstAddr).Struct(dhcpFrame).Write()
+		Logger.Msg("process packet").Label("src").Struct(frame.SrcAddr).Label("dst").Struct(frame.DstAddr).Struct(dhcpFrame).Write()
 	}
 
 	options := dhcpFrame.ParseOptions()
@@ -342,7 +343,7 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 			dstAddr = packet.Addr{MAC: frame.SrcAddr.MAC, IP: frame.SrcAddr.IP, Port: DHCP4ClientPort}
 		}
 		if Debug {
-			fastlog.NewLine(module, "send reply to").Struct(dstAddr).Struct(response).Write()
+			Logger.Msg("send reply to").Struct(dstAddr).Struct(response).Write()
 		}
 		srcAddr := packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: h.session.NICInfo.HostAddr4.IP, Port: DHCP4ServerPort}
 		if err := sendDHCP4Packet(h.session.Conn, srcAddr, dstAddr, response); err != nil {

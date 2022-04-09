@@ -66,7 +66,7 @@ func main() {
 			}
 
 			if packet.Logger.IsDebug() && frame.PayloadID != packet.PayloadTCP {
-				frame.Log(fastlog.NewLine("dhcpd", "got packet")).Write()
+				frame.Log(packet.Logger.Msg("got packet")).Write()
 			}
 			switch frame.PayloadID {
 			case packet.PayloadDNS:

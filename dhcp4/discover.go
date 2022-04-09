@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/irai/packet"
-	"github.com/irai/packet/fastlog"
 )
 
 // handleDiscover respond with a DHCP offer packet
@@ -42,7 +41,7 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (d DHCP4) {
 	reqIP, _ := netip.AddrFromSlice(options[OptionRequestedIPAddress])
 	name := string(options[OptionHostName])
 
-	fastlog.NewLine(module, "discover rcvd").ByteArray("xid", p.XId()).ByteArray("clientid", clientID).IP("ip", reqIP).String("name", name).Uint16("secs", p.Secs()).Write()
+	Logger.Msg("discover rcvd").ByteArray("xid", p.XId()).ByteArray("clientid", clientID).IP("ip", reqIP).String("name", name).Uint16("secs", p.Secs()).Write()
 
 	lease := h.findOrCreate(clientID, p.CHAddr(), name)
 
@@ -52,7 +51,7 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (d DHCP4) {
 		// To fix forever discovery loop where client always get the IP from router but is rejected by our ARP
 		// if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && lease.subnet.Stage == packet.StageRedirected) {
 		// fmt.Printf("dhcp4 : discover - send 256 discover packets %s\n", fields)
-		fastlog.NewLine(module, "discover - send 256 discover packets").Write()
+		Logger.Msg("discover - send 256 discover packets").Write()
 		h.attackDHCPServer(options)
 	}
 
@@ -78,7 +77,7 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (d DHCP4) {
 
 	if !lease.IPOffer.IsValid() {
 		if err := h.allocIPOffer(lease, reqIP); err != nil {
-			fastlog.NewLine(module, "all ips allocated, failing silently").Error(err).Write()
+			Logger.Msg("all ips allocated, failing silently").Error(err).Write()
 			h.delete(lease)
 			return nil
 		}
@@ -101,7 +100,7 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (d DHCP4) {
 	// keep chAddr, ciAddr, xid
 	ret := Marshall(p, BootReply, Offer, nil, netip.Addr{}, lease.IPOffer, nil, false, opts, options[OptionParameterRequestList])
 	if Debug {
-		fastlog.NewLine(module, "offer options").Sprintf("optrecv", options).Sprintf("optsent", ret.ParseOptions()).Write()
+		Logger.Msg("offer options").Sprintf("optrecv", options).Sprintf("optsent", ret.ParseOptions()).Write()
 	}
 
 	//Attemp to disrupt the lan DHCP handshake
@@ -116,6 +115,6 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (d DHCP4) {
 
 	// Set the IP4 offer to be later checked in ARP ACD
 	h.session.SetDHCPv4IPOffer(lease.Addr.MAC, lease.IPOffer, packet.NameEntry{Type: module, Name: name})
-	fastlog.NewLine(module, "offer OK").ByteArray("xid", p.XId()).ByteArray("clientid", clientID).IP("ip", lease.IPOffer).String("subnet", lease.subnet.ID).Write()
+	Logger.Msg("offer OK").ByteArray("xid", p.XId()).ByteArray("clientid", clientID).IP("ip", lease.IPOffer).String("subnet", lease.subnet.ID).Write()
 	return ret
 }

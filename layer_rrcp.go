@@ -48,7 +48,7 @@ func (p RRCP) RegisterAddr() uint16 { return binary.BigEndian.Uint16(p[4:6]) } /
 func (p RRCP) RegisterData() uint16 { return binary.BigEndian.Uint16(p[6:8]) } // register data
 
 func (p RRCP) String() string {
-	return fastlog.NewLine("", "").Struct(p).ToString()
+	return Logger.Msg("").Struct(p).ToString()
 }
 
 func (p RRCP) FastLog(l *fastlog.Line) *fastlog.Line {

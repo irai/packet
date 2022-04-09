@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/irai/packet"
-	"github.com/irai/packet/fastlog"
 )
 
 // IsHunting returns true if the ip is activelly hunted via a goroutine
@@ -43,7 +42,7 @@ func (h *Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
 	h.huntList[string(addr.MAC)] = addr
 
 	if Logger.IsInfo() {
-		fastlog.NewLine(module, "start hunt").Struct(addr).Write()
+		Logger.Msg("start hunt").Struct(addr).Write()
 	}
 	go h.spoofLoop(addr)
 	return packet.StageHunt, nil
@@ -59,10 +58,10 @@ func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
 	}
 	h.arpMutex.Unlock()
 	if !hunting {
-		fastlog.NewLine(module, "error stop hunt failed - not in hunt stage").Struct(addr).Write()
+		Logger.Msg("error stop hunt failed - not in hunt stage").Struct(addr).Write()
 	}
 	if Logger.IsInfo() {
-		fastlog.NewLine(module, "stop hunt").Struct(addr).Write()
+		Logger.Msg("stop hunt").Struct(addr).Write()
 	}
 	return packet.StageNormal, nil
 }
@@ -86,14 +85,14 @@ func (h *Handler) spoofLoop(addr packet.Addr) {
 
 		if !hunting || h.closed {
 			if Logger.IsInfo() {
-				fastlog.NewLine(module, "hunt loop stop").Struct(addr).Int("repeat", nTimes).String("duration", time.Since(startTime).String()).Write()
+				Logger.Msg("hunt loop stop").Struct(addr).Int("repeat", nTimes).String("duration", time.Since(startTime).String()).Write()
 			}
 
 			// When hunt terminate normally, clear the arp table with announcement to real router mac.
 			if !h.closed {
 				// request will fix the ether src mac to host to prevent ethernet port disabling
 				if err := h.RequestRaw(addr.MAC, h.session.NICInfo.RouterAddr4, h.session.NICInfo.RouterAddr4); err != nil {
-					fastlog.NewLine(module, "error send request packet").Struct(addr).Error(err).Write()
+					Logger.Msg("error send request packet").Struct(addr).Error(err).Write()
 				}
 			}
 			return
@@ -105,13 +104,13 @@ func (h *Handler) spoofLoop(addr packet.Addr) {
 		// i.e. tell target I am 192.168.0.1
 		err := h.AnnounceTo(targetAddr.MAC, h.session.NICInfo.RouterAddr4.IP)
 		if err != nil {
-			fastlog.NewLine(module, "error send announcement packet").Struct(targetAddr).Error(err).Write()
+			Logger.Msg("error send announcement packet").Struct(targetAddr).Error(err).Write()
 			return
 		}
 
 		if nTimes%16 == 0 { // minimise logging
 			if Logger.IsInfo() {
-				fastlog.NewLine(module, "hunt loop attack").Struct(targetAddr).Int("repeat", nTimes).String("duration", time.Since(startTime).String()).Write()
+				Logger.Msg("hunt loop attack").Struct(targetAddr).Int("repeat", nTimes).String("duration", time.Since(startTime).String()).Write()
 			}
 		}
 		nTimes++

@@ -17,23 +17,24 @@ func Benchmark_FastLogPrint(b *testing.B) {
 	h, _ := testSession()
 	frame, _ := h.Parse(ether)
 
-	fastlog.Std.Out = ioutil.Discard
+	fastlog.DefaultIOWriter = ioutil.Discard
+	logger := fastlog.New("test")
 	b.Run("ether", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			fastlog.Std.NewLine("ether", "").Struct(ether).Write()
+			logger.Msg("ether").Struct(ether).Write()
 		}
 	})
 	b.Run("ip", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			fastlog.Std.NewLine("ipv4", "").Struct(ip4).Write()
+			logger.Msg("ipv4").Struct(ip4).Write()
 		}
 	})
 	b.Run("frame", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			frame.Log(fastlog.Std.NewLine("frame", "")).Write()
+			frame.Log(logger.Msg("frame")).Write()
 		}
 	})
 }

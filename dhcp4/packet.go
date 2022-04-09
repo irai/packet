@@ -90,7 +90,7 @@ func (p DHCP4) IsValid() error {
 }
 
 func (p DHCP4) String() string {
-	l := fastlog.NewLine("", "")
+	l := Logger.Msg("")
 	return p.FastLog(l).ToString()
 }
 

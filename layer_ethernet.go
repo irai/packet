@@ -181,7 +181,7 @@ func (p Ether) AppendPayload(payload []byte) (Ether, error) {
 }
 
 func (p Ether) String() string {
-	return fastlog.NewLine("", "").Struct(p).ToString()
+	return Logger.Msg("").Struct(p).ToString()
 }
 
 // Fastlog implements fastlog struct interface
@@ -225,7 +225,7 @@ func (p IEEE1905) Flags() uint8      { return p[7] }
 func (p IEEE1905) TLV() []byte       { return p[8:] }
 
 func (p IEEE1905) String() string {
-	line := fastlog.NewLine("", "")
+	line := Logger.Msg("")
 	return p.FastLog(line).ToString()
 }
 
@@ -257,7 +257,7 @@ func (p EthernetPause) Duration() uint16 { return binary.BigEndian.Uint16(p[2:4]
 func (p EthernetPause) Reserved() []byte { return p[4:] }
 
 func (p EthernetPause) String() string {
-	return fastlog.NewLine("", "").Struct(p).ToString()
+	return Logger.Msg("").Struct(p).ToString()
 }
 
 func (p EthernetPause) FastLog(line *fastlog.Line) *fastlog.Line {
@@ -316,7 +316,7 @@ func (p LLDP) getTLV(n int) (t int, l int, v []byte, err error) {
 }
 
 func (p LLDP) String() string {
-	return fastlog.NewLine("", "").Struct(p).ToString()
+	return Logger.Msg("").Struct(p).ToString()
 }
 
 func (p LLDP) Type(t int) string {

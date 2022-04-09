@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/irai/packet"
-	"github.com/irai/packet/fastlog"
 )
 
 // HandleRequest process client DHCPREQUEST message to servers
@@ -101,15 +100,15 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 		operation = rebooting
 	}
 
-	fastlog.NewLine(module, "request rcvd").ByteArray("xid", p.XId()).ByteArray("clientid", clientID).IP("ip", reqIP).String("name", nameEntry.Name).MAC("chaddr", p.CHAddr()).IP("serverID", serverIP).Write()
+	Logger.Msg("request rcvd").ByteArray("xid", p.XId()).ByteArray("clientid", clientID).IP("ip", reqIP).String("name", nameEntry.Name).MAC("chaddr", p.CHAddr()).IP("serverID", serverIP).Write()
 
 	if Debug {
-		fastlog.NewLine(module, "request parameters").ByteArray("xid", p.XId()).IP("ciaddr", p.CIAddr()).Bool("brd", p.Broadcast()).IP("serverIP", serverIP).Write()
+		Logger.Msg("request parameters").ByteArray("xid", p.XId()).IP("ciaddr", p.CIAddr()).Bool("brd", p.Broadcast()).IP("serverIP", serverIP).Write()
 	}
 
 	// reqIP must always be filled in
 	if !reqIP.IsValid() || reqIP.IsUnspecified() {
-		fastlog.NewLine(module, "invalid request IP").ByteArray("xid", p.XId()).String("optionIP", string(options[OptionRequestedIPAddress])).IP("ciaddr", p.CIAddr()).Write()
+		Logger.Msg("invalid request IP").ByteArray("xid", p.XId()).String("optionIP", string(options[OptionRequestedIPAddress])).IP("ciaddr", p.CIAddr()).Write()
 		return nil
 	}
 
@@ -136,13 +135,13 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 			if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && captured) {
 				// The client is attempting to confirm an offer with another server
 				// Send a nack to client
-				fastlog.NewLine(module, "request NACK - select is for another server").ByteArray("xid", p.XId()).IP("serverIP", serverIP).Uint16("secs", p.Secs()).Write()
+				Logger.Msg("request NACK - select is for another server").ByteArray("xid", p.XId()).IP("serverIP", serverIP).Uint16("secs", p.Secs()).Write()
 				return nakPacket(p, subnet.DHCPServer.AsSlice(), clientID)
 			}
 
 			// almost always a new host IP
 			h.session.DHCPv4Update(p.CHAddr(), reqIP, nameEntry)
-			fastlog.NewLine(module, "ignore select for another server").ByteArray("xid", p.XId()).IP("serverIP", serverIP).Write()
+			Logger.Msg("ignore select for another server").ByteArray("xid", p.XId()).IP("serverIP", serverIP).Write()
 			return nil // request not for us - silently discard packet
 		}
 
@@ -150,10 +149,10 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 			(lease.State == StateDiscover && (!bytes.Equal(lease.XID, p.XId()) || lease.IPOffer != reqIP)) || // invalid discover request
 			(lease.State == StateAllocated && lease.Addr.IP != reqIP) { // invalid request - iphone send duplicate select packets - let it pass
 			// fmt.Printf("dhcp4 : request NACK - select invalid parameters %s lxid=%v leaseIP=%s\n", fields, lease.XID, lease.Addr.IP)
-			fastlog.NewLine(module, "request NACK - select invalid parameters").ByteArray("xid", p.XId()).ByteArray("lxid", lease.XID).IP("leaseIP", lease.Addr.IP).Write()
+			Logger.Msg("request NACK - select invalid parameters").ByteArray("xid", p.XId()).ByteArray("lxid", lease.XID).IP("leaseIP", lease.Addr.IP).Write()
 			return nakPacket(p, subnet.DHCPServer.AsSlice(), clientID)
 		}
-		fastlog.NewLine(module, "request ACK - select").ByteArray("xid", p.XId()).ByteArray("clientid", clientID).IP("ip", reqIP).String("subnet", lease.subnet.ID).Write()
+		Logger.Msg("request ACK - select").ByteArray("xid", p.XId()).ByteArray("clientid", clientID).IP("ip", reqIP).String("subnet", lease.subnet.ID).Write()
 
 	case renewing:
 		// If renewing then this packet was unicast to us and the client
@@ -161,11 +160,11 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 		if lease.State != StateAllocated ||
 			lease.Addr.IP != reqIP || !bytes.Equal(lease.Addr.MAC, p.CHAddr()) ||
 			lease.DHCPExpiry.Before(time.Now()) {
-			fastlog.NewLine(module, "request NACK - renew invalid or expired lease").ByteArray("xid", p.XId()).IP("gw", subnet.DefaultGW).Write()
+			Logger.Msg("request NACK - renew invalid or expired lease").ByteArray("xid", p.XId()).IP("gw", subnet.DefaultGW).Write()
 
 			return nakPacket(p, subnet.DHCPServer.AsSlice(), clientID)
 		}
-		fastlog.NewLine(module, "request ACK - renewing").ByteArray("xid", p.XId()).IP("ip", reqIP).Write()
+		Logger.Msg("request ACK - renewing").ByteArray("xid", p.XId()).IP("ip", reqIP).Write()
 
 	case rebooting, rebinding:
 		// rebooting is a common operation and occurs when the client is rejoining the network after
@@ -186,7 +185,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 		h.session.DHCPv4Update(p.CHAddr(), reqIP, nameEntry)
 
 		if lease.State == StateFree {
-			fastlog.NewLine(module, "client lease does not exist").ByteArray("xid", p.XId()).IP("ip", reqIP).Write()
+			Logger.Msg("client lease does not exist").ByteArray("xid", p.XId()).IP("ip", reqIP).Write()
 
 			if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && captured) {
 				// Attempt to force other dhcp server to release the IP
@@ -204,7 +203,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 		if lease.State != StateAllocated ||
 			lease.Addr.IP != reqIP || !bytes.Equal(lease.Addr.MAC, p.CHAddr()) ||
 			!subnet.LAN.Contains(lease.Addr.IP) {
-			fastlog.NewLine(module, "request NACK - rebooting").ByteArray("xid", p.XId()).IP("ip", reqIP).Write()
+			Logger.Msg("request NACK - rebooting").ByteArray("xid", p.XId()).IP("ip", reqIP).Write()
 
 			if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && captured) {
 				// Attempt to force other dhcp server to release the IP
@@ -219,13 +218,13 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 		}
 
 		if operation == rebooting {
-			fastlog.NewLine(module, "request ACK - rebooting").ByteArray("xid", p.XId()).IP("ip", reqIP).Write()
+			Logger.Msg("request ACK - rebooting").ByteArray("xid", p.XId()).IP("ip", reqIP).Write()
 		} else {
-			fastlog.NewLine(module, "request ACK - rebinding").ByteArray("xid", p.XId()).IP("ip", reqIP).Write()
+			Logger.Msg("request ACK - rebinding").ByteArray("xid", p.XId()).IP("ip", reqIP).Write()
 		}
 
 	default:
-		fastlog.NewLine(module, "error in request - ignore invalid operation").ByteArray("xid", p.XId()).Uint8("operation", operation).Write()
+		Logger.Msg("error in request - ignore invalid operation").ByteArray("xid", p.XId()).Uint8("operation", operation).Write()
 		return nil
 	}
 
@@ -249,7 +248,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 	ret := Marshall(p, BootReply, ACK, nil, netip.Addr{}, lease.Addr.IP, nil, false, opts, options[OptionParameterRequestList])
 
 	if Debug {
-		l := fastlog.NewLine(module, "request ack options recv").ByteArray("xid", p.XId()).Sprintf("options", options[OptionParameterRequestList])
+		l := Logger.Msg("request ack options recv").ByteArray("xid", p.XId()).Sprintf("options", options[OptionParameterRequestList])
 		l.Module(module, "request ack options sent").ByteArray("xid", p.XId()).Sprintf("options", ret.ParseOptions())
 		l.Write()
 	}

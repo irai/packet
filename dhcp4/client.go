@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/irai/packet"
-	"github.com/irai/packet/fastlog"
 )
 
 var (
@@ -43,7 +42,7 @@ func (h *Handler) attackDHCPServer(options Options) {
 // In most cases the home dhcp will mark the entry but keep the entry in the table
 // This is an error state and the DHCP server should tell the administrator
 func (h *Handler) forceDecline(clientID []byte, serverIP netip.Addr, chAddr net.HardwareAddr, clientIP netip.Addr, xid []byte) {
-	fastlog.NewLine("dhcp4", "client send decline to server").ByteArray("xid", xid).ByteArray("clientid", clientID).IP("ip", clientIP).Write()
+	Logger.Msg("client send decline to server").ByteArray("xid", xid).ByteArray("clientid", clientID).IP("ip", clientIP).Write()
 
 	// use a copy in the goroutine
 	clientID = dupBytes(clientID)
@@ -72,7 +71,7 @@ func (h *Handler) forceDecline(clientID []byte, serverIP netip.Addr, chAddr net.
 //
 // Jan 21 - NOT working; the test router does not drop the entry. WHY?
 func (h *Handler) forceRelease(clientID []byte, serverIP netip.Addr, chAddr net.HardwareAddr, clientIP netip.Addr, xid []byte) {
-	fastlog.NewLine("dhcp4", "client send release to server").ByteArray("xid", xid).ByteArray("clientid", clientID).IP("ip", clientIP).Write()
+	Logger.Msg("client send release to server").ByteArray("xid", xid).ByteArray("clientid", clientID).IP("ip", clientIP).Write()
 
 	chAddr = dupMAC(chAddr)
 	clientID = dupBytes(clientID)
@@ -116,7 +115,7 @@ func (h *Handler) sendDeclineReleasePacket(msgType MessageType, clientID []byte,
 // SendDiscoverPacket send a DHCP discover packet to target
 func (h *Handler) SendDiscoverPacket(chAddr net.HardwareAddr, ciAddr netip.Addr, xid []byte, name string) (err error) {
 	if Debug {
-		fastlog.NewLine(module, "send discover packet").ByteArray("xid", xid).MAC("from", chAddr).IP("ciaddr", ciAddr).Write()
+		Logger.Msg("send discover packet").ByteArray("xid", xid).MAC("from", chAddr).IP("ciaddr", ciAddr).Write()
 	}
 	// Commond options seen on many dhcp clients
 	options := Options{}
@@ -191,7 +190,7 @@ func (h *Handler) processClientPacket(host *packet.Host, req DHCP4) error {
 		return nil
 	}
 
-	fastlog.NewLine("dhcp4", "client offer from another dhcp server").ByteArray("xid", req.XId()).ByteArray("clientid", clientID).IP("ip", req.YIAddr()).Write()
+	Logger.Msg("client offer from another dhcp server").ByteArray("xid", req.XId()).ByteArray("clientid", clientID).IP("ip", req.YIAddr()).Write()
 
 	// Force dhcp server to release the IP
 	if h.mode == ModeSecondaryServer || (h.mode == ModeSecondaryServerNice && h.session.IsCaptured(req.CHAddr())) {

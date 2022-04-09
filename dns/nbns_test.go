@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/irai/packet"
-	"github.com/irai/packet/fastlog"
 )
 
 func Test_encodeNBNSName(t *testing.T) {
@@ -89,11 +88,11 @@ func Test_NBNS(t *testing.T) {
 	Debug = true
 
 	ether := packet.Ether(nbnsFrame)
-	fastlog.NewLine("test", "ether").Struct(ether).Write()
+	Logger.Msg("test" + "ether").Struct(ether).Write()
 	ip := packet.IP4(ether.Payload())
-	fastlog.NewLine("test", "ip").Struct(ip).Write()
+	Logger.Msg("test" + "ip").Struct(ip).Write()
 	udp := packet.UDP(ip.Payload())
-	fastlog.NewLine("test", "udp").Struct(udp).Write()
+	Logger.Msg("test" + "udp").Struct(udp).Write()
 	p := DNS(udp.Payload())
 	if p.IsValid() != nil {
 		t.Fatal("invalid dns packet")

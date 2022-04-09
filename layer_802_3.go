@@ -44,7 +44,7 @@ func (p LLC) Payload() []byte {
 
 func (p LLC) String() string {
 	// return fmt.Sprintf("dsap=%x ssap=%x type=%s control1=%x", p.DSAP(), p.SSAP(), p.Type(), p.Control())
-	line := fastlog.NewLine("", "")
+	line := Logger.Msg("")
 	return p.FastLog(line).ToString()
 }
 
@@ -84,7 +84,7 @@ func (p SNAP) EtherType() uint16      { return binary.BigEndian.Uint16(p[6:8]) }
 func (p SNAP) Payload() []byte        { return p[8:] }
 func (p SNAP) String() string {
 	// return fmt.Sprintf("dsap=0x%x control=0x%x orgid=0x%x ethertype=0x%x", p.DSAP(), p.Control(), p.OrganisationID(), p.EtherType())
-	line := fastlog.NewLine("", "")
+	line := Logger.Msg("")
 	return p.FastLog(line).ToString()
 }
 
@@ -119,7 +119,7 @@ func Process8023Frame(frame Frame, pos int) (int, int, error) {
 		stpCount++
 		now := time.Now()
 		if stpNextLog.Before(now) {
-			fastlog.NewLine(module, "LLC STP protocol").Struct(frame.Ether()).Struct(llc).Int("count", stpCount).ByteArray("payload", frame.Ether().Payload()).Write()
+			Logger.Msg("LLC STP protocol").Struct(frame.Ether()).Struct(llc).Int("count", stpCount).ByteArray("payload", frame.Ether().Payload()).Write()
 			stpNextLog = now.Add(time.Minute * 5)
 		}
 		return 0, 0, nil
@@ -132,12 +132,12 @@ func Process8023Frame(frame Frame, pos int) (int, int, error) {
 			return 0, 0, err
 		}
 		// fmt.Printf("packet: LLC SNAP protocol %s %s payload=[% x]\n", ether, snap, ether[:])
-		fastlog.NewLine(module, "LLC SNAP protocol").Struct(frame.Ether()).Struct(snap).ByteArray("payload", frame.Ether().Payload()).Write()
+		Logger.Msg("LLC SNAP protocol").Struct(frame.Ether()).Struct(snap).ByteArray("payload", frame.Ether().Payload()).Write()
 		return 0, 0, nil
 	}
 
 	if llc.DSAP() == 0xe0 && llc.SSAP() == 0xe0 {
-		fastlog.NewLine(module, "IPX protocol").Struct(frame.Ether()).ByteArray("payload", frame.Ether().Payload()).Write()
+		Logger.Msg("IPX protocol").Struct(frame.Ether()).ByteArray("payload", frame.Ether().Payload()).Write()
 		return 0, 0, nil
 	}
 
@@ -146,6 +146,6 @@ func Process8023Frame(frame Frame, pos int) (int, int, error) {
 	//    sudo tcpdump -vv -x not ip6 and not ip and not arp
 	//    then switch a mobile phone to airplane mode to force a network reconnect
 	// fmt.Printf("packet: rcvd 802.3 LLC frame %s %s payload=[% x]\n", ether, llc, ether[:])
-	fastlog.NewLine(module, "802.3 LLC frame").Struct(frame.Ether()).ByteArray("payload", frame.Ether().Payload()).Write()
+	Logger.Msg("802.3 LLC frame").Struct(frame.Ether()).ByteArray("payload", frame.Ether().Payload()).Write()
 	return 0, 0, nil
 }

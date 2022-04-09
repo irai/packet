@@ -44,7 +44,7 @@ func (p IP6) Dst() netip.Addr    { return netip.AddrFrom16(*(*[16]byte)(p[24:40]
 func (p IP6) Payload() []byte    { return p[40:] }
 func (p IP6) HeaderLen() int     { return 40 }
 func (p IP6) String() string {
-	return fastlog.NewLine("", "").Struct(p).ToString()
+	return Logger.Msg("").Struct(p).ToString()
 }
 
 // Print implements fastlog struct interface

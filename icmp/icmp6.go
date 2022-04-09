@@ -106,7 +106,7 @@ func (h *Handler6) ProcessPacket(pkt packet.Frame) (err error) {
 
 	t := ipv6.ICMPType(icmp6Frame.Type())
 	if Logger6.IsDebug() && t != ipv6.ICMPTypeRouterAdvertisement {
-		fastlog.NewLine("icmp6", "ether").Struct(pkt.Ether()).Module("icmp6", "ip6").Struct(ip6Frame).Module("icmp6", "icmp").Struct(icmp6Frame).Write()
+		Logger6.Msg("ether").Struct(pkt.Ether()).Module("icmp6", "ip6").Struct(ip6Frame).Module("icmp6", "icmp").Struct(icmp6Frame).Write()
 	}
 
 	switch t {
@@ -117,7 +117,7 @@ func (h *Handler6) ProcessPacket(pkt packet.Frame) (err error) {
 			return err
 		}
 		if Logger6.IsDebug() {
-			fastlog.NewLine("icmp6", "neighbor advertisement rcvd").IP("ip", ip6Frame.Src()).Struct(frame).Write()
+			Logger6.Msg("neighbor advertisement rcvd").IP("ip", ip6Frame.Src()).Struct(frame).Write()
 		}
 
 		// When a device gets an IPv6 address, it will join a solicited-node multicast group
@@ -140,7 +140,7 @@ func (h *Handler6) ProcessPacket(pkt packet.Frame) (err error) {
 			return err
 		}
 		if Logger6.IsDebug() {
-			fastlog.NewLine("icmp6", "neighbor solicitation rcvd").IP("ip", ip6Frame.Src()).Struct(frame).Write()
+			Logger6.Msg("neighbor solicitation rcvd").IP("ip", ip6Frame.Src()).Struct(frame).Write()
 		}
 
 		// Source address:
@@ -220,7 +220,7 @@ func (h *Handler6) ProcessPacket(pkt packet.Frame) (err error) {
 		h.Unlock()
 
 		if Logger6.IsDebug() {
-			l := fastlog.NewLine("icmp6", "ether").Struct(pkt.Ether()).Module("icmp6", "ip6").Struct(ip6Frame)
+			l := Logger6.Msg("ether").Struct(pkt.Ether()).Module("icmp6", "ip6").Struct(ip6Frame)
 			l.Module("icmp6", "router advertisement").Struct(icmp6Frame).Sprintf("options", router.Options)
 			l.Write()
 		}
@@ -232,7 +232,7 @@ func (h *Handler6) ProcessPacket(pkt packet.Frame) (err error) {
 			return err
 		}
 		if Logger6.IsDebug() {
-			fastlog.NewLine("icmp6", "router solicitation").IP("ip", ip6Frame.Src()).Struct(frame).Write()
+			Logger6.Msg("router solicitation").IP("ip", ip6Frame.Src()).Struct(frame).Write()
 		}
 
 		// Source address:
