@@ -72,7 +72,7 @@ func (h *Handler) PrintTable() {
 	}
 }
 
-// Spoof send spoofed packets to target when the target host is requesting the gateway address.
+// ProcessPacket process an ARP packet
 //
 // ARP: packet types
 //      note that RFC 3927 specifies 00:00:00:00:00:00 for Request TargetMAC
@@ -162,7 +162,8 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 		// if dhcpv4 spoofing then reject any other ip that is not the spoofed IP on offer
 		if offer := h.session.DHCPv4IPOffer(arpFrame.SrcMAC()); offer.Is4() && offer != arpFrame.DstIP() {
 			// Note: detected one situation where android probed external DNS IP. Not sure if this occur in other clients.
-			//     arp  : probe reject for ip=8.8.8.8 from mac=84:11:9e:03:89:c0 (android phone) - 10 March 2021
+			//       to avoid issues, check DstIP is in the local subnet.
+			//       arp  : probe reject for ip=8.8.8.8 from mac=84:11:9e:03:89:c0 (android phone) - 10 March 2021
 			if h.session.NICInfo.HomeLAN4.Contains(arpFrame.DstIP()) {
 				Logger.Msg("probe reject for").IP("ip", arpFrame.DstIP()).MAC("fromMAC", arpFrame.SrcMAC()).IP("offer", offer).Write()
 				// unicast reply to srcMAC

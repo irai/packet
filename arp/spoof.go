@@ -23,7 +23,8 @@ func (h *Handler) findHuntByIP(ip netip.Addr) (packet.Addr, bool) {
 	return packet.Addr{}, false
 }
 
-// StartHunt implements PacketProcessor interface
+// StartHunt starts a background goroutine to spoof the target addr. This will continue
+// until StopHunt() is called.
 //
 // ARP StartHunt performs the following:
 //  1. add addr to "hunt" list
@@ -44,39 +45,34 @@ func (h *Handler) StartHunt(addr packet.Addr) (packet.HuntStage, error) {
 	if Logger.IsInfo() {
 		fastlog.NewLine(module, "start hunt").Struct(addr).Write()
 	}
-	// fmt.Printf("arp   : start hunt %s\n", addr)
 	go h.spoofLoop(addr)
 	return packet.StageHunt, nil
 }
 
-// StopHunt implements PacketProcessor interface
-// ARP StopHunt will remove the addr from the hunt list which will terminate the hunting goroutine
+// StopHunt stops spoofing the target addr.
 func (h *Handler) StopHunt(addr packet.Addr) (packet.HuntStage, error) {
 	h.arpMutex.Lock()
 	_, hunting := h.huntList[string(addr.MAC)]
 	if hunting {
+		// remove the addr from the hunt list which will cause hunting goroutine to terminate.
 		delete(h.huntList, string(addr.MAC))
 	}
 	h.arpMutex.Unlock()
 	if !hunting {
 		fastlog.NewLine(module, "error stop hunt failed - not in hunt stage").Struct(addr).Write()
-		// fmt.Println("arp   : hunt stop failed - not in hunt stage", addr)
 	}
 	if Logger.IsInfo() {
 		fastlog.NewLine(module, "stop hunt").Struct(addr).Write()
 	}
-	// fmt.Println("arp   : stop hunt", addr)
 	return packet.StageNormal, nil
 }
 
-// spoofLoop attacks the client with ARP attacks
-//
-// It will continuously send a number of ARP packets to client:
-//   1. spoof the client arp table to send router packets to us
+// spoofLoop attacks the client with ARP attacks. The loop will
+// continuously send poisoned arp packets to client to keep its arp
+// table pointing to us as the default gw.
 //
 func (h *Handler) spoofLoop(addr packet.Addr) {
-
-	// The client ARP table is refreshed often and only last for a short while (few minutes)
+	// The client ARP table is refreshed often and only last for a short while (i.e. a few minutes)
 	// To make sure the cache stays poisoned, replay every few seconds with a loop.
 	// 6 second re-arp seem to be adequate;
 	// Experimented with 300ms but no noticeable improvement other the chatty net.
@@ -113,7 +109,7 @@ func (h *Handler) spoofLoop(addr packet.Addr) {
 			return
 		}
 
-		if nTimes%16 == 0 {
+		if nTimes%16 == 0 { // minimise logging
 			if Logger.IsInfo() {
 				fastlog.NewLine(module, "hunt loop attack").Struct(targetAddr).Int("repeat", nTimes).String("duration", time.Since(startTime).String()).Write()
 			}

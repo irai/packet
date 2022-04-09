@@ -85,6 +85,8 @@ func EncodeARP(b []byte, operation uint16, srcAddr packet.Addr, dstAddr packet.A
 	return b
 }
 
+// RequestTo sends an arp request to the destination mac. This is useful
+// to send a unicast request to a host.
 func (h *Handler) RequestTo(dst net.HardwareAddr, targetIP netip.Addr) error {
 	if !targetIP.Is4() {
 		return packet.ErrInvalidIP
@@ -95,7 +97,7 @@ func (h *Handler) RequestTo(dst net.HardwareAddr, targetIP netip.Addr) error {
 	return h.RequestRaw(dst, h.session.NICInfo.HostAddr4, packet.Addr{MAC: packet.EthernetBroadcast, IP: targetIP})
 }
 
-// Request send ARP request from host to targetIP
+// Request send a broadcast ARP request from host to targetIP
 func (h *Handler) Request(targetIP netip.Addr) error {
 	if !targetIP.Is4() {
 		return packet.ErrInvalidIP
@@ -234,11 +236,8 @@ func (h *Handler) WhoIs(ip netip.Addr) (packet.Addr, error) {
 
 // ScanNetwork sends 256 arp requests to identify IPs on the lan
 func (h *Handler) Scan() error {
-
-	// Copy underneath array so we can modify value.
 	ip := h.session.NICInfo.HomeLAN4.Addr()
 	n := (uint32(0xffffffff) << uint32(h.session.NICInfo.HomeLAN4.Bits())) >> h.session.NICInfo.HomeLAN4.Bits()
-
 	for host := uint32(1); host < n; host++ {
 		ip = ip.Next()
 
