@@ -16,7 +16,11 @@ var (
 	}
 )
 
-// Router holds a router identification
+// Router holds a router identification and is useful to implement
+// Router Advertisement Servers.
+//
+// As of April 22,
+// THIS IS INCOMPLETE and not working yet
 type Router struct {
 	Addr            packet.Addr
 	enableRADVS     bool // if true, we respond for this server

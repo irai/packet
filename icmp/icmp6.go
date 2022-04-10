@@ -94,7 +94,8 @@ func (h *Handler6) PingAll() error {
 
 var repeat int = -1
 
-// ProcessPacket handles icmp6 packets
+// ProcessPacket handles icmp6 packets and executes neighbor
+// advertising spoofing for target LLAs.
 func (h *Handler6) ProcessPacket(pkt packet.Frame) (err error) {
 	ip6Frame := pkt.IP6()
 	icmp6Frame := packet.ICMP(pkt.Payload())
