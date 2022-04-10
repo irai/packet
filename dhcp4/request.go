@@ -102,7 +102,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 
 	Logger.Msg("request rcvd").ByteArray("xid", p.XId()).ByteArray("clientid", clientID).IP("ip", reqIP).String("name", nameEntry.Name).MAC("chaddr", p.CHAddr()).IP("serverID", serverIP).Write()
 
-	if Debug {
+	if Logger.IsInfo() {
 		Logger.Msg("request parameters").ByteArray("xid", p.XId()).IP("ciaddr", p.CIAddr()).Bool("brd", p.Broadcast()).IP("serverIP", serverIP).Write()
 	}
 
@@ -247,21 +247,13 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 	opts[OptionIPAddressLeaseTime] = optionsLeaseTime(lease.subnet.Duration) // rfc: must include
 	ret := Marshall(p, BootReply, ACK, nil, netip.Addr{}, lease.Addr.IP, nil, false, opts, options[OptionParameterRequestList])
 
-	if Debug {
+	if Logger.IsInfo() {
 		l := Logger.Msg("request ack options recv").ByteArray("xid", p.XId()).Sprintf("options", options[OptionParameterRequestList])
 		l.Module(module, "request ack options sent").ByteArray("xid", p.XId()).Sprintf("options", ret.ParseOptions())
 		l.Write()
 	}
 
 	h.saveConfig(h.filename)
-
-	/**
-	result.SrcAddr = lease.Addr
-	result.Update = true
-	result.IsRouter = true // hack to mark result as a new host
-	result.HuntStage = lease.subnet.Stage
-	result.NameEntry.Name = lease.Name
-	*/
 
 	// Update session with DHCP details - almost always a new host IP will be setup
 	h.session.DHCPv4Update(lease.Addr.MAC, lease.Addr.IP, nameEntry)

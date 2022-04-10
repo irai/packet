@@ -99,7 +99,7 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (d DHCP4) {
 
 	// keep chAddr, ciAddr, xid
 	ret := Marshall(p, BootReply, Offer, nil, netip.Addr{}, lease.IPOffer, nil, false, opts, options[OptionParameterRequestList])
-	if Debug {
+	if Logger.IsInfo() {
 		Logger.Msg("offer options").Sprintf("optrecv", options).Sprintf("optsent", ret.ParseOptions()).Write()
 	}
 

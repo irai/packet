@@ -132,7 +132,7 @@ func setupTestHandler() *testContext {
 
 	tc.session, err = packet.Config{Conn: tc.inConn, NICInfo: nicInfo}.NewSession("")
 
-	if Debug {
+	if Logger.IsInfo() {
 		fmt.Println("nicinfo: ", tc.session.NICInfo)
 	}
 
@@ -153,7 +153,7 @@ func setupTestHandler() *testContext {
 
 func (tc *testContext) Close() {
 	time.Sleep(time.Millisecond * 20) // wait for all packets to finish
-	if Debug {
+	if Logger.IsInfo() {
 		fmt.Println("teminating context")
 	}
 	tc.wg.Wait()

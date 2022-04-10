@@ -1,8 +1,17 @@
 // Package dhcp4 implements a dhcp server designed to operate as a secondary
 // dhcp server on the same lan.
 //
-// Initial implementation inspired by code written by http://richard.warburton.it/
-// see: https://github.com/krolaw/dhcp4
+// It allows the segmentation of the LAN into two distintict subnets, one used for
+// hosts not captured, and a more confined subnet for hosts in capture state.
+//
+// Captured hosts will have a specific subnet with the default router set to us so that
+// all captured host traffic is directed to us.
+//
+// It may also be set to attack the primary DHCP host to exhaust entries.
+//
+// The original implementation used Richard Burton's dhcp4 package
+// (see: https://github.com/krolaw/dhcp4) for processing of dhcp packets but current versions
+// use our own packet package.
 package dhcp4
 
 import (
@@ -20,8 +29,8 @@ import (
 
 const module = "dhcp4"
 
-var Debug bool
 var Logger = fastlog.New(module)
+var LeaseFilename = "./dhcpleases.yaml"
 
 type Mode int32
 
@@ -48,43 +57,16 @@ type Config struct {
 	LeaseFilename string
 }
 
-type DHCP4Handler interface {
-	// Start() error
-	Close() error
-	ProcessPacket(packet.Frame) error
-	StartHunt(packet.Addr) error
-	StopHunt(packet.Addr) error
-	// CheckAddr(packet.Addr) error
-	MinuteTicker(time.Time) error
-}
-
-// PacketNOOP is a no op packet processor
-type PacketNOOP struct{}
-
-var _ DHCP4Handler = PacketNOOP{}
-
-// func (p PacketNOOP) Start() error                     { return nil }
-func (p PacketNOOP) ProcessPacket(packet.Frame) error { return nil }
-func (p PacketNOOP) StartHunt(addr packet.Addr) error { return nil }
-func (p PacketNOOP) StopHunt(addr packet.Addr) error  { return nil }
-func (p PacketNOOP) Close() error                     { return nil }
-func (p PacketNOOP) MinuteTicker(now time.Time) error { return nil }
-
-var _ DHCP4Handler = &Handler{}
-var LeaseFilename = "./dhcpleases.yaml"
-
-type leaseTable map[string]*Lease
-
 // Handler is the main dhcp4 handler
 type Handler struct {
-	session   *packet.Session // engine handler
-	mode      Mode            // operating mode: primary, secondary, nice
-	filename  string          // leases filename
-	closed    bool            // indicates that Close() function was called
-	closeChan chan bool       // channel to close underlying goroutines
-	table     leaseTable      // in memory lease table
-	net1      *dhcpSubnet     // home LAN
-	net2      *dhcpSubnet     // netfilter LAN - a subnet of net1
+	session   *packet.Session   // engine handler
+	mode      Mode              // operating mode: primary, secondary, nice
+	filename  string            // leases filename
+	closed    bool              // indicates that Close() function was called
+	closeChan chan bool         // channel to close underlying goroutines
+	table     map[string]*Lease // in memory lease table
+	net1      *dhcpSubnet       // home LAN
+	net2      *dhcpSubnet       // netfilter LAN - a subnet of net1
 	sync.Mutex
 }
 
@@ -147,7 +129,7 @@ func (config Config) New(session *packet.Session) (h *Handler, err error) {
 	if err != nil || h.net1 == nil || h.net2 == nil || h.table == nil ||
 		configChanged(homeSubnet, h.net1.SubnetConfig) || configChanged(netfilterSubnet, h.net2.SubnetConfig) {
 		if err != nil && !os.IsNotExist(err) {
-			fmt.Printf("dhcp4: invalid config file=%s. resetting...\n", h.filename)
+			Logger.Msg("invalid config file. resetting...").String("filename", h.filename).Write()
 		}
 		h.table = make(map[string]*Lease)
 
@@ -172,16 +154,7 @@ func (config Config) New(session *packet.Session) (h *Handler, err error) {
 	return h, nil
 }
 
-/**
-// Start implements PacketProcessor interface
-func (h *Handler) Start() error {
-	h.closed = false
-	h.closeChan = make(chan bool) // goroutines listen on this for closure
-	return nil
-}
-***/
-
-// Stop implements PacketProcessor interface
+// Close free up internal resouces.
 func (h *Handler) Close() error {
 	if h.closed {
 		return nil
@@ -191,7 +164,7 @@ func (h *Handler) Close() error {
 	return nil
 }
 
-// MinuteTicker implements packet processor interface
+// MinuteTicker perform checks and free leases as required.
 func (h *Handler) MinuteTicker(now time.Time) error {
 	h.Lock()
 	defer h.Unlock()
@@ -206,8 +179,8 @@ func configChanged(config SubnetConfig, current SubnetConfig) bool {
 		config.DHCPServer != current.DHCPServer ||
 		(config.Duration != 0 && config.Duration != current.Duration) ||
 		(config.FirstIP.Is4() && config.FirstIP != current.FirstIP) {
-		fmt.Printf("dhcp4: config parameters changed new config=%+v\n", config)
-		fmt.Printf("dhcp4: config parameters changed old config=%+v\n", current)
+		Logger.Msg("config parameters changed").Sprintf("new config=%+v", config).Write()
+		Logger.Msg("config parameters changed").Sprintf("old config=%+v", current).Write()
 		return true
 	}
 	return false
@@ -238,8 +211,8 @@ func (h *Handler) printTable() {
 
 // StartHunt will start the process to capture the client DHCP negotiation
 func (h *Handler) StartHunt(addr packet.Addr) error {
-	if Debug {
-		fmt.Printf("dhcp4: start hunt %s\n", addr)
+	if Logger.IsInfo() {
+		Logger.Msg("start hunt").Struct(addr).Write()
 	}
 
 	h.Lock() // local handler lock
@@ -256,30 +229,14 @@ func (h *Handler) StartHunt(addr packet.Addr) error {
 
 // StopHunt will end the capture process
 func (h *Handler) StopHunt(addr packet.Addr) error {
-	if Debug {
-		fmt.Printf("dhcp4: stop hunt %s\n", addr)
+	if Logger.IsInfo() {
+		Logger.Msg("stop hunt").Struct(addr).Write()
 	}
 	return nil
 }
 
-/***
-// HuntStage returns StageHunt if mac and ip are valid DHCP entry in the capture state.
-// Otherwise returns false.
-func (h *Handler) CheckAddr(addr packet.Addr) error {
-	h.Lock()
-	defer h.Unlock()
-
-	lease := h.findByIP(addr.IP)
-
-	if lease != nil && lease.State == StateAllocated {
-		return nil
-	}
-	Logger.Msg( "failed to get dhcp hunt status").Struct(addr).Error(packet.ErrNotFound).Write()
-	return packet.ErrNotFound
-}
-***/
-
-// ProcessPacket implements PacketProcessor interface
+// ProcessPacket handles a DHCP4 packet performing DHCP4 spoofing and
+// segmentation to keep captured hosts on a different subnet.
 func (h *Handler) ProcessPacket(frame packet.Frame) error {
 	if frame.PayloadID != packet.PayloadDHCP4 {
 		return packet.ErrParseProtocol
@@ -291,14 +248,14 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 
 	// if udp.DstPort() == DHCP4ClientPort {
 	if frame.DstAddr.Port == DHCP4ClientPort {
-		if Debug {
+		if Logger.IsInfo() {
 			Logger.Msg("dhcp client packet").Struct(dhcpFrame).Write()
 		}
 		err := h.processClientPacket(frame.Host, dhcpFrame)
 		return err
 	}
 
-	if Debug {
+	if Logger.IsInfo() {
 		Logger.Msg("process packet").Label("src").Struct(frame.SrcAddr).Label("dst").Struct(frame.DstAddr).Struct(dhcpFrame).Write()
 	}
 
@@ -330,7 +287,7 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 	case Offer:
 		fmt.Println("dhcp4: error got dhcp offer")
 	default:
-		fmt.Printf("dhcp4: message type not supported %v", reqType)
+		Logger.Msg("message not supported").Uint8("type", uint8(reqType)).Write()
 	}
 	h.Unlock()
 
@@ -342,12 +299,12 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 		} else {
 			dstAddr = packet.Addr{MAC: frame.SrcAddr.MAC, IP: frame.SrcAddr.IP, Port: DHCP4ClientPort}
 		}
-		if Debug {
+		if Logger.IsInfo() {
 			Logger.Msg("send reply to").Struct(dstAddr).Struct(response).Write()
 		}
 		srcAddr := packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: h.session.NICInfo.HostAddr4.IP, Port: DHCP4ServerPort}
 		if err := sendDHCP4Packet(h.session.Conn, srcAddr, dstAddr, response); err != nil {
-			fmt.Printf("dhcp4: failed sending packet error=%s", err)
+			Logger.Msg("send packet failed").Error(err).Write()
 			return err
 		}
 	}

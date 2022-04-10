@@ -114,7 +114,7 @@ func (h *Handler) sendDeclineReleasePacket(msgType MessageType, clientID []byte,
 
 // SendDiscoverPacket send a DHCP discover packet to target
 func (h *Handler) SendDiscoverPacket(chAddr net.HardwareAddr, ciAddr netip.Addr, xid []byte, name string) (err error) {
-	if Debug {
+	if Logger.IsInfo() {
 		Logger.Msg("send discover packet").ByteArray("xid", xid).MAC("from", chAddr).IP("ciaddr", ciAddr).Write()
 	}
 	// Commond options seen on many dhcp clients

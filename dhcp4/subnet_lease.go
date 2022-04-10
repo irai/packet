@@ -55,17 +55,9 @@ func newSubnet(config SubnetConfig) (*dhcpSubnet, error) {
 	subnet.broadcast = netip.AddrFrom4(a4)
 
 	// default values for first and last IPs
-	// config.FirstIP = packet.CopyIP(config.FirstIP).To4() // must copy, we are updating the array
 	if !config.FirstIP.Is4() || config.FirstIP.IsUnspecified() || !subnet.LAN.Contains(config.FirstIP) {
 		config.FirstIP = subnet.LAN.Addr().Next()
 	}
-	/**
-	config.LastIP = packet.CopyIP(config.LastIP).To4() // must copy, we are updating the array
-	if config.LastIP == nil || config.LastIP.Equal(net.IPv4zero) || config.LastIP[3] > subnet.broadcast[3] {
-		config.LastIP = packet.CopyIP(subnet.broadcast).To4()
-		config.LastIP[3] = config.LastIP[3] - 1
-	}
-	*/
 	subnet.Duration = config.Duration
 	if subnet.Duration == 0 {
 		subnet.Duration = 4 * time.Hour
@@ -87,18 +79,13 @@ func newSubnet(config SubnetConfig) (*dhcpSubnet, error) {
 	if !config.LAN.Contains(config.FirstIP) {
 		return nil, fmt.Errorf("FirstIP not in subnet")
 	}
-	/*
-		if subnet.FirstIP[3] >= subnet.LastIP[3] {
-			return nil, fmt.Errorf("firstIP after lastIP IPs")
-		}
-	*/
 	if subnet.DNSServer.IsUnspecified() {
 		return nil, fmt.Errorf("invalid DNSServer")
 	}
 
 	// subnet.nextIP = uint(subnet.FirstIP[3])
 
-	if Debug {
+	if Logger.IsInfo() {
 		fmt.Printf("dhcp4: createSubnet %+v", config)
 	}
 
@@ -117,7 +104,7 @@ func newSubnet(config SubnetConfig) (*dhcpSubnet, error) {
 		OptionDomainNameServer: subnet.DNSServer.AsSlice(),
 	}
 
-	if Debug {
+	if Logger.IsInfo() {
 		fmt.Printf("dhcp4: subnet lan=%s gw=%s dhcp=%s dns=%s dur=%v options=%+v",
 			subnet.LAN, subnet.DefaultGW, subnet.DHCPServer, subnet.DNSServer, subnet.Duration, subnet.options)
 	}
@@ -165,7 +152,7 @@ func (h *dhcpSubnet) appendRouteOptions(ip netip.Addr, mask net.IPMask, routeTo 
 	h.options[OptionClasslessRouteFormat] = buf
 }
 
-func loadConfig(fname string) (net1 *dhcpSubnet, net2 *dhcpSubnet, t leaseTable, err error) {
+func loadConfig(fname string) (net1 *dhcpSubnet, net2 *dhcpSubnet, t map[string]*Lease, err error) {
 	if fname == "" {
 		return
 	}
@@ -176,7 +163,7 @@ func loadConfig(fname string) (net1 *dhcpSubnet, net2 *dhcpSubnet, t leaseTable,
 	return loadByteArray(source)
 }
 
-func loadByteArray(source []byte) (net1 *dhcpSubnet, net2 *dhcpSubnet, t leaseTable, err error) {
+func loadByteArray(source []byte) (net1 *dhcpSubnet, net2 *dhcpSubnet, t map[string]*Lease, err error) {
 	table := struct {
 		Net1   *SubnetConfig
 		Net2   *SubnetConfig

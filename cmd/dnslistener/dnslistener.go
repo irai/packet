@@ -123,7 +123,7 @@ func main() {
 				case "packet":
 					packet.Logger.SetLevel(level)
 				case "dhcp4", "dhcp":
-					dhcp4.Debug = !dhcp4.Debug
+					dhcp4.Logger.SetLevel(level)
 				case "all":
 					packet.Logger.SetLevel(level)
 				}

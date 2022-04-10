@@ -14,7 +14,7 @@ import (
 
 func Test_declineSimple(t *testing.T) {
 	packet.Logger.SetLevel(fastlog.LevelError)
-	Debug = false
+	Logger.SetLevel(fastlog.LevelError)
 	os.Remove(testDHCPFilename)
 	tc := setupTestHandler()
 	defer tc.Close()
@@ -40,7 +40,7 @@ func Test_declineSimple(t *testing.T) {
 	checkLeaseTable(t, tc, 0, 0, 1)
 }
 func Test_DeclineFromAnotherServer(t *testing.T) {
-	Debug = false
+	Logger.SetLevel(fastlog.LevelError)
 	os.Remove(testDHCPFilename)
 	tc := setupTestHandler()
 	defer tc.Close()

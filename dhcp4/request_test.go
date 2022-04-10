@@ -15,7 +15,7 @@ import (
 
 func Test_requestSimple(t *testing.T) {
 	packet.Logger.SetLevel(fastlog.LevelDebug)
-	Debug = true
+	Logger.SetLevel(fastlog.LevelError)
 	os.Remove(testDHCPFilename)
 	tc := setupTestHandler()
 	defer tc.Close()
@@ -61,7 +61,7 @@ func Test_requestSimple(t *testing.T) {
 
 func Test_requestCaptured(t *testing.T) {
 	packet.Logger.SetLevel(fastlog.LevelDebug)
-	Debug = false
+	Logger.SetLevel(fastlog.LevelError)
 	os.Remove(testDHCPFilename)
 	tc := setupTestHandler()
 	defer tc.Close()
@@ -139,7 +139,7 @@ func Test_requestCaptured(t *testing.T) {
 func Test_requestExhaust(t *testing.T) {
 
 	packet.Logger.SetLevel(fastlog.LevelError)
-	Debug = false
+	Logger.SetLevel(fastlog.LevelError)
 	os.Remove(testDHCPFilename)
 	tc := setupTestHandler()
 	defer tc.Close()
@@ -170,7 +170,7 @@ func Test_requestExhaust(t *testing.T) {
 }
 
 func Test_requestAnotherHost(t *testing.T) {
-	Debug = false
+	Logger.SetLevel(fastlog.LevelError)
 	os.Remove(testDHCPFilename)
 	tc := setupTestHandler()
 	defer tc.Close()

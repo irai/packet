@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/fastlog"
 )
 
 func TestAttach(t *testing.T) {
@@ -217,7 +218,7 @@ func TestHandler_handleRequest(t *testing.T) {
 		{name: "req5", wantErr: false, wantReplyType: ACK, updateReqIP: true, p: android_req3},
 	}
 
-	Debug = false
+	Logger.SetLevel(fastlog.LevelError)
 	os.Remove(testDHCPFilename)
 	tc := setupTestHandler()
 	defer tc.Close()

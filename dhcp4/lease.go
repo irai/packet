@@ -11,7 +11,7 @@ import (
 	"github.com/irai/packet/fastlog"
 )
 
-// State defines type for lease state
+// State defines a type for lease state
 type State int
 
 // lease state constants
@@ -111,7 +111,7 @@ func (h *Handler) findOrCreate(clientID []byte, mac net.HardwareAddr, name strin
 	lease.subnet = subnet
 	lease.Name = name
 	h.table[string(lease.ClientID)] = lease
-	if Debug {
+	if Logger.IsInfo() {
 		// fmt.Printf("dhcp4 : new lease allocated %s\n", lease)
 		Logger.Msg("new lease allocated").Struct(lease).Write()
 	}
@@ -128,7 +128,7 @@ func (h *Handler) allocIPOffer(lease *Lease, reqIP netip.Addr) error {
 		if l := h.findByIP(reqIP); l == nil || l.State == StateFree || bytes.Equal(l.ClientID, lease.ClientID) {
 			if h.session.FindIP(reqIP) == nil {
 				lease.IPOffer = reqIP
-				if Debug {
+				if Logger.IsInfo() {
 					Logger.Msg("offer").IP("ip", lease.IPOffer).Write()
 				}
 				return nil
@@ -170,7 +170,7 @@ func (h *Handler) allocIPOffer(lease *Lease, reqIP netip.Addr) error {
 		return errors.New("exhausted all ips")
 	}
 	lease.IPOffer = ip
-	if Debug {
+	if Logger.IsInfo() {
 		Logger.Msg("offer").IP("ip", lease.IPOffer).Write()
 	}
 	return nil
@@ -179,7 +179,7 @@ func (h *Handler) allocIPOffer(lease *Lease, reqIP netip.Addr) error {
 func (h *Handler) freeLeases(now time.Time) error {
 	for _, lease := range h.table {
 		if lease.State != StateFree && lease.DHCPExpiry.Before(now) {
-			if Debug {
+			if Logger.IsInfo() {
 				Logger.Msg("freeing lease").Struct(lease).Write()
 			}
 			lease.State = StateFree

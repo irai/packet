@@ -16,6 +16,86 @@ const (
 	DHCP4ClientPort = 68
 )
 
+type OpCode byte
+
+// OpCodes
+const (
+	BootRequest OpCode = 1 // From Client
+	BootReply   OpCode = 2 // From Server
+)
+
+type MessageType byte
+
+// DHCP Message Type 53
+const (
+	Discover MessageType = 1
+	Offer    MessageType = 2
+	Request  MessageType = 3
+	Decline  MessageType = 4
+	ACK      MessageType = 5
+	NAK      MessageType = 6
+	Release  MessageType = 7
+	Inform   MessageType = 8
+)
+
+type OptionCode byte
+
+// DHCP Options
+// see complete list here: https://www.iana.org/assignments/bootp-dhcp-parameters/bootp-dhcp-parameters.xhtml
+const (
+	End                                      OptionCode = 255
+	Pad                                      OptionCode = 0
+	OptionSubnetMask                         OptionCode = 1
+	OptionTimeOffset                         OptionCode = 2
+	OptionRouter                             OptionCode = 3
+	OptionTimeServer                         OptionCode = 4
+	OptionNameServer                         OptionCode = 5
+	OptionDomainNameServer                   OptionCode = 6
+	OptionLogServer                          OptionCode = 7
+	OptionCookieServer                       OptionCode = 8
+	OptionLPRServer                          OptionCode = 9
+	OptionImpressServer                      OptionCode = 10
+	OptionResourceLocationServer             OptionCode = 11
+	OptionHostName                           OptionCode = 12
+	OptionBootFileSize                       OptionCode = 13
+	OptionMeritDumpFile                      OptionCode = 14
+	OptionDomainName                         OptionCode = 15
+	OptionSwapServer                         OptionCode = 16
+	OptionRootPath                           OptionCode = 17
+	OptionExtensionsPath                     OptionCode = 18
+	OptionIPForwardingEnableDisable          OptionCode = 19 // IP Layer Parameters per Host
+	OptionNonLocalSourceRoutingEnableDisable OptionCode = 20
+	OptionPolicyFilter                       OptionCode = 21
+	OptionMaximumDatagramReassemblySize      OptionCode = 22
+	OptionDefaultIPTimeToLive                OptionCode = 23
+	OptionPathMTUAgingTimeout                OptionCode = 24
+	OptionPathMTUPlateauTable                OptionCode = 25
+	OptionInterfaceMTU                       OptionCode = 26 // IP Layer Parameters per Interface
+	OptionAllSubnetsAreLocal                 OptionCode = 27
+	OptionBroadcastAddress                   OptionCode = 28
+	OptionPerformMaskDiscovery               OptionCode = 29
+	OptionMaskSupplier                       OptionCode = 30
+	OptionPerformRouterDiscovery             OptionCode = 31
+	OptionRouterSolicitationAddress          OptionCode = 32
+	OptionStaticRoute                        OptionCode = 33
+	OptionTrailerEncapsulation               OptionCode = 34
+	OptionARPCacheTimeout                    OptionCode = 35
+	OptionEthernetEncapsulation              OptionCode = 36
+	OptionRequestedIPAddress                 OptionCode = 50 // DHCP Extensions
+	OptionIPAddressLeaseTime                 OptionCode = 51
+	OptionOverload                           OptionCode = 52
+	OptionDHCPMessageType                    OptionCode = 53
+	OptionServerIdentifier                   OptionCode = 54
+	OptionParameterRequestList               OptionCode = 55
+	OptionMessage                            OptionCode = 56
+	OptionMaximumDHCPMessageSize             OptionCode = 57
+	OptionRenewalTimeValue                   OptionCode = 58
+	OptionRebindingTimeValue                 OptionCode = 59
+	OptionVendorClassIdentifier              OptionCode = 60
+	OptionClientIdentifier                   OptionCode = 61
+	OptionClasslessRouteFormat               OptionCode = 121
+)
+
 // A DHCP4 packet
 type DHCP4 []byte
 
@@ -321,83 +401,3 @@ func nakPacket(req DHCP4, serverID, clientID []byte) DHCP4 {
 	}
 	return Marshall(req, BootReply, NAK, nil, packet.IPv4zero, packet.IPv4zero, nil, false, options, nil)
 }
-
-type OpCode byte
-
-// OpCodes
-const (
-	BootRequest OpCode = 1 // From Client
-	BootReply   OpCode = 2 // From Server
-)
-
-type MessageType byte
-
-// DHCP Message Type 53
-const (
-	Discover MessageType = 1
-	Offer    MessageType = 2
-	Request  MessageType = 3
-	Decline  MessageType = 4
-	ACK      MessageType = 5
-	NAK      MessageType = 6
-	Release  MessageType = 7
-	Inform   MessageType = 8
-)
-
-type OptionCode byte
-
-// DHCP Options
-// see complete list here: https://www.iana.org/assignments/bootp-dhcp-parameters/bootp-dhcp-parameters.xhtml
-const (
-	End                                      OptionCode = 255
-	Pad                                      OptionCode = 0
-	OptionSubnetMask                         OptionCode = 1
-	OptionTimeOffset                         OptionCode = 2
-	OptionRouter                             OptionCode = 3
-	OptionTimeServer                         OptionCode = 4
-	OptionNameServer                         OptionCode = 5
-	OptionDomainNameServer                   OptionCode = 6
-	OptionLogServer                          OptionCode = 7
-	OptionCookieServer                       OptionCode = 8
-	OptionLPRServer                          OptionCode = 9
-	OptionImpressServer                      OptionCode = 10
-	OptionResourceLocationServer             OptionCode = 11
-	OptionHostName                           OptionCode = 12
-	OptionBootFileSize                       OptionCode = 13
-	OptionMeritDumpFile                      OptionCode = 14
-	OptionDomainName                         OptionCode = 15
-	OptionSwapServer                         OptionCode = 16
-	OptionRootPath                           OptionCode = 17
-	OptionExtensionsPath                     OptionCode = 18
-	OptionIPForwardingEnableDisable          OptionCode = 19 // IP Layer Parameters per Host
-	OptionNonLocalSourceRoutingEnableDisable OptionCode = 20
-	OptionPolicyFilter                       OptionCode = 21
-	OptionMaximumDatagramReassemblySize      OptionCode = 22
-	OptionDefaultIPTimeToLive                OptionCode = 23
-	OptionPathMTUAgingTimeout                OptionCode = 24
-	OptionPathMTUPlateauTable                OptionCode = 25
-	OptionInterfaceMTU                       OptionCode = 26 // IP Layer Parameters per Interface
-	OptionAllSubnetsAreLocal                 OptionCode = 27
-	OptionBroadcastAddress                   OptionCode = 28
-	OptionPerformMaskDiscovery               OptionCode = 29
-	OptionMaskSupplier                       OptionCode = 30
-	OptionPerformRouterDiscovery             OptionCode = 31
-	OptionRouterSolicitationAddress          OptionCode = 32
-	OptionStaticRoute                        OptionCode = 33
-	OptionTrailerEncapsulation               OptionCode = 34
-	OptionARPCacheTimeout                    OptionCode = 35
-	OptionEthernetEncapsulation              OptionCode = 36
-	OptionRequestedIPAddress                 OptionCode = 50 // DHCP Extensions
-	OptionIPAddressLeaseTime                 OptionCode = 51
-	OptionOverload                           OptionCode = 52
-	OptionDHCPMessageType                    OptionCode = 53
-	OptionServerIdentifier                   OptionCode = 54
-	OptionParameterRequestList               OptionCode = 55
-	OptionMessage                            OptionCode = 56
-	OptionMaximumDHCPMessageSize             OptionCode = 57
-	OptionRenewalTimeValue                   OptionCode = 58
-	OptionRebindingTimeValue                 OptionCode = 59
-	OptionVendorClassIdentifier              OptionCode = 60
-	OptionClientIdentifier                   OptionCode = 61
-	OptionClasslessRouteFormat               OptionCode = 121
-)

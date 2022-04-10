@@ -21,8 +21,7 @@ func TestDHCPHandler_handleDiscover(t *testing.T) {
 	options := Options{}
 	options[OptionCode(OptionParameterRequestList)] = []byte{byte(OptionDomainNameServer)}
 
-	// packet.DebugIP4 = true
-	Debug = true
+	Logger.SetLevel(fastlog.LevelError)
 	os.Remove(testDHCPFilename)
 	tc := setupTestHandler()
 	defer tc.Close()
@@ -109,7 +108,7 @@ func TestDHCPHandler_handleDiscoverCaptured(t *testing.T) {
 	options[OptionCode(OptionParameterRequestList)] = []byte{byte(OptionDomainNameServer)}
 
 	// packet.DebugIP4 = true
-	Debug = true
+	Logger.SetLevel(fastlog.LevelError)
 	os.Remove(testDHCPFilename)
 	tc := setupTestHandler()
 	defer tc.Close()
@@ -153,7 +152,7 @@ func TestDHCPHandler_exhaust(t *testing.T) {
 	options[OptionCode(OptionParameterRequestList)] = []byte{byte(OptionDomainNameServer)}
 
 	packet.Logger.SetLevel(fastlog.LevelError)
-	Debug = false
+	Logger.SetLevel(fastlog.LevelError)
 	os.Remove(testDHCPFilename)
 	tc := setupTestHandler()
 	defer tc.Close()
