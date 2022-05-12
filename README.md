@@ -147,6 +147,18 @@ traffic to the default gateway.
 
 Refer to the sample spoofer application.
 
+## DHCP4 server and spoofing
+
+need notes
+
+## ICMP6 spoofing
+
+need notes
+
+## DNS naming
+
+need notes
+
 
 ## Credits
 
@@ -154,5 +166,10 @@ Thanks to the following individuals for making their outstanding source code ava
 
 * Richard Warburton - The idea of memory mapped slices appeared when inspecting his DHCP4 library (https://github.com/krolaw/dhcp4).
 * Matt Layer - Great low level raw packet processing packages (https://github.com/mdlayher/raw, https://github.com/mdlayher/ethernet)
+* Gopacket Authors - Comprehensive package to process network packets (https://github.com/google/gopacket)
+
+Many other packages contributed ideas or "code reuse" and references to these are mentioned in the source code.
+
+
 
 
