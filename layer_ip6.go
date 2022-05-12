@@ -14,6 +14,7 @@ const (
 	IP6HeaderLen = 40 // IP6 header len
 )
 
+// IP6 provide decode and encoding of IPv6 packets.
 // IP6 structure: see https://github.com/golang/net/blob/master/ipv6/header.go
 type IP6 []byte
 
@@ -24,15 +25,6 @@ func (p IP6) IsValid() error {
 	return fmt.Errorf("invalid ipv6 len=%d: %w", len(p), ErrFrameLen)
 }
 
-// checkIPv6 verifies that ip is an IPv6 address.
-func checkIPv6(ip net.IP) error {
-	if ip.To16() == nil || ip.To4() != nil {
-		return fmt.Errorf("ndp: invalid IPv6 address: %q", ip.String())
-	}
-
-	return nil
-}
-
 func (p IP6) Version() int       { return int(p[0]) >> 4 }                                // protocol version
 func (p IP6) TrafficClass() int  { return int(p[0]&0x0f)<<4 | int(p[1])>>4 }              // traffic class
 func (p IP6) FlowLabel() int     { return int(p[1]&0x0f)<<16 | int(p[2])<<8 | int(p[3]) } // flow label
@@ -41,8 +33,8 @@ func (p IP6) NextHeader() uint8  { return p[6] }                                
 func (p IP6) HopLimit() uint8    { return p[7] }                                          // hop limit
 func (p IP6) Src() netip.Addr    { return netip.AddrFrom16(*(*[16]byte)(p[8:24])) }       // source address
 func (p IP6) Dst() netip.Addr    { return netip.AddrFrom16(*(*[16]byte)(p[24:40])) }      // destination address
-func (p IP6) Payload() []byte    { return p[40:] }
-func (p IP6) HeaderLen() int     { return 40 }
+func (p IP6) Payload() []byte    { return p[IP6HeaderLen:] }
+func (p IP6) HeaderLen() int     { return IP6HeaderLen }
 func (p IP6) String() string {
 	return Logger.Msg("").Struct(p).ToString()
 }
@@ -175,13 +167,6 @@ func (p HopByHopExtensionHeader) ParseHopByHopExtensions() (ext map[int][]byte, 
 		}
 	}
 	return nil, nil
-}
-
-func IsIP6(ip net.IP) bool {
-	if ip.To16() != nil && ip.To4() == nil {
-		return true
-	}
-	return false
 }
 
 func IPv6SolicitedNode(lla netip.Addr) Addr {

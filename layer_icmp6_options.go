@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/netip"
 	"strings"
 	"time"
 	"unicode"
@@ -215,17 +216,17 @@ func (pi *PrefixInformation) unmarshal(b []byte) error {
 	pi.ValidLifetime = time.Duration(binary.BigEndian.Uint32(value[2:6])) * time.Second
 	pi.PreferredLifetime = time.Duration(binary.BigEndian.Uint32(value[6:10])) * time.Second
 	// Skip reserved area.
-	addr := CopyIP(net.IP(value[14:30]))
-	if err := checkIPv6(addr); err != nil {
-		return err
+	addr, ok := netip.AddrFromSlice(value[14:30])
+	if !ok || !addr.Is6() {
+		return ErrInvalidIP
 	}
 
 	// Per the RFC, bits in prefix past prefix length are ignored by the
 	// receiver.
 	pi.PrefixLength = value[0]
 	mask := net.CIDRMask(int(pi.PrefixLength), 128)
-	addr = addr.Mask(mask)
-	pi.Prefix = addr
+	pi.Prefix = net.IP(addr.AsSlice()).Mask(mask)
+	// pi.Prefix = addr
 
 	return nil
 }
