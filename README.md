@@ -18,22 +18,62 @@ network packets.
 * arp module to spoof arp mac table
 * dhcp module to spoof DHCP traffic on LAN
 
+## Raw network packet reading
+
+Session provides easy access to read raw packets from the wire. Session automatically places
+the nic in promiscuous mode so we receive **all** packets hiting your network card.
+```
+	s, err := packet.NewSession("eth0")
+	if err != nil {
+		fmt.Printf("conn error: %s", err)
+		return
+	}
+	defer s.Close()
+
+	buffer := make([]byte, packet.EthMaxSize)
+	for {
+		n, _, err := s.ReadFrom(buffer)
+		if err != nil {
+			fmt.Println("error reading packet", err)
+			return
+		}
+        // process packet...
+    }
+```
 
 ## Packet parsing
 
-For example, given a network packet b that contains a udp frame inside an ip4 and ethernet frame, you can 
-map and access all fields in the packet via:
+Given a network packet b that contains a udp frame inside an ip4 and ethernet frame, you can 
+map and access all fields in the packet via Parse(). Parse returns a Frame structure with accessor for all 
+interesting bits.
 ```
-  frame, err := packet.Parse(b)
-  ether := frame.Ether()  // memory mapped []byte to access ether fields
-  ip := frame.IP4() // memory mapped []byte to access ipv4 fields
-  udp := frame.UDP() // memory mapped []byte to access udp fields
-  payload := frame.Payload() // memory mapped []byte to access payload
+  frame, err := session.Parse(b)
+  ether := frame.Ether()  // memory mapped slice to access ether fields
+  ip := frame.IP4() // memory mapped slice to access ipv4 fields
+  udp := frame.UDP() // memory mapped slice to access udp fields
+  payload := frame.Payload() // memory mapped slice to access payload
 
   fmt.Println("ether", ether.Src(), ether.Dst())
   fmt.Println("ip4", ip.Src(), ip.Dst())
   fmt.Println("udp", udp.SrcPort(), udp.DstPort())
   fmt.Printf("payloadID=%s payload=[%x]\n", frame.PayloadID, payload)
+```
+
+## Payload identification
+
+Frame will always contain a payload ID that identifies the last payload in the packet. For example,
+if the packet is a udp DHCP4 packet, PayloadID will return PayloadDHCP4 and Payload() will return a slice to the DHCP4 packet. 
+
+```
+    frame, err := s.Parse(buffer[:n])
+    // if err
+
+    switch frame.PayloadID {
+    case packet.PayloadARP: 
+        // Process arp packets
+    case packet.PayloadICMP6: 
+        // Process icmpv6 packets
+    }
 ```
 
 ## IPv4 and IPv6 parsing
@@ -67,24 +107,11 @@ Working with IPv4, IPv6, UDP frames is fairly straight forward. For example:
   }
 ```
 
-## Capturing network packets on linux:
-```
-	s, err := packet.NewSession(*nic)
-    buffer := make([]byte, packet.EthMaxSize)
-    for {
-        n, _, err := s.ReadFrom(buffer)
-        if err != nil { panic(err) }
-
-        frame, err := s.Parse(buffer[:n])
-        // work on the packet...
-    }
-```
-
 ## Host online and offline notifications
 
-The package tracks when a host becomes online and when it goes offline as a
-result of inactivity.  It will send a online notification when a new host
-is detected or when an existing host changes its IP. It will send a offline 
+Session tracks when a host becomes online and when it goes offline as a
+result of inactivity.  It sends an online notification for a new host
+or when an existing host changes its IP. It sends an offline 
 notification when te host has not responded for a period of 5 minutes or more.
 
 ```
