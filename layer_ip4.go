@@ -6,10 +6,15 @@ import (
 	"net/netip"
 
 	"github.com/irai/packet/fastlog"
-	"golang.org/x/net/ipv4"
 )
 
-// IP4 provide access to IP fields without copying data.
+const (
+	Version      = 4  // protocol version
+	HeaderLen    = 20 // header length without extension headers
+	UDPHeaderLen = 8
+)
+
+// IP4 provide decoding and encoding of IPv4 packets.
 // see: ipv4.ParseHeader in https://raw.githubusercontent.com/golang/net/master/ipv4/header.go
 type IP4 []byte
 
@@ -24,14 +29,11 @@ func (p IP4) FlagMoreFragments() bool { return (uint8(p[6]) & 0b00100000) != 0 }
 func (p IP4) Fragment() uint16        { return ((uint16(p[6]) & 0b00011111) << 8) & uint16(p[7]) }
 func (p IP4) TTL() int                { return int(p[8]) }
 func (p IP4) Checksum() int           { return int(binary.BigEndian.Uint16(p[10:12])) }
-func (p IP4) Src() netip.Addr         { return netip.AddrFrom4(*((*[4]byte)(p[12:16]))) } // must use IP type to avoid allocation
-// func (p IP4) Src() net.IP             { return net.IP(p[12:16]) } // must use IP type to avoid allocation
-func (p IP4) Dst() netip.Addr        { return netip.AddrFrom4(*((*[4]byte)(p[16:20]))) } // must use IP type to avoid allocation
-func (p IP4) NetaddrDst() netip.Addr { return netip.AddrFrom4(*((*[4]byte)(p[16:19]))) }
-
-// func (p IP4) NetaddrDst() netip.Addr  { return netip.AddrFrom4(p[16], p[17], p[18], p[19]) }
-func (p IP4) TotalLen() int   { return int(binary.BigEndian.Uint16(p[2:4])) } // total packet size including header and payload
-func (p IP4) Payload() []byte { return p[p.IHL():p.TotalLen()] }
+func (p IP4) Src() netip.Addr         { return netip.AddrFrom4(*((*[4]byte)(p[12:16]))) }
+func (p IP4) Dst() netip.Addr         { return netip.AddrFrom4(*((*[4]byte)(p[16:20]))) }
+func (p IP4) NetaddrDst() netip.Addr  { return netip.AddrFrom4(*((*[4]byte)(p[16:19]))) }
+func (p IP4) TotalLen() int           { return int(binary.BigEndian.Uint16(p[2:4])) } // total packet size including header and payload
+func (p IP4) Payload() []byte         { return p[p.IHL():p.TotalLen()] }
 func (p IP4) String() string {
 	return Logger.Msg("").Struct(p).ToString()
 }
@@ -64,10 +66,10 @@ func (p IP4) FastLog(line *fastlog.Line) *fastlog.Line {
 
 func EncodeIP4(p []byte, ttl byte, src netip.Addr, dst netip.Addr) IP4 {
 	options := []byte{}
-	var hdrLen = ipv4.HeaderLen + len(options) // len includes options
+	var hdrLen = HeaderLen + len(options) // len includes options
 	const fragOffset = 0
 	const flags = 0
-	const totalLen = ipv4.HeaderLen + 0 // 0 payload
+	const totalLen = HeaderLen + 0 // 0 payload
 	const id = 0
 	const protocol = 0 // invalid
 	const checksum = 0
@@ -80,7 +82,7 @@ func EncodeIP4(p []byte, ttl byte, src netip.Addr, dst netip.Addr) IP4 {
 		dst = IPv4zero
 	}
 
-	p[0] = byte(ipv4.Version<<4 | (hdrLen >> 2 & 0x0f))
+	p[0] = byte(Version<<4 | (hdrLen >> 2 & 0x0f))
 	p[1] = byte(0xc0) // DSCP CS6)
 	binary.BigEndian.PutUint16(p[2:4], uint16(totalLen))
 	binary.BigEndian.PutUint16(p[4:6], uint16(id))
@@ -92,12 +94,12 @@ func EncodeIP4(p []byte, ttl byte, src netip.Addr, dst netip.Addr) IP4 {
 	copy(p[12:16], s[:])
 	s = dst.As4()
 	copy(p[16:20], s[:])
-	return p[:ipv4.HeaderLen]
+	return p[:HeaderLen]
 }
 
 func (p IP4) SetPayload(b []byte, protocol byte) IP4 {
 	p[9] = protocol
-	totalLen := uint16(ipv4.HeaderLen + len(b))
+	totalLen := uint16(HeaderLen + len(b))
 	binary.BigEndian.PutUint16(p[2:4], totalLen)
 	checksum := p.CalculateChecksum()
 	p[11] = byte(checksum >> 8)
@@ -110,7 +112,7 @@ func (p IP4) AppendPayload(b []byte, protocol byte) (IP4, error) {
 		return nil, ErrPayloadTooBig
 	}
 	p = p[:len(p)+len(b)] // change slice in case slice is less than required
-	totalLen := uint16(ipv4.HeaderLen + len(b))
+	totalLen := uint16(HeaderLen + len(b))
 	binary.BigEndian.PutUint16(p[2:4], totalLen)
 	copy(p.Payload(), b)
 	p[9] = protocol
@@ -127,9 +129,8 @@ func (p IP4) CalculateChecksum() uint16 {
 	return Checksum(psh)
 }
 
-// Checksum calculate IP4, ICMP6 checksum - is this the same for TCP?
+// Checksum calculate IP4, ICMP6 checksum
 // In network format already
-// TODO: fix this to work with big endian
 func Checksum(b []byte) uint16 {
 	csumcv := len(b) - 1 // checksum coverage
 	s := uint32(0)
@@ -143,8 +144,6 @@ func Checksum(b []byte) uint16 {
 	s = s + s>>16
 	return ^uint16(s)
 }
-
-const UDPHeaderLen = 8
 
 // UDP provides decoding and encoding of udp frames
 type UDP []byte
