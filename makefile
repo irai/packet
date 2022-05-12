@@ -1,7 +1,7 @@
 
 BIN_DIR=~/go/bin
 BINARY_NAME=arpspoofer_arm
-TEST_SERVER=192.168.0.107
+TEST_SERVER=192.168.0.129
  
 all: test deploy
  
