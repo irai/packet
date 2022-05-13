@@ -21,7 +21,7 @@ mechanism for notification when a host is online and offline.
 
 The package is designed to operate in low power CPUs (i.e. ARM) and with limited memory. It
 uses memory mapped slices to provide direct access to protocol fields without 
-copying to a new structure. This technique provides fast access to fields with zero allocation and the  
+copying to a new structure. This technique provides fast access to fields with zero allocation and the
 compiler inlines most protocol field functions to a memory reference.
 
 ## session to capture raw network packets
@@ -169,11 +169,11 @@ need notes
 
 ## Examples
 
-[arp spoofer]/cmd/arpspoofer
-[dhcpd]/cmd/dhcpd
-[dnslistener]/cmd/dnslistener
-[list lan hosts]/cmd/hosts
-[simple tcpdump]/cmd/tcpdump
+[arp spoofer](/cmd/arpspoofer)  
+[dhcpd](/cmd/dhcpd)  
+[dnslistener](/cmd/dnslistener)  
+[hosts](/cmd/hosts)  
+[tcpdump](/cmd/tcpdump)  
 
 
 ## Credits
