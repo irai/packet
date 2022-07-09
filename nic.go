@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/netip"
@@ -260,6 +261,16 @@ func GetIP4DefaultGatewayAddr(nic string) (addr Addr, err error) {
 	}
 
 	return addr, nil
+}
+
+func EnableIP4Forwarding(nic string) error {
+	// enable ip_forward
+	// sudo echo 1 | sudo tee /proc/sys/net/ipv4/ip_forward
+	proc := fmt.Sprintf("/proc/sys/net/ipv4/ip_forward")
+	if err := ioutil.WriteFile(proc, []byte{'1'}, os.ModePerm); err != nil {
+		return fmt.Errorf("failed to set %s: %w", proc, err)
+	}
+	return nil
 }
 
 // ExecPing execute /usr/bin/ping

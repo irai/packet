@@ -65,6 +65,7 @@ var (
 	ErrNoReader      = errors.New("no reader")
 	ErrInvalidParam  = errors.New("invalid parameter")
 	ErrMulticastMAC  = errors.New("mac is multicast")
+	ErrHandlerClosed = errors.New("handler is closed")
 )
 
 // CLoudFlare family
@@ -238,6 +239,11 @@ func (h *Session) Close() {
 	close(h.closeChan)
 	close(h.C)
 	h.Conn.Close()
+	time.Sleep(time.Second) // give time for goroutines to end
+}
+
+func (h *Session) EnableIP4Forwarding() error {
+	return EnableIP4Forwarding(h.NICInfo.IFI.Name)
 }
 
 // PrintTable logs the table to standard out.
@@ -262,6 +268,9 @@ func (h *Session) ReadFrom(b []byte) (int, net.Addr, error) {
 				Logger.Msg("temporary conn read error").Error(err).Write()
 			}
 			continue
+		}
+		if h.closed {
+			return n, addr, ErrHandlerClosed
 		}
 		return n, addr, err
 	}
