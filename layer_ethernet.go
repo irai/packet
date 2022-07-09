@@ -86,7 +86,7 @@ func (p Ether) SrcIP() netip.Addr {
 	return netip.Addr{}
 }
 
-// SrcIP i a convenience function to return the destination IP address. It returns nil if no IP packet is present.
+// DspIP i a convenience function to return the destination IP address. It returns nil if no IP packet is present.
 func (p Ether) DstIP() netip.Addr {
 	switch p.EtherType() {
 	case syscall.ETH_P_IP:
@@ -96,16 +96,6 @@ func (p Ether) DstIP() netip.Addr {
 	}
 	return netip.Addr{}
 }
-
-/**
-// SrcIP i a convenience function to return the destination IP address in netip.Addr format. It returns nil if no IP packet is present.
-func (p Ether) NetaddrDstIP() netip.Addr {
-	if ip, ok := netip.AddrFromSlice(p.DstIP()); ok {
-		return ip
-	}
-	return netip.Addr{}
-}
-*/
 
 // HeaderLen returns the header length.
 func (p Ether) HeaderLen() int {
