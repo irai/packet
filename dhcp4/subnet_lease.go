@@ -99,7 +99,7 @@ func newSubnet(config SubnetConfig) (*dhcpSubnet, error) {
 	// 121-classless route option(takes precedence to 33)
 	subnet.options = Options{
 		OptionServerIdentifier: subnet.DHCPServer.AsSlice(),
-		OptionSubnetMask:       subnet.LAN.Masked().Addr().AsSlice(), // must occur before router - need to sort the map
+		OptionSubnetMask:       net.CIDRMask(subnet.LAN.Bits(), 32), // must occur before router - need to sort the map
 		OptionRouter:           subnet.DefaultGW.AsSlice(),
 		OptionDomainNameServer: subnet.DNSServer.AsSlice(),
 	}
