@@ -1,10 +1,9 @@
 # packet
 Implements layer 2, IPv4, IPv6, UDP, TCP and application level packet processing.
 
-The motivation for this package is to enable a fast, memory efficient
-parsing of network packets on a LAN and tracking of LAN hosts. The package will 
-automatically track host IPs on the LAN and it includes a 
-mechanism for notification when a host is online and offline.
+The motivation for this package is to enable fast, memory efficient
+parsing of network packets and tracking of LAN hosts. The package 
+automatically track host IPs on the LAN and notifies when the IP is online offline.
 
 ## Features
 
@@ -13,7 +12,7 @@ mechanism for notification when a host is online and offline.
 * session: notification of host online and offline
 * naming: host naming via various protocols dhcp, mdns, ssdp, nbns, 
 * arp: module to spoof arp mac table
-* dhcp: module to spoof DHCP4 traffic on LAN and to run your own dhcp server
+* dhcp: module to spoof DHCP4 traffic on LAN 
 * icmp6: module to spoof Local Link Address via Neigbour Discovery
 * fastlog: a custom log package to log network protocols
 
@@ -24,10 +23,10 @@ uses memory mapped slices to provide direct access to protocol fields without
 copying to a new structure. This technique provides fast access to fields with zero allocation and the
 compiler inlines most protocol field functions to a memory reference.
 
-## session to capture raw network packets
+## Use Session to capture raw network packets
 
 Session provides easy access to read raw packets from the wire. Session automatically places
-the nic in promiscuous mode so we receive **all** packets hiting the network card.
+the nic in promiscuous mode so we receive **all** packets hiting the network card including packets sent by us.
 ```
 	s, err := packet.NewSession("eth0")
 	if err != nil {
@@ -47,17 +46,18 @@ the nic in promiscuous mode so we receive **all** packets hiting the network car
     }
 ```
 
-## Packet parsing
+## Use Parse() to map a raw packet into protocol types
 
+Parse() provides a memory mapping of protocols to slices without copying or allocation.
 Given a network packet b that contains a udp frame inside an ip4 and ethernet frame, you can 
-map and access all fields in the packet via Parse(). Parse returns a Frame structure with accessor for all 
+access all protocol fields after calling Parse(). Parse returns a Frame structure with accessor for all 
 interesting bits.
 ```
   n, _, _ := s.ReadFrom(b)          // read network packet
   frame, err := session.Parse(b[:n]) // fast parse and set references
-  ether := frame.Ether()            // memory mapped slice to access ether fields
-  ip := frame.IP4()                 // memory mapped slice to access ipv4 fields
-  udp := frame.UDP()                // memory mapped slice to access udp fields
+  ether := frame.Ether()            // memory mapped slice to access ether fields; return nil if not valid ethernet
+  ip := frame.IP4()                 // memory mapped slice to access ipv4 fields; return nil if it does not contain IP4
+  udp := frame.UDP()                // memory mapped slice to access udp fields; return nil if it does not contain UDP
   payload := frame.Payload()        // memory mapped slice to access payload
 
   fmt.Println("ether", ether.Src(), ether.Dst())
@@ -68,7 +68,7 @@ interesting bits.
 
 ## Payload identification
 
-Frame will always contain a payload ID that identifies the last payload in the packet. For example,
+Frame contains a payload ID that identifies the last payload in the packet. In most cases, this will be the application protocol ID. For example,
 if the packet is a udp DHCP4 packet, PayloadID will return PayloadDHCP4 and Payload() will return a slice to the DHCP4 packet. 
 
 ```
@@ -78,8 +78,8 @@ if the packet is a udp DHCP4 packet, PayloadID will return PayloadDHCP4 and Payl
     switch frame.PayloadID {
     case packet.PayloadARP: 
         // Process arp packets
-    case packet.PayloadICMP6: 
-        // Process icmpv6 packets
+    case packet.PayloadDHCP4: 
+        // Process DHCPv4 packets
     }
 ```
 
@@ -96,30 +96,27 @@ Working with IPv4, IPv6, UDP frames is fairly straight forward. For example:
   fmt.Println("dstAddr", frame.Dst().MAC, frame.Dst().IP) // will print source mac and ip
 
   // if you are interested in the IPv4 fields
-  if frame.Is4() {
+  if p := frame.IP4(); p != nil {
     // access ipv4 fields
-    p := frame.IP4()
     fmt.Println("version", p.Version(), "src", p.Src(), "dst", p.Dst(),"proto", p.Protocol(), "ttl", p.TTL())
   }
 
   // if you are intereste in the IPv6 fields
-  if frame.Is6() {
-    p := frame.IP6()
+  if p := frame.IP6(); p != nil {
     fmt.Println("version", p.Version(), "src", p.Src(), "dst", p.Dst(),"nextHeader", p.NextHeader(), "hopLimit", p.HopLimit())
   }
 
   // if you are interested in UDP fields
-  if frame.IsUDP() {
-    fmt.Println(frame.UDP())
+  if p := frame.UDP(); p != nil {
+    fmt.Println(p)
   }
 ```
 
-## Host online and offline notifications
+## Session provides notifications for Host online and offline
 
-session tracks when a host changes to online or offline.
-It sends an online notification for a new host
-or when an existing host changes its IP. It sends an offline 
-notification when te host has not responded for a period of 5 minutes or more.
+Session tracks when a host changes to online or offline and sends notifications via a go channel.
+The first time an IP is detected or when an existing host changes IP, Session sends an online notification via the notification channel.
+Similarly, if an IP is not seen on the network for 5 minutes or more, Session sends an offline  notification via the notification channel.
 
 ```
 s, err := packet.NewSession(*nic)
