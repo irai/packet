@@ -12,7 +12,6 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/irai/packet"
 	"github.com/irai/packet/dhcp4"
@@ -28,7 +27,6 @@ var dhcpd *dhcp4.Handler
 
 func main() {
 	var err error
-	var exiting bool
 
 	flag.Parse()
 
@@ -36,6 +34,13 @@ func main() {
 	s, err := packet.NewSession(*nic)
 	if err != nil {
 		fmt.Printf("conn error: %s", err)
+		return
+	}
+	defer s.Close()
+
+	// Must enable IPv4 forwarding to be able to forward IP packets sent to this host as the default gw.
+	if err = s.EnableIP4Forwarding(); err != nil {
+		fmt.Printf("failed to set IPv4 forwarding: %s", err)
 		return
 	}
 
@@ -46,6 +51,7 @@ func main() {
 		fmt.Println("error creating dhcpd", err)
 		return
 	}
+	defer dhcpd.Close()
 
 	// start packet processing goroutine
 	go func() {
@@ -53,7 +59,7 @@ func main() {
 		for {
 			n, _, err := s.ReadFrom(buffer)
 			if err != nil {
-				if !exiting {
+				if err != packet.ErrHandlerClosed {
 					fmt.Println("error reading packet", err)
 				}
 				return
@@ -70,9 +76,6 @@ func main() {
 				continue
 			}
 
-			if packet.Logger.IsDebug() && frame.PayloadID != packet.PayloadTCP {
-				frame.Log(packet.Logger.Msg("got packet")).Write()
-			}
 			switch frame.PayloadID {
 			case packet.PayloadDHCP4:
 				if err := dhcpd.ProcessPacket(frame); err != nil {
@@ -82,7 +85,7 @@ func main() {
 		}
 	}()
 
-	// start goroutine to read command line
+	// start goroutine to read command line and populate inputChan
 	inputChan := make(chan []string)
 	go func() {
 		for {
@@ -96,16 +99,11 @@ func main() {
 	c := make(chan os.Signal, 2)
 	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
 	for {
-
 		select {
 		case sig := <-c:
 			switch sig {
 			case syscall.SIGINT, syscall.SIGTERM:
-				exiting = true
-				dhcpd.Close()
-				s.Close()
-				time.Sleep(time.Second)
-				return
+				return // will cause defered Close() functions to run
 			}
 
 		case tokens := <-inputChan:
@@ -125,7 +123,7 @@ func main() {
 					dhcp4.Logger.SetLevel(level)
 				case "all":
 					packet.Logger.SetLevel(level)
-					// dhcp4.Debug = packet.Debug
+					dhcp4.Logger.SetLevel(level)
 				}
 
 			case "q":
@@ -133,7 +131,7 @@ func main() {
 
 			default:
 				fmt.Println("")
-				fmt.Println("change log level:   log packet|dhcp|all")
+				fmt.Println("change log level:   log [packet|dhcp|all]")
 				fmt.Println("list hosts      :   l|list")
 				fmt.Println("quit            :   q")
 			}
