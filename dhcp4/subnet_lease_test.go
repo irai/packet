@@ -59,7 +59,7 @@ func Test_Subnet_Save(t *testing.T) {
 		t.Fatal("cannot save", err)
 	}
 
-	net1, net2, leases, err := loadConfig(filename)
+	net1, net2, leases, err := tc.h.loadConfig(filename)
 	if err != nil {
 		t.Fatalf("unexpected error in lease file %v", err)
 		return
@@ -82,10 +82,11 @@ func Test_Subnet_Save(t *testing.T) {
 
 func Test_Migration(t *testing.T) {
 
-	h := Handler{}
+	tc := setupTestHandler()
+	defer tc.Close()
 	var err error
 
-	if h.net1, h.net2, h.table, err = loadByteArray(testMigrationFile); err != nil {
+	if tc.h.net1, tc.h.net2, tc.h.table, err = tc.h.loadByteArray(testMigrationFile); err != nil {
 		// old files will not load because of change to netip package.
 		// just return
 		// ignore
@@ -93,19 +94,19 @@ func Test_Migration(t *testing.T) {
 		return
 	}
 
-	if n := len(h.table); n != 2 {
+	if n := len(tc.h.table); n != 2 {
 		t.Errorf("invalid len want=%v got=%v", 2, n)
 	}
 
 	count := 0
-	for _, v := range h.table {
+	for _, v := range tc.h.table {
 		if v.Addr.IP == netip.AddrFrom4([4]byte{192, 168, 1, 8}) || v.Addr.IP == netip.AddrFrom4([4]byte{192, 168, 1, 7}) {
 			count++
 		}
 	}
 	if count != 2 {
 		t.Errorf("missing ips ")
-		h.printTable()
+		tc.h.printTable()
 	}
 }
 

@@ -83,6 +83,10 @@ func (config Config) New(session *packet.Session) (h *Handler, err error) {
 	h.filename = config.LeaseFilename
 	h.closeChan = make(chan bool)
 
+	if Logger.IsDebug() {
+		Logger.Msg("new dhcp4 handler").Sprintf("config", config).Write()
+	}
+
 	// validate netfilter subnet
 	if !config.NetfilterIP.Addr().IsValid() {
 		config.NetfilterIP = netip.PrefixFrom(session.NICInfo.HostAddr4.IP, session.NICInfo.HomeLAN4.Bits()) // using single subnet: same as home subnet
@@ -97,7 +101,7 @@ func (config Config) New(session *packet.Session) (h *Handler, err error) {
 	}
 	h.mode = config.Mode
 
-	// validate dns server : default to router if not given
+	// validate dns server : set default to router IP
 	if !config.DNSServer.IsValid() {
 		config.DNSServer = session.NICInfo.RouterAddr4.IP
 	}
@@ -110,24 +114,22 @@ func (config Config) New(session *packet.Session) (h *Handler, err error) {
 		DNSServer:  config.DNSServer,
 		Stage:      packet.StageNormal,
 		// FirstIP:    net.ParseIP("192.168.0.10"),
-		// LastIP:     net.ParseIP("192.168.0.127"),
 	}
 	// Segment network - netfilter subnet includes netfilter subnet only
 	netfilterSubnet := SubnetConfig{
-		// LAN:        netip.PrefixFrom({IP: config.NetfilterIP.IP.Mask(config.NetfilterIP.Mask), Mask: config.NetfilterIP.Mask},
 		LAN:        config.NetfilterIP.Masked(),
 		DefaultGW:  config.NetfilterIP.Addr(),
 		DHCPServer: session.NICInfo.HostAddr4.IP,
 		DNSServer:  packet.DNSv4CloudFlareFamily1,
 		Stage:      packet.StageRedirected,
 		// FirstIP:    net.ParseIP("192.168.0.10"),
-		// LastIP:     net.ParseIP("192.168.0.127"),
 	}
 
 	// Reset leases if error or config has changed
-	h.net1, h.net2, h.table, err = loadConfig(h.filename)
+	h.net1, h.net2, h.table, err = h.loadConfig(h.filename)
 	if err != nil || h.net1 == nil || h.net2 == nil || h.table == nil ||
 		configChanged(homeSubnet, h.net1.SubnetConfig) || configChanged(netfilterSubnet, h.net2.SubnetConfig) {
+
 		if err != nil && !os.IsNotExist(err) {
 			Logger.Msg("invalid config file. resetting...").String("filename", h.filename).Write()
 		}
@@ -151,6 +153,10 @@ func (config Config) New(session *packet.Session) (h *Handler, err error) {
 	// Add static and classless route options
 	h.net2.appendRouteOptions(h.net1.DefaultGW, net.CIDRMask(h.net1.LAN.Bits(), 32-h.net1.LAN.Bits()), h.net2.DefaultGW)
 	h.saveConfig(h.filename)
+	if Logger.IsInfo() {
+		Logger.Msg("subnet 1").Sprintf("config", h.net1).Write()
+		Logger.Msg("subnet 2").Sprintf("config", h.net2).Write()
+	}
 	return h, nil
 }
 
@@ -255,7 +261,7 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 		return err
 	}
 
-	if Logger.IsInfo() {
+	if Logger.IsDebug() {
 		Logger.Msg("process packet").Label("src").Struct(frame.SrcAddr).Label("dst").Struct(frame.DstAddr).Struct(dhcpFrame).Write()
 	}
 
@@ -299,7 +305,7 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 		} else {
 			dstAddr = packet.Addr{MAC: frame.SrcAddr.MAC, IP: frame.SrcAddr.IP, Port: DHCP4ClientPort}
 		}
-		if Logger.IsInfo() {
+		if Logger.IsDebug() {
 			Logger.Msg("send reply to").Struct(dstAddr).Struct(response).Write()
 		}
 		srcAddr := packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: h.session.NICInfo.HostAddr4.IP, Port: DHCP4ServerPort}

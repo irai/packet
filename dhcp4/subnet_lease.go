@@ -83,12 +83,6 @@ func newSubnet(config SubnetConfig) (*dhcpSubnet, error) {
 		return nil, fmt.Errorf("invalid DNSServer")
 	}
 
-	// subnet.nextIP = uint(subnet.FirstIP[3])
-
-	if Logger.IsInfo() {
-		fmt.Printf("dhcp4: createSubnet %+v", config)
-	}
-
 	// Common options request:
 	//   [1 121 3 6 15 119 252] - iphone
 	//   [1 3 6 15 31 33 43 44 46 47 119 121 249 252] - Dell Win 10
@@ -102,11 +96,6 @@ func newSubnet(config SubnetConfig) (*dhcpSubnet, error) {
 		OptionSubnetMask:       net.CIDRMask(subnet.LAN.Bits(), 32), // must occur before router - need to sort the map
 		OptionRouter:           subnet.DefaultGW.AsSlice(),
 		OptionDomainNameServer: subnet.DNSServer.AsSlice(),
-	}
-
-	if Logger.IsInfo() {
-		fmt.Printf("dhcp4: subnet lan=%s gw=%s dhcp=%s dns=%s dur=%v options=%+v",
-			subnet.LAN, subnet.DefaultGW, subnet.DHCPServer, subnet.DNSServer, subnet.Duration, subnet.options)
 	}
 
 	return &subnet, nil
@@ -152,7 +141,7 @@ func (h *dhcpSubnet) appendRouteOptions(ip netip.Addr, mask net.IPMask, routeTo 
 	h.options[OptionClasslessRouteFormat] = buf
 }
 
-func loadConfig(fname string) (net1 *dhcpSubnet, net2 *dhcpSubnet, t map[string]*Lease, err error) {
+func (handler *Handler) loadConfig(fname string) (net1 *dhcpSubnet, net2 *dhcpSubnet, t map[string]*Lease, err error) {
 	if fname == "" {
 		return
 	}
@@ -160,10 +149,10 @@ func loadConfig(fname string) (net1 *dhcpSubnet, net2 *dhcpSubnet, t map[string]
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	return loadByteArray(source)
+	return handler.loadByteArray(source)
 }
 
-func loadByteArray(source []byte) (net1 *dhcpSubnet, net2 *dhcpSubnet, t map[string]*Lease, err error) {
+func (handler *Handler) loadByteArray(source []byte) (net1 *dhcpSubnet, net2 *dhcpSubnet, t map[string]*Lease, err error) {
 	table := struct {
 		Net1   *SubnetConfig
 		Net2   *SubnetConfig
@@ -231,9 +220,14 @@ func loadByteArray(source []byte) (net1 *dhcpSubnet, net2 *dhcpSubnet, t map[str
 				continue
 			}
 
-			if net2.LAN.Contains(v.Addr.IP) {
-				v.subnet = net2
+			// if mac is captured, validate the IP is in the net2 subnet
+			if handler.session.IsCaptured(v.Addr.MAC) {
+				if net2.LAN.Contains(v.Addr.IP) {
+					v.subnet = net2
+				}
 			}
+
+			// copy to final table
 			l := Lease{}
 			l = v
 			tt[string(v.ClientID)] = &l
