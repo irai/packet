@@ -112,7 +112,6 @@ func (h *Handler) findOrCreate(clientID []byte, mac net.HardwareAddr, name strin
 	lease.Name = name
 	h.table[string(lease.ClientID)] = lease
 	if Logger.IsInfo() {
-		// fmt.Printf("dhcp4 : new lease allocated %s\n", lease)
 		Logger.Msg("new lease allocated").Struct(lease).Write()
 	}
 	return lease

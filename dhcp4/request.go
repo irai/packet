@@ -100,9 +100,11 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 		operation = rebooting
 	}
 
-	Logger.Msg("request rcvd").ByteArray("xid", p.XId()).ByteArray("clientid", clientID).IP("ip", reqIP).String("name", nameEntry.Name).MAC("chaddr", p.CHAddr()).IP("serverID", serverIP).Write()
-
 	if Logger.IsInfo() {
+		Logger.Msg("request rcvd").ByteArray("xid", p.XId()).ByteArray("clientid", clientID).IP("ip", reqIP).String("name", nameEntry.Name).MAC("chaddr", p.CHAddr()).IP("serverID", serverIP).Write()
+	}
+
+	if Logger.IsDebug() {
 		Logger.Msg("request parameters").ByteArray("xid", p.XId()).IP("ciaddr", p.CIAddr()).Bool("brd", p.Broadcast()).IP("serverIP", serverIP).Write()
 	}
 
@@ -142,6 +144,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 			// almost always a new host IP
 			h.session.DHCPv4Update(p.CHAddr(), reqIP, nameEntry)
 			Logger.Msg("ignore select for another server").ByteArray("xid", p.XId()).IP("serverIP", serverIP).Write()
+
 			return nil // request not for us - silently discard packet
 		}
 
@@ -152,7 +155,9 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 			Logger.Msg("request NACK - select invalid parameters").ByteArray("xid", p.XId()).ByteArray("lxid", lease.XID).IP("leaseIP", lease.Addr.IP).Write()
 			return nakPacket(p, subnet.DHCPServer.AsSlice(), clientID)
 		}
-		Logger.Msg("request ACK - select").ByteArray("xid", p.XId()).ByteArray("clientid", clientID).IP("ip", reqIP).String("subnet", lease.subnet.ID).Write()
+		if Logger.IsInfo() {
+			Logger.Msg("request ACK - select").ByteArray("xid", p.XId()).ByteArray("clientid", clientID).IP("ip", reqIP).String("subnet", lease.subnet.ID).Write()
+		}
 
 	case renewing:
 		// If renewing then this packet was unicast to us and the client
@@ -161,10 +166,11 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 			lease.Addr.IP != reqIP || !bytes.Equal(lease.Addr.MAC, p.CHAddr()) ||
 			lease.DHCPExpiry.Before(time.Now()) {
 			Logger.Msg("request NACK - renew invalid or expired lease").ByteArray("xid", p.XId()).IP("gw", subnet.DefaultGW).Write()
-
 			return nakPacket(p, subnet.DHCPServer.AsSlice(), clientID)
 		}
-		Logger.Msg("request ACK - renewing").ByteArray("xid", p.XId()).IP("ip", reqIP).Write()
+		if Logger.IsInfo() {
+			Logger.Msg("request ACK - renewing").ByteArray("xid", p.XId()).IP("ip", reqIP).Write()
+		}
 
 	case rebooting, rebinding:
 		// rebooting is a common operation and occurs when the client is rejoining the network after
@@ -217,10 +223,12 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 			return nakPacket(p, subnet.DHCPServer.AsSlice(), clientID)
 		}
 
-		if operation == rebooting {
-			Logger.Msg("request ACK - rebooting").ByteArray("xid", p.XId()).IP("ip", reqIP).Write()
-		} else {
-			Logger.Msg("request ACK - rebinding").ByteArray("xid", p.XId()).IP("ip", reqIP).Write()
+		if Logger.IsInfo() {
+			if operation == rebooting {
+				Logger.Msg("request ACK - rebooting").ByteArray("xid", p.XId()).IP("ip", reqIP).String("subnet", lease.subnet.ID).Write()
+			} else {
+				Logger.Msg("request ACK - rebinding").ByteArray("xid", p.XId()).IP("ip", reqIP).String("subnet", lease.subnet.ID).Write()
+			}
 		}
 
 	default:
@@ -247,7 +255,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 	opts[OptionIPAddressLeaseTime] = optionsLeaseTime(lease.subnet.Duration) // rfc: must include
 	ret := Marshall(p, BootReply, ACK, nil, netip.Addr{}, lease.Addr.IP, nil, false, opts, options[OptionParameterRequestList])
 
-	if Logger.IsInfo() {
+	if Logger.IsDebug() {
 		l := Logger.Msg("request ack options recv").ByteArray("xid", p.XId()).Sprintf("options", options[OptionParameterRequestList])
 		l.Module(module, "request ack options sent").ByteArray("xid", p.XId()).Sprintf("options", ret.ParseOptions())
 		l.Write()
