@@ -343,7 +343,7 @@ func (l *Line) Stringer(value fmt.Stringer) *Line {
 func (l *Line) Duration(name string, duration time.Duration) *Line {
 	l.appendByte(' ')
 	l.index = l.index + copy(l.buffer[l.index:], name)
-	l.appendByte(' ')
+	l.appendByte('=')
 	l.index = l.index + copy(l.buffer[l.index:], duration.String())
 	return l
 }
@@ -352,7 +352,7 @@ func (l *Line) Duration(name string, duration time.Duration) *Line {
 func (l *Line) Time(name string, t time.Time) *Line {
 	l.appendByte(' ')
 	l.index = l.index + copy(l.buffer[l.index:], name)
-	l.appendByte(' ')
+	l.appendByte('=')
 	tmp := make([]byte, 0, 64)
 	tmp = t.AppendFormat(tmp, time.StampMilli)
 	// l.index = l.index + copy(l.buffer[l.index:], time.String())
@@ -364,7 +364,7 @@ func (l *Line) Time(name string, t time.Time) *Line {
 func (l *Line) Sprintf(name string, value interface{}) *Line {
 	l.appendByte(' ')
 	l.index = l.index + copy(l.buffer[l.index:], name)
-	l.appendByte(' ')
+	l.appendByte('=')
 	l.index = l.index + copy(l.buffer[l.index:], fmt.Sprintf("%+v", value))
 	return l
 }
