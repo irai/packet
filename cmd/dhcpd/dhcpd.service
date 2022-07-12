@@ -1,0 +1,21 @@
+# Example systemd.service file to run dhcpd service
+
+[Unit]
+Description=Packet dhcp daemon
+Wants=network-online.target
+After=network.target network-online.target
+
+[Service]
+WorkingDirectory=/home/netfilter/bin
+Type=simple
+User=root
+
+# comment
+ExecStart=/home/netfilter/bin/dhcpd_arm
+
+RemainAfterExit=no
+RestartSec=30
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

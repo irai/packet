@@ -19,8 +19,9 @@ import (
 )
 
 var (
-	nic   = flag.String("i", "eth0", "nic interface")
-	debug = flag.String("d", "info", "set to error or info or debug to control debug messages")
+	nic    = flag.String("i", "eth0", "nic interface")
+	debug  = flag.String("d", "info", "set to error or info or debug to control debug messages")
+	prompt = flag.Bool("prompt", false, "console prompt for interactive debugging")
 )
 
 var dhcpd *dhcp4.Handler
@@ -87,13 +88,15 @@ func main() {
 
 	// start goroutine to read command line and populate inputChan
 	inputChan := make(chan []string)
-	go func() {
-		for {
-			fmt.Println("\n----")
-			fmt.Print("Enter command: ")
-			inputChan <- readInput()
-		}
-	}()
+	if *prompt {
+		go func() {
+			for {
+				fmt.Println("\n----")
+				fmt.Print("Enter command: ")
+				inputChan <- readInput()
+			}
+		}()
+	}
 
 	// terminate cleanly when we get ctrl-C or sigterm
 	c := make(chan os.Signal, 2)
