@@ -12,7 +12,7 @@ import (
 	"github.com/irai/packet"
 	"github.com/irai/packet/arp"
 	"github.com/irai/packet/fastlog"
-	"github.com/irai/packet/icmp"
+	icmp "github.com/irai/packet/handlers/icmp_spoofer"
 )
 
 // Simple utility to demonstrate use of ARP spoofing
