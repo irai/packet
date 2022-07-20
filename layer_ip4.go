@@ -31,7 +31,6 @@ func (p IP4) TTL() int                { return int(p[8]) }
 func (p IP4) Checksum() int           { return int(binary.BigEndian.Uint16(p[10:12])) }
 func (p IP4) Src() netip.Addr         { return netip.AddrFrom4(*((*[4]byte)(p[12:16]))) }
 func (p IP4) Dst() netip.Addr         { return netip.AddrFrom4(*((*[4]byte)(p[16:20]))) }
-func (p IP4) NetaddrDst() netip.Addr  { return netip.AddrFrom4(*((*[4]byte)(p[16:19]))) }
 func (p IP4) TotalLen() int           { return int(binary.BigEndian.Uint16(p[2:4])) } // total packet size including header and payload
 func (p IP4) Payload() []byte         { return p[p.IHL():p.TotalLen()] }
 func (p IP4) String() string {
@@ -104,7 +103,7 @@ func (p IP4) SetPayload(b []byte, protocol byte) IP4 {
 	checksum := p.CalculateChecksum()
 	p[11] = byte(checksum >> 8)
 	p[10] = byte(checksum)
-	return b[:totalLen]
+	return p[:totalLen]
 }
 
 func (p IP4) AppendPayload(b []byte, protocol byte) (IP4, error) {
@@ -183,12 +182,14 @@ func EncodeUDP(p []byte, srcPort uint16, dstPort uint16) UDP {
 	binary.BigEndian.PutUint16(p[0:2], srcPort)
 	binary.BigEndian.PutUint16(p[2:4], dstPort)
 	binary.BigEndian.PutUint16(p[4:6], 0) // len zero - no payload
+	// TODO: udp checksum is mandatory for IPv6 - must do this
+	binary.BigEndian.PutUint16(p[6:8], 0) // no checksum
 	return UDP(p)
 }
 
 func (p UDP) SetPayload(b []byte) UDP {
 	binary.BigEndian.PutUint16(p[4:6], UDPHeaderLen+uint16(len(b)))
-	// no checksum for IP4
+	binary.BigEndian.PutUint16(p[6:8], 0) // no checksum
 	return p[:len(p)+len(b)]
 }
 
@@ -199,7 +200,7 @@ func (p UDP) AppendPayload(b []byte) (UDP, error) {
 	p = p[:len(p)+len(b)] // change slice in case slice is less total
 	copy(p.Payload(), b)
 	binary.BigEndian.PutUint16(p[4:6], UDPHeaderLen+uint16(len(b)))
-	// no checksum for IP4
+	binary.BigEndian.PutUint16(p[6:8], 0) // no checksum
 	return p, nil
 }
 
