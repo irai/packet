@@ -70,9 +70,10 @@ type Handler struct {
 	sync.Mutex
 }
 
-// New returns a dhcp handler.
+// New returns a dhcp handler with two internal subnets.
 func New(session *packet.Session) (handler *Handler, err error) {
-	config := Config{Mode: ModeSecondaryServer, DNSServer: session.NICInfo.RouterAddr4.IP, LeaseFilename: LeaseFilename}
+	config := Config{Mode: ModeSecondaryServer, DNSServer: session.NICInfo.RouterAddr4.IP,
+		NetfilterIP: netip.PrefixFrom(session.NICInfo.HostAddr4.IP, session.NICInfo.HomeLAN4.Bits()), LeaseFilename: LeaseFilename}
 	return config.New(session)
 }
 
@@ -88,8 +89,8 @@ func (config Config) New(session *packet.Session) (h *Handler, err error) {
 	}
 
 	// validate netfilter subnet
-	if !config.NetfilterIP.Addr().IsValid() {
-		config.NetfilterIP = netip.PrefixFrom(session.NICInfo.HostAddr4.IP, session.NICInfo.HomeLAN4.Bits()) // using single subnet: same as home subnet
+	if !config.NetfilterIP.IsValid() {
+		return nil, fmt.Errorf("netfilter prefix NetfilterIP=%s is invalid: %w", config.NetfilterIP, packet.ErrInvalidIP)
 	}
 	if !session.NICInfo.HomeLAN4.Contains(config.NetfilterIP.Addr()) {
 		return nil, fmt.Errorf("netfilter ip=%s does not exist in home net=%s: %w", config.NetfilterIP, session.NICInfo.HomeLAN4, packet.ErrInvalidIP)
