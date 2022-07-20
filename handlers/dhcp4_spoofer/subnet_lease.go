@@ -31,9 +31,9 @@ type SubnetConfig struct {
 // dhcpSubnet hold the 256 lease array for subnet
 // We use the last byte in IPv4 as the index.
 type dhcpSubnet struct {
-	SubnetConfig            // anonymous struct
-	broadcast    netip.Addr // hold the net broadcast IP
-	options      Options    // Options to send to DHCP Clients
+	SubnetConfig                     // anonymous struct
+	broadcast    netip.Addr          // hold the net broadcast IP
+	options      packet.DHCP4Options // Options to send to DHCP Clients
 	nextIP       netip.Addr
 }
 
@@ -91,19 +91,19 @@ func newSubnet(config SubnetConfig) (*dhcpSubnet, error) {
 	// 1-subnet mask; 3-router; 6-DNS; 15-domain name;26-MTU; 28-Broadcast addr; 31-router discovery;33-static route;
 	// 43-Vendor specific;44-Netbios name; 47-Netbios scope;51-Lease time;58-Renewal time (t1); 59-rebind time(t2)
 	// 121-classless route option(takes precedence to 33)
-	subnet.options = Options{
-		OptionServerIdentifier: subnet.DHCPServer.AsSlice(),
-		OptionSubnetMask:       net.CIDRMask(subnet.LAN.Bits(), 32), // must occur before router - need to sort the map
-		OptionRouter:           subnet.DefaultGW.AsSlice(),
-		OptionDomainNameServer: subnet.DNSServer.AsSlice(),
+	subnet.options = packet.DHCP4Options{
+		packet.DHCP4OptionServerIdentifier: subnet.DHCPServer.AsSlice(),
+		packet.DHCP4OptionSubnetMask:       net.CIDRMask(subnet.LAN.Bits(), 32), // must occur before router - need to sort the map
+		packet.DHCP4OptionRouter:           subnet.DefaultGW.AsSlice(),
+		packet.DHCP4OptionDomainNameServer: subnet.DNSServer.AsSlice(),
 	}
 
 	return &subnet, nil
 }
 
 // CopyOptions returns the default options for this subnet
-func (h *dhcpSubnet) CopyOptions() Options {
-	opts := make(Options, len(h.options)+5)
+func (h *dhcpSubnet) CopyOptions() packet.DHCP4Options {
+	opts := make(packet.DHCP4Options, len(h.options)+5)
 	for k, v := range h.options {
 		opts[k] = v
 	}
@@ -112,8 +112,8 @@ func (h *dhcpSubnet) CopyOptions() Options {
 
 func (h *dhcpSubnet) appendRouteOptions(ip netip.Addr, mask net.IPMask, routeTo netip.Addr) {
 
-	h.options[OptionPerformRouterDiscovery] = []byte{0} // don't perform router discovery
-	h.options[OptionStaticRoute] = append([]byte(ip.AsSlice()), []byte(routeTo.AsSlice())...)
+	h.options[packet.DHCP4OptionPerformRouterDiscovery] = []byte{0} // don't perform router discovery
+	h.options[packet.DHCP4OptionStaticRoute] = append([]byte(ip.AsSlice()), []byte(routeTo.AsSlice())...)
 
 	// Classless Route Option Format (override Static Route if requested)
 	// The code for this option is 121, and its minimum length is 5 bytes.
@@ -138,7 +138,7 @@ func (h *dhcpSubnet) appendRouteOptions(ip netip.Addr, mask net.IPMask, routeTo 
 	buf[0] = uint8(ones)
 	copy(buf[1:], mask[:octects])
 	copy(buf[1+octects:], routeTo.AsSlice())
-	h.options[OptionClasslessRouteFormat] = buf
+	h.options[packet.DHCP4OptionClasslessRouteFormat] = buf
 }
 
 func (handler *Handler) loadConfig(fname string) (net1 *dhcpSubnet, net2 *dhcpSubnet, t map[string]*Lease, err error) {

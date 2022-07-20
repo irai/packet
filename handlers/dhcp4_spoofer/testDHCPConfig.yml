@@ -1,0 +1,19 @@
+net1:
+  lan: 192.168.0.0/24
+  defaultgw: 192.168.0.11
+  dhcpserver: 192.168.0.129
+  dnsserver: 8.8.8.8
+  firstip: 192.168.0.1
+  duration: 4h0m0s
+  stage: 1
+  id: net1
+net2:
+  lan: 192.168.0.128/25
+  defaultgw: 192.168.0.129
+  dhcpserver: 192.168.0.129
+  dnsserver: 1.1.1.3
+  firstip: 192.168.0.129
+  duration: 4h0m0s
+  stage: 3
+  id: net2
+leases: []

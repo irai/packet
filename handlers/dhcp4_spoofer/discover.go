@@ -35,11 +35,11 @@ import (
 //    addresses; the address is selected based on the subnet from which
 //    the message was received (if 'giaddr' is 0) or on the address of
 //    the relay agent that forwarded the message ('giaddr' when not 0).
-func (h *Handler) handleDiscover(p DHCP4, options Options) (d DHCP4) {
+func (h *Handler) handleDiscover(p packet.DHCP4, options packet.DHCP4Options) (d packet.DHCP4) {
 
 	clientID := getClientID(p, options)
-	reqIP, _ := netip.AddrFromSlice(options[OptionRequestedIPAddress])
-	name := string(options[OptionHostName])
+	reqIP, _ := netip.AddrFromSlice(options[packet.DHCP4OptionRequestedIPAddress])
+	name := string(options[packet.DHCP4OptionHostName])
 
 	if Logger.IsInfo() {
 		Logger.Msg("discover rcvd").ByteArray("xid", p.XId()).ByteArray("clientid", clientID).IP("ip", reqIP).String("name", name).Uint16("secs", p.Secs()).Write()
@@ -97,10 +97,10 @@ func (h *Handler) handleDiscover(p DHCP4, options Options) (d DHCP4) {
 
 	// Offer options
 	opts := lease.subnet.CopyOptions()
-	opts[OptionIPAddressLeaseTime] = optionsLeaseTime(lease.subnet.Duration) // rfc: must include
+	opts[packet.DHCP4OptionIPAddressLeaseTime] = packet.OptionsLeaseTime(lease.subnet.Duration) // rfc: must include
 
 	// keep chAddr, ciAddr, xid
-	ret := Marshall(p, BootReply, Offer, nil, netip.Addr{}, lease.IPOffer, nil, false, opts, options[OptionParameterRequestList])
+	ret := packet.EncodeDHCP4(p, packet.DHCP4BootReply, packet.DHCP4Offer, nil, netip.Addr{}, lease.IPOffer, nil, false, opts, options[packet.DHCP4OptionParameterRequestList])
 	if Logger.IsInfo() {
 		Logger.Msg("discover options received").Sprintf("options", options).Write()
 		Logger.Msg("discover options sent").Sprintf("options", ret.ParseOptions()).Write()

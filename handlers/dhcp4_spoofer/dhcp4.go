@@ -248,13 +248,13 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 	if frame.PayloadID != packet.PayloadDHCP4 {
 		return packet.ErrParseProtocol
 	}
-	dhcpFrame := DHCP4(frame.Payload())
+	dhcpFrame := packet.DHCP4(frame.Payload())
 	if err := dhcpFrame.IsValid(); err != nil {
 		return err
 	}
 
 	// if udp.DstPort() == DHCP4ClientPort {
-	if frame.DstAddr.Port == DHCP4ClientPort {
+	if frame.DstAddr.Port == packet.DHCP4ClientPort {
 		if Logger.IsInfo() {
 			Logger.Msg("dhcp client packet").Struct(dhcpFrame).Write()
 		}
@@ -267,31 +267,31 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 	}
 
 	options := dhcpFrame.ParseOptions()
-	var reqType MessageType
-	if t := options[OptionDHCPMessageType]; len(t) != 1 {
+	var reqType packet.DHCP4MessageType
+	if t := options[packet.DHCP4OptionDHCPMessageType]; len(t) != 1 {
 		fmt.Println("dhcp4 : skiping dhcp - missing message type")
 		return packet.ErrParseFrame
 	} else {
-		reqType = MessageType(t[0])
-		if reqType < Discover || reqType > Inform {
+		reqType = packet.DHCP4MessageType(t[0])
+		if reqType < packet.DHCP4Discover || reqType > packet.DHCP4Inform {
 			fmt.Println("dhcp4 : skiping dhcp packet invalid type ", reqType)
 			return packet.ErrParseFrame
 		}
 	}
 
-	var response DHCP4
+	var response packet.DHCP4
 
 	h.Lock()
 	switch reqType {
-	case Discover:
+	case packet.DHCP4Discover:
 		response = h.handleDiscover(dhcpFrame, options)
-	case Request:
+	case packet.DHCP4Request:
 		response = h.handleRequest(frame.Host, dhcpFrame, options, frame.SrcAddr.IP)
-	case Decline:
+	case packet.DHCP4Decline:
 		response = h.handleDecline(dhcpFrame, options)
-	case Release:
+	case packet.DHCP4Release:
 		response = h.handleRelease(dhcpFrame, options)
-	case Offer:
+	case packet.DHCP4Offer:
 		fmt.Println("dhcp4: error got dhcp offer")
 	default:
 		Logger.Msg("message not supported").Uint8("type", uint8(reqType)).Write()
@@ -302,14 +302,14 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 		var dstAddr packet.Addr
 		// If IP not available, broadcast
 		if frame.SrcAddr.IP == packet.IPv4zero || dhcpFrame.Broadcast() {
-			dstAddr = packet.Addr{MAC: packet.EthBroadcast, IP: packet.IPv4bcast, Port: DHCP4ClientPort}
+			dstAddr = packet.Addr{MAC: packet.EthBroadcast, IP: packet.IPv4bcast, Port: packet.DHCP4ClientPort}
 		} else {
-			dstAddr = packet.Addr{MAC: frame.SrcAddr.MAC, IP: frame.SrcAddr.IP, Port: DHCP4ClientPort}
+			dstAddr = packet.Addr{MAC: frame.SrcAddr.MAC, IP: frame.SrcAddr.IP, Port: packet.DHCP4ClientPort}
 		}
 		if Logger.IsDebug() {
 			Logger.Msg("send reply to").Struct(dstAddr).Struct(response).Write()
 		}
-		srcAddr := packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: h.session.NICInfo.HostAddr4.IP, Port: DHCP4ServerPort}
+		srcAddr := packet.Addr{MAC: h.session.NICInfo.HostAddr4.MAC, IP: h.session.NICInfo.HostAddr4.IP, Port: packet.DHCP4ServerPort}
 		if err := sendDHCP4Packet(h.session.Conn, srcAddr, dstAddr, response); err != nil {
 			Logger.Msg("send packet failed").Error(err).Write()
 			return err
@@ -318,8 +318,8 @@ func (h *Handler) ProcessPacket(frame packet.Frame) error {
 	return nil
 }
 
-func getClientID(p DHCP4, options Options) []byte {
-	clientID, ok := options[OptionClientIdentifier]
+func getClientID(p packet.DHCP4, options packet.DHCP4Options) []byte {
+	clientID, ok := options[packet.DHCP4OptionClientIdentifier]
 	if !ok {
 		clientID = p.CHAddr()
 	}

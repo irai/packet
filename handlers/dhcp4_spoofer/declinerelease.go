@@ -3,6 +3,8 @@ package dhcp4
 import (
 	"bytes"
 	"net/netip"
+
+	"github.com/irai/packet"
 )
 
 // handleDecline will process a DHCP decline message from a client and free up the
@@ -19,10 +21,10 @@ import (
 // |requested-ip  |MUST         |MUST NOT     |
 // |ciaddr        |zero         |IP address   |
 // -------------------------------------------+
-func (h *Handler) handleDecline(p DHCP4, options Options) (d DHCP4) {
+func (h *Handler) handleDecline(p packet.DHCP4, options packet.DHCP4Options) (d packet.DHCP4) {
 
-	reqIP, _ := netip.AddrFromSlice(options[OptionRequestedIPAddress])
-	serverIP, _ := netip.AddrFromSlice(options[OptionServerIdentifier])
+	reqIP, _ := netip.AddrFromSlice(options[packet.DHCP4OptionRequestedIPAddress])
+	serverIP, _ := netip.AddrFromSlice(options[packet.DHCP4OptionServerIdentifier])
 	clientID := getClientID(p, options)
 
 	lease := h.findOrCreate(clientID, p.CHAddr(), "")
@@ -57,9 +59,9 @@ func (h *Handler) handleDecline(p DHCP4, options Options) (d DHCP4) {
 // of DHCP does not depend on the transmission of DHCPRELEASE messages.
 //
 // The client unicasts DHCPRELEASE messages to the server.
-func (h *Handler) handleRelease(p DHCP4, options Options) (d DHCP4) {
+func (h *Handler) handleRelease(p packet.DHCP4, options packet.DHCP4Options) (d packet.DHCP4) {
 	reqIP := p.CIAddr()
-	serverIP, _ := netip.AddrFromSlice(options[OptionServerIdentifier])
+	serverIP, _ := netip.AddrFromSlice(options[packet.DHCP4OptionServerIdentifier])
 	clientID := getClientID(p, options)
 
 	lease := h.findOrCreate(clientID, p.CHAddr(), "")

@@ -14,8 +14,8 @@ import (
 	"syscall"
 
 	"github.com/irai/packet"
-	"github.com/irai/packet/dhcp4"
 	"github.com/irai/packet/fastlog"
+	dhcp4 "github.com/irai/packet/handlers/dhcp4_spoofer"
 )
 
 var (

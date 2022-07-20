@@ -8,7 +8,7 @@ import (
 	"github.com/irai/packet"
 )
 
-func sendDHCP4Packet(conn net.PacketConn, srcAddr packet.Addr, dstAddr packet.Addr, p DHCP4) (err error) {
+func sendDHCP4Packet(conn net.PacketConn, srcAddr packet.Addr, dstAddr packet.Addr, p packet.DHCP4) (err error) {
 	b := packet.EtherBufferPool.Get().(*[packet.EthMaxSize]byte)
 	defer packet.EtherBufferPool.Put(b)
 	ether := packet.Ether(b[0:])

@@ -37,7 +37,7 @@ var (
 
 	dnsIP4 = netip.MustParseAddr("8.8.8.8")
 
-	dhcpDst = packet.Addr{MAC: packet.EthBroadcast, IP: packet.IPv4zero, Port: DHCP4ServerPort}
+	dhcpDst = packet.Addr{MAC: packet.EthBroadcast, IP: packet.IPv4zero, Port: packet.DHCP4ServerPort}
 )
 
 type testContext struct {
@@ -72,16 +72,16 @@ func readResponse(tc *testContext) error {
 			panic(s)
 		}
 
-		dhcp4Frame := DHCP4(packet.UDP(packet.IP4(packet.Ether(buf).Payload()).Payload()).Payload())
+		dhcp4Frame := packet.DHCP4(packet.UDP(packet.IP4(packet.Ether(buf).Payload()).Payload()).Payload())
 		options := dhcp4Frame.ParseOptions()
-		var reqType MessageType
-		if t := options[OptionDHCPMessageType]; len(t) != 1 {
+		var reqType packet.DHCP4MessageType
+		if t := options[packet.DHCP4OptionDHCPMessageType]; len(t) != 1 {
 			fmt.Println("dhcp4: skiping dhcp packet with len not 1")
 			continue
 		} else {
-			reqType = MessageType(t[0])
+			reqType = packet.DHCP4MessageType(t[0])
 		}
-		if reqType == Offer {
+		if reqType == packet.DHCP4Offer {
 			ip := dhcp4Frame.YIAddr()
 			if !ip.IsValid() {
 				panic("ip is nil")
@@ -99,7 +99,7 @@ func readResponse(tc *testContext) error {
 		if false {
 			fmt.Printf("received msg n=%d %s\n", len(tc.responseTable), ether)
 		}
-		if dhcp4Frame.OpCode() == BootReply {
+		if dhcp4Frame.OpCode() == packet.DHCP4BootReply {
 			if len(tc.notifyReply) >= cap(tc.notifyReply) {
 				fmt.Println("error notifyChannel full - ignoring reply", len(tc.notifyReply))
 				continue
@@ -162,8 +162,8 @@ func (tc *testContext) Close() {
 func newDHCPHost(t *testing.T, tc *testContext, mac net.HardwareAddr, name string) []byte {
 	tc.xid++
 	xid := []byte(fmt.Sprintf("%d", tc.xid))
-	srcAddr := packet.Addr{MAC: mac, IP: packet.IPv4zero, Port: DHCP4ClientPort}
-	dstAddr := packet.Addr{MAC: packet.EthernetBroadcast, IP: packet.IPv4zero, Port: DHCP4ServerPort}
+	srcAddr := packet.Addr{MAC: mac, IP: packet.IPv4zero, Port: packet.DHCP4ClientPort}
+	dstAddr := packet.Addr{MAC: packet.EthernetBroadcast, IP: packet.IPv4zero, Port: packet.DHCP4ServerPort}
 
 	tc.Lock()
 	tc.IPOffer = netip.Addr{}
@@ -185,10 +185,10 @@ func newDHCPHost(t *testing.T, tc *testContext, mac net.HardwareAddr, name strin
 		if err != nil || frame.PayloadID != packet.PayloadDHCP4 {
 			t.Fatal("invalid err or payloadID", err, frame.PayloadID)
 		}
-		dhcp := DHCP4(frame.Payload())
+		dhcp := packet.DHCP4(frame.Payload())
 		ipOffer = dhcp.YIAddr()
 		options := dhcp.ParseOptions()
-		if options[OptionSubnetMask] == nil || options[OptionRouter] == nil || options[OptionDomainNameServer] == nil {
+		if options[packet.DHCP4OptionSubnetMask] == nil || options[packet.DHCP4OptionRouter] == nil || options[packet.DHCP4OptionDomainNameServer] == nil {
 			t.Fatalf("DHCPHandler.handleDiscover() missing options =%v", options)
 		}
 		if ip := tc.h.session.DHCPv4IPOffer(dhcp.CHAddr()); ipOffer != ip {
@@ -210,12 +210,12 @@ func newDHCPHost(t *testing.T, tc *testContext, mac net.HardwareAddr, name strin
 	tc.h.session.Notify(frame)
 	select {
 	case p := <-tc.notifyReply:
-		dhcp := DHCP4(packet.UDP(packet.IP4(packet.Ether(p).Payload()).Payload()).Payload())
+		dhcp := packet.DHCP4(packet.UDP(packet.IP4(packet.Ether(p).Payload()).Payload()).Payload())
 		if ipOffer != dhcp.YIAddr() {
 			t.Fatalf("DHCPHandler.handleDiscover() invalid ip got=%v, want=%v", ipOffer, dhcp.YIAddr())
 		}
 		options := dhcp.ParseOptions()
-		if options[OptionSubnetMask] == nil || options[OptionRouter] == nil || options[OptionDomainNameServer] == nil {
+		if options[packet.DHCP4OptionSubnetMask] == nil || options[packet.DHCP4OptionRouter] == nil || options[packet.DHCP4OptionDomainNameServer] == nil {
 			t.Fatalf("DHCPHandler.handleDiscover() missing options =%v", options)
 		}
 	case <-time.After(time.Millisecond * 10):
@@ -240,21 +240,21 @@ func newDHCPHost(t *testing.T, tc *testContext, mac net.HardwareAddr, name strin
 }
 
 func newDHCP4DeclineFrame(src packet.Addr, dst packet.Addr, declineIP netip.Addr, serverIP netip.Addr, xid []byte) packet.Ether {
-	options := Options{}
-	options[OptionParameterRequestList] = []byte{byte(OptionServerIdentifier), byte(OptionRequestedIPAddress)}
-	options[OptionMessage] = []byte("netfilter decline")
+	options := packet.DHCP4Options{}
+	options[packet.DHCP4OptionParameterRequestList] = []byte{byte(packet.DHCP4OptionServerIdentifier), byte(packet.DHCP4OptionRequestedIPAddress)}
+	options[packet.DHCP4OptionMessage] = []byte("netfilter decline")
 	if serverIP.Is4() {
-		options[OptionServerIdentifier] = serverIP.AsSlice()
+		options[packet.DHCP4OptionServerIdentifier] = serverIP.AsSlice()
 	}
 	if declineIP.Is4() {
-		options[OptionRequestedIPAddress] = declineIP.AsSlice()
+		options[packet.DHCP4OptionRequestedIPAddress] = declineIP.AsSlice()
 	}
 
 	ether := packet.Ether(make([]byte, packet.EthMaxSize))
 	ether = packet.EncodeEther(ether, syscall.ETH_P_IP, src.MAC, dst.MAC)
 	ip4 := packet.EncodeIP4(ether.Payload(), 50, src.IP, dst.IP)
 	udp := packet.EncodeUDP(ip4.Payload(), src.Port, dst.Port)
-	dhcp := Marshall(udp.Payload(), BootRequest, Decline, src.MAC, src.IP, packet.IPv4zero, xid, false, options, options[OptionParameterRequestList])
+	dhcp := packet.EncodeDHCP4(udp.Payload(), packet.DHCP4BootRequest, packet.DHCP4Decline, src.MAC, src.IP, packet.IPv4zero, xid, false, options, options[packet.DHCP4OptionParameterRequestList])
 	udp = udp.SetPayload(dhcp)
 	ip4 = ip4.SetPayload(udp, syscall.IPPROTO_UDP)
 	var err error
@@ -269,15 +269,15 @@ func newDHCP4DiscoverFrame(src packet.Addr, name string, xid []byte) packet.Ethe
 		xid = make([]byte, 4)
 		rand.Read(xid)
 	}
-	options := Options{}
-	options[OptionParameterRequestList] = []byte{byte(OptionServerIdentifier), byte(OptionRequestedIPAddress), byte(OptionDomainNameServer), byte(OptionClientIdentifier)}
-	options[OptionHostName] = []byte(name)
+	options := packet.DHCP4Options{}
+	options[packet.DHCP4OptionParameterRequestList] = []byte{byte(packet.DHCP4OptionServerIdentifier), byte(packet.DHCP4OptionRequestedIPAddress), byte(packet.DHCP4OptionDomainNameServer), byte(packet.DHCP4OptionClientIdentifier)}
+	options[packet.DHCP4OptionHostName] = []byte(name)
 
 	ether := packet.Ether(make([]byte, packet.EthMaxSize))
 	ether = packet.EncodeEther(ether, syscall.ETH_P_IP, src.MAC, dhcpDst.MAC)
 	ip4 := packet.EncodeIP4(ether.Payload(), 50, src.IP, dhcpDst.IP)
 	udp := packet.EncodeUDP(ip4.Payload(), src.Port, dhcpDst.Port)
-	dhcp := Marshall(udp.Payload(), BootRequest, Discover, src.MAC, src.IP, packet.IPv4zero, xid, false, options, options[OptionParameterRequestList])
+	dhcp := packet.EncodeDHCP4(udp.Payload(), packet.DHCP4BootRequest, packet.DHCP4Discover, src.MAC, src.IP, packet.IPv4zero, xid, false, options, options[packet.DHCP4OptionParameterRequestList])
 	udp = udp.SetPayload(dhcp)
 	ip4 = ip4.SetPayload(udp, syscall.IPPROTO_UDP)
 	var err error
@@ -288,17 +288,17 @@ func newDHCP4DiscoverFrame(src packet.Addr, name string, xid []byte) packet.Ethe
 }
 
 func newDHCP4RequestFrame(src packet.Addr, dst packet.Addr, name string, serverID netip.Addr, requestedIP netip.Addr, xid []byte) packet.Ether {
-	options := Options{}
-	options[OptionParameterRequestList] = []byte{byte(OptionServerIdentifier), byte(OptionRequestedIPAddress), byte(OptionDomainNameServer)}
-	options[OptionRequestedIPAddress] = requestedIP.AsSlice()
-	options[OptionServerIdentifier] = serverID.AsSlice()
-	options[OptionHostName] = []byte(name)
+	options := packet.DHCP4Options{}
+	options[packet.DHCP4OptionParameterRequestList] = []byte{byte(packet.DHCP4OptionServerIdentifier), byte(packet.DHCP4OptionRequestedIPAddress), byte(packet.DHCP4OptionDomainNameServer)}
+	options[packet.DHCP4OptionRequestedIPAddress] = requestedIP.AsSlice()
+	options[packet.DHCP4OptionServerIdentifier] = serverID.AsSlice()
+	options[packet.DHCP4OptionHostName] = []byte(name)
 
 	ether := packet.Ether(make([]byte, packet.EthMaxSize))
 	ether = packet.EncodeEther(ether, syscall.ETH_P_IP, src.MAC, dst.MAC)
 	ip4 := packet.EncodeIP4(ether.Payload(), 50, src.IP, dst.IP)
 	udp := packet.EncodeUDP(ip4.Payload(), src.Port, dst.Port)
-	dhcp := Marshall(udp.Payload(), BootRequest, Request, src.MAC, requestedIP, packet.IPv4zero, xid, false, options, options[OptionParameterRequestList])
+	dhcp := packet.EncodeDHCP4(udp.Payload(), packet.DHCP4BootRequest, packet.DHCP4Request, src.MAC, requestedIP, packet.IPv4zero, xid, false, options, options[packet.DHCP4OptionParameterRequestList])
 	udp = udp.SetPayload(dhcp)
 	ip4 = ip4.SetPayload(udp, syscall.IPPROTO_UDP)
 	var err error

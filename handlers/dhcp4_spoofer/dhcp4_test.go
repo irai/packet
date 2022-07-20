@@ -206,16 +206,16 @@ func TestHandler_handleRequest(t *testing.T) {
 		name          string
 		p             []byte
 		updateReqIP   bool // indicate if we want to update the offer
-		dhcp          DHCP4
+		dhcp          packet.DHCP4
 		wantErr       bool
-		wantReplyType MessageType
+		wantReplyType packet.DHCP4MessageType
 	}{
-		{name: "req1", wantErr: false, wantReplyType: NAK, p: android_req1},
-		{name: "req2", wantErr: false, wantReplyType: NAK, p: android_req1},
-		{name: "req3", wantErr: false, wantReplyType: NAK, p: android_req1},
-		{name: "req4", wantErr: false, wantReplyType: NAK, p: android_req2},
-		{name: "discover", wantErr: false, wantReplyType: Offer, p: android_discover},
-		{name: "req5", wantErr: false, wantReplyType: ACK, updateReqIP: true, p: android_req3},
+		{name: "req1", wantErr: false, wantReplyType: packet.DHCP4NAK, p: android_req1},
+		{name: "req2", wantErr: false, wantReplyType: packet.DHCP4NAK, p: android_req1},
+		{name: "req3", wantErr: false, wantReplyType: packet.DHCP4NAK, p: android_req1},
+		{name: "req4", wantErr: false, wantReplyType: packet.DHCP4NAK, p: android_req2},
+		{name: "discover", wantErr: false, wantReplyType: packet.DHCP4Offer, p: android_discover},
+		{name: "req5", wantErr: false, wantReplyType: packet.DHCP4ACK, updateReqIP: true, p: android_req3},
 	}
 
 	Logger.SetLevel(fastlog.LevelError)
@@ -236,7 +236,7 @@ func TestHandler_handleRequest(t *testing.T) {
 			if err != nil {
 				panic(err)
 			}
-			dhcp := DHCP4(frame.Payload())
+			dhcp := packet.DHCP4(frame.Payload())
 			if err := dhcp.IsValid(); err != nil {
 				t.Fatalf("%s: Handler.handleRequest() unexpected error %s", tt.name, err)
 			}
@@ -244,8 +244,8 @@ func TestHandler_handleRequest(t *testing.T) {
 			// update request to offer IP if desired
 			if options := dhcp.ParseOptions(); tt.updateReqIP && bytes.Equal(dhcp.XId(), offerXID) && offerIP.Is4() {
 				fmt.Println("dhcp4 test updating IP", offerIP, offerXID, dhcp.ParseOptions())
-				options[OptionRequestedIPAddress] = offerIP.AsSlice()
-				n := dhcp.appendOptions(options, options[OptionParameterRequestList])
+				options[packet.DHCP4OptionRequestedIPAddress] = offerIP.AsSlice()
+				n := dhcp.AppendOptions(options, options[packet.DHCP4OptionParameterRequestList])
 				dhcp = dhcp[:240+n]
 				if err := dhcp.IsValid(); err != nil {
 					t.Fatalf("%s: Handler.handleRequest() unexpected error %s", tt.name, err)
@@ -264,18 +264,18 @@ func TestHandler_handleRequest(t *testing.T) {
 					panic(err)
 				}
 				// dhcp := DHCP4(packet.UDP(packet.IP4(packet.Ether(msg).Payload()).Payload()).Payload())
-				dhcp := DHCP4(frame.Payload())
+				dhcp := packet.DHCP4(frame.Payload())
 				options := dhcp.ParseOptions()
-				tmp, ok := options[OptionDHCPMessageType]
+				tmp, ok := options[packet.DHCP4OptionDHCPMessageType]
 				if !ok || len(tmp) != 1 {
 					t.Fatalf("%s: Handler.handleRequest() invalid message type got=%v, want=%v", tt.name, tmp, tt.wantReplyType)
 				}
-				mt := MessageType(tmp[0])
+				mt := packet.DHCP4MessageType(tmp[0])
 				if mt != tt.wantReplyType {
 					t.Fatalf("%s: Handler.handleRequest() invalid message type got=%v, want=%v", tt.name, mt, tt.wantReplyType)
 					return
 				}
-				if mt == Offer {
+				if mt == packet.DHCP4Offer {
 					offerXID = packet.CopyBytes(dhcp.XId())
 					offerIP = dhcp.YIAddr()
 				}

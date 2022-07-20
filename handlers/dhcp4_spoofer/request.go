@@ -49,24 +49,24 @@ import (
 //  indicating clearly that it presently owns that address. It then broadcasts the request on the local network.
 //
 
-func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, senderIP netip.Addr) DHCP4 {
+func (h *Handler) handleRequest(host *packet.Host, p packet.DHCP4, options packet.DHCP4Options, senderIP netip.Addr) packet.DHCP4 {
 
 	reqIP, serverIP := packet.IPv4zero, packet.IPv4zero
 
 	clientID := getClientID(p, options)
-	if tmp, ok := options[OptionRequestedIPAddress]; ok {
+	if tmp, ok := options[packet.DHCP4OptionRequestedIPAddress]; ok {
 		reqIP, ok = netip.AddrFromSlice(tmp)
 		if !ok || !reqIP.Is4() {
 			reqIP = packet.IPv4zero
 		}
 	}
-	if tmp, ok := options[OptionServerIdentifier]; ok {
+	if tmp, ok := options[packet.DHCP4OptionServerIdentifier]; ok {
 		serverIP, ok = netip.AddrFromSlice(tmp)
 		if !ok || !serverIP.Is4() {
 			serverIP = packet.IPv4zero
 		}
 	}
-	nameEntry := packet.NameEntry{Type: module, Name: string(options[OptionHostName])}
+	nameEntry := packet.NameEntry{Type: module, Name: string(options[packet.DHCP4OptionHostName])}
 
 	// ---------------------------------------------------------------------
 	// |              |INIT-REBOOT  |SELECTING    |RENEWING     |REBINDING |
@@ -110,7 +110,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 
 	// reqIP must always be filled in
 	if !reqIP.IsValid() || reqIP.IsUnspecified() {
-		Logger.Msg("invalid request IP").ByteArray("xid", p.XId()).String("optionIP", string(options[OptionRequestedIPAddress])).IP("ciaddr", p.CIAddr()).Write()
+		Logger.Msg("invalid request IP").ByteArray("xid", p.XId()).String("optionIP", string(options[packet.DHCP4OptionRequestedIPAddress])).IP("ciaddr", p.CIAddr()).Write()
 		return nil
 	}
 
@@ -236,17 +236,17 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 	lease.DHCPExpiry = time.Now().Add(lease.subnet.Duration)
 	lease.Count = 0
 
-	if tmp, ok := options[OptionHostName]; ok {
+	if tmp, ok := options[packet.DHCP4OptionHostName]; ok {
 		lease.Name = string(tmp)
 	}
 
 	// Ack Options - same as offer options
 	opts := lease.subnet.CopyOptions()
-	opts[OptionIPAddressLeaseTime] = optionsLeaseTime(lease.subnet.Duration) // rfc: must include
-	ret := Marshall(p, BootReply, ACK, nil, netip.Addr{}, lease.Addr.IP, nil, false, opts, options[OptionParameterRequestList])
+	opts[packet.DHCP4OptionIPAddressLeaseTime] = packet.OptionsLeaseTime(lease.subnet.Duration) // rfc: must include
+	ret := packet.EncodeDHCP4(p, packet.DHCP4BootReply, packet.DHCP4ACK, nil, netip.Addr{}, lease.Addr.IP, nil, false, opts, options[packet.DHCP4OptionParameterRequestList])
 
 	if Logger.IsDebug() {
-		l := Logger.Msg("request ack options recv").ByteArray("xid", p.XId()).Sprintf("options", options[OptionParameterRequestList])
+		l := Logger.Msg("request ack options recv").ByteArray("xid", p.XId()).Sprintf("options", options[packet.DHCP4OptionParameterRequestList])
 		l.Module(module, "request ack options sent").ByteArray("xid", p.XId()).Sprintf("options", ret.ParseOptions())
 		l.Write()
 	}
@@ -257,4 +257,15 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 	h.session.DHCPv4Update(lease.Addr.MAC, lease.Addr.IP, nameEntry)
 
 	return ret
+}
+
+// nakPacket returns a NACK reply packet.
+// It reuses the buffer updating fields as required returning the same slice with updated len.
+func nakPacket(req packet.DHCP4, serverID, clientID []byte) packet.DHCP4 {
+	options := packet.DHCP4Options{}
+	options[packet.DHCP4OptionServerIdentifier] = []byte(serverID) // rfc: must include
+	if clientID != nil {
+		options[packet.DHCP4OptionClientIdentifier] = clientID
+	}
+	return packet.EncodeDHCP4(req, packet.DHCP4BootReply, packet.DHCP4NAK, nil, packet.IPv4zero, packet.IPv4zero, nil, false, options, nil)
 }

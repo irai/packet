@@ -1,4 +1,4 @@
-package dhcp4
+package packet
 
 import (
 	"bytes"
@@ -12,29 +12,29 @@ import (
 func TestMarshall(t *testing.T) {
 	tests := []struct {
 		name      string
-		opcode    OpCode
-		mt        MessageType
+		opcode    DHCP4OpCode
+		mt        DHCP4MessageType
 		chAddr    net.HardwareAddr
 		ciAddr    netip.Addr
 		yiAddr    netip.Addr
 		xid       []byte
 		broadcast bool
-		options   Options
+		options   DHCP4Options
 		wantErr   bool
 	}{
-		{name: "simple", opcode: BootRequest, mt: Request, chAddr: mac0, ciAddr: ip1, yiAddr: netip.Addr{}, xid: []byte{1, 1, 1, 1}, broadcast: true, wantErr: false,
-			options: Options{
-				OptionSubnetMask:       []byte{255, 255, 255, 0}, // must occur before router
-				OptionRouter:           ip5.AsSlice(),
-				OptionDomainNameServer: ip4.AsSlice(),
-				OptionDHCPMessageType:  []byte{byte(Request)},
+		{name: "simple", opcode: DHCP4BootRequest, mt: DHCP4Request, chAddr: mac1, ciAddr: ip1, yiAddr: netip.Addr{}, xid: []byte{1, 1, 1, 1}, broadcast: true, wantErr: false,
+			options: DHCP4Options{
+				DHCP4OptionSubnetMask:       []byte{255, 255, 255, 0}, // must occur before router
+				DHCP4OptionRouter:           ip5.AsSlice(),
+				DHCP4OptionDomainNameServer: ip4.AsSlice(),
+				DHCP4OptionDHCPMessageType:  []byte{byte(DHCP4Request)},
 			},
 		},
 	}
 	buf := make([]byte, 1500)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dhcp := Marshall(buf, tt.opcode, tt.mt, tt.chAddr, tt.ciAddr, tt.yiAddr, tt.xid, tt.broadcast, tt.options, tt.options[OptionParameterRequestList])
+			dhcp := EncodeDHCP4(buf, tt.opcode, tt.mt, tt.chAddr, tt.ciAddr, tt.yiAddr, tt.xid, tt.broadcast, tt.options, tt.options[DHCP4OptionParameterRequestList])
 			if (dhcp == nil) != tt.wantErr {
 				t.Errorf("Marshall() = %v, want %v", dhcp, tt.wantErr)
 			}
@@ -67,19 +67,19 @@ func TestMarshall(t *testing.T) {
 func TestMarshallChangeToReply(t *testing.T) {
 	type ts struct {
 		name      string
-		opcode    OpCode
-		mt        MessageType
+		opcode    DHCP4OpCode
+		mt        DHCP4MessageType
 		chAddr    net.HardwareAddr
 		ciAddr    netip.Addr
 		yiAddr    netip.Addr
 		xid       []byte
 		broadcast bool
-		options   Options
+		options   DHCP4Options
 		wantErr   bool
 	}
 	buf := make([]byte, 1500)
-	tt := ts{name: "changetoreply", opcode: BootRequest, mt: Discover, chAddr: mac1, ciAddr: netip.Addr{}, yiAddr: netip.Addr{}, xid: []byte{1, 1, 1, 1}, broadcast: true, wantErr: false, options: nil}
-	dhcp := Marshall(buf, tt.opcode, tt.mt, tt.chAddr, tt.ciAddr, tt.yiAddr, tt.xid, tt.broadcast, tt.options, tt.options[OptionParameterRequestList])
+	tt := ts{name: "changetoreply", opcode: DHCP4BootRequest, mt: DHCP4Discover, chAddr: mac1, ciAddr: netip.Addr{}, yiAddr: netip.Addr{}, xid: []byte{1, 1, 1, 1}, broadcast: true, wantErr: false, options: nil}
+	dhcp := EncodeDHCP4(buf, tt.opcode, tt.mt, tt.chAddr, tt.ciAddr, tt.yiAddr, tt.xid, tt.broadcast, tt.options, tt.options[DHCP4OptionParameterRequestList])
 	if err := dhcp.IsValid(); err != nil {
 		t.Errorf("Marshall() = invalid dhcp error %v", err)
 	}
@@ -99,15 +99,15 @@ func TestMarshallChangeToReply(t *testing.T) {
 		t.Errorf("%s: Marshall() = invalid broadcast got=%v, want=%v, flags=0x%x", tt.name, v, tt.broadcast, dhcp.Flags())
 	}
 
-	options := Options{
-		OptionSubnetMask:         []byte{255, 255, 255, 0}, // must occur before router
-		OptionRouter:             ip5.AsSlice(),
-		OptionDomainNameServer:   ip4.AsSlice(),
-		OptionServerIdentifier:   hostIP4.AsSlice(),
-		OptionDHCPMessageType:    []byte{byte(Request)},
-		OptionIPAddressLeaseTime: optionsLeaseTime(time.Second * 10),
+	options := DHCP4Options{
+		DHCP4OptionSubnetMask:         []byte{255, 255, 255, 0}, // must occur before router
+		DHCP4OptionRouter:             ip5.AsSlice(),
+		DHCP4OptionDomainNameServer:   ip4.AsSlice(),
+		DHCP4OptionServerIdentifier:   hostIP4.AsSlice(),
+		DHCP4OptionDHCPMessageType:    []byte{byte(DHCP4Request)},
+		DHCP4OptionIPAddressLeaseTime: OptionsLeaseTime(time.Second * 10),
 	}
-	dhcp = Marshall(dhcp, BootReply, Offer, nil, netip.Addr{}, ip3, nil, false, options, options[OptionParameterRequestList])
+	dhcp = EncodeDHCP4(dhcp, DHCP4BootReply, DHCP4Offer, nil, netip.Addr{}, ip3, nil, false, options, options[DHCP4OptionParameterRequestList])
 	if err := dhcp.IsValid(); err != nil {
 		t.Errorf("Marshall() = invalid dhcp error %v", err)
 	}
@@ -129,9 +129,9 @@ func TestMarshallChangeToReply(t *testing.T) {
 
 	// must receive three options at least
 	options = dhcp.ParseOptions()
-	if !bytes.Equal(options[OptionDHCPMessageType], []byte{byte(Offer)}) ||
-		!bytes.Equal(options[OptionIPAddressLeaseTime], []byte{0, 0, 0, 10}) ||
-		!bytes.Equal(options[OptionServerIdentifier], hostIP4.AsSlice()) {
+	if !bytes.Equal(options[DHCP4OptionDHCPMessageType], []byte{byte(DHCP4Offer)}) ||
+		!bytes.Equal(options[DHCP4OptionIPAddressLeaseTime], []byte{0, 0, 0, 10}) ||
+		!bytes.Equal(options[DHCP4OptionServerIdentifier], hostIP4.AsSlice()) {
 		t.Errorf("%s: Marshall() = invalid options got=%v", tt.name, options)
 	}
 

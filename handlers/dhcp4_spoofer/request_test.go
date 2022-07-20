@@ -151,7 +151,7 @@ func Test_requestExhaust(t *testing.T) {
 	tc.xid++
 	xid := []byte(fmt.Sprintf("%d", tc.xid))
 	mac5 = net.HardwareAddr{0x00, 0xff, 0xaa, 0xbb, 0x05, 0x05} // new mac
-	srcAddr := packet.Addr{MAC: mac5, IP: packet.IPv4zero, Port: DHCP4ClientPort}
+	srcAddr := packet.Addr{MAC: mac5, IP: packet.IPv4zero, Port: packet.DHCP4ClientPort}
 	// dstAddr := packet.Addr{MAC: packet.EthernetBroadcast, IP: net.IPv4zero, Port: DHCP4ServerPort}
 	ether := newDHCP4DiscoverFrame(srcAddr, "onelastname", xid)
 	frame, err := tc.session.Parse(ether)
@@ -179,8 +179,8 @@ func Test_requestAnotherHost(t *testing.T) {
 	tc.xid++
 	xid := []byte(fmt.Sprintf("%d", tc.xid))
 	mac5 = net.HardwareAddr{0x00, 0xff, 0xaa, 0xbb, 0x05, 0x05} // new mac
-	srcAddr := packet.Addr{MAC: mac5, IP: packet.IPv4zero, Port: DHCP4ClientPort}
-	dstAddr := packet.Addr{MAC: packet.EthernetBroadcast, IP: packet.IPv4zero, Port: DHCP4ServerPort}
+	srcAddr := packet.Addr{MAC: mac5, IP: packet.IPv4zero, Port: packet.DHCP4ClientPort}
+	dstAddr := packet.Addr{MAC: packet.EthernetBroadcast, IP: packet.IPv4zero, Port: packet.DHCP4ServerPort}
 
 	// first discover packet
 	ether := newDHCP4DiscoverFrame(srcAddr, "host name", xid)
