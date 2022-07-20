@@ -151,7 +151,6 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 		if !bytes.Equal(lease.Addr.MAC, p.CHAddr()) || // invalid hardware
 			(lease.State == StateDiscover && (!bytes.Equal(lease.XID, p.XId()) || lease.IPOffer != reqIP)) || // invalid discover request
 			(lease.State == StateAllocated && lease.Addr.IP != reqIP) { // invalid request - iphone send duplicate select packets - let it pass
-			// fmt.Printf("dhcp4 : request NACK - select invalid parameters %s lxid=%v leaseIP=%s\n", fields, lease.XID, lease.Addr.IP)
 			Logger.Msg("request NACK - select invalid parameters").ByteArray("xid", p.XId()).ByteArray("lxid", lease.XID).IP("leaseIP", lease.Addr.IP).Write()
 			return nakPacket(p, subnet.DHCPServer.AsSlice(), clientID)
 		}
@@ -176,16 +175,7 @@ func (h *Handler) handleRequest(host *packet.Host, p DHCP4, options Options, sen
 		// rebooting is a common operation and occurs when the client is rejoining the network after
 		// being away or when wifi is switched off and on.
 		//  - client tries to pick up previosly know IP address, with a request packet.
-		//  - client has not sent discover packet
-
-		// almost always a new host IP
-		/*
-			result.Update = true
-			result.IsRouter = true                                   // hack to mark result as a new host
-			result.SrcAddr = packet.Addr{MAC: p.CHAddr(), IP: reqIP} // ok to pass frame addr
-			result.NameEntry.Name = name
-			result.HuntStage = packet.StageNoChange
-		*/
+		//  - client does not send discover packet
 
 		// Update session with DHCP details - almost always a new host IP will be setup
 		h.session.DHCPv4Update(p.CHAddr(), reqIP, nameEntry)

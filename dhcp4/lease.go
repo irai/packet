@@ -111,7 +111,7 @@ func (h *Handler) findOrCreate(clientID []byte, mac net.HardwareAddr, name strin
 	lease.subnet = subnet
 	lease.Name = name
 	h.table[string(lease.ClientID)] = lease
-	if Logger.IsInfo() {
+	if Logger.IsDebug() {
 		Logger.Msg("new lease allocated").Struct(lease).Write()
 	}
 	return lease
