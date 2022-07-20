@@ -1,6 +1,5 @@
 
 BIN_DIR=~/go/bin
-BINARY_NAME=arpspoofer_arm
 TEST_SERVER=192.168.0.129
  
 all: test deploy
@@ -18,7 +17,6 @@ dnslistener:
 	env GOOS=linux GOARCH=arm go build -o ${BIN_DIR}/dnslistener_arm cmd/dnslistener/*.go
 
 arpspoofer:
-	#rm -f ./cmd/arpspoofer/arpspoofer_arm
 	env GOOS=linux GOARCH=arm go build -o ${BIN_DIR}/arpspoofer_arm cmd/arpspoofer/*.go
 
 build: arpspoofer dnslistener dhcpd tcpdump hosts
@@ -28,11 +26,6 @@ test:
  
 deploy:	build
 	scp ${BIN_DIR}/*_arm netfilter@${TEST_SERVER}:/home/netfilter/bin
-	#scp ${BIN_DIR}/hosts_arm netfilter@${TEST_SERVER}:/home/netfilter/bin/hosts
-	#scp ${BIN_DIR}/tcpdump_arm netfilter@${TEST_SERVER}:/home/netfilter/bin/tcpdump
-	#scp ${BIN_DIR}/arpspoofer_arm netfilter@${TEST_SERVER}:/home/netfilter/bin/arpspoofer
-	#scp ${BIN_DIR}/packetlistener_arm netfilter@${TEST_SERVER}:/home/netfilter/bin/packetlistener
-	#scp ${BIN_DIR}/dhcpd_arm netfilter@${TEST_SERVER}:/home/netfilter/bin/dhcpd
  
 clean:
 	go clean
