@@ -1,4 +1,4 @@
-package icmp
+package icmp_spoofer
 
 import (
 	"testing"
