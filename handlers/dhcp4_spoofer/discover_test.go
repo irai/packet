@@ -1,4 +1,4 @@
-package dhcp4
+package dhcp4_spoofer
 
 import (
 	"net"

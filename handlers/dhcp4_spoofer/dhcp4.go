@@ -1,4 +1,4 @@
-// Package dhcp4 implements a dhcp server designed to operate as a secondary
+// package dhcp4_spoofer implements a dhcp server designed to operate as a secondary
 // dhcp server on the same lan.
 //
 // It allows the segmentation of the LAN into two distintict subnets, one used for
@@ -12,7 +12,7 @@
 // The original implementation used Richard Burton's dhcp4 package
 // (see: https://github.com/krolaw/dhcp4) for processing of dhcp packets but current versions
 // use our own packet package.
-package dhcp4
+package dhcp4_spoofer
 
 import (
 	"fmt"

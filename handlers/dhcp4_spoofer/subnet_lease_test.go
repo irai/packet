@@ -1,7 +1,7 @@
 //go:build !arp
 // +build !arp
 
-package dhcp4
+package dhcp4_spoofer
 
 import (
 	"fmt"
