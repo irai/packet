@@ -1,4 +1,4 @@
-package dns
+package dns_naming
 
 import (
 	"errors"
@@ -29,13 +29,13 @@ func (h *DNSHandler) DNSExist(ip netip.Addr) bool {
 	return false
 }
 
-func (h *DNSHandler) DNSFind(name string) DNSEntry {
+func (h *DNSHandler) DNSFind(name string) packet.DNSEntry {
 	h.mutex.RLock()
 	defer h.mutex.RUnlock()
 	if e, found := h.DNSTable[name]; found {
-		return e.copy()
+		return e.Copy()
 	}
-	return DNSEntry{}
+	return packet.DNSEntry{}
 }
 
 func (h *DNSHandler) DNSLookupPTR(ip netip.Addr) {
@@ -48,7 +48,7 @@ func (h *DNSHandler) DNSLookupPTR(ip netip.Addr) {
 		// TODO: should we block unknown IPs?
 		entry, found := h.DNSTable["ptrentryname"]
 		if !found {
-			entry = newDNSEntry()
+			entry = packet.NewDNSEntry()
 			entry.Name = "ptrentryname"
 			h.DNSTable["ptrentryname"] = entry
 		}
@@ -60,7 +60,7 @@ func (h *DNSHandler) DNSLookupPTR(ip netip.Addr) {
 				if Debug {
 					fmt.Printf("dns   : add ptr record not found for ip=%s\n", ip)
 				}
-				entry.IP4Records[ip] = IPResourceRecord{IP: ip}
+				entry.IP4Records[ip] = packet.IPResourceRecord{IP: ip}
 			}
 			return
 		}
@@ -71,7 +71,7 @@ func (h *DNSHandler) DNSLookupPTR(ip netip.Addr) {
 			if Debug {
 				fmt.Printf("dns   : ptr record not found for ip=%s\n", ip)
 			}
-			entry.IP4Records[ip] = IPResourceRecord{IP: ip}
+			entry.IP4Records[ip] = packet.IPResourceRecord{IP: ip}
 		}
 	}
 }

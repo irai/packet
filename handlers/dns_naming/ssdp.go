@@ -1,4 +1,4 @@
-package dns
+package dns_naming
 
 import (
 	"bufio"

@@ -1,4 +1,8 @@
-package dns
+// Package dns_naming maps a name from the wire to a mac address.
+// It is useful on a lan to link hosts to known names.
+// It works for mdns, dns, nbns, and ssdp names as these all use standard dns message formats when
+// replying to queries.
+package dns_naming
 
 import (
 	"context"
@@ -19,7 +23,7 @@ var Logger = fastlog.New(module)
 
 type DNSHandler struct {
 	session   *packet.Session
-	DNSTable  map[string]DNSEntry // store dns records
+	DNSTable  map[string]packet.DNSEntry // store dns records
 	mutex     sync.RWMutex
 	mconn4    *net.UDPConn
 	mconn6    *net.UDPConn
@@ -30,7 +34,7 @@ type DNSHandler struct {
 func New(session *packet.Session) (h *DNSHandler, err error) {
 	h = new(DNSHandler)
 	h.session = session
-	h.DNSTable = make(map[string]DNSEntry, 256)
+	h.DNSTable = make(map[string]packet.DNSEntry, 256)
 	h.mdnsCache = make(map[string]cache)
 
 	// Resgiter for MDNS multicast
@@ -97,21 +101,21 @@ func ReverseDNS(ip netip.Addr) error {
 //
 // It returns a copy of the DNSEntry that is free from race conditions. The caller has a unique copy.
 //
-func (h *DNSHandler) ProcessDNS(frame packet.Frame) (e DNSEntry, err error) {
-	p := DNS(frame.Payload())
+func (h *DNSHandler) ProcessDNS(frame packet.Frame) (e packet.DNSEntry, err error) {
+	p := packet.DNS(frame.Payload())
 	if err := p.IsValid(); err != nil {
-		return DNSEntry{}, err
+		return packet.DNSEntry{}, err
 	}
 
 	// buffer for doing name decoding.  We use a single reusable buffer to avoid
 	// constant allocation of small byte slices during dns name parsing.
 	buffer := make([]byte, 0, 64) // allocate enough to minimise allocation
-	var question Question
+	var question packet.Question
 
 	index := 12
-	question, index, err = decodeQuestion(p, index, buffer)
+	question, index, err = packet.DecodeQuestion(p, index, buffer)
 	if err != nil {
-		return DNSEntry{}, err
+		return packet.DNSEntry{}, err
 	}
 
 	h.mutex.Lock()
@@ -119,24 +123,24 @@ func (h *DNSHandler) ProcessDNS(frame packet.Frame) (e DNSEntry, err error) {
 
 	e, found := h.DNSTable[string(question.Name)] // lookup directly from []byte to avoid allocation
 	if !found {
-		e = newDNSEntry()
+		e = packet.NewDNSEntry()
 		e.Name = string(question.Name)
-		e.IP4Records = make(map[netip.Addr]IPResourceRecord)
-		e.IP6Records = make(map[netip.Addr]IPResourceRecord)
-		e.CNameRecords = make(map[string]NameResourceRecord)
-		e.PTRRecords = make(map[string]IPResourceRecord)
+		e.IP4Records = make(map[netip.Addr]packet.IPResourceRecord)
+		e.IP6Records = make(map[netip.Addr]packet.IPResourceRecord)
+		e.CNameRecords = make(map[string]packet.NameResourceRecord)
+		e.PTRRecords = make(map[string]packet.IPResourceRecord)
 	}
 
 	var updated bool
-	if _, updated, err = e.decodeAnswers(p, index, buffer); err != nil {
-		return DNSEntry{}, err
+	if _, updated, err = e.DecodeAnswers(p, index, buffer); err != nil {
+		return packet.DNSEntry{}, err
 	}
 	if updated {
 		if Debug {
 			Logger.Msg("entry").Struct(e).Write()
 		}
 		h.DNSTable[e.Name] = e
-		return e.copy(), nil // return a copy to avoid race on maps
+		return e.Copy(), nil // return a copy to avoid race on maps
 	}
-	return DNSEntry{}, nil
+	return packet.DNSEntry{}, nil
 }

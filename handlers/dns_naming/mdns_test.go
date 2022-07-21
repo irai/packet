@@ -1,4 +1,4 @@
-package dns
+package dns_naming
 
 import (
 	"fmt"
@@ -34,7 +34,7 @@ func TestMDNSHandler_PTR(t *testing.T) {
 	if err != nil {
 		t.Fatal("invalid packet", err)
 	}
-	p := DNS(frame.Payload())
+	p := packet.DNS(frame.Payload())
 	if p.IsValid() != nil {
 		t.Fatal("invalid dns packet")
 	}
@@ -140,18 +140,18 @@ func TestMDNSHandler_Sonos(t *testing.T) {
 	tests := []struct {
 		name         string
 		frame        []byte
-		wantIPv4Host NameEntry
-		wantIPv6Host NameEntry
+		wantIPv4Host packet.DNSNameEntry
+		wantIPv6Host packet.DNSNameEntry
 		wantErr      bool
 	}{
 		{name: "sonos1", frame: sonosResponse1, wantErr: false,
-			wantIPv4Host: NameEntry{},
+			wantIPv4Host: packet.DNSNameEntry{},
 		},
 		{name: "sonos2", frame: sonosResponse2, wantErr: false,
-			wantIPv4Host: NameEntry{Name: "sonosB8E937524E2C", Addr: packet.Addr{IP: netip.AddrFrom4([4]byte{192, 168, 0, 101})}},
+			wantIPv4Host: packet.DNSNameEntry{Name: "sonosB8E937524E2C", Addr: packet.Addr{IP: netip.AddrFrom4([4]byte{192, 168, 0, 101})}},
 		},
 		{name: "sonos3", frame: sonosResponse3, wantErr: false,
-			wantIPv4Host: NameEntry{Name: "Sonos-B8E937524E2C", Addr: packet.Addr{IP: netip.AddrFrom4([4]byte{192, 168, 0, 101})}},
+			wantIPv4Host: packet.DNSNameEntry{Name: "Sonos-B8E937524E2C", Addr: packet.Addr{IP: netip.AddrFrom4([4]byte{192, 168, 0, 101})}},
 		},
 	}
 
@@ -161,7 +161,7 @@ func TestMDNSHandler_Sonos(t *testing.T) {
 			if err != nil {
 				t.Fatal("invalid dns packet", err)
 			}
-			p := DNS(frame.Payload())
+			p := packet.DNS(frame.Payload())
 			if p.IsValid() != nil {
 				t.Fatal("invalid dns packet")
 			}
@@ -311,21 +311,21 @@ func TestMDNSHandler_Apple(t *testing.T) {
 	tests := []struct {
 		name         string
 		frame        []byte
-		wantIPv4Host NameEntry
-		wantIPv6Host NameEntry
+		wantIPv4Host packet.DNSNameEntry
+		wantIPv6Host packet.DNSNameEntry
 		wantErr      bool
 	}{
 		{name: "MacBook", frame: frameMacBook, wantErr: false,
-			wantIPv4Host: NameEntry{Name: "Goth", Addr: packet.Addr{IP: netip.AddrFrom4([4]byte{192, 168, 0, 110})}, Model: "MacBookPro14,1"},
+			wantIPv4Host: packet.DNSNameEntry{Name: "Goth", Addr: packet.Addr{IP: netip.AddrFrom4([4]byte{192, 168, 0, 110})}, Model: "MacBookPro14,1"},
 		},
 		{name: "iPhoneIpv6Query", frame: frameIphoneIPv6Query, wantErr: false,
-			wantIPv4Host: NameEntry{Name: "", Addr: packet.Addr{}, Model: ""},
+			wantIPv4Host: packet.DNSNameEntry{Name: "", Addr: packet.Addr{}, Model: ""},
 		},
 		{name: "WindowsAnnouncement", frame: frameWindows10AnnouncementIP6, wantErr: false,
-			wantIPv4Host: NameEntry{Name: "DESKTOP-EQ0BFB7", Addr: packet.Addr{IP: netip.AddrFrom4([4]byte{192, 168, 0, 103})}, Model: ""},
+			wantIPv4Host: packet.DNSNameEntry{Name: "DESKTOP-EQ0BFB7", Addr: packet.Addr{IP: netip.AddrFrom4([4]byte{192, 168, 0, 103})}, Model: ""},
 		},
 		{name: "WindowsAnnouncement", frame: frameWindows10AnnouncementiIP4, wantErr: false,
-			wantIPv4Host: NameEntry{Name: "", Addr: packet.Addr{IP: netip.AddrFrom4([4]byte{192, 168, 0, 103})}, Model: ""},
+			wantIPv4Host: packet.DNSNameEntry{Name: "", Addr: packet.Addr{IP: netip.AddrFrom4([4]byte{192, 168, 0, 103})}, Model: ""},
 		},
 	}
 
@@ -335,7 +335,7 @@ func TestMDNSHandler_Apple(t *testing.T) {
 			if err != nil {
 				t.Fatal("invalid dns packet", err)
 			}
-			p := DNS(frame.UDP().Payload())
+			p := packet.DNS(frame.UDP().Payload())
 			if p.IsValid() != nil {
 				t.Fatal("invalid dns packet")
 			}

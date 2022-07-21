@@ -1,4 +1,4 @@
-package dns
+package dns_naming
 
 import (
 	"fmt"
@@ -142,13 +142,13 @@ func TestDNSHandler_ProcessSSDPFrame(t *testing.T) {
 	tests := []struct {
 		name         string
 		frame        []byte
-		wantName     NameEntry
+		wantName     packet.DNSNameEntry
 		wantLocation string
 		wantErr      bool
 	}{
 		{name: "ssddpNotify", frame: ssdpNotifyFrame, wantErr: false, wantLocation: "http://192.168.0.103:1400/xml/device_description.xml"},
-		{name: "ssdpSearchRequest", frame: frameMSearchRequest, wantErr: false, wantLocation: "", wantName: NameEntry{OS: "Windows"}},
-		{name: "ssdpSearchRequestChrome", frame: frameMSearchRequestChrome, wantErr: false, wantLocation: "", wantName: NameEntry{OS: "Windows"}},
+		{name: "ssdpSearchRequest", frame: frameMSearchRequest, wantErr: false, wantLocation: "", wantName: packet.DNSNameEntry{OS: "Windows"}},
+		{name: "ssdpSearchRequestChrome", frame: frameMSearchRequestChrome, wantErr: false, wantLocation: "", wantName: packet.DNSNameEntry{OS: "Windows"}},
 		{name: "ssdpSearchResponse", frame: frameMSearchResponse, wantErr: false, wantLocation: "http://192.168.0.1:1900/gatedesc.xml"},
 	}
 

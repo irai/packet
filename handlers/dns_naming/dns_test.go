@@ -1,4 +1,4 @@
-package dns
+package dns_naming
 
 import (
 	"bytes"
@@ -481,42 +481,4 @@ func Benchmark_DNSConcurrentAccess(b *testing.B) {
 	b.RunParallel("youtube", func(b *testing.B) {
 	})
 	**/
-}
-
-func BenchmarkEncode(b *testing.B) {
-	session, _ := testSession()
-	defer session.Close()
-
-	frame, _ := session.Parse(testWwwYouTubeCom)
-
-	b.ReportAllocs()
-
-	b.Run("decodeName with buffer", func(b *testing.B) {
-		buffer := make([]byte, 0, 64)
-		for i := 0; i < b.N; i++ {
-			dnsFrame := DNS(frame.Payload())
-			question, index, err := decodeQuestion(dnsFrame, 12, buffer)
-			if err != nil || question.Name == nil || index == -1 {
-				b.Fatal("Message.Pack() =", err, question, index)
-			}
-			e := newDNSEntry()
-			if _, _, err = e.decodeAnswers(dnsFrame, index, buffer); err != nil {
-				b.Fatal("Message.Pack() decode error =", err)
-			}
-		}
-	})
-	b.Run("decodeName empty buffer", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			var buffer []byte
-			dnsFrame := DNS(frame.Payload())
-			question, index, err := decodeQuestion(dnsFrame, 12, buffer)
-			if err != nil || question.Name == nil || index == -1 {
-				b.Fatal("Message.Pack() =", err, question, index)
-			}
-			e := newDNSEntry()
-			if _, _, err = e.decodeAnswers(dnsFrame, index, buffer); err != nil {
-				b.Fatal("Message.Pack() decode error =", err)
-			}
-		}
-	})
 }

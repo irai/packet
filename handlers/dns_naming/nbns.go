@@ -1,4 +1,4 @@
-package dns
+package dns_naming
 
 import (
 	"bytes"
@@ -41,8 +41,6 @@ const (
 	questionTypeGeneral    = 0x0020 //  NetBIOS general Name Service Resource Record
 	questionTypeNodeStatus = 0x0021 // NBSTAT NetBIOS NODE STATUS Resource Record (See NODE STATUS REQUEST)
 
-	// NbnsQuestionClass
-	questionClassInternet = 0x0001
 )
 
 var sequence uint16 = 1 // incremented for every packet sent
@@ -124,7 +122,7 @@ func decodeNBNSName(buf []byte) (n int, name string, err error) {
 func (h *DNSHandler) SendNBNSQuery(srcAddr packet.Addr, dstAddr packet.Addr, name string) (err error) {
 	const word = uint16(responseRequest | opcodeQuery | nmflagsUnicast | rcodeOK)
 	sequence++
-	p := dnsQueryMarshal(sequence, word, encodeNBNSName(name), questionTypeGeneral)
+	p := packet.EncodeDNSQuery(sequence, word, encodeNBNSName(name), questionTypeGeneral)
 	return h.sendNBNS(srcAddr, dstAddr, p)
 }
 
@@ -136,11 +134,11 @@ func (h *DNSHandler) SendNBNSNodeStatus() (err error) {
 	const name = `*               `
 	const word = uint16(responseRequest | opcodeQuery | nmflagsUnicast | rcodeOK)
 	sequence++
-	p := dnsQueryMarshal(sequence, word, encodeNBNSName(name), questionTypeNodeStatus)
+	p := packet.EncodeDNSQuery(sequence, word, encodeNBNSName(name), questionTypeNodeStatus)
 	return h.sendNBNS(h.session.NICInfo.HostAddr4, packet.IP4BroadcastAddr, p)
 }
 
-func (h *DNSHandler) sendNBNS(srcAddr packet.Addr, dstAddr packet.Addr, p DNS) (err error) {
+func (h *DNSHandler) sendNBNS(srcAddr packet.Addr, dstAddr packet.Addr, p packet.DNS) (err error) {
 	b := packet.EtherBufferPool.Get().(*[packet.EthMaxSize]byte)
 	defer packet.EtherBufferPool.Put(b)
 	ether := packet.Ether(b[0:])
@@ -223,7 +221,7 @@ func processNBNSNodeStatusResponse(b []byte) (names []string, err error) {
 }
 
 func (h *DNSHandler) ProcessNBNS(host *packet.Host, ether packet.Ether, payload []byte) (name packet.NameEntry, err error) {
-	dns := DNS(payload)
+	dns := packet.DNS(payload)
 	if err := dns.IsValid(); err != nil {
 		return name, err
 	}

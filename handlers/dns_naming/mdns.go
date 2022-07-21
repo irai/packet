@@ -1,4 +1,4 @@
-package dns
+package dns_naming
 
 import (
 	"net"
@@ -327,7 +327,7 @@ func (h *DNSHandler) ProcessMDNS(frame packet.Frame) (ipv4 []packet.IPNameEntry,
 	if !dnsHeader.Response {
 		var line *fastlog.Line
 		if Debug {
-			line = LoggerMDNS.Msg("query rcvd").Struct(addr).Struct(DNS(frame.Payload()))
+			line = LoggerMDNS.Msg("query rcvd").Struct(addr).Struct(packet.DNS(frame.Payload()))
 		}
 		if questions, err := p.AllQuestions(); err == nil {
 			entry := packet.IPNameEntry{}
@@ -360,7 +360,7 @@ func (h *DNSHandler) ProcessMDNS(frame packet.Frame) (ipv4 []packet.IPNameEntry,
 	}
 
 	if Debug {
-		LoggerMDNS.Msg("response rcvd").Struct(addr).Struct(DNS(frame.Payload())).Write()
+		LoggerMDNS.Msg("response rcvd").Struct(addr).Struct(packet.DNS(frame.Payload())).Write()
 	}
 
 	if _, found := h.getMDNSCache(frame.SrcAddr.MAC, dnsHeader.ID); found {

@@ -1,4 +1,4 @@
-package dns
+package dns_naming
 
 import (
 	"fmt"
@@ -93,7 +93,7 @@ func Test_NBNS(t *testing.T) {
 	Logger.Msg("test" + "ip").Struct(ip).Write()
 	udp := packet.UDP(ip.Payload())
 	Logger.Msg("test" + "udp").Struct(udp).Write()
-	p := DNS(udp.Payload())
+	p := packet.DNS(udp.Payload())
 	if p.IsValid() != nil {
 		t.Fatal("invalid dns packet")
 	}

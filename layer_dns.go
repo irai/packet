@@ -1,4 +1,4 @@
-package dns
+package packet
 
 import (
 	"encoding/binary"
@@ -7,15 +7,16 @@ import (
 	"net/netip"
 	"strings"
 
-	"github.com/irai/packet"
 	"github.com/irai/packet/fastlog"
 )
 
-// DNS is specified in RFC 1034 / RFC 1035
+// NbnsQuestionClass
+const questionClassInternet = 0x0001
+
+// DNS represents a DNS packet as specified in RFC 1034 / RFC 1035
 // see : https://github.com/google/gopacket/blob/master/layers/dns.go
 //
-
-// DNS maps a domain name server frame
+//  DNS packet format
 //  0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
 //  +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
 //  |                      ID                       |
@@ -36,7 +37,7 @@ func (p DNS) IsValid() error {
 	if len(p) >= 12 {
 		return nil
 	}
-	return packet.ErrFrameLen
+	return ErrFrameLen
 }
 
 func (p DNS) String() string {
@@ -69,15 +70,7 @@ func (p DNS) ANCount() uint16       { return binary.BigEndian.Uint16(p[6:8]) }  
 func (p DNS) NSCount() uint16       { return binary.BigEndian.Uint16(p[8:10]) }  // Authority record count
 func (p DNS) ARCount() uint16       { return binary.BigEndian.Uint16(p[10:12]) } // Additional information count
 
-func newDNSEntry() (entry DNSEntry) {
-	entry.IP4Records = make(map[netip.Addr]IPResourceRecord)
-	entry.IP6Records = make(map[netip.Addr]IPResourceRecord)
-	entry.CNameRecords = make(map[string]NameResourceRecord)
-	entry.PTRRecords = make(map[string]IPResourceRecord)
-	return entry
-}
-
-func dnsQueryMarshal(tranID uint16, flags uint16, encodedName []byte, questionType uint16) DNS {
+func EncodeDNSQuery(tranID uint16, flags uint16, encodedName []byte, questionType uint16) DNS {
 	b := make([]byte, 512)
 	binary.BigEndian.PutUint16(b[0:2], tranID)
 	binary.BigEndian.PutUint16(b[2:4], flags)
@@ -97,14 +90,15 @@ type Question struct {
 	Class uint16
 }
 
-func decodeQuestion(p DNS, index int, buffer []byte) (question Question, off int, err error) {
+// DecodeQuestion returns the first question in the DNS packet
+func DecodeQuestion(p DNS, index int, buffer []byte) (question Question, off int, err error) {
 	if p.QDCount() != 1 { // assume a single question
-		return Question{}, -1, packet.ErrParseFrame
+		return Question{}, -1, ErrParseFrame
 	}
 
 	// get first answer
 	if index+6 > len(p) { // must have at least 2 bytes name, 4 bytes type and class
-		return Question{}, -1, packet.ErrParseFrame
+		return Question{}, -1, ErrParseFrame
 	}
 	name, endq, err := decodeName(p, index, &buffer, 1)
 	if err != nil {
@@ -119,11 +113,39 @@ func decodeQuestion(p DNS, index int, buffer []byte) (question Question, off int
 	return question, index, nil
 }
 
+type NameResourceRecord struct {
+	Name  string
+	CName string
+	TTL   uint32
+}
+
+type IPResourceRecord struct {
+	Name string
+	IP   netip.Addr
+	TTL  uint32
+}
+
+type DNSEntry struct {
+	Name         string
+	IP4Records   map[netip.Addr]IPResourceRecord
+	IP6Records   map[netip.Addr]IPResourceRecord
+	CNameRecords map[string]NameResourceRecord
+	PTRRecords   map[string]IPResourceRecord
+}
+
+func NewDNSEntry() (entry DNSEntry) {
+	entry.IP4Records = make(map[netip.Addr]IPResourceRecord)
+	entry.IP6Records = make(map[netip.Addr]IPResourceRecord)
+	entry.CNameRecords = make(map[string]NameResourceRecord)
+	entry.PTRRecords = make(map[string]IPResourceRecord)
+	return entry
+}
+
 // decode decodes the resource record, returning the total length of the record.
 //
 // not goroutine safe:
 //   must acquire lock before calling as function will update maps
-func (e *DNSEntry) decodeAnswers(p DNS, offset int, buffer []byte) (int, bool, error) {
+func (e *DNSEntry) DecodeAnswers(p DNS, offset int, buffer []byte) (int, bool, error) {
 	return e.decodeRRs(int(p.ANCount()), p, offset, buffer)
 }
 
@@ -164,13 +186,13 @@ func (e *DNSEntry) decodeRRs(count int, p DNS, offset int, buffer []byte) (int, 
 		dataLen := binary.BigEndian.Uint16(p[endq+8 : endq+10])
 		offset = endq + 10 + int(dataLen)
 		if offset > len(p) {
-			return 0, false, fmt.Errorf("invalid resource record len: %w", packet.ErrInvalidLen)
+			return 0, false, fmt.Errorf("invalid resource record len: %w", ErrInvalidLen)
 		}
 
 		switch t {
 		case 1: // A
 			if dataLen != 4 {
-				return 0, false, fmt.Errorf("invalid A data len: %w", packet.ErrInvalidLen)
+				return 0, false, fmt.Errorf("invalid A data len: %w", ErrInvalidLen)
 			}
 			ip, _ := netip.AddrFromSlice(net.IP(p[endq+10 : endq+10+4]))
 			if _, found := e.IP4Records[ip]; !found {
@@ -180,7 +202,7 @@ func (e *DNSEntry) decodeRRs(count int, p DNS, offset int, buffer []byte) (int, 
 
 		case 28: // AAAA
 			if dataLen != 16 {
-				return 0, false, fmt.Errorf("invalid AAAA data len: %w", packet.ErrInvalidLen)
+				return 0, false, fmt.Errorf("invalid AAAA data len: %w", ErrInvalidLen)
 			}
 			ip, _ := netip.AddrFromSlice(net.IP(p[endq+10 : endq+10+16]))
 			if _, found := e.IP6Records[ip]; !found {
@@ -202,7 +224,7 @@ func (e *DNSEntry) decodeRRs(count int, p DNS, offset int, buffer []byte) (int, 
 			}
 
 		case 15: // MX record
-			if Debug {
+			if Logger.IsDebug() {
 				fmt.Println("dns   : received MX record response - ignoring", string(name))
 			}
 
@@ -228,7 +250,7 @@ func (e *DNSEntry) decodeRRs(count int, p DNS, offset int, buffer []byte) (int, 
 				e.PTRRecords[r.Name] = r
 				updated = true
 			}
-			if Debug {
+			if Logger.IsDebug() {
 				fmt.Printf("dns   : received PTR record response ptr=%s ip=%s\n", r.Name, r.IP)
 			}
 		default:
@@ -239,169 +261,8 @@ func (e *DNSEntry) decodeRRs(count int, p DNS, offset int, buffer []byte) (int, 
 	return offset, updated, nil
 }
 
-const maxRecursionLevel = 255
-
-// decodeName extracted from https://github.com/google/gopacket/blob/master/layers/dns.go
-func decodeName(data []byte, offset int, buffer *[]byte, level int) ([]byte, int, error) {
-	if level > maxRecursionLevel {
-		return nil, 0, packet.ErrParseFrame
-	} else if offset >= len(data) {
-		return nil, 0, packet.ErrParseFrame
-	} else if offset < 0 {
-		return nil, 0, packet.ErrParseFrame
-	}
-	start := len(*buffer)
-	index := offset
-	if data[index] == 0x00 {
-		return nil, index + 1, nil
-	}
-loop:
-	for data[index] != 0x00 {
-		switch data[index] & 0xc0 {
-		default:
-			/* RFC 1035
-			   A domain name represented as a sequence of labels, where
-			   each label consists of a length octet followed by that
-			   number of octets.  The domain name terminates with the
-			   zero length octet for the null label of the root.  Note
-			   that this field may be an odd number of octets; no
-			   padding is used.
-			*/
-			index2 := index + int(data[index]) + 1
-			if index2-offset > 255 {
-				return nil, 0, packet.ErrParseFrame
-			} else if index2 < index+1 || index2 > len(data) {
-				return nil, 0, packet.ErrParseFrame
-			}
-			*buffer = append(*buffer, '.')
-			*buffer = append(*buffer, data[index+1:index2]...)
-			index = index2
-
-		case 0xc0:
-			/* RFC 1035
-			   The pointer takes the form of a two octet sequence.
-			   The first two bits are ones.  This allows a pointer to
-			   be distinguished from a label, since the label must
-			   begin with two zero bits because labels are restricted
-			   to 63 octets or less.  (The 10 and 01 combinations are
-			   reserved for future use.)  The OFFSET field specifies
-			   an offset from the start of the message (i.e., the
-			   first octet of the ID field in the domain header).  A
-			   zero offset specifies the first byte of the ID field,
-			   etc.
-			   The compression scheme allows a domain name in a message to be
-			   represented as either:
-			      - a sequence of labels ending in a zero octet
-			      - a pointer
-			      - a sequence of labels ending with a pointer
-			*/
-			if index+2 > len(data) {
-				return nil, 0, packet.ErrParseFrame
-			}
-			offsetp := int(binary.BigEndian.Uint16(data[index:index+2]) & 0x3fff)
-			if offsetp > len(data) {
-				return nil, 0, packet.ErrParseFrame
-			}
-			// This looks a little tricky, but actually isn't.  Because of how
-			// decodeName is written, calling it appends the decoded name to the
-			// current buffer.  We already have the start of the buffer, then, so
-			// once this call is done buffer[start:] will contain our full name.
-			_, _, err := decodeName(data, offsetp, buffer, level+1)
-			if err != nil {
-				return nil, 0, err
-			}
-			index++ // pointer is two bytes, so add an extra byte here.
-			break loop
-		/* EDNS, or other DNS option ? */
-		case 0x40: // RFC 2673
-			return nil, 0, fmt.Errorf("qname '0x40' - RFC 2673 unsupported yet (data=%x index=%d)",
-				data[index], index)
-
-		case 0x80:
-			return nil, 0, fmt.Errorf("qname '0x80' unsupported yet (data=%x index=%d)",
-				data[index], index)
-		}
-
-		if index >= len(data) {
-			return nil, 0, packet.ErrParseFrame
-		}
-	}
-	if len(*buffer) <= start {
-		return (*buffer)[start:], index + 1, nil
-	}
-	return (*buffer)[start+1:], index + 1, nil
-}
-
-func encode(qType uint16, qClass uint16, qName []byte, data []byte, offset int) int {
-	noff := encodeName(qName, data, offset)
-	nSz := noff - offset
-	binary.BigEndian.PutUint16(data[noff:], uint16(qType))
-	binary.BigEndian.PutUint16(data[noff+2:], uint16(qClass))
-	return nSz + 4
-}
-
-// encodeName extracted from https://github.com/google/gopacket/blob/master/layers/dns.go
-func encodeName(name []byte, data []byte, offset int) int {
-	l := 0
-	for i := range name {
-		if name[i] == '.' {
-			data[offset+i-l] = byte(l)
-			l = 0
-		} else {
-			// skip one to write the length
-			data[offset+i+1] = name[i]
-			l++
-		}
-	}
-
-	if len(name) == 0 {
-		data[offset] = 0x00 // terminal
-		return offset + 1
-	}
-
-	// length for final portion
-	data[offset+len(name)-l] = byte(l)
-	data[offset+len(name)+1] = 0x00 // terminal
-	return offset + len(name) + 2
-}
-
-type NameResourceRecord struct {
-	Name  string
-	CName string
-	TTL   uint32
-}
-
-type IPResourceRecord struct {
-	Name string
-	IP   netip.Addr
-	TTL  uint32
-}
-type DNSEntry struct {
-	Name         string
-	IP4Records   map[netip.Addr]IPResourceRecord
-	IP6Records   map[netip.Addr]IPResourceRecord
-	CNameRecords map[string]NameResourceRecord
-	PTRRecords   map[string]IPResourceRecord
-}
-
-// NameEntry holds a name entry
-type NameEntry struct {
-	Addr         packet.Addr
-	Name         string
-	Model        string
-	Manufacturer string
-	OS           string
-}
-
-func (n NameEntry) FastLog(l *fastlog.Line) *fastlog.Line {
-	l.Struct(n.Addr)
-	l.String("name", n.Name)
-	l.String("model", n.Model)
-	return l
-}
-
 // copy returns a deep copy of DNSEntry
-func (d DNSEntry) copy() DNSEntry {
+func (d DNSEntry) Copy() DNSEntry {
 	e := DNSEntry{Name: d.Name}
 	e.IP4Records = make(map[netip.Addr]IPResourceRecord, len(d.IP4Records))
 	e.IP6Records = make(map[netip.Addr]IPResourceRecord, len(d.IP6Records))
@@ -465,4 +326,146 @@ func (d DNSEntry) FastLog(l *fastlog.Line) *fastlog.Line {
 	l.StringArray("cname", str)
 	return l
 
+}
+
+// NameEntry holds a name entry
+type DNSNameEntry struct {
+	Addr         Addr
+	Name         string
+	Model        string
+	Manufacturer string
+	OS           string
+}
+
+func (n DNSNameEntry) FastLog(l *fastlog.Line) *fastlog.Line {
+	l.Struct(n.Addr)
+	l.String("name", n.Name)
+	l.String("model", n.Model)
+	return l
+}
+
+func encode(qType uint16, qClass uint16, qName []byte, data []byte, offset int) int {
+	noff := encodeName(qName, data, offset)
+	nSz := noff - offset
+	binary.BigEndian.PutUint16(data[noff:], uint16(qType))
+	binary.BigEndian.PutUint16(data[noff+2:], uint16(qClass))
+	return nSz + 4
+}
+
+// encodeName extracted from https://github.com/google/gopacket/blob/master/layers/dns.go
+func encodeName(name []byte, data []byte, offset int) int {
+	l := 0
+	for i := range name {
+		if name[i] == '.' {
+			data[offset+i-l] = byte(l)
+			l = 0
+		} else {
+			// skip one to write the length
+			data[offset+i+1] = name[i]
+			l++
+		}
+	}
+
+	if len(name) == 0 {
+		data[offset] = 0x00 // terminal
+		return offset + 1
+	}
+
+	// length for final portion
+	data[offset+len(name)-l] = byte(l)
+	data[offset+len(name)+1] = 0x00 // terminal
+	return offset + len(name) + 2
+}
+
+const maxRecursionLevel = 255
+
+// decodeName extracted from https://github.com/google/gopacket/blob/master/layers/dns.go
+func decodeName(data []byte, offset int, buffer *[]byte, level int) ([]byte, int, error) {
+	if level > maxRecursionLevel {
+		return nil, 0, ErrParseFrame
+	} else if offset >= len(data) {
+		return nil, 0, ErrParseFrame
+	} else if offset < 0 {
+		return nil, 0, ErrParseFrame
+	}
+	start := len(*buffer)
+	index := offset
+	if data[index] == 0x00 {
+		return nil, index + 1, nil
+	}
+loop:
+	for data[index] != 0x00 {
+		switch data[index] & 0xc0 {
+		default:
+			/* RFC 1035
+			   A domain name represented as a sequence of labels, where
+			   each label consists of a length octet followed by that
+			   number of octets.  The domain name terminates with the
+			   zero length octet for the null label of the root.  Note
+			   that this field may be an odd number of octets; no
+			   padding is used.
+			*/
+			index2 := index + int(data[index]) + 1
+			if index2-offset > 255 {
+				return nil, 0, ErrParseFrame
+			} else if index2 < index+1 || index2 > len(data) {
+				return nil, 0, ErrParseFrame
+			}
+			*buffer = append(*buffer, '.')
+			*buffer = append(*buffer, data[index+1:index2]...)
+			index = index2
+
+		case 0xc0:
+			/* RFC 1035
+			   The pointer takes the form of a two octet sequence.
+			   The first two bits are ones.  This allows a pointer to
+			   be distinguished from a label, since the label must
+			   begin with two zero bits because labels are restricted
+			   to 63 octets or less.  (The 10 and 01 combinations are
+			   reserved for future use.)  The OFFSET field specifies
+			   an offset from the start of the message (i.e., the
+			   first octet of the ID field in the domain header).  A
+			   zero offset specifies the first byte of the ID field,
+			   etc.
+			   The compression scheme allows a domain name in a message to be
+			   represented as either:
+			      - a sequence of labels ending in a zero octet
+			      - a pointer
+			      - a sequence of labels ending with a pointer
+			*/
+			if index+2 > len(data) {
+				return nil, 0, ErrParseFrame
+			}
+			offsetp := int(binary.BigEndian.Uint16(data[index:index+2]) & 0x3fff)
+			if offsetp > len(data) {
+				return nil, 0, ErrParseFrame
+			}
+			// This looks a little tricky, but actually isn't.  Because of how
+			// decodeName is written, calling it appends the decoded name to the
+			// current buffer.  We already have the start of the buffer, then, so
+			// once this call is done buffer[start:] will contain our full name.
+			_, _, err := decodeName(data, offsetp, buffer, level+1)
+			if err != nil {
+				return nil, 0, err
+			}
+			index++ // pointer is two bytes, so add an extra byte here.
+			break loop
+		/* EDNS, or other DNS option ? */
+		case 0x40: // RFC 2673
+			return nil, 0, fmt.Errorf("qname '0x40' - RFC 2673 unsupported yet (data=%x index=%d)",
+				data[index], index)
+
+		case 0x80:
+			return nil, 0, fmt.Errorf("qname '0x80' unsupported yet (data=%x index=%d)",
+				data[index], index)
+		}
+
+		if index >= len(data) {
+			return nil, 0, ErrParseFrame
+		}
+	}
+	if len(*buffer) <= start {
+		return (*buffer)[start:], index + 1, nil
+	}
+	return (*buffer)[start+1:], index + 1, nil
 }
