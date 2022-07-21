@@ -142,35 +142,40 @@ for {
 }
 ```
 
-## IPv4 and IPv6 spoofing
+## arp spoofing
 
-The package contains an arp spoofer module and a icmpv6 spoofer module
-which can be used to spoof client to send all their traffic to host. The package
-setup all the necessary forwarding capabilities to automatically forward
-traffic to the default gateway.
+The package contains an arp_spoofer handler that can spoof 
+the arp table on a target host. The handler will send
+poisoned arp packets continously to keep the arp cache pointing to us.
 
-Refer to the sample spoofer application.
+See example application below.
+
+## IPv6 icmp spoofing
+
+The package contains an icmpv6_spoofer handler that can spoof the 
+neighgor discovery protocol on a target host making all IPv6 traffic redirect
+to us. The handler will send poisoned icmpv6 packets continously to keep the ndp cache pointing to us.
+
+See example application below.
+
 
 ## DHCP4 server and spoofing
 
 need notes
 refer to example dhcp server.
 
-## ICMP6 spoofing
-
-need notes
-
 ## DNS naming
 
-need notes
+The package includes a dns_naming handler that creates a map of names to a mac address
+to simplify host identification.
 
 ## Examples
 
-[arp spoofer](/cmd/arpspoofer)  
-[dhcpd](/cmd/dhcpd)  
-[dnslistener](/cmd/dnslistener)  
-[hosts](/cmd/hosts)  
-[tcpdump](/cmd/tcpdump)  
+[arp spoofer](/examples/arpspoofer)  
+[dhcpd](/examples/dhcpd)  
+[dnslistener](/examples/dnslistener)  
+[hosts](/examples/hosts)  
+[tcpdump](/examples/tcpdump)  
 
 
 ## Credits
