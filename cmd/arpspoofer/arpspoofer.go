@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/irai/packet"
-	"github.com/irai/packet/arp"
 	"github.com/irai/packet/fastlog"
+	arp "github.com/irai/packet/handlers/arp_spoofer"
 	icmp "github.com/irai/packet/handlers/icmp_spoofer"
 )
 

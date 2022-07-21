@@ -1,4 +1,4 @@
-package arp
+package arp_spoofer
 
 import (
 	"net/netip"

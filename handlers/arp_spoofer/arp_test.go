@@ -1,4 +1,4 @@
-package arp
+package arp_spoofer
 
 import (
 	"context"
@@ -28,9 +28,6 @@ var (
 	ip4       = netip.MustParseAddr("192.168.0.4")
 	ip5       = netip.MustParseAddr("192.168.0.5")
 
-	localIP  = netip.MustParseAddr("169.254.0.10")
-	localIP2 = netip.MustParseAddr("169.254.0.11")
-
 	mac1 = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x01}
 	mac2 = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x02}
 	mac3 = net.HardwareAddr{0x00, 0x02, 0x03, 0x04, 0x05, 0x03}
@@ -59,6 +56,21 @@ type testContext struct {
 	sync.Mutex
 }
 
+func newEtherPacket(hType uint16, srcMAC net.HardwareAddr, dstMAC net.HardwareAddr) packet.Ether {
+	buf := make([]byte, packet.EthMaxSize) // allocate in the stack
+	p := packet.EncodeEther(buf, hType, srcMAC, dstMAC)
+	return p
+}
+
+func newARPPacket(op uint16, srcAddr packet.Addr, dstAddr packet.Addr) packet.ARP {
+	b := make([]byte, packet.ARPLen)
+	p := packet.EncodeARP(b, op, srcAddr, dstAddr)
+	if p == nil {
+		panic("invalid arp packet")
+	}
+	return p
+}
+
 func setupTestHandler(t *testing.T) *testContext {
 	var err error
 
@@ -77,6 +89,9 @@ func setupTestHandler(t *testing.T) *testContext {
 	}
 
 	tc.session, err = packet.Config{Conn: tc.inConn, NICInfo: nicInfo}.NewSession("")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if tc.arp, err = New(tc.session); err != nil {
 		t.Fatal(err)
@@ -122,7 +137,7 @@ func readResponse(ctx context.Context, tc *testContext) error {
 			panic("invalid ether type")
 		}
 
-		arpFrame := ARP(ether.Payload())
+		arpFrame := packet.ARP(ether.Payload())
 		if arpFrame.IsValid() != nil {
 			panic("invalid arp packet")
 		}
@@ -151,26 +166,26 @@ func Test_Handler_BasicTest(t *testing.T) {
 	tests := []struct {
 		name       string
 		ether      packet.Ether
-		arp        ARP
+		arp        packet.ARP
 		wantErr    error
 		wantLen    int
 		wantResult bool
 	}{
 		{name: "replymac2",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac2, routerMAC),
-			arp:     newARPPacket(OperationReply, addr2, routerAddr),
+			arp:     newARPPacket(packet.ARPOperationReply, addr2, routerAddr),
 			wantErr: nil, wantLen: 3, wantResult: true},
 		{name: "replymac3",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac3, routerMAC),
-			arp:     newARPPacket(OperationReply, addr3, routerAddr),
+			arp:     newARPPacket(packet.ARPOperationReply, addr3, routerAddr),
 			wantErr: nil, wantLen: 4, wantResult: true},
 		{name: "replymac4",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac4, routerMAC),
-			arp:     newARPPacket(OperationReply, addr4, routerAddr),
+			arp:     newARPPacket(packet.ARPOperationReply, addr4, routerAddr),
 			wantErr: nil, wantLen: 5, wantResult: true},
 		{name: "request",
 			ether:   newEtherPacket(syscall.ETH_P_ARP, mac4, routerMAC),
-			arp:     newARPPacket(OperationRequest, addr4, routerAddr),
+			arp:     newARPPacket(packet.ARPOperationRequest, addr4, routerAddr),
 			wantErr: nil, wantLen: 5, wantResult: true},
 	}
 
