@@ -154,7 +154,6 @@ func (h *Session) findOrCreateHostWithLock(addr Addr) (host *Host, found bool) {
 }
 
 func (h *Session) deleteHost(ip netip.Addr) {
-	// newIP, _ := netip.AddrFromSlice(ip)
 	if host := h.findIP(ip); host != nil {
 		if Logger.IsDebug() {
 			Logger.Msg("delete host").IP("ip", ip).Struct(host).Write()
@@ -183,11 +182,6 @@ func (h *Session) FindIP(ip netip.Addr) *Host {
 // findIP finds the host for IP wihout locking the engine
 // Engine must be locked prior to calling this function
 func (h *Session) findIP(ip netip.Addr) *Host {
-	// newIP, ok := netip.AddrFromSlice(ip)
-	// fmt.Println("TRACE ", newIP)
-	// if !ok {
-	// panic(fmt.Sprintf("invalid ip %v", ip))
-	// }
 	return h.HostTable.Table[ip]
 }
 
