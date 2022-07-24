@@ -109,6 +109,10 @@ func (l *Logger) SetLevel(level LogLevel) {
 	atomic.StoreUint32(&l.level, uint32(level))
 }
 
+func (l *Logger) SetLevelString(str string) {
+	atomic.StoreUint32(&l.level, uint32(Str2LogLevel(str)))
+}
+
 func (l *Logger) Disable() {
 	atomic.StoreUint32(&l.level, uint32(LevelError))
 }
@@ -301,7 +305,7 @@ func (l *Line) MAC(name string, value net.HardwareAddr) *Line {
 	l.appendByte(' ')
 	l.index = l.index + copy(l.buffer[l.index:], name)
 	l.appendByte('=')
-	if value != nil && len(value) == 6 {
+	if len(value) == 6 {
 		l.writeHex(value[0])
 		l.appendByte(':')
 		l.writeHex(value[1])

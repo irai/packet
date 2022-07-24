@@ -26,7 +26,6 @@ type complexType struct {
 	buffer   []byte
 	ipArray  []net.IP
 	strArray []string
-	n        int
 }
 
 func (t complexType) FastLog(l *Line) *Line {
