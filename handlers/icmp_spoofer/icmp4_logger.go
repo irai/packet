@@ -5,8 +5,11 @@ import (
 	"syscall"
 
 	"github.com/irai/packet"
+	"github.com/irai/packet/fastlog"
 	"golang.org/x/net/ipv4"
 )
+
+var Logger4 = fastlog.New("icmp4")
 
 // Handler4 maintains the underlying socket connection
 type Handler4 struct {

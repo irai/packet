@@ -12,8 +12,7 @@ import (
 	"golang.org/x/net/ipv6"
 )
 
-var Logger4 = fastlog.New("icmp4")
-var Logger6 = fastlog.New("icmp4")
+var Logger6 = fastlog.New("icmp6")
 
 // Handler implements ICMPv6 Neighbor Discovery Protocol
 // see: https://mdlayher.com/blog/network-protocol-breakdown-ndp-and-go/
