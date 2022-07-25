@@ -45,9 +45,10 @@ var lines = sync.Pool{New: func() interface{} { return new(Line) }}
 type LogLevel uint32
 
 const (
-	LevelError = LogLevel(0)
-	LevelInfo  = LogLevel(1)
-	LevelDebug = LogLevel(2)
+	LevelInvalid = LogLevel(0)
+	LevelError   = LogLevel(1)
+	LevelInfo    = LogLevel(2)
+	LevelDebug   = LogLevel(3)
 )
 
 func (l LogLevel) String() string {
@@ -56,8 +57,10 @@ func (l LogLevel) String() string {
 		return "error"
 	case LevelInfo:
 		return "info"
+	case LevelDebug:
+		return "debug"
 	}
-	return "debug"
+	return "invalid"
 }
 
 // Logger is a handler to access logging functions.
@@ -97,8 +100,10 @@ func Str2LogLevel(level string) LogLevel {
 		return LevelInfo
 	case "debug":
 		return LevelDebug
+	case "error":
+		return LevelError
 	}
-	return LevelError
+	return LevelInvalid
 }
 
 func (l *Logger) Level() LogLevel {
@@ -106,11 +111,15 @@ func (l *Logger) Level() LogLevel {
 }
 
 func (l *Logger) SetLevel(level LogLevel) {
-	atomic.StoreUint32(&l.level, uint32(level))
+	if level != LevelInvalid {
+		atomic.StoreUint32(&l.level, uint32(level))
+	}
 }
 
 func (l *Logger) SetLevelString(str string) {
-	atomic.StoreUint32(&l.level, uint32(Str2LogLevel(str)))
+	if level := Str2LogLevel(str); level != LevelInvalid {
+		atomic.StoreUint32(&l.level, uint32(level))
+	}
 }
 
 func (l *Logger) Disable() {
