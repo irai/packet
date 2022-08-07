@@ -130,10 +130,9 @@ func TestHandler_findOrCreateHostTestCopyIPMAC(t *testing.T) {
 func Benchmark_findOrCreateHost(b *testing.B) {
 	engine, _ := testSession()
 
-	// March 2021 - running benchmark on WSL 2 - 64 hosts
-	// Benchmark_findOrCreateHost-8   	 7318504	       145 ns/op	       0 B/op	       0 allocs/op
-	// Benchmark_findOrCreateHost-8   	 7555534	       141 ns/op	       0 B/op	       0 allocs/op
-	// ip := CopyIP(hostIP4).To4()
+	// running benchmark on WSL 2 - 64 hosts
+	// March 21   Benchmark_findOrCreateHost-8   	 7555534	       141 ns/op	       0 B/op	       0 allocs/op
+	// Aug 22                                        22853504	        56.53 ns/op	       0 B/op	       0 allocs/op
 	mac := net.HardwareAddr{0x00, 0xff, 0xaa, 0xbb, 0x55, 0x55}
 	for i := 0; i < b.N; i++ {
 		ip := netip.AddrFrom4([4]byte{192, 168, 0, byte(i % 64)})
