@@ -38,11 +38,6 @@ func (a Addr) Network() string {
 	return "raw"
 }
 
-func (a Addr) Netip() netip.Addr {
-	// n, _ := netip.AddrFromSlice(a.IP)
-	return a.IP
-}
-
 // AddrList manages a goroutine safe set for adding and removing mac addresses
 type AddrList struct {
 	list []Addr
