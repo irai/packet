@@ -71,12 +71,12 @@ var (
 // CLoudFlare family
 // https://developers.cloudflare.com/1.1.1.1/1.1.1.1-for-families
 var (
-	DNSv4CloudFlare1       = netip.MustParseAddr("1.1.1.2") // malware
+	DNSv4CloudFlare1       = netip.MustParseAddr("1.1.1.2") // block malware
 	DNSv6Cloudflare1       = netip.AddrFrom16([16]byte{0x26, 0x06, 0x47, 0x00, 0x47, 0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0x11, 0x11})
-	DNSv4CloudFlare2       = netip.MustParseAddr("1.0.0.2") // malware
+	DNSv4CloudFlare2       = netip.MustParseAddr("1.0.0.2") // block malware
 	DNSv6Cloudflare2       = netip.AddrFrom16([16]byte{0x26, 0x06, 0x47, 0x00, 0x47, 0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0x10, 0x01})
-	DNSv4CloudFlareFamily1 = netip.MustParseAddr("1.1.1.3") // malware and adult sites
-	DNSv4CloudFlareFamily2 = netip.MustParseAddr("1.0.0.3") // malware and adult sites
+	DNSv4CloudFlareFamily1 = netip.MustParseAddr("1.1.1.3") // block malware and adult sites
+	DNSv4CloudFlareFamily2 = netip.MustParseAddr("1.0.0.3") // block malware and adult sites
 
 	// OpenDNS
 	OpenDNS1 = netip.MustParseAddr("208.67.222.123")
