@@ -146,9 +146,33 @@ for {
 
 The package contains an arp_spoofer handler that can spoof 
 the arp table on a target host. The handler will send
-poisoned arp packets continously to keep the arp cache pointing to us.
+poisoned arp packets continously to keep the arp cache pointing to us. See example arp_spoofer application.
 
-See example application below.
+If you like to spoof all hosts on a network, use the notification handler to start and stop the arp hunt for each host. 
+```
+s, err := packet.NewSession(*nic)
+defer s.Close()
+arpSpoofer, err = arp.New(s)
+defer arpSpoofer.Close()
+
+go func() {
+		for {
+			notification := <-s.C
+			switch notification.Online {
+			case true:
+				fmt.Printf("is online: %s\n", notification)
+				arpSpoofer.StartHunt(notification.Addr)
+			default:
+				fmt.Printf("is offline: %s\n", notification)
+				arpSpoofer.StopHunt(notification.Addr)
+			}
+			s.PrintTable()
+		}
+	}()
+	
+// In your main packet processing loop, call the s.Notify() function as the last action in the loop.
+// See example here: https://github.com/irai/packet/tree/main/examples/hosts
+```
 
 ## IPv6 icmp spoofing
 
