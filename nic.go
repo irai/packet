@@ -5,18 +5,20 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
 	"net/netip"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/vishvananda/netlink"
+	"golang.org/x/net/icmp"
+	"golang.org/x/net/ipv4"
 )
 
 // NICInfo stores the network interface info
@@ -273,25 +275,85 @@ func EnableIP4Forwarding(nic string) error {
 	return nil
 }
 
-// ExecPing execute /usr/bin/ping
+// ExecPing executes an ICMP ping to the given IP.
+// Equivalent to running: /usr/bin/ping -W 1 -i 0.2 -c 1
 //
 // This is usefull when engine is not yet running and you need to populate the local arp/ndp cache
 // If passing an IPv6 LLA, then must pass the scope as in "fe80::1%eth0"
 func ExecPing(ip string) (err error) {
-	// -w deadline - wait 1 second
-	// -i frequency - one request each 0,2 seconds
-	// -c count - how many replies to receive before returning (in conjuction with -w)
-	cmd := exec.Command("/usr/bin/ping", ip, "-w", "1", "-i", "0.2", "-c", "1")
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	if err = cmd.Run(); err != nil {
-		// fmt.Printf("packet: failed to ping ip=%s error=%s\n", ip, err)
-		return err
+	start := time.Now()
+
+	dst, err := net.ResolveIPAddr("ip4", ip)
+	if err != nil {
+		return fmt.Errorf("resolve ip addr: %w", err)
 	}
-	// fmt.Printf("ping: %q\n", stdout.String())
-	// fmt.Printf("errs: %q\n", stderr.String())
-	return err
+
+	conn, err := icmp.ListenPacket("ip4:icmp", "0.0.0.0")
+	if err != nil {
+		return fmt.Errorf("icmp listen packet: %w", err)
+	}
+	defer conn.Close()
+
+	msg := icmp.Message{
+		Type: ipv4.ICMPTypeEcho,
+		Code: 0,
+		Body: &icmp.Echo{
+			ID:   os.Getpid() & 0xffff,
+			Seq:  1,
+			Data: []byte("HELLO-NETFITER"),
+		},
+	}
+	msgBytes, err := msg.Marshal(nil)
+	if err != nil {
+		return fmt.Errorf("icmp marshal: %w", err)
+	}
+
+	deadline := start.Add(time.Second)
+	period := 200 * time.Millisecond
+	nextWrite := start.Add(period)
+
+	for time.Now().Before(deadline) {
+		// set next write deadline
+		conn.SetDeadline(nextWrite)
+		nextWrite = nextWrite.Add(period)
+		if nextWrite.After(deadline) {
+			nextWrite = deadline
+		}
+
+		// send ping
+		if _, err := conn.WriteTo(msgBytes, dst); err != nil {
+			if errors.Is(err, os.ErrDeadlineExceeded) {
+				// timeout, write next ping
+				continue
+			}
+			return fmt.Errorf("icmp write: %w", err)
+		}
+
+		// update seq
+		msg.Body.(*icmp.Echo).Seq++
+		msgBytes, err = msg.Marshal(nil)
+		if err != nil {
+			return fmt.Errorf("icmp marshal: %w", err)
+		}
+
+		// assume ICMP size < 1500
+		reply := make([]byte, 1500)
+
+		// receive reply
+		_, _, err := conn.ReadFrom(reply)
+		if err != nil {
+			if errors.Is(err, os.ErrDeadlineExceeded) {
+				// timeout, write next ping
+				continue
+			}
+			return fmt.Errorf("icmp read: %w", err)
+		}
+
+		// success
+		return nil
+	}
+
+	return fmt.Errorf("ping timeout")
 }
 
 func LinuxConfigureInterface(nic string, hostIP netip.Prefix, newIP netip.Prefix, gw netip.Prefix) error {
